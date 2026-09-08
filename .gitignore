@@ -1,0 +1,25 @@
+﻿# Dependencias
+node_modules/
+vendor/
+
+# Entornos y secretos
+.env
+.env.*
+!.env.example
+
+# Builds
+apps/web/.next/
+apps/api/bootstrap/cache/*
+apps/api/storage/*.key
+
+# Base de datos local
+apps/api/database/database.sqlite
+
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.backup
+
+# Sistema
+.DS_Store
+*.log
