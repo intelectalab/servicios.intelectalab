@@ -56,17 +56,6 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO erp_app;"
           psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO erp_app;"
 
-      - name: Ejecutar migraciones de Laravel (owner=postgres)
-        working-directory: apps/api
-        env:
-          DB_CONNECTION: pgsql
-          DB_HOST: 127.0.0.1
-          DB_PORT: 5432
-          DB_DATABASE: erp_saas
-          DB_USERNAME: postgres
-          DB_PASSWORD: ci_password
-        run: php artisan migrate --force
-
       - name: Análisis de dependencias (SAST básico)
         working-directory: apps/api
         run: composer audit
