@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
@@ -49,5 +50,15 @@ class User extends Authenticatable
                 $model->id = (string) Str::uuid();
             }
         });
+    }
+
+    public function hasPermission(string $permissionCode): bool
+    {
+        return DB::table('user_roles')
+            ->join('role_permissions', 'user_roles.role_id', '=', 'role_permissions.role_id')
+            ->join('permissions', 'role_permissions.permission_id', '=', 'permissions.id')
+            ->where('user_roles.user_id', $this->id)
+            ->where('permissions.code', $permissionCode)
+            ->exists();
     }
 }
