@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -31,6 +33,26 @@ class AuthController extends Controller
             ]);
         }
 
+        // Resolvemos su tenant usando la misma función segura
+        // que ya usa el middleware TenantContext.
+        $tenantId = DB::selectOne(
+            'SELECT resolve_active_tenant_for_user(?) AS tenant_id',
+            [$user->id]
+        )?->tenant_id;
+
+        if ($tenantId) {
+            DB::statement("SET app.tenant_id = '{$tenantId}'");
+
+            AuditLogger::log(
+                tenantId: $tenantId,
+                userId: $user->id,
+                action: 'auth.login',
+                entityType: 'User',
+                entityId: $user->id,
+                metadata: ['email' => $user->email],
+            );
+        }
+
         $token = $user->createToken('api-token')->plainTextToken;
 
         $user->last_login_at = now();
@@ -53,6 +75,18 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
+        $tenantId = $request->attributes->get('tenant_id');
+
+        if ($tenantId) {
+            AuditLogger::log(
+                tenantId: $tenantId,
+                userId: $request->user()->id,
+                action: 'auth.logout',
+                entityType: 'User',
+                entityId: $request->user()->id,
+            );
+        }
+
         $request->user()->currentAccessToken()->delete();
 
         return response()->json(['message' => 'Sesión cerrada correctamente.']);
