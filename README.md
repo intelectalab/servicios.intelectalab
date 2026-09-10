@@ -59,7 +59,7 @@ npm run dev
 
 Frontend disponible en `http://localhost:3000`.
 
-## ⚠️ Importante: dos usuarios de base de datos distintos
+## ⚠️⚠️ Importante: dos usuarios de base de datos distintos
 
 Este proyecto usa **Row Level Security (RLS)** en PostgreSQL para aislar los datos entre tenants. Por eso se necesitan dos usuarios de base de datos con roles distintos:
 
