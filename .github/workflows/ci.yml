@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: erp_saas
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql
+
+      - name: Install Composer dependencies
+        working-directory: apps/api
+        run: composer install --no-interaction --prefer-dist
+
+      - name: Prepare .env
+        working-directory: apps/api
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
+      - name: Restaurar el esquema de 113 tablas (owner=postgres)
+        env:
+          PGPASSWORD: ci_password
+        run: |
+          psql -h 127.0.0.1 -U postgres -d erp_saas -f database/schema_reference.sql
+
+      - name: Crear el rol de aplicación erp_app (respeta RLS)
+        env:
+          PGPASSWORD: ci_password
+        run: |
+          psql -h 127.0.0.1 -U postgres -d erp_saas -c "CREATE ROLE erp_app WITH LOGIN PASSWORD 'erp_app_password';"
+          psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT USAGE ON SCHEMA public TO erp_app;"
+          psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO erp_app;"
+          psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO erp_app;"
+
+      - name: Ejecutar migraciones de Laravel (owner=postgres)
+        working-directory: apps/api
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: erp_saas
+          DB_USERNAME: postgres
+          DB_PASSWORD: ci_password
+        run: php artisan migrate --force
+
+      - name: Análisis de dependencias (SAST básico)
+        working-directory: apps/api
+        run: composer audit
+
+      - name: Ejecutar tests (como erp_app, respetando RLS)
+        working-directory: apps/api
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+          DB_DATABASE: erp_saas
+          DB_USERNAME: erp_app
+          DB_PASSWORD: erp_app_password
+        run: php artisan test
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint
+      - name: Build
+        working-directory: apps/web
+        run: npm run build
