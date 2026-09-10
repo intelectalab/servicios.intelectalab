@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict EzNtKE3rjFTdfj0YpnkUsm9kEq1ZRfmQhjPZAd7p2BikcaTqcis9jbmavhybZxA
+\restrict msaAD1PTgG1HfeN3Gk8W3gSqkdTXD9EHJrelBdvAFrc6SXXvGjykCuuZwyxASkb
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg13+2)
 -- Dumped by pg_dump version 17.11
@@ -72,6 +72,24 @@ $$;
 
 
 ALTER FUNCTION public.app_user_id() OWNER TO erp_user;
+
+--
+-- Name: resolve_active_tenant_for_user(uuid); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.resolve_active_tenant_for_user(p_user_id uuid) RETURNS uuid
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    SELECT tenant_id
+    FROM tenant_users
+    WHERE user_id = p_user_id
+      AND status = 'ACTIVE'
+    LIMIT 1;
+$$;
+
+
+ALTER FUNCTION public.resolve_active_tenant_for_user(p_user_id uuid) OWNER TO erp_user;
 
 --
 -- Name: set_updated_at(); Type: FUNCTION; Schema: public; Owner: erp_user
@@ -189,6 +207,32 @@ CREATE TABLE public.budgets (
 
 
 ALTER TABLE public.budgets OWNER TO erp_user;
+
+--
+-- Name: cache; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.cache (
+    key character varying(255) NOT NULL,
+    value text NOT NULL,
+    expiration integer NOT NULL
+);
+
+
+ALTER TABLE public.cache OWNER TO erp_user;
+
+--
+-- Name: cache_locks; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.cache_locks (
+    key character varying(255) NOT NULL,
+    owner character varying(255) NOT NULL,
+    expiration integer NOT NULL
+);
+
+
+ALTER TABLE public.cache_locks OWNER TO erp_user;
 
 --
 -- Name: checklist_items; Type: TABLE; Schema: public; Owner: erp_user
@@ -833,6 +877,44 @@ CREATE TABLE public.evidences (
 ALTER TABLE public.evidences OWNER TO erp_user;
 
 --
+-- Name: failed_jobs; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.failed_jobs (
+    id bigint NOT NULL,
+    uuid character varying(255) NOT NULL,
+    connection text NOT NULL,
+    queue text NOT NULL,
+    payload text NOT NULL,
+    exception text NOT NULL,
+    failed_at timestamp(0) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+
+ALTER TABLE public.failed_jobs OWNER TO erp_user;
+
+--
+-- Name: failed_jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: erp_user
+--
+
+CREATE SEQUENCE public.failed_jobs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.failed_jobs_id_seq OWNER TO erp_user;
+
+--
+-- Name: failed_jobs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: erp_user
+--
+
+ALTER SEQUENCE public.failed_jobs_id_seq OWNED BY public.failed_jobs.id;
+
+
+--
 -- Name: file_objects; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -1098,6 +1180,99 @@ CREATE TABLE public.invoices (
 ALTER TABLE public.invoices OWNER TO erp_user;
 
 --
+-- Name: job_batches; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.job_batches (
+    id character varying(255) NOT NULL,
+    name character varying(255) NOT NULL,
+    total_jobs integer NOT NULL,
+    pending_jobs integer NOT NULL,
+    failed_jobs integer NOT NULL,
+    failed_job_ids text NOT NULL,
+    options text,
+    cancelled_at integer,
+    created_at integer NOT NULL,
+    finished_at integer
+);
+
+
+ALTER TABLE public.job_batches OWNER TO erp_user;
+
+--
+-- Name: jobs; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.jobs (
+    id bigint NOT NULL,
+    queue character varying(255) NOT NULL,
+    payload text NOT NULL,
+    attempts smallint NOT NULL,
+    reserved_at integer,
+    available_at integer NOT NULL,
+    created_at integer NOT NULL
+);
+
+
+ALTER TABLE public.jobs OWNER TO erp_user;
+
+--
+-- Name: jobs_id_seq; Type: SEQUENCE; Schema: public; Owner: erp_user
+--
+
+CREATE SEQUENCE public.jobs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.jobs_id_seq OWNER TO erp_user;
+
+--
+-- Name: jobs_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: erp_user
+--
+
+ALTER SEQUENCE public.jobs_id_seq OWNED BY public.jobs.id;
+
+
+--
+-- Name: migrations; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.migrations (
+    id integer NOT NULL,
+    migration character varying(255) NOT NULL,
+    batch integer NOT NULL
+);
+
+
+ALTER TABLE public.migrations OWNER TO erp_user;
+
+--
+-- Name: migrations_id_seq; Type: SEQUENCE; Schema: public; Owner: erp_user
+--
+
+CREATE SEQUENCE public.migrations_id_seq
+    AS integer
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.migrations_id_seq OWNER TO erp_user;
+
+--
+-- Name: migrations_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: erp_user
+--
+
+ALTER SEQUENCE public.migrations_id_seq OWNED BY public.migrations.id;
+
+
+--
 -- Name: notifications; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -1288,6 +1463,47 @@ CREATE TABLE public.permissions (
 
 
 ALTER TABLE public.permissions OWNER TO erp_user;
+
+--
+-- Name: personal_access_tokens; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.personal_access_tokens (
+    id bigint NOT NULL,
+    tokenable_type character varying(255) NOT NULL,
+    tokenable_id uuid NOT NULL,
+    name text NOT NULL,
+    token character varying(64) NOT NULL,
+    abilities text,
+    last_used_at timestamp(0) without time zone,
+    expires_at timestamp(0) without time zone,
+    created_at timestamp(0) without time zone,
+    updated_at timestamp(0) without time zone
+);
+
+
+ALTER TABLE public.personal_access_tokens OWNER TO erp_user;
+
+--
+-- Name: personal_access_tokens_id_seq; Type: SEQUENCE; Schema: public; Owner: erp_user
+--
+
+CREATE SEQUENCE public.personal_access_tokens_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.personal_access_tokens_id_seq OWNER TO erp_user;
+
+--
+-- Name: personal_access_tokens_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: erp_user
+--
+
+ALTER SEQUENCE public.personal_access_tokens_id_seq OWNED BY public.personal_access_tokens.id;
+
 
 --
 -- Name: persons; Type: TABLE; Schema: public; Owner: erp_user
@@ -2375,6 +2591,34 @@ CREATE TABLE public.workflow_runs (
 ALTER TABLE public.workflow_runs OWNER TO erp_user;
 
 --
+-- Name: failed_jobs id; Type: DEFAULT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.failed_jobs ALTER COLUMN id SET DEFAULT nextval('public.failed_jobs_id_seq'::regclass);
+
+
+--
+-- Name: jobs id; Type: DEFAULT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.jobs ALTER COLUMN id SET DEFAULT nextval('public.jobs_id_seq'::regclass);
+
+
+--
+-- Name: migrations id; Type: DEFAULT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.migrations ALTER COLUMN id SET DEFAULT nextval('public.migrations_id_seq'::regclass);
+
+
+--
+-- Name: personal_access_tokens id; Type: DEFAULT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.personal_access_tokens ALTER COLUMN id SET DEFAULT nextval('public.personal_access_tokens_id_seq'::regclass);
+
+
+--
 -- Name: advances advances_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -2428,6 +2672,22 @@ ALTER TABLE ONLY public.budget_lines
 
 ALTER TABLE ONLY public.budgets
     ADD CONSTRAINT budgets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: cache_locks cache_locks_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.cache_locks
+    ADD CONSTRAINT cache_locks_pkey PRIMARY KEY (key);
+
+
+--
+-- Name: cache cache_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.cache
+    ADD CONSTRAINT cache_pkey PRIMARY KEY (key);
 
 
 --
@@ -2839,6 +3099,22 @@ ALTER TABLE ONLY public.evidences
 
 
 --
+-- Name: failed_jobs failed_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.failed_jobs
+    ADD CONSTRAINT failed_jobs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: failed_jobs failed_jobs_uuid_unique; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.failed_jobs
+    ADD CONSTRAINT failed_jobs_uuid_unique UNIQUE (uuid);
+
+
+--
 -- Name: file_objects file_objects_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -2999,6 +3275,30 @@ ALTER TABLE ONLY public.invoices
 
 
 --
+-- Name: job_batches job_batches_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.job_batches
+    ADD CONSTRAINT job_batches_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: jobs jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.jobs
+    ADD CONSTRAINT jobs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: migrations migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.migrations
+    ADD CONSTRAINT migrations_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: notifications notifications_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -3108,6 +3408,22 @@ ALTER TABLE ONLY public.permissions
 
 ALTER TABLE ONLY public.permissions
     ADD CONSTRAINT permissions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: personal_access_tokens personal_access_tokens_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.personal_access_tokens
+    ADD CONSTRAINT personal_access_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: personal_access_tokens personal_access_tokens_token_unique; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.personal_access_tokens
+    ADD CONSTRAINT personal_access_tokens_token_unique UNIQUE (token);
 
 
 --
@@ -3831,6 +4147,20 @@ ALTER TABLE ONLY public.workflow_runs
 
 
 --
+-- Name: cache_expiration_index; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX cache_expiration_index ON public.cache USING btree (expiration);
+
+
+--
+-- Name: cache_locks_expiration_index; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX cache_locks_expiration_index ON public.cache_locks USING btree (expiration);
+
+
+--
 -- Name: idx_audit_logs_entity; Type: INDEX; Schema: public; Owner: erp_user
 --
 
@@ -4129,6 +4459,27 @@ CREATE INDEX idx_webhook_deliveries_pending ON public.webhook_deliveries USING b
 --
 
 CREATE INDEX idx_work_orders_tenant_status ON public.work_orders USING btree (tenant_id, status);
+
+
+--
+-- Name: jobs_queue_index; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX jobs_queue_index ON public.jobs USING btree (queue);
+
+
+--
+-- Name: personal_access_tokens_expires_at_index; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX personal_access_tokens_expires_at_index ON public.personal_access_tokens USING btree (expires_at);
+
+
+--
+-- Name: personal_access_tokens_tokenable_type_tokenable_id_index; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX personal_access_tokens_tokenable_type_tokenable_id_index ON public.personal_access_tokens USING btree (tokenable_type, tokenable_id);
 
 
 --
@@ -8102,8 +8453,883 @@ ALTER TABLE public.workflow_definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workflow_runs ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: pg_database_owner
+--
+
+GRANT USAGE ON SCHEMA public TO erp_app;
+
+
+--
+-- Name: TABLE advances; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.advances TO erp_app;
+
+
+--
+-- Name: TABLE audit_logs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.audit_logs TO erp_app;
+
+
+--
+-- Name: TABLE branches; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.branches TO erp_app;
+
+
+--
+-- Name: TABLE budget_lines; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.budget_lines TO erp_app;
+
+
+--
+-- Name: TABLE budgets; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.budgets TO erp_app;
+
+
+--
+-- Name: TABLE cache; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cache TO erp_app;
+
+
+--
+-- Name: TABLE cache_locks; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cache_locks TO erp_app;
+
+
+--
+-- Name: TABLE checklist_items; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.checklist_items TO erp_app;
+
+
+--
+-- Name: TABLE checklists; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.checklists TO erp_app;
+
+
+--
+-- Name: TABLE companies; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.companies TO erp_app;
+
+
+--
+-- Name: TABLE contacts; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.contacts TO erp_app;
+
+
+--
+-- Name: TABLE contract_items; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.contract_items TO erp_app;
+
+
+--
+-- Name: TABLE contracted_services; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.contracted_services TO erp_app;
+
+
+--
+-- Name: TABLE contracts; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.contracts TO erp_app;
+
+
+--
+-- Name: TABLE cost_centers; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cost_centers TO erp_app;
+
+
+--
+-- Name: TABLE cost_entries; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cost_entries TO erp_app;
+
+
+--
+-- Name: TABLE credential_access_logs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credential_access_logs TO erp_app;
+
+
+--
+-- Name: TABLE credential_records; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credential_records TO erp_app;
+
+
+--
+-- Name: TABLE credential_versions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credential_versions TO erp_app;
+
+
+--
+-- Name: TABLE crm_activities; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_activities TO erp_app;
+
+
+--
+-- Name: TABLE crm_campaign_members; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_campaign_members TO erp_app;
+
+
+--
+-- Name: TABLE crm_campaigns; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_campaigns TO erp_app;
+
+
+--
+-- Name: TABLE crm_conversions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_conversions TO erp_app;
+
+
+--
+-- Name: TABLE crm_entity_tags; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_entity_tags TO erp_app;
+
+
+--
+-- Name: TABLE crm_leads; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_leads TO erp_app;
+
+
+--
+-- Name: TABLE crm_opportunities; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_opportunities TO erp_app;
+
+
+--
+-- Name: TABLE crm_pipeline_stages; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_pipeline_stages TO erp_app;
+
+
+--
+-- Name: TABLE crm_pipelines; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_pipelines TO erp_app;
+
+
+--
+-- Name: TABLE crm_settings; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_settings TO erp_app;
+
+
+--
+-- Name: TABLE crm_sources; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_sources TO erp_app;
+
+
+--
+-- Name: TABLE crm_tags; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.crm_tags TO erp_app;
+
+
+--
+-- Name: TABLE customers; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.customers TO erp_app;
+
+
+--
+-- Name: TABLE dashboard_definitions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.dashboard_definitions TO erp_app;
+
+
+--
+-- Name: TABLE deliverables; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.deliverables TO erp_app;
+
+
+--
+-- Name: TABLE document_links; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.document_links TO erp_app;
+
+
+--
+-- Name: TABLE document_versions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.document_versions TO erp_app;
+
+
+--
+-- Name: TABLE documents; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.documents TO erp_app;
+
+
+--
+-- Name: TABLE employees; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.employees TO erp_app;
+
+
+--
+-- Name: TABLE evidences; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.evidences TO erp_app;
+
+
+--
+-- Name: TABLE failed_jobs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.failed_jobs TO erp_app;
+
+
+--
+-- Name: SEQUENCE failed_jobs_id_seq; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.failed_jobs_id_seq TO erp_app;
+
+
+--
+-- Name: TABLE file_objects; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.file_objects TO erp_app;
+
+
+--
+-- Name: TABLE financial_accounts; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.financial_accounts TO erp_app;
+
+
+--
+-- Name: TABLE fiscal_configurations; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fiscal_configurations TO erp_app;
+
+
+--
+-- Name: TABLE fiscal_documents; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fiscal_documents TO erp_app;
+
+
+--
+-- Name: TABLE fiscal_notes; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fiscal_notes TO erp_app;
+
+
+--
+-- Name: TABLE fiscal_series; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fiscal_series TO erp_app;
+
+
+--
+-- Name: TABLE idempotency_keys; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.idempotency_keys TO erp_app;
+
+
+--
+-- Name: TABLE integration_attempts; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.integration_attempts TO erp_app;
+
+
+--
+-- Name: TABLE integration_connections; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.integration_connections TO erp_app;
+
+
+--
+-- Name: TABLE integration_dead_letters; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.integration_dead_letters TO erp_app;
+
+
+--
+-- Name: TABLE invoice_items; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.invoice_items TO erp_app;
+
+
+--
+-- Name: TABLE invoices; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.invoices TO erp_app;
+
+
+--
+-- Name: TABLE job_batches; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.job_batches TO erp_app;
+
+
+--
+-- Name: TABLE jobs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.jobs TO erp_app;
+
+
+--
+-- Name: SEQUENCE jobs_id_seq; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.jobs_id_seq TO erp_app;
+
+
+--
+-- Name: TABLE migrations; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.migrations TO erp_app;
+
+
+--
+-- Name: SEQUENCE migrations_id_seq; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.migrations_id_seq TO erp_app;
+
+
+--
+-- Name: TABLE notifications; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.notifications TO erp_app;
+
+
+--
+-- Name: TABLE order_items; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.order_items TO erp_app;
+
+
+--
+-- Name: TABLE orders; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.orders TO erp_app;
+
+
+--
+-- Name: TABLE organizations; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.organizations TO erp_app;
+
+
+--
+-- Name: TABLE outbox_events; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.outbox_events TO erp_app;
+
+
+--
+-- Name: TABLE parties; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.parties TO erp_app;
+
+
+--
+-- Name: TABLE payment_allocations; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.payment_allocations TO erp_app;
+
+
+--
+-- Name: TABLE payments; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.payments TO erp_app;
+
+
+--
+-- Name: TABLE permissions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.permissions TO erp_app;
+
+
+--
+-- Name: TABLE personal_access_tokens; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.personal_access_tokens TO erp_app;
+
+
+--
+-- Name: SEQUENCE personal_access_tokens_id_seq; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,USAGE ON SEQUENCE public.personal_access_tokens_id_seq TO erp_app;
+
+
+--
+-- Name: TABLE persons; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.persons TO erp_app;
+
+
+--
+-- Name: TABLE portal_notifications; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.portal_notifications TO erp_app;
+
+
+--
+-- Name: TABLE portal_requests; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.portal_requests TO erp_app;
+
+
+--
+-- Name: TABLE portal_users; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.portal_users TO erp_app;
+
+
+--
+-- Name: TABLE projects; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.projects TO erp_app;
+
+
+--
+-- Name: TABLE quotation_approvals; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.quotation_approvals TO erp_app;
+
+
+--
+-- Name: TABLE quotation_items; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.quotation_items TO erp_app;
+
+
+--
+-- Name: TABLE quotations; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.quotations TO erp_app;
+
+
+--
+-- Name: TABLE receivables; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.receivables TO erp_app;
+
+
+--
+-- Name: TABLE recurring_service_alerts; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.recurring_service_alerts TO erp_app;
+
+
+--
+-- Name: TABLE recurring_service_cycles; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.recurring_service_cycles TO erp_app;
+
+
+--
+-- Name: TABLE recurring_service_instances; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.recurring_service_instances TO erp_app;
+
+
+--
+-- Name: TABLE recurring_service_prices; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.recurring_service_prices TO erp_app;
+
+
+--
+-- Name: TABLE refunds; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.refunds TO erp_app;
+
+
+--
+-- Name: TABLE report_definitions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.report_definitions TO erp_app;
+
+
+--
+-- Name: TABLE report_exports; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.report_exports TO erp_app;
+
+
+--
+-- Name: TABLE resource_assignments; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.resource_assignments TO erp_app;
+
+
+--
+-- Name: TABLE resources; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.resources TO erp_app;
+
+
+--
+-- Name: TABLE role_permissions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.role_permissions TO erp_app;
+
+
+--
+-- Name: TABLE roles; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.roles TO erp_app;
+
+
+--
+-- Name: TABLE saas_plans; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.saas_plans TO erp_app;
+
+
+--
+-- Name: TABLE service_categories; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.service_categories TO erp_app;
+
+
+--
+-- Name: TABLE service_prices; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.service_prices TO erp_app;
+
+
+--
+-- Name: TABLE service_recurring_configs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.service_recurring_configs TO erp_app;
+
+
+--
+-- Name: TABLE service_service_links; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.service_service_links TO erp_app;
+
+
+--
+-- Name: TABLE service_template_items; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.service_template_items TO erp_app;
+
+
+--
+-- Name: TABLE service_templates; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.service_templates TO erp_app;
+
+
+--
+-- Name: TABLE services; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.services TO erp_app;
+
+
+--
+-- Name: TABLE suppliers; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.suppliers TO erp_app;
+
+
+--
+-- Name: TABLE support_sla_runs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.support_sla_runs TO erp_app;
+
+
+--
+-- Name: TABLE support_slas; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.support_slas TO erp_app;
+
+
+--
+-- Name: TABLE support_ticket_assignments; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.support_ticket_assignments TO erp_app;
+
+
+--
+-- Name: TABLE support_ticket_comments; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.support_ticket_comments TO erp_app;
+
+
+--
+-- Name: TABLE support_ticket_events; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.support_ticket_events TO erp_app;
+
+
+--
+-- Name: TABLE support_tickets; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.support_tickets TO erp_app;
+
+
+--
+-- Name: TABLE task_checklist_items; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.task_checklist_items TO erp_app;
+
+
+--
+-- Name: TABLE task_checklists; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.task_checklists TO erp_app;
+
+
+--
+-- Name: TABLE tasks; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tasks TO erp_app;
+
+
+--
+-- Name: TABLE tenant_modules; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tenant_modules TO erp_app;
+
+
+--
+-- Name: TABLE tenant_settings; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tenant_settings TO erp_app;
+
+
+--
+-- Name: TABLE tenant_subscriptions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tenant_subscriptions TO erp_app;
+
+
+--
+-- Name: TABLE tenant_usage_counters; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tenant_usage_counters TO erp_app;
+
+
+--
+-- Name: TABLE tenant_users; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tenant_users TO erp_app;
+
+
+--
+-- Name: TABLE tenants; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tenants TO erp_app;
+
+
+--
+-- Name: TABLE time_entries; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.time_entries TO erp_app;
+
+
+--
+-- Name: TABLE user_roles; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.user_roles TO erp_app;
+
+
+--
+-- Name: TABLE users; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.users TO erp_app;
+
+
+--
+-- Name: TABLE warranty_claims; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.warranty_claims TO erp_app;
+
+
+--
+-- Name: TABLE warranty_policies; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.warranty_policies TO erp_app;
+
+
+--
+-- Name: TABLE webhook_deliveries; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.webhook_deliveries TO erp_app;
+
+
+--
+-- Name: TABLE webhook_endpoints; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.webhook_endpoints TO erp_app;
+
+
+--
+-- Name: TABLE webhook_inbound_events; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.webhook_inbound_events TO erp_app;
+
+
+--
+-- Name: TABLE work_orders; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.work_orders TO erp_app;
+
+
+--
+-- Name: TABLE workflow_definitions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workflow_definitions TO erp_app;
+
+
+--
+-- Name: TABLE workflow_runs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workflow_runs TO erp_app;
+
+
+--
 -- PostgreSQL database dump complete
 --
 
-\unrestrict EzNtKE3rjFTdfj0YpnkUsm9kEq1ZRfmQhjPZAd7p2BikcaTqcis9jbmavhybZxA
+\unrestrict msaAD1PTgG1HfeN3Gk8W3gSqkdTXD9EHJrelBdvAFrc6SXXvGjykCuuZwyxASkb
 
