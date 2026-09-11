@@ -105,7 +105,7 @@ export default function ForgotPasswordForm() {
                   placeholder="tu@empresa.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-xl border-[1.5px] border-[#E1E7EC] bg-[#F6F8FA] py-2.5 pl-[42px] pr-3.5 text-[15px] text-[#0F1F2E] transition-all placeholder:text-[#5C6F81]/60 focus:border-[color:var(--teal-dark)] focus:bg-white focus:shadow-[0_0_0_4px_rgba(128,206,215,0.19)] focus:outline-none"
+                  className="w-full rounded-2xl border-[1.5px] border-[#E1E7EC] bg-[#F6F8FA] py-2.5 pl-[42px] pr-3.5 text-[15px] text-[#0F1F2E] transition-all placeholder:text-[#5C6F81]/60 focus:border-[color:var(--teal-dark)] focus:bg-white focus:shadow-[0_0_0_4px_rgba(128,206,215,0.19)] focus:outline-none"
                   style={{ ["--teal-dark" as string]: TEAL_DARK }}
                 />
               </div>
@@ -129,7 +129,7 @@ export default function ForgotPasswordForm() {
               whileHover={loading ? undefined : { scale: 1.02 }}
               whileTap={loading ? undefined : { scale: 0.98 }}
               transition={{ duration: 0.15 }}
-              className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-[15px] font-semibold text-white shadow-[0_4px_14px_-4px_rgba(0,35,71,0.35)] transition-shadow hover:shadow-[0_10px_24px_-8px_rgba(0,35,71,0.4)] disabled:cursor-not-allowed disabled:opacity-70"
+              className="mt-6 flex w-full items-center justify-center gap-2 rounded-full py-3 text-[15px] font-semibold text-white shadow-[0_4px_14px_-4px_rgba(0,35,71,0.35)] transition-shadow hover:shadow-[0_10px_24px_-8px_rgba(0,35,71,0.4)] disabled:cursor-not-allowed disabled:opacity-70"
               style={{ background: `linear-gradient(180deg, ${NAVY_HOVER} 0%, ${NAVY} 100%)` }}
             >
               {loading ? (

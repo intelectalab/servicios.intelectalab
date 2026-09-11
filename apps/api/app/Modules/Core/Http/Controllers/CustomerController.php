@@ -22,8 +22,10 @@ class CustomerController extends Controller
         return response()->json($query->paginate($request->integer('per_page', 20)));
     }
 
-    public function show(Customer $customer)
+    public function show(string $customer)
     {
+        $customer = Customer::findOrFail($customer);
+
         return response()->json($customer->load('party.person', 'party.organization'));
     }
 

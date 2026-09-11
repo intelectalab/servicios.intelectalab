@@ -3,9 +3,13 @@
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Core\Http\Controllers\CustomerController;
+use App\Modules\Services\Http\Controllers\ServiceController;
+use App\Modules\Services\Http\Controllers\QuotationController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
+    Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword']);
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
 
     Route::middleware(['auth:sanctum', 'tenant.context'])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
@@ -17,6 +21,28 @@ Route::prefix('v1')->group(function () {
         });
 
         Route::middleware('permission:core.manage')->post('/customers', [CustomerController::class, 'store']);
+
+        // Servicios
+        Route::middleware('permission:services.view')->group(function () {
+            Route::get('/services', [ServiceController::class, 'index']);
+            Route::get('/services/{service}', [ServiceController::class, 'show']);
+        });
+        Route::middleware('permission:services.manage')->group(function () {
+            Route::post('/services', [ServiceController::class, 'store']);
+            Route::post('/services/{service}/activate', [ServiceController::class, 'activate']);
+        });
+
+        // Cotizaciones
+        Route::middleware('permission:quotations.view')->group(function () {
+            Route::get('/quotations', [QuotationController::class, 'index']);
+            Route::get('/quotations/{quotation}', [QuotationController::class, 'show']);
+        });
+        Route::middleware('permission:quotations.manage')->group(function () {
+            Route::post('/quotations', [QuotationController::class, 'store']);
+            Route::post('/quotations/{quotation}/submit', [QuotationController::class, 'submit']);
+            Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
+            Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject']);
+        });
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {
             return response()->json(['message' => 'Tienes permiso para ver usuarios.']);

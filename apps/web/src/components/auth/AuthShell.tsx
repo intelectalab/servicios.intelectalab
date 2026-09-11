@@ -80,7 +80,7 @@ export default function AuthShell({
     <div className="flex min-h-screen bg-[#F6F8FA] text-[#0F1F2E]">
       {/* Panel izquierdo — marca (oculto en mobile) */}
       <aside
-        className="relative hidden w-[44%] flex-col justify-between overflow-hidden p-14 text-white md:flex"
+        className="relative hidden w-1/2 lg:w-[45%] flex-col justify-between overflow-hidden p-14 text-white md:flex"
         style={{ background: `linear-gradient(165deg, ${NAVY} 0%, ${NAVY_DEEP} 100%)` }}
       >
         <div
@@ -112,26 +112,32 @@ export default function AuthShell({
           transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
         />
 
-        <div className="relative mt-10 max-w-sm">
+        <div className="relative mt-8 max-w-2xl">
           <Logo variant="light" />
-          <p className="mt-12 text-[32px] font-bold leading-tight tracking-tight">
-            Toda tu operación, en un solo lugar.
+          <p className="mt-12 text-[38px] font-bold leading-tight tracking-tight">
+            Toda tu operación,<br />en un solo lugar.
           </p>
-          <p className="mt-4 max-w-[340px] text-[15px] leading-relaxed text-[#C7D6E4]">
+          <p className="mt-5 max-w-[400px] text-[16px] leading-relaxed text-[#C7D6E4]">
             Clientes, permisos y equipos — administrados desde un mismo panel,
             con el control que tu empresa necesita.
           </p>
 
-          <ul className="mt-10 flex flex-col gap-4">
+          {/* Nuevo diseño de contenedores para características */}
+          <div className="mt-12 grid grid-cols-1 gap-4 xl:grid-cols-3">
             {FEATURES.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-center gap-3 text-[14px] text-[#DCE7F0]">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.06] ring-1 ring-white/10">
-                  <Icon size={15} className="text-[#80CED7]" />
+              <div 
+                key={text} 
+                className="flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-sm transition-all hover:bg-white/[0.07]"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] ring-1 ring-white/10">
+                  <Icon size={20} className="text-[#80CED7]" />
                 </span>
-                {text}
-              </li>
+                <span className="text-[14px] font-medium leading-snug text-[#DCE7F0]">
+                  {text}
+                </span>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
 
         <p className="relative text-[13px] text-[#7C93A8]">
@@ -142,7 +148,7 @@ export default function AuthShell({
       {/* Panel derecho — contenido de la pantalla */}
       <main className="flex flex-1 items-center justify-center p-6">
         <motion.div
-          className="w-full max-w-sm rounded-2xl border border-[#E1E7EC] bg-white p-7 shadow-[0_1px_2px_rgba(15,31,46,0.04),0_12px_28px_-16px_rgba(15,31,46,0.12)] sm:p-9"
+          className="w-full max-w-[420px] rounded-3xl border border-[#EAECEF] bg-white p-8 shadow-[0_8px_40px_-12px_rgba(15,31,46,0.08)] sm:p-10"
           variants={container}
           initial="hidden"
           animate="show"
@@ -152,14 +158,16 @@ export default function AuthShell({
           </motion.div>
 
           <motion.div variants={item}>
-            <h1 className="text-[27px] font-bold tracking-tight">{title}</h1>
-            <p className="mt-2 text-[15px] text-[#5C6F81]">{subtitle}</p>
+            <h1 className="text-[28px] font-bold tracking-tight">{title}</h1>
+            <p className="mt-2.5 text-[15px] text-[#5C6F81]">{subtitle}</p>
           </motion.div>
 
-          {children}
+          <div className="mt-8">
+            {children}
+          </div>
 
           {footer && (
-            <motion.p variants={item} className="mt-7 text-center text-[13.5px] text-[#5C6F81]">
+            <motion.p variants={item} className="mt-8 text-center text-[14px] text-[#5C6F81]">
               {footer}
             </motion.p>
           )}
