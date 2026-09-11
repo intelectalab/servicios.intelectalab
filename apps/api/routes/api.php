@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 use App\Modules\Core\Http\Controllers\CustomerController;
 use App\Modules\Services\Http\Controllers\ServiceController;
 use App\Modules\Services\Http\Controllers\QuotationController;
+use App\Modules\Services\Http\Controllers\ContractController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -13,6 +14,7 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware(['auth:sanctum', 'tenant.context'])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
+        Route::get('/me/permissions', [AuthController::class, 'permissions']);
         Route::post('/logout', [AuthController::class, 'logout']);
 
         Route::middleware('permission:core.view')->group(function () {
@@ -42,6 +44,16 @@ Route::prefix('v1')->group(function () {
             Route::post('/quotations/{quotation}/submit', [QuotationController::class, 'submit']);
             Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
             Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject']);
+        });
+
+        // Contratos
+        Route::middleware('permission:contracts.view')->group(function () {
+            Route::get('/contracts', [ContractController::class, 'index']);
+            Route::get('/contracts/{contract}', [ContractController::class, 'show']);
+        });
+        Route::middleware('permission:contracts.manage')->group(function () {
+            Route::post('/quotations/{quotation}/contract', [ContractController::class, 'generateFromQuotation']);
+            Route::post('/contracts/{contract}/activate', [ContractController::class, 'activate']);
         });
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {
