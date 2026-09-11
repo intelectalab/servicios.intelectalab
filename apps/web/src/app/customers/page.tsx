@@ -23,17 +23,17 @@ import {
   getCustomerDocument,
 } from "@/types/customer";
 
-const NAVY = "#002347";
-const NAVY_HOVER = "#013a70";
+const NAVY = "var(--app-brand-deep)";
+const NAVY_HOVER = "var(--app-brand)";
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  ACTIVE: { bg: "#E8F5EC", text: "#2E7D4F", label: "Activo" },
-  INACTIVE: { bg: "#F1F3F5", text: "#5C6F81", label: "Inactivo" },
-  SUSPENDED: { bg: "#FCEAE8", text: "#C4453B", label: "Suspendido" },
+  ACTIVE: { bg: "var(--status-active-bg)", text: "var(--status-active-text)", label: "Activo" },
+  INACTIVE: { bg: "var(--status-inactive-bg)", text: "var(--status-inactive-text)", label: "Inactivo" },
+  SUSPENDED: { bg: "var(--status-suspended-bg)", text: "var(--status-suspended-text)", label: "Suspendido" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? { bg: "#F1F3F5", text: "#5C6F81", label: status };
+  const style = STATUS_STYLES[status] ?? { bg: "var(--status-inactive-bg)", text: "var(--status-inactive-text)", label: status };
   return (
     <span
       className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
@@ -114,7 +114,7 @@ export default function CustomersPage() {
         </div>
         <Link
           href="/customers/new"
-          className="mt-4 flex w-fit items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-white shadow-[0_4px_14px_-4px_rgba(0,35,71,0.35)] transition-shadow hover:shadow-[0_10px_24px_-8px_rgba(0,35,71,0.4)] sm:mt-0"
+          className="mt-4 flex w-fit items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-[var(--app-action-text)] shadow-[0_4px_14px_-4px_rgba(0,35,71,0.35)] transition-shadow hover:shadow-[0_10px_24px_-8px_rgba(0,35,71,0.4)] sm:mt-0"
           style={{ background: `linear-gradient(180deg, ${NAVY_HOVER} 0%, ${NAVY} 100%)` }}
         >
           <Plus size={16} />
@@ -146,8 +146,8 @@ export default function CustomersPage() {
               className="rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors"
               style={
                 statusFilter === s
-                  ? { backgroundColor: NAVY, color: "#fff" }
-                  : { backgroundColor: "#fff", color: "#5C6F81", border: "1.5px solid #E1E7EC" }
+                  ? { backgroundColor: NAVY, color: "var(--app-action-text)" }
+                  : { backgroundColor: "var(--app-surface)", color: "var(--app-muted)", border: "1.5px solid var(--app-border)" }
               }
             >
               {s === "" ? "Todos" : STATUS_STYLES[s]?.label ?? s}
@@ -214,7 +214,7 @@ export default function CustomersPage() {
                       <div className="flex items-center gap-3">
                         <span
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                          style={{ backgroundColor: "#E9F4F6" }}
+                          style={{ backgroundColor: "var(--app-brand-soft)" }}
                         >
                           {isOrg ? (
                             <Building2 size={15} className="text-[#4FA9B4]" />

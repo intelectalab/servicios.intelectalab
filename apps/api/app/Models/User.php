@@ -63,4 +63,16 @@ class User extends Authenticatable implements CanResetPasswordContract
             ->where('permissions.code', $permissionCode)
             ->exists();
     }
+
+    public function permissionCodes(): array
+    {
+        return DB::table('user_roles')
+            ->join('role_permissions', 'user_roles.role_id', '=', 'role_permissions.role_id')
+            ->join('permissions', 'role_permissions.permission_id', '=', 'permissions.id')
+            ->where('user_roles.user_id', $this->id)
+            ->pluck('permissions.code')
+            ->unique()
+            ->values()
+            ->all();
+    }
 }

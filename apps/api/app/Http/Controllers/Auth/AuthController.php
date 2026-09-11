@@ -73,6 +73,13 @@ class AuthController extends Controller
         return response()->json($request->user());
     }
 
+    public function permissions(Request $request)
+    {
+        return response()->json([
+            'permissions' => $request->user()->permissionCodes(),
+        ]);
+    }
+
     public function logout(Request $request)
     {
         $tenantId = $request->attributes->get('tenant_id');

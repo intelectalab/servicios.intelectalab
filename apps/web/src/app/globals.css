@@ -1,8 +1,49 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #eaf4f8;
   --foreground: #171717;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f2f8fa;
+  --app-page: #eaf5f8;
+  --app-text: #171717;
+  --app-muted: #526778;
+  --app-border: #cfe0e8;
+  --app-brand: #0c74a6;
+  --app-brand-deep: #064d6e;
+  --app-brand-soft: #dff3f8;
+  --app-tooltip: #171717;
+  --app-tooltip-text: #ffffff;
+  --app-action-text: #ffffff;
+  --status-active-bg: #e8f5ec;
+  --status-active-text: #2e7d4f;
+  --status-inactive-bg: #f1f3f5;
+  --status-inactive-text: #526778;
+  --status-suspended-bg: #fceae8;
+  --status-suspended-text: #c4453b;
+}
+
+[data-theme="dark"] {
+  --background: #111b22;
+  --foreground: #f4fbfd;
+  --app-surface: #182b35;
+  --app-surface-muted: #203b47;
+  --app-page: #0e1c24;
+  --app-text: #f4fbfd;
+  --app-muted: #a9c1cc;
+  --app-border: #34515d;
+  --app-brand: #7fd4f5;
+  --app-brand-deep: #0c74a6;
+  --app-brand-soft: #224c5d;
+  --app-tooltip: #e8f8fc;
+  --app-tooltip-text: #071116;
+  --app-action-text: #ffffff;
+  --status-active-bg: #234c3d;
+  --status-active-text: #9ce6bd;
+  --status-inactive-bg: #2b3e48;
+  --status-inactive-text: #b8cbd4;
+  --status-suspended-bg: #593b3b;
+  --status-suspended-text: #ffb0a8;
 }
 
 @theme inline {
@@ -21,6 +62,41 @@
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: var(--app-text);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+.app-page { background-color: var(--app-page); color: var(--app-text); }
+.app-surface { background-color: var(--app-surface); }
+.app-surface-muted { background-color: var(--app-surface-muted); }
+.app-text { color: var(--app-text); }
+.app-muted { color: var(--app-muted); }
+.app-border { border-color: var(--app-border); }
+.app-brand { color: var(--app-brand); }
+.app-brand-bg { background-color: var(--app-brand-deep); }
+.app-brand-soft { background-color: var(--app-brand-soft); }
+.app-hover:hover { background-color: var(--app-surface-muted); color: var(--app-text); }
+
+.logo-dark { display: none; }
+[data-theme="dark"] .logo-light { display: none; }
+[data-theme="dark"] .logo-dark { display: block; }
+
+.theme-sun-icon { display: none; }
+[data-theme="dark"] .theme-moon-icon { display: none; }
+[data-theme="dark"] .theme-sun-icon { display: block; }
+
+[data-theme="dark"] [class*="bg-white"] { background-color: var(--app-surface) !important; }
+[data-theme="dark"] [class*="bg-[#F6F8FA]"] { background-color: var(--app-page) !important; }
+[data-theme="dark"] [class*="bg-[#F1F3F5]"] { background-color: var(--app-surface-muted) !important; }
+[data-theme="dark"] [class*="bg-[#E9F4F6]"] { background-color: var(--app-brand-soft) !important; }
+[data-theme="dark"] [class*="bg-[#FAFBFC]"] { background-color: var(--app-surface-muted) !important; }
+[data-theme="dark"] [class*="bg-[#F8FAFC]"] { background-color: var(--app-surface-muted) !important; }
+[data-theme="dark"] [class*="bg-[#EBF8FA]"] { background-color: var(--app-brand-soft) !important; }
+[data-theme="dark"] [class*="text-[#0F1F2E]"] { color: var(--app-text) !important; }
+[data-theme="dark"] [class*="text-[#5C6F81]"] { color: var(--app-muted) !important; }
+[data-theme="dark"] [class*="text-[#8A9BA8]"] { color: var(--app-muted) !important; }
+[data-theme="dark"] [class*="text-[#006070]"] { color: var(--app-brand) !important; }
+[data-theme="dark"] [class*="border-[#E1E7EC]"] { border-color: var(--app-border) !important; }
+[data-theme="dark"] [class*="border-[#F0F2F5]"] { border-color: var(--app-border) !important; }
+[data-theme="dark"] [class*="border-[#F0F4F7]"] { border-color: var(--app-border) !important; }
+[data-theme="dark"] [class*="divide-[#F0F2F5]"] > :not(:last-child) { border-color: var(--app-border) !important; }

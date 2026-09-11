@@ -7,15 +7,17 @@ import { Users, ShieldCheck, Building2 } from "lucide-react";
 
 /**
  * ─────────────────────────────────────────────────────────
- * Paleta — tomada directo del logo de intelectaLab.
- * Si el logo cambia, solo edita estos valores.
+ * Paleta — tomada directo del logo de Grupo de Soluciones Creativas.
+ * El celeste es el protagonista (ícono + "grupo de soluciones"),
+ * así que es el primario. Los nombres NAVY/TEAL quedaron del
+ * branding anterior; si el logo cambia otra vez, edita estos valores.
  * ─────────────────────────────────────────────────────────
  */
-export const NAVY = "#002347";
-export const NAVY_DEEP = "#001325";
-export const NAVY_HOVER = "#013a70";
-export const TEAL = "#80CED7";
-export const TEAL_DARK = "#4FA9B4";
+export const NAVY = "#0C74A6";
+export const NAVY_DEEP = "#064D6E";
+export const NAVY_HOVER = "#1791C4";
+export const TEAL = "#7FD4F5";
+export const TEAL_DARK = "#1B92C9";
 
 export const container: Variants = {
   hidden: {},
@@ -33,9 +35,10 @@ export function Logo({ variant = "dark" }: { variant?: "dark" | "light" }) {
     <div className="relative h-11 w-[200px]">
       <Image
         src="/logo.png"
-        alt="intelectaLab"
+        alt="GsCreativas"
         fill
         priority
+        sizes="200px"
         className="object-contain object-left"
         style={{ filter: variant === "light" ? "brightness(0) invert(1)" : "none" }}
       />
@@ -77,7 +80,7 @@ export default function AuthShell({
   const prefersReducedMotion = useReducedMotion();
 
   return (
-    <div className="flex min-h-screen bg-[#F6F8FA] text-[#0F1F2E]">
+    <div className="app-page flex min-h-screen">
       {/* Panel izquierdo — marca (oculto en mobile) */}
       <aside
         className="relative hidden w-1/2 lg:w-[45%] flex-col justify-between overflow-hidden p-14 text-white md:flex"
@@ -130,7 +133,7 @@ export default function AuthShell({
                 className="flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-sm transition-all hover:bg-white/[0.07]"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] ring-1 ring-white/10">
-                  <Icon size={20} className="text-[#80CED7]" />
+                  <Icon size={20} className="text-[#7FD4F5]" />
                 </span>
                 <span className="text-[14px] font-medium leading-snug text-[#DCE7F0]">
                   {text}
@@ -141,14 +144,14 @@ export default function AuthShell({
         </div>
 
         <p className="relative text-[13px] text-[#7C93A8]">
-          © {new Date().getFullYear()} intelectaLab
+          © {new Date().getFullYear()} Grupo de Soluciones Creativas
         </p>
       </aside>
 
       {/* Panel derecho — contenido de la pantalla */}
-      <main className="flex flex-1 items-center justify-center p-6">
+      <main className="app-page flex flex-1 items-center justify-center p-6">
         <motion.div
-          className="w-full max-w-[420px] rounded-3xl border border-[#EAECEF] bg-white p-8 shadow-[0_8px_40px_-12px_rgba(15,31,46,0.08)] sm:p-10"
+          className="app-surface app-border w-full max-w-[420px] rounded-3xl border p-8 shadow-[0_8px_40px_-12px_rgba(15,31,46,0.08)] sm:p-10"
           variants={container}
           initial="hidden"
           animate="show"
@@ -158,8 +161,8 @@ export default function AuthShell({
           </motion.div>
 
           <motion.div variants={item}>
-            <h1 className="text-[28px] font-bold tracking-tight">{title}</h1>
-            <p className="mt-2.5 text-[15px] text-[#5C6F81]">{subtitle}</p>
+            <h1 className="app-text text-[28px] font-bold tracking-tight">{title}</h1>
+            <p className="app-muted mt-2.5 text-[15px]">{subtitle}</p>
           </motion.div>
 
           <div className="mt-8">
@@ -167,7 +170,7 @@ export default function AuthShell({
           </div>
 
           {footer && (
-            <motion.p variants={item} className="mt-8 text-center text-[14px] text-[#5C6F81]">
+            <motion.p variants={item} className="app-muted mt-8 text-center text-[14px]">
               {footer}
             </motion.p>
           )}
