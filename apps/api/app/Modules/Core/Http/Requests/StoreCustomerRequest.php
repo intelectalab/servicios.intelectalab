@@ -25,6 +25,7 @@ class StoreCustomerRequest extends FormRequest
             'trade_name' => ['nullable', 'string', 'max:200'],
 
             'payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'metadata' => ['nullable', 'array'],
         ];
     }
 }

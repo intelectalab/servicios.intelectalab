@@ -47,6 +47,7 @@ class CustomerController extends Controller
                     'family_name' => $request->family_name,
                     'document_type' => $request->document_type,
                     'document_number' => $request->document_number,
+                    'metadata' => $request->metadata ?? [],
                 ]);
             } else {
                 Organization::create([
@@ -54,6 +55,7 @@ class CustomerController extends Controller
                     'legal_name' => $request->legal_name,
                     'trade_name' => $request->trade_name ?? null,
                     'tax_identifier' => $request->document_number, // el RUC va aquí
+                    'metadata' => $request->metadata ?? [],
                 ]);
             }
 
