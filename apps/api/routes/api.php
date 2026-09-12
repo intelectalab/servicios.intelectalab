@@ -9,6 +9,8 @@ use App\Modules\Services\Http\Controllers\ContractController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
 use App\Modules\Operations\Http\Controllers\TaskController;
 use App\Modules\Operations\Http\Controllers\ChecklistController;
+use App\Modules\Operations\Http\Controllers\TimeEntryController;
+use App\Modules\Operations\Http\Controllers\ResourceController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -86,6 +88,20 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:operations.manage')->group(function () {
             Route::post('/tasks', [TaskController::class, 'store']);
             Route::patch('/tasks/{task}/checklist-items/{item}', [TaskController::class, 'completeChecklistItem']);
+        });
+
+        // Registro de horas
+        Route::middleware('permission:operations.view')->get('/time-entries', [TimeEntryController::class, 'index']);
+        Route::middleware('permission:operations.manage')->group(function () {
+            Route::post('/time-entries', [TimeEntryController::class, 'store']);
+            Route::post('/time-entries/{timeEntry}/approve', [TimeEntryController::class, 'approve']);
+        });
+
+        // Recursos
+        Route::middleware('permission:operations.view')->get('/resources', [ResourceController::class, 'index']);
+        Route::middleware('permission:operations.manage')->group(function () {
+            Route::post('/resources', [ResourceController::class, 'store']);
+            Route::post('/resources/{resource}/assign', [ResourceController::class, 'assign']);
         });
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {
