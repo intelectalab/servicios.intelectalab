@@ -14,7 +14,6 @@ import {
   AlertCircle,
   RefreshCw,
 } from "lucide-react";
-import AppShell from "@/components/layout/AppShell";
 import { apiFetch, ApiError } from "@/lib/api";
 import {
   type Customer,
@@ -104,7 +103,7 @@ export default function CustomersPage() {
   }, [customers, search]);
 
   return (
-    <AppShell>
+    <>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
@@ -275,6 +274,6 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
-    </AppShell>
+    </>
   );
 }

@@ -6,6 +6,9 @@ use App\Modules\Core\Http\Controllers\CustomerController;
 use App\Modules\Services\Http\Controllers\ServiceController;
 use App\Modules\Services\Http\Controllers\QuotationController;
 use App\Modules\Services\Http\Controllers\ContractController;
+use App\Modules\Operations\Http\Controllers\WorkOrderController;
+use App\Modules\Operations\Http\Controllers\TaskController;
+use App\Modules\Operations\Http\Controllers\ChecklistController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -54,6 +57,35 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:contracts.manage')->group(function () {
             Route::post('/quotations/{quotation}/contract', [ContractController::class, 'generateFromQuotation']);
             Route::post('/contracts/{contract}/activate', [ContractController::class, 'activate']);
+        });
+
+        // Checklists (plantillas)
+        Route::middleware('permission:operations.view')->group(function () {
+            Route::get('/checklists', [ChecklistController::class, 'index']);
+            Route::get('/checklists/{checklist}', [ChecklistController::class, 'show']);
+        });
+        Route::middleware('permission:operations.manage')->post('/checklists', [ChecklistController::class, 'store']);
+
+        // Órdenes de trabajo
+        Route::middleware('permission:operations.view')->group(function () {
+            Route::get('/work-orders', [WorkOrderController::class, 'index']);
+            Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show']);
+        });
+        Route::middleware('permission:operations.manage')->group(function () {
+            Route::post('/work-orders', [WorkOrderController::class, 'store']);
+            Route::post('/work-orders/{workOrder}/assign', [WorkOrderController::class, 'assign']);
+            Route::post('/work-orders/{workOrder}/start', [WorkOrderController::class, 'start']);
+            Route::post('/work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete']);
+        });
+
+        // Tareas
+        Route::middleware('permission:operations.view')->group(function () {
+            Route::get('/tasks', [TaskController::class, 'index']);
+            Route::get('/tasks/{task}', [TaskController::class, 'show']);
+        });
+        Route::middleware('permission:operations.manage')->group(function () {
+            Route::post('/tasks', [TaskController::class, 'store']);
+            Route::patch('/tasks/{task}/checklist-items/{item}', [TaskController::class, 'completeChecklistItem']);
         });
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {

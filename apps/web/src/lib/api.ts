@@ -1,3 +1,5 @@
+import { clearAuthToken, getAuthToken } from "./auth";
+
 export class ApiError extends Error {
   status: number;
   errors?: Record<string, string[]>;
@@ -17,7 +19,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
  * Laravel (422 con `errors`, 401, etc.) y parsea JSON.
  */
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+  const token = getAuthToken();
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -37,7 +39,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
 
   if (!res.ok) {
     if (res.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("token");
+      clearAuthToken();
       window.location.href = "/login";
     }
     throw new ApiError(data?.message ?? "Error al comunicarse con el servidor.", res.status, data?.errors);

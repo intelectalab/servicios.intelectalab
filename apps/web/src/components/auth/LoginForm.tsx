@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Mail, Lock, Check } from "lucide-react";
 import AuthShell, { item, UnderlineLink, NAVY, NAVY_HOVER, TEAL_DARK } from "./AuthShell";
+import { setAuthToken } from "@/lib/auth";
 
 export default function LoginForm() {
   const router = useRouter();
@@ -36,7 +37,7 @@ export default function LoginForm() {
         throw new Error(message);
       }
 
-      localStorage.setItem("token", data.token);
+      setAuthToken(data.token);
       router.push("/customers");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ocurrió un error. Intenta de nuevo.");

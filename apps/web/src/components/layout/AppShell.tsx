@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BriefcaseBusiness, FileText, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api";
+import { clearAuthToken } from "@/lib/auth";
 import Header from "@/components/layout/Header";
 import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
 
@@ -49,7 +50,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     } catch {
       // Si falla la llamada, igual limpiamos la sesión localmente.
     } finally {
-      localStorage.removeItem("token");
+      clearAuthToken();
       router.push("/login");
     }
   }
