@@ -11,6 +11,7 @@ use App\Modules\Operations\Http\Controllers\TaskController;
 use App\Modules\Operations\Http\Controllers\ChecklistController;
 use App\Modules\Operations\Http\Controllers\TimeEntryController;
 use App\Modules\Operations\Http\Controllers\ResourceController;
+use App\Modules\Documents\Http\Controllers\DocumentController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -103,6 +104,14 @@ Route::prefix('v1')->group(function () {
             Route::post('/resources', [ResourceController::class, 'store']);
             Route::post('/resources/{resource}/assign', [ResourceController::class, 'assign']);
         });
+
+        // Documentos
+        Route::middleware('permission:documents.view')->group(function () {
+            Route::get('/documents', [DocumentController::class, 'index']);
+            Route::get('/documents/{document}', [DocumentController::class, 'show']);
+            Route::get('/documents/{document}/download-url', [DocumentController::class, 'downloadUrl']);
+        });
+        Route::middleware('permission:documents.manage')->post('/documents', [DocumentController::class, 'store']);
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {
             return response()->json(['message' => 'Tienes permiso para ver usuarios.']);

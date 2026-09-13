@@ -32,7 +32,22 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+  
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: erp_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: erp_minio_admin
+      MINIO_ROOT_PASSWORD: erp_minio_password
+    command: server /data --console-address ":9001"
+    volumes:
+      - erp_minio_data:/data
 
 volumes:
   erp_postgres_data:
   erp_redis_data:
+  erp_minio_data:
