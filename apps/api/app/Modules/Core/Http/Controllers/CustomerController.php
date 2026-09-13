@@ -8,9 +8,12 @@ use App\Modules\Core\Models\Customer;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Organization;
+use App\Modules\Services\Models\Quotation;
+use App\Modules\Services\Models\Contract;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class CustomerController extends Controller
 {
@@ -87,5 +90,57 @@ class CustomerController extends Controller
             $customer->load('party.person', 'party.organization'),
             201
         );
+    }
+
+    public function deactivate(string $customer, Request $request)
+    {
+        $customer = Customer::findOrFail($customer);
+
+        if ($customer->status === 'INACTIVE') {
+            throw ValidationException::withMessages([
+                'status' => ['Este cliente ya está inactivo.'],
+            ]);
+        }
+
+        $customer->update(['status' => 'INACTIVE']);
+
+        AuditLogger::log(
+            tenantId: $request->attributes->get('tenant_id'),
+            userId: $request->user()->id,
+            action: 'customer.deactivate',
+            entityType: 'Customer',
+            entityId: $customer->id,
+        );
+
+        return response()->json($customer);
+    }
+
+    /**
+     * Vista 360: el cliente junto con sus cotizaciones y contratos relacionados,
+     * para tener una sola pantalla de resumen en vez de navegar por separado.
+     */
+    public function overview(string $customer)
+    {
+        $customer = Customer::with('party.person', 'party.organization')->findOrFail($customer);
+
+        $quotations = Quotation::where('customer_id', $customer->id)
+            ->orderByDesc('created_at')
+            ->get(['id', 'quotation_number', 'status', 'total', 'currency', 'created_at']);
+
+        $contracts = Contract::where('customer_id', $customer->id)
+            ->orderByDesc('created_at')
+            ->get(['id', 'contract_number', 'status', 'total_value', 'currency', 'start_date', 'end_date']);
+
+        return response()->json([
+            'customer' => $customer,
+            'quotations' => $quotations,
+            'contracts' => $contracts,
+            'summary' => [
+                'total_quotations' => $quotations->count(),
+                'total_contracts' => $contracts->count(),
+                'active_contracts' => $contracts->where('status', 'ACTIVE')->count(),
+                'total_contracted_value' => $contracts->where('status', 'ACTIVE')->sum('total_value'),
+            ],
+        ]);
     }
 }

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Core\Http\Controllers\CustomerController;
+use App\Modules\Core\Http\Controllers\SupplierController;
 use App\Modules\Services\Http\Controllers\ServiceController;
 use App\Modules\Services\Http\Controllers\QuotationController;
 use App\Modules\Services\Http\Controllers\ContractController;
@@ -28,7 +29,20 @@ Route::prefix('v1')->group(function () {
             Route::get('/customers/{customer}', [CustomerController::class, 'show']);
         });
 
+        Route::middleware('permission:core.view')->get('/customers/{customer}/overview', [CustomerController::class, 'overview']);
+
         Route::middleware('permission:core.manage')->post('/customers', [CustomerController::class, 'store']);
+        Route::middleware('permission:core.manage')->post('/customers/{customer}/deactivate', [CustomerController::class, 'deactivate']);
+
+        // Proveedores
+        Route::middleware('permission:core.view')->group(function () {
+            Route::get('/suppliers', [SupplierController::class, 'index']);
+            Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
+        });
+        Route::middleware('permission:core.manage')->group(function () {
+            Route::post('/suppliers', [SupplierController::class, 'store']);
+            Route::post('/suppliers/{supplier}/deactivate', [SupplierController::class, 'deactivate']);
+        });
 
         // Servicios
         Route::middleware('permission:services.view')->group(function () {
