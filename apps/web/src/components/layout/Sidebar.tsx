@@ -4,7 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
-import type { ComponentType } from "react";
+import { createPortal } from "react-dom";
+import { useState, type ComponentType } from "react";
 
 export type MenuItem = {
   href: string;
@@ -40,6 +41,12 @@ export default function Sidebar({
   loggingOut,
 }: SidebarProps) {
   const pathname = usePathname();
+  const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
+
+  function showTooltip(event: { currentTarget: HTMLAnchorElement }, label: string) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    setTooltip({ label, top: rect.top + rect.height / 2, left: rect.right + 12 });
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -47,7 +54,11 @@ export default function Sidebar({
         {compact ? <CompactLogo /> : <Logo />}
       </div>
 
-      <nav className={compact ? "flex-1 space-y-1 px-2" : "flex-1 space-y-1 px-3"} aria-label="Navegación principal">
+      <nav
+        className={`min-h-0 flex-1 overflow-y-auto ${compact ? "space-y-1 px-2" : "space-y-1 px-3"}`}
+        aria-label="Navegación principal"
+        onScroll={() => setTooltip(null)}
+      >
         {items.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname?.startsWith(`${href}/`);
 
@@ -56,6 +67,10 @@ export default function Sidebar({
               key={href}
               href={href}
               onClick={onNavigate}
+              onMouseEnter={compact ? (event) => showTooltip(event, label) : undefined}
+              onMouseLeave={compact ? () => setTooltip(null) : undefined}
+              onFocus={compact ? (event) => showTooltip(event, label) : undefined}
+              onBlur={compact ? () => setTooltip(null) : undefined}
               aria-label={compact ? label : undefined}
               className={`group relative flex items-center rounded-xl py-2.5 text-sm font-medium transition-colors ${
                 compact ? "justify-center px-0" : "gap-3 px-3"
@@ -66,12 +81,6 @@ export default function Sidebar({
             >
               <Icon size={17} strokeWidth={2} color={active ? "var(--app-brand)" : undefined} />
               {!compact && <span className="whitespace-nowrap">{label}</span>}
-              {compact && (
-                <span className="invisible pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium opacity-0 shadow-lg transition-all duration-150 group-hover:visible group-hover:translate-x-0 group-hover:opacity-100" style={{ backgroundColor: "var(--app-tooltip)", color: "var(--app-tooltip-text)" }}>
-                  <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent" style={{ borderRightColor: "var(--app-tooltip)" }} />
-                  {label}
-                </span>
-              )}
             </Link>
           );
         })}
@@ -79,6 +88,17 @@ export default function Sidebar({
           <p className="app-muted px-3 py-2 text-sm">No hay módulos disponibles.</p>
         )}
       </nav>
+
+      {compact && tooltip && typeof document !== "undefined" && createPortal(
+        <span
+          className="pointer-events-none fixed z-50 -translate-y-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-lg"
+          style={{ top: tooltip.top, left: tooltip.left, backgroundColor: "var(--app-tooltip)", color: "var(--app-tooltip-text)" }}
+        >
+          <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent" style={{ borderRightColor: "var(--app-tooltip)" }} />
+          {tooltip.label}
+        </span>,
+        document.body,
+      )}
 
       <div className={`app-border ${compact ? "border-t p-2" : "border-t p-3"}`}>
         <button

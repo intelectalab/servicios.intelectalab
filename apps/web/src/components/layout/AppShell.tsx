@@ -58,10 +58,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const visibleMenu = MENU_ITEMS.filter((item) => permissions.includes(item.requiredPermission));
 
   return (
-    <div className="app-page flex min-h-screen">
+    <div className="app-page flex h-screen min-h-0 overflow-hidden">
       {/* Sidebar desktop */}
       <aside
-        className={`app-surface app-border hidden shrink-0 overflow-visible border-r transition-[width] duration-300 md:block ${
+        className={`app-surface app-border hidden h-full min-h-0 shrink-0 overflow-visible border-r transition-[width] duration-300 md:block ${
           sidebarOpen ? "w-64" : "w-16"
         }`}
       >
@@ -91,7 +91,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header
           open={sidebarOpen || mobileOpen}
           currentSection={MENU_ITEMS.find((item) => pathname?.startsWith(item.href))?.label ?? "Inicio"}
@@ -101,7 +101,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           }}
         />
 
-        <main className="flex-1 p-6 md:p-10">{children}</main>
+        <main className="min-h-0 flex-1 overflow-hidden p-6 md:p-10">{children}</main>
       </div>
     </div>
   );

@@ -115,6 +115,106 @@ class CustomerController extends Controller
         return response()->json($customer);
     }
 
+    public function activate(string $customer, Request $request)
+    {
+        $customer = Customer::findOrFail($customer);
+
+        if ($customer->status === 'ACTIVE') {
+            throw ValidationException::withMessages([
+                'status' => ['Este cliente ya está activo.'],
+            ]);
+        }
+
+        $customer->update(['status' => 'ACTIVE']);
+
+        AuditLogger::log(
+            tenantId: $request->attributes->get('tenant_id'),
+            userId: $request->user()->id,
+            action: 'customer.activate',
+            entityType: 'Customer',
+            entityId: $customer->id,
+        );
+
+        return response()->json($customer);
+    }
+
+    public function bulkDeactivate(Request $request)
+    {
+        $request->validate([
+            'ids'   => ['required', 'array'],
+            'ids.*' => ['uuid']
+        ]);
+
+        $tenantId = $request->attributes->get('tenant_id');
+
+        // Filtramos para asegurar que sean del tenant y no estén ya inactivos
+        $validIds = Customer::where('tenant_id', $tenantId)
+            ->whereIn('id', $request->ids)
+            ->where('status', '!=', 'INACTIVE')
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($validIds)) {
+            throw ValidationException::withMessages([
+                'ids' => ['No hay clientes válidos para desactivar.'],
+            ]);
+        }
+
+        Customer::whereIn('id', $validIds)->update(['status' => 'INACTIVE']);
+
+        AuditLogger::log(
+            tenantId: $tenantId,
+            userId: $request->user()->id,
+            action: 'customer.bulk_deactivate',
+            entityType: 'Customer',
+            entityId: null, 
+            metadata: ['affected_ids' => $validIds],
+        );
+
+        return response()->json([
+            'message' => count($validIds) . ' cliente(s) desactivado(s) correctamente.',
+            'affected_ids' => $validIds
+        ]);
+    }
+
+    public function bulkActivate(Request $request)
+    {
+        $request->validate([
+            'ids'   => ['required', 'array'],
+            'ids.*' => ['uuid']
+        ]);
+
+        $tenantId = $request->attributes->get('tenant_id');
+
+        $validIds = Customer::where('tenant_id', $tenantId)
+            ->whereIn('id', $request->ids)
+            ->where('status', '!=', 'ACTIVE')
+            ->pluck('id')
+            ->toArray();
+
+        if (empty($validIds)) {
+            throw ValidationException::withMessages([
+                'ids' => ['No hay clientes válidos para activar.'],
+            ]);
+        }
+
+        Customer::whereIn('id', $validIds)->update(['status' => 'ACTIVE']);
+
+        AuditLogger::log(
+            tenantId: $tenantId,
+            userId: $request->user()->id,
+            action: 'customer.bulk_activate',
+            entityType: 'Customer',
+            entityId: null,
+            metadata: ['affected_ids' => $validIds],
+        );
+
+        return response()->json([
+            'message' => count($validIds) . ' cliente(s) activado(s) correctamente.',
+            'affected_ids' => $validIds
+        ]);
+    }
+
     /**
      * Vista 360: el cliente junto con sus cotizaciones y contratos relacionados,
      * para tener una sola pantalla de resumen en vez de navegar por separado.

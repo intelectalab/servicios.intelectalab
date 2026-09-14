@@ -2,19 +2,24 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
   Plus,
-  ChevronLeft,
-  ChevronRight,
-  Users,
-  Building2,
-  User,
   AlertCircle,
   RefreshCw,
+  Filter,
+  Columns,
+  Trash2,
+  Download,
+  UserPlus,
+  Loader2,
+  CheckCircle,
+  X // <-- Aquí está tu icono X
 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
+import { Pagination } from "@/components/Pagination";
+import { CustomerTable } from "@/components/dashboard/customers/CustomerTable";
 import {
   type Customer,
   type PaginatedResponse,
@@ -22,43 +27,22 @@ import {
   getCustomerDocument,
 } from "@/types/customer";
 
-const NAVY = "var(--app-brand-deep)";
-const NAVY_HOVER = "var(--app-brand)";
-
-const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
-  ACTIVE: { bg: "var(--status-active-bg)", text: "var(--status-active-text)", label: "Activo" },
-  INACTIVE: { bg: "var(--status-inactive-bg)", text: "var(--status-inactive-text)", label: "Inactivo" },
-  SUSPENDED: { bg: "var(--status-suspended-bg)", text: "var(--status-suspended-text)", label: "Suspendido" },
-};
-
-function StatusBadge({ status }: { status: string }) {
-  const style = STATUS_STYLES[status] ?? { bg: "var(--status-inactive-bg)", text: "var(--status-inactive-text)", label: status };
-  return (
-    <span
-      className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium"
-      style={{ backgroundColor: style.bg, color: style.text }}
-    >
-      {style.label}
-    </span>
-  );
-}
-
-function formatCurrency(value: string | number | null) {
-  if (value === null || value === undefined) return "—";
-  const num = typeof value === "string" ? parseFloat(value) : value;
-  if (Number.isNaN(num)) return "—";
-  return num.toLocaleString("es-PE", { style: "currency", currency: "PEN" });
-}
-
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(10);
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [statusFilter, setStatusFilter] = useState<string>("");
+  
+  const [activeTab, setActiveTab] = useState<string>(""); 
   const [search, setSearch] = useState("");
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [refreshTrigger, setRefreshTrigger] = useState(0); 
+
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,14 +51,19 @@ export default function CustomersPage() {
       setLoading(true);
       setError("");
       try {
-        const params = new URLSearchParams({ page: String(page), per_page: "20" });
-        if (statusFilter) params.set("status", statusFilter);
+        const params = new URLSearchParams({ 
+          page: String(page), 
+          per_page: String(perPage) 
+        });
+        if (activeTab) params.set("status", activeTab);
 
         const res = await apiFetch<PaginatedResponse<Customer>>(`/v1/customers?${params}`);
         if (cancelled) return;
+        
         setCustomers(res.data);
         setLastPage(res.last_page);
         setTotal(res.total);
+        setSelectedIds([]); 
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof ApiError ? err.message : "No se pudo cargar la lista de clientes.");
@@ -84,14 +73,9 @@ export default function CustomersPage() {
     }
 
     load();
-    return () => {
-      cancelled = true;
-    };
-  }, [page, statusFilter]);
+    return () => { cancelled = true; };
+  }, [page, perPage, activeTab, refreshTrigger]);
 
-  // Filtro de texto en cliente (nombre/documento) sobre la página actual.
-  // El backend no expone un parámetro de búsqueda todavía — si lo agregas,
-  // lo movemos al fetch para que filtre sobre todo el listado, no solo la página.
   const filtered = useMemo(() => {
     if (!search.trim()) return customers;
     const q = search.trim().toLowerCase();
@@ -102,178 +86,289 @@ export default function CustomersPage() {
     );
   }, [customers, search]);
 
+  const handlePerPageChange = (newPerPage: number) => {
+    setPerPage(newPerPage);
+    setPage(1); 
+  };
+
+  const handleToggleSelection = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = (ids: string[]) => {
+    setSelectedIds(ids);
+  };
+
+  const handleBulkDeactivate = async () => {
+    const idsToDeactivate = selectedIds.filter(id => {
+      const customer = customers.find(c => c.id === id);
+      return customer && customer.status !== 'INACTIVE';
+    });
+
+    if (idsToDeactivate.length === 0) return;
+    if (!window.confirm(`¿Estás seguro de desactivar ${idsToDeactivate.length} cliente(s)?`)) return;
+
+    setIsProcessing(true);
+    try {
+      await apiFetch(`/v1/customers/bulk-deactivate`, { 
+        method: "POST",
+        body: JSON.stringify({ ids: idsToDeactivate })
+      });
+      
+      setRefreshTrigger(prev => prev + 1);
+      setSelectedIds([]); 
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof ApiError ? err.message : "Ocurrió un error al desactivar los clientes.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleBulkActivate = async () => {
+    const idsToActivate = selectedIds.filter(id => {
+      const customer = customers.find(c => c.id === id);
+      return customer && customer.status !== 'ACTIVE';
+    });
+
+    if (idsToActivate.length === 0) return;
+    if (!window.confirm(`¿Estás seguro de reactivar ${idsToActivate.length} cliente(s)?`)) return;
+
+    setIsProcessing(true);
+    try {
+      await apiFetch(`/v1/customers/bulk-activate`, { 
+        method: "POST",
+        body: JSON.stringify({ ids: idsToActivate })
+      });
+      
+      setRefreshTrigger(prev => prev + 1);
+      setSelectedIds([]); 
+    } catch (err) {
+      console.error(err);
+      alert(err instanceof ApiError ? err.message : "Ocurrió un error al activar los clientes.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const TABS = [
+    { id: "", label: "Todos" },
+    { id: "ACTIVE", label: "Activos" },
+    { id: "INACTIVE", label: "Inactivos" },
+  ];
+
+  const selectedCustomers = customers.filter(c => selectedIds.includes(c.id));
+  const hasActiveSelected = selectedCustomers.some(c => c.status === 'ACTIVE');
+  const hasInactiveSelected = selectedCustomers.some(c => c.status === 'INACTIVE');
+
   return (
-    <>
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
-          <p className="mt-1 text-sm text-[#5C6F81]">
-            {loading ? "Cargando…" : `${total} cliente${total === 1 ? "" : "s"} registrado${total === 1 ? "" : "s"}`}
-          </p>
-        </div>
-        <Link
-          href="/customers/new"
-          className="mt-4 flex w-fit items-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold text-[var(--app-action-text)] shadow-[0_4px_14px_-4px_rgba(0,35,71,0.35)] transition-shadow hover:shadow-[0_10px_24px_-8px_rgba(0,35,71,0.4)] sm:mt-0"
-          style={{ background: `linear-gradient(180deg, ${NAVY_HOVER} 0%, ${NAVY} 100%)` }}
-        >
-          <Plus size={16} />
-          Nuevo cliente
-        </Link>
-      </div>
-
-      {/* Filtros */}
-      <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1 sm:max-w-xs">
-          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[#5C6F81]" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre o documento…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-xl border-[1.5px] border-[#E1E7EC] bg-white py-2 pl-10 pr-3 text-sm text-[#0F1F2E] transition-colors placeholder:text-[#5C6F81]/60 focus:border-[#4FA9B4] focus:outline-none focus:ring-4 focus:ring-[#80CED7]/20"
-          />
+    <div className="flex h-full min-h-0 flex-col p-0.1 text-slate-900">
+      
+      {/* Contenedor principal con esquinas asimétricas */}
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white shadow-sm rounded-tl-[40px] rounded-br-[40px]">
+        
+        {/* Header */}
+        <div className="flex shrink-0 flex-col gap-4 px-8 pt-8 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Clientes</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Gestiona la información de tus clientes y controla sus condiciones comerciales.
+            </p>
+          </div>
+          <Link
+            href="/customers/new"
+            className="flex items-center gap-2 rounded-md bg-[var(--app-brand-deep)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--app-brand)]"
+          >
+            <Plus size={16} />
+            Nuevo cliente
+          </Link>
         </div>
 
-        <div className="flex gap-2">
-          {["", "ACTIVE", "INACTIVE", "SUSPENDED"].map((s) => (
+        {/* Tabs */}
+        <div className="mt-4 flex shrink-0 gap-6 border-b border-slate-200 px-8">
+          {TABS.map((tab) => (
             <button
-              key={s || "all"}
-              onClick={() => {
-                setStatusFilter(s);
-                setPage(1);
-              }}
-              className="rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors"
-              style={
-                statusFilter === s
-                  ? { backgroundColor: NAVY, color: "var(--app-action-text)" }
-                  : { backgroundColor: "var(--app-surface)", color: "var(--app-muted)", border: "1.5px solid var(--app-border)" }
-              }
+              key={tab.id}
+              onClick={() => { setActiveTab(tab.id); setPage(1); }}
+              className={`border-b-2 pb-3 text-sm font-medium transition-colors ${
+                activeTab === tab.id
+                  ? "border-[var(--app-brand-deep)] text-[var(--app-brand-deep)]"
+                  : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700"
+              }`}
             >
-              {s === "" ? "Todos" : STATUS_STYLES[s]?.label ?? s}
+              {tab.label}
             </button>
           ))}
         </div>
-      </div>
 
-      {/* Tabla */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="mt-5 overflow-hidden rounded-2xl border border-[#E1E7EC] bg-white"
-      >
-        {error ? (
-          <div className="flex flex-col items-center gap-3 py-16 text-center">
-            <AlertCircle size={28} className="text-[#C4453B]" />
-            <p className="text-sm text-[#5C6F81]">{error}</p>
-            <button
-              onClick={() => setPage((p) => p)}
-              className="mt-1 flex items-center gap-1.5 text-sm font-semibold text-[#002347] hover:underline"
-            >
-              <RefreshCw size={14} />
-              Reintentar
+        {/* Toolbar (Siempre visible) */}
+        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-8 py-4 z-20">
+          <div className="flex flex-1 items-center gap-3">
+            <div className="relative w-full max-w-sm">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar por nombre, RUC o documento..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-9 text-sm transition-colors focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
+              />
+              {/* Botón X dinámico para el buscador */}
+              {search && (
+                <button
+                  onClick={() => setSearch("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            
+            <button className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <Filter size={14} />
+              Más filtros
             </button>
           </div>
-        ) : loading ? (
-          <div className="divide-y divide-[#F0F2F5]">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-6 py-4">
-                <div className="h-9 w-9 animate-pulse rounded-full bg-[#F0F2F5]" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-3 w-40 animate-pulse rounded bg-[#F0F2F5]" />
-                  <div className="h-2.5 w-24 animate-pulse rounded bg-[#F0F2F5]" />
-                </div>
-                <div className="h-5 w-16 animate-pulse rounded-full bg-[#F0F2F5]" />
-              </div>
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-16 text-center">
-            <Users size={28} className="text-[#5C6F81]" />
-            <p className="text-sm font-medium text-[#0F1F2E]">No se encontraron clientes</p>
-            <p className="text-sm text-[#5C6F81]">Prueba con otro término de búsqueda o filtro.</p>
-          </div>
-        ) : (
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-[#E1E7EC] text-xs font-semibold uppercase tracking-wide text-[#5C6F81]">
-                <th className="px-6 py-3">Cliente</th>
-                <th className="px-6 py-3">Documento</th>
-                <th className="px-6 py-3">Límite de crédito</th>
-                <th className="px-6 py-3">Estado</th>
-                <th className="px-6 py-3" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#F0F2F5]">
-              {filtered.map((customer) => {
-                const isOrg = customer.party.party_type === "ORGANIZATION";
-                return (
-                  <tr key={customer.id} className="transition-colors hover:bg-[#FAFBFC]">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full"
-                          style={{ backgroundColor: "var(--app-brand-soft)" }}
-                        >
-                          {isOrg ? (
-                            <Building2 size={15} className="text-[#4FA9B4]" />
-                          ) : (
-                            <User size={15} className="text-[#4FA9B4]" />
-                          )}
-                        </span>
-                        <div>
-                          <p className="font-medium text-[#0F1F2E]">{getCustomerDisplayName(customer)}</p>
-                          <p className="text-xs text-[#5C6F81]">{isOrg ? "Empresa" : "Persona natural"}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-[#5C6F81]">{getCustomerDocument(customer)}</td>
-                    <td className="px-6 py-4 text-[#5C6F81]">{formatCurrency(customer.credit_limit)}</td>
-                    <td className="px-6 py-4">
-                      <StatusBadge status={customer.status} />
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Link
-                        href={`/customers/${customer.id}`}
-                        className="text-sm font-semibold text-[#002347] hover:underline"
-                      >
-                        Ver
-                      </Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </motion.div>
 
-      {/* Paginación */}
-      {!loading && !error && lastPage > 1 && (
-        <div className="mt-5 flex items-center justify-between">
-          <p className="text-sm text-[#5C6F81]">
-            Página {page} de {lastPage}
-          </p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1}
-              className="flex items-center gap-1 rounded-lg border-[1.5px] border-[#E1E7EC] px-3 py-1.5 text-sm font-medium text-[#5C6F81] transition-colors hover:bg-[#F6F8FA] disabled:opacity-40"
-            >
-              <ChevronLeft size={15} />
-              Anterior
-            </button>
-            <button
-              onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
-              disabled={page >= lastPage}
-              className="flex items-center gap-1 rounded-lg border-[1.5px] border-[#E1E7EC] px-3 py-1.5 text-sm font-medium text-[#5C6F81] transition-colors hover:bg-[#F6F8FA] disabled:opacity-40"
-            >
-              Siguiente
-              <ChevronRight size={15} />
+          <div className="flex items-center gap-2">
+            <button className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              <Columns size={14} />
+              Columnas
             </button>
           </div>
         </div>
-      )}
-    </>
+
+        {/* Barra de Acciones Masivas */}
+        <AnimatePresence>
+          {selectedIds.length > 0 && (
+            <motion.div 
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="shrink-0 border-b border-slate-200 bg-[var(--app-brand-soft)] z-10 overflow-hidden"
+            >
+              <div className="flex items-center justify-between gap-4 px-8 py-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded bg-[var(--app-brand-deep)] text-xs font-bold text-white">
+                    {selectedIds.length}
+                  </span>
+                  <span className="text-sm font-medium text-[var(--app-brand-deep)]">
+                    cliente(s) seleccionado(s)
+                  </span>
+                  
+                  {/* BOTÓN X PARA LIMPIAR SELECCIÓN MASIVA */}
+                  <button
+                    onClick={() => setSelectedIds([])}
+                    className="ml-1 rounded-full p-1 text-[var(--app-brand-deep)] transition-colors hover:bg-white/60 focus:outline-none"
+                    aria-label="Deseleccionar todos"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--app-brand-deep)] transition-colors hover:bg-white/60">
+                    <UserPlus size={14} /> Asignar
+                  </button>
+                  <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--app-brand-deep)] transition-colors hover:bg-white/60">
+                    <Download size={14} /> Exportar
+                  </button>
+                  <div className="mx-1 h-4 w-px bg-slate-300" />
+                  
+                  {hasInactiveSelected && (
+                    <button 
+                      onClick={handleBulkActivate}
+                      disabled={isProcessing}
+                      className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-white/60 disabled:opacity-50"
+                    >
+                      {isProcessing ? (
+                        <><Loader2 size={14} className="animate-spin" /> Procesando...</>
+                      ) : (
+                        <><CheckCircle size={14} /> Activar</>
+                      )}
+                    </button>
+                  )}
+
+                  {hasActiveSelected && (
+                    <button 
+                      onClick={handleBulkDeactivate}
+                      disabled={isProcessing}
+                      className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-white/60 disabled:opacity-50"
+                    >
+                      {isProcessing ? (
+                        <><Loader2 size={14} className="animate-spin" /> Procesando...</>
+                      ) : (
+                        <><Trash2 size={14} /> Desactivar</>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Table Area */}
+        <div className="flex-1 overflow-auto bg-white px-2">
+          {error ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <AlertCircle size={32} className="mb-3 text-red-500" />
+              <p className="text-sm text-slate-600">{error}</p>
+              <button
+                onClick={() => setRefreshTrigger(prev => prev + 1)}
+                className="mt-4 flex items-center gap-2 text-sm font-medium text-[var(--app-brand-deep)] hover:underline"
+              >
+                <RefreshCw size={14} /> Reintentar
+              </button>
+            </div>
+          ) : loading ? (
+            <div className="divide-y divide-slate-100 px-6">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 py-4">
+                  <div className="h-4 w-4 animate-pulse rounded bg-slate-200" />
+                  <div className="h-10 w-10 animate-pulse rounded-full bg-slate-200" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 w-48 animate-pulse rounded bg-slate-200" />
+                    <div className="h-3 w-24 animate-pulse rounded bg-slate-200" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                <Search size={24} className="text-slate-400" />
+              </div>
+              <h3 className="text-sm font-medium text-slate-900">No se encontraron clientes</h3>
+              <p className="mt-1 text-sm text-slate-500">Ajusta tu búsqueda o cambia de pestaña.</p>
+            </div>
+          ) : (
+            <CustomerTable 
+              customers={filtered} 
+              selectedIds={selectedIds}
+              onToggleSelection={handleToggleSelection}
+              onSelectAll={handleSelectAll}
+            />
+          )}
+        </div>
+
+        {/* Pagination */}
+        {!loading && !error && (
+          <div className="shrink-0">
+            <Pagination 
+              currentPage={page} 
+              lastPage={lastPage} 
+              total={total}
+              perPage={perPage}
+              onPageChange={setPage} 
+              onPerPageChange={handlePerPageChange}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
