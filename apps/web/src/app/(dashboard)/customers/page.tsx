@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -20,12 +19,14 @@ import {
 import { apiFetch, ApiError } from "@/lib/api";
 import { Pagination } from "@/components/Pagination";
 import { CustomerTable } from "@/components/dashboard/customers/CustomerTable";
+import { CustomerDrawer } from "@/components/dashboard/customers/CustomerDrawer";
 import {
   type Customer,
   type PaginatedResponse,
   getCustomerDisplayName,
   getCustomerDocument,
 } from "@/types/customer";
+import { CustomerOverviewDrawer } from "@/components/dashboard/customers/CustomerOverviewDrawer";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -43,6 +44,9 @@ export default function CustomersPage() {
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,13 +181,13 @@ export default function CustomersPage() {
               Gestiona la información de tus clientes y controla sus condiciones comerciales.
             </p>
           </div>
-          <Link
-            href="/customers/new"
+          <button
+            onClick={() => setIsDrawerOpen(true)}
             className="flex items-center gap-2 rounded-md bg-[var(--app-brand-deep)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--app-brand)]"
           >
             <Plus size={16} />
             Nuevo cliente
-          </Link>
+          </button>
         </div>
 
         {/* Tabs */}
@@ -351,6 +355,7 @@ export default function CustomersPage() {
               selectedIds={selectedIds}
               onToggleSelection={handleToggleSelection}
               onSelectAll={handleSelectAll}
+              onSelectCustomer={(id) => setViewCustomerId(id)}
             />
           )}
         </div>
@@ -368,6 +373,18 @@ export default function CustomersPage() {
             />
           </div>
         )}
+
+        <CustomerDrawer 
+          isOpen={isDrawerOpen} 
+          onClose={() => setIsDrawerOpen(false)} 
+          onSuccess={() => setRefreshTrigger(prev => prev + 1)}
+        />
+
+        <CustomerOverviewDrawer 
+          customerId={viewCustomerId} 
+          onClose={() => setViewCustomerId(null)} 
+          onUpdate={() => setRefreshTrigger(prev => prev + 1)}
+        />
       </div>
     </div>
   );

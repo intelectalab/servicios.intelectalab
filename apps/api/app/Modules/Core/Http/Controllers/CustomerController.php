@@ -92,6 +92,63 @@ class CustomerController extends Controller
         );
     }
 
+    public function update(Request $request, string $id)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        $customer = Customer::where('tenant_id', $tenantId)->findOrFail($id);
+
+        DB::transaction(function () use ($request, $customer, $tenantId) {
+            $party = $customer->party;
+
+            // Actualizar condiciones comerciales del cliente
+            $customer->update([
+                'payment_terms_days' => $request->input('payment_terms_days', $customer->payment_terms_days),
+                'credit_limit' => $request->has('credit_limit') ? $request->input('credit_limit') : $customer->credit_limit,
+            ]);
+
+            // Actualizar datos de la Party según su tipo
+            if ($party->party_type === 'PERSON') {
+                $person = $party->person;
+                if ($person) {
+                    $person->update([
+                        'given_names' => $request->input('given_names', $person->given_names),
+                        'family_name' => $request->input('family_name', $person->family_name),
+                        'document_type' => $request->input('document_type', $person->document_type),
+                        'document_number' => $request->input('document_number', $person->document_number),
+                    ]);
+                }
+            } else {
+                $organization = $party->organization;
+                if ($organization) {
+                    $organization->update([
+                        'legal_name' => $request->input('legal_name', $organization->legal_name),
+                        'trade_name' => $request->input('trade_name', $organization->trade_name),
+                        'tax_identifier' => $request->input('document_number', $organization->tax_identifier),
+                    ]);
+                }
+            }
+
+            // Registrar en la bitácora de auditoría
+            AuditLogger::log(
+                tenantId: $tenantId,
+                userId: $request->user()->id,
+                action: 'customer.update',
+                entityType: 'Customer',
+                entityId: $customer->id,
+                metadata: [
+                    'party_type' => $party->party_type,
+                    'payment_terms_days' => $customer->payment_terms_days,
+                    'credit_limit' => $customer->credit_limit,
+                ],
+            );
+        });
+
+        return response()->json([
+            'message' => 'Cliente actualizado correctamente',
+            'customer' => $customer->load('party.person', 'party.organization')
+        ]);
+    }
+
     public function deactivate(string $customer, Request $request)
     {
         $customer = Customer::findOrFail($customer);
