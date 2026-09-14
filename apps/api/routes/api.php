@@ -17,6 +17,7 @@ use App\Modules\Operations\Http\Controllers\ResourceController;
 use App\Modules\Documents\Http\Controllers\DocumentController;
 use App\Modules\Finance\Http\Controllers\InvoiceController;
 use App\Modules\Finance\Http\Controllers\PaymentController;
+use App\Modules\Support\Http\Controllers\SupportTicketController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -43,6 +44,7 @@ Route::prefix('v1')->group(function () {
             
             // Acciones individuales
             Route::post('/customers', [CustomerController::class, 'store']);
+            Route::put('/customers/{customer}', [CustomerController::class, 'update']);
             Route::post('/customers/{customer}/deactivate', [CustomerController::class, 'deactivate']);
             Route::post('/customers/{customer}/activate', [CustomerController::class, 'activate']);
         });
@@ -168,6 +170,20 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:billing.view')->get('/receivables', [PaymentController::class, 'receivables']);
         Route::middleware('permission:billing.view')->get('/payments', [PaymentController::class, 'index']);
         Route::middleware('permission:billing.manage')->post('/payments', [PaymentController::class, 'store']);
+
+        // Soporte
+        Route::middleware('permission:support.view')->group(function () {
+            Route::get('/support-tickets', [SupportTicketController::class, 'index']);
+            Route::get('/support-tickets/{ticket}', [SupportTicketController::class, 'show']);
+        });
+        Route::middleware('permission:support.manage')->group(function () {
+            Route::post('/support-tickets', [SupportTicketController::class, 'store']);
+            Route::post('/support-tickets/{ticket}/assign', [SupportTicketController::class, 'assign']);
+            Route::post('/support-tickets/{ticket}/comments', [SupportTicketController::class, 'addComment']);
+            Route::post('/support-tickets/{ticket}/resolve', [SupportTicketController::class, 'resolve']);
+            Route::post('/support-tickets/{ticket}/close', [SupportTicketController::class, 'close']);
+            Route::post('/support-tickets/{ticket}/reopen', [SupportTicketController::class, 'reopen']);
+        });
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {
             return response()->json(['message' => 'Tienes permiso para ver usuarios.']);
