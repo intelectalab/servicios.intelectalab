@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
 import { motion } from "framer-motion";
-import { Building2, User, MoreHorizontal, MoreVertical, ArrowUp, ArrowDown, Filter } from "lucide-react";
+import { Building2, User, MoreHorizontal, MoreVertical, ArrowUp, ArrowDown, Filter, Pin, PinOff } from "lucide-react";
 import { type Customer, getCustomerDisplayName, getCustomerDocument } from "@/types/customer";
 import { type CustomFieldDefinition } from "@/types/custom-field";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -35,6 +35,11 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
   // Estado para controlar qué menú de cabecera está abierto
   const [openHeaderMenu, setOpenHeaderMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const headerCellRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
+  const selectionCellRef = useRef<HTMLTableCellElement>(null);
+  const preferencesLoaded = useRef(false);
+  const [frozenColumns, setFrozenColumns] = useState<string[]>([]);
+  const [frozenOffsets, setFrozenOffsets] = useState<Record<string, number>>({});
 
   // Cerrar menú al hacer clic fuera
   useEffect(() => {
@@ -46,6 +51,34 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    let frameId: number | undefined;
+    try {
+      const stored = window.localStorage.getItem(FROZEN_COLUMNS_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          frameId = window.requestAnimationFrame(() => {
+            setFrozenColumns(parsed);
+            preferencesLoaded.current = true;
+          });
+        }
+      }
+    } catch {
+      // Ignorar preferencias dañadas del navegador.
+    } finally {
+      if (!frameId) preferencesLoaded.current = true;
+    }
+    return () => {
+      if (frameId) window.cancelAnimationFrame(frameId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesLoaded.current) return;
+    window.localStorage.setItem(FROZEN_COLUMNS_STORAGE_KEY, JSON.stringify(frozenColumns));
+  }, [frozenColumns]);
 
   useEffect(() => {
     let cancelled = false;
@@ -100,8 +133,8 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
     if (!sortColumn) return customers;
 
     return [...customers].sort((a, b) => {
-      let valA: any = "";
-      let valB: any = "";
+      let valA: string | number = "";
+      let valB: string | number = "";
 
       if (sortColumn === "client") {
         valA = getCustomerDisplayName(a).toLowerCase();
@@ -146,12 +179,126 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
 
   const isAllSelected = sortedCustomers.length > 0 && selectedIds.length === sortedCustomers.length;
 
+  const columns = useMemo(() => [
+    ...STATIC_COLUMNS.slice(0, 2),
+    ...definitions.map((def) => ({ key: def.id, title: def.label })),
+    ...STATIC_COLUMNS.slice(2),
+  ], [definitions]);
+
+  const orderedColumns = useMemo(() => {
+    const availableKeys = new Set(columns.map((column) => column.key));
+    const pinned = frozenColumns.filter((key) => availableKeys.has(key));
+    return [
+      ...pinned.map((key) => columns.find((column) => column.key === key)! ),
+      ...columns.filter((column) => !pinned.includes(column.key)),
+    ];
+  }, [columns, frozenColumns]);
+
+  const lastFrozenColumnKey = useMemo(
+    () => frozenColumns.findLast((key) => orderedColumns.some((column) => column.key === key)),
+    [frozenColumns, orderedColumns]
+  );
+
+  const getFrozenDividerClass = (columnKey: string) =>
+    columnKey === lastFrozenColumnKey ? "border-r-2 border-slate-300" : "";
+
+  useLayoutEffect(() => {
+    const updateOffsets = () => {
+      const offsets: Record<string, number> = {};
+      let offset = selectionCellRef.current?.getBoundingClientRect().width ?? 0;
+
+      for (const column of orderedColumns) {
+        if (!frozenColumns.includes(column.key)) continue;
+        offsets[column.key] = offset;
+        offset += headerCellRefs.current[column.key]?.getBoundingClientRect().width ?? 0;
+      }
+
+      setFrozenOffsets(offsets);
+    };
+
+    const frameId = window.requestAnimationFrame(updateOffsets);
+    const observer = new ResizeObserver(updateOffsets);
+    if (selectionCellRef.current) observer.observe(selectionCellRef.current);
+    Object.values(headerCellRefs.current).forEach((element) => {
+      if (element) observer.observe(element);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
+  }, [orderedColumns, frozenColumns]);
+
+  const toggleFrozenColumn = (columnKey: ColumnKey) => {
+    setFrozenColumns((current) => current.includes(columnKey)
+      ? current.filter((key) => key !== columnKey)
+      : [...current, columnKey]);
+    setOpenHeaderMenu(null);
+  };
+
+  const getFrozenStyle = (columnKey: ColumnKey, isHeader = false) => frozenColumns.includes(columnKey)
+    ? { left: frozenOffsets[columnKey] ?? 0, position: "sticky" as const, zIndex: isHeader ? 70 : 20 }
+    : undefined;
+
+  const renderCustomerCell = (customer: Customer, columnKey: string, isSelected: boolean) => {
+    const isOrg = customer.party.party_type === "ORGANIZATION";
+    const customerVals = customerValuesMap[customer.id] || {};
+    const cellClassName = isSelected
+      ? `px-6 py-4 bg-slate-50 group-hover:bg-slate-50 ${getFrozenDividerClass(columnKey)}`
+      : `px-6 py-4 bg-white group-hover:bg-slate-50 ${getFrozenDividerClass(columnKey)}`;
+    const cellStyle = getFrozenStyle(columnKey);
+
+    if (columnKey === "client") {
+      return (
+        <td key={columnKey} className={cellClassName} style={cellStyle}>
+          <div className="flex items-center gap-3 min-w-[200px]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+              {isOrg ? <Building2 size={18} /> : <User size={18} />}
+            </div>
+            <div>
+              <button type="button" onClick={() => onSelectCustomer(customer.id)} className="font-medium text-slate-900 hover:text-[var(--app-brand-deep)] hover:underline text-left">
+                {getCustomerDisplayName(customer)}
+              </button>
+              <p className="text-xs text-slate-500">{isOrg ? "Empresa" : "Persona Natural"}</p>
+            </div>
+          </div>
+        </td>
+      );
+    }
+
+    if (columnKey === "document") {
+      return <td key={columnKey} className={`${cellClassName} text-slate-600`} style={cellStyle}>{getCustomerDocument(customer)}</td>;
+    }
+    if (columnKey === "payment_terms") {
+      return <td key={columnKey} className={`${cellClassName} text-slate-600`} style={cellStyle}>{customer.payment_terms_days} días</td>;
+    }
+    if (columnKey === "credit_limit") {
+      return <td key={columnKey} className={`${cellClassName} font-medium text-slate-700`} style={cellStyle}>{formatCurrency(customer.credit_limit)}</td>;
+    }
+    if (columnKey === "status") {
+      return <td key={columnKey} className={cellClassName} style={cellStyle}><StatusBadge status={customer.status} /></td>;
+    }
+    if (columnKey === "actions") {
+      return <td key={columnKey} className={`${cellClassName} text-right`} style={cellStyle}><button type="button" onClick={() => onSelectCustomer(customer.id)} className="text-slate-400 transition-colors hover:text-slate-900"><MoreHorizontal size={18} /></button></td>;
+    }
+
+    const value = customerVals[columnKey];
+    const displayValue = value === "true" ? "Sí" : value === "false" ? "No" : value || "—";
+    return <td key={columnKey} className={`${cellClassName} text-slate-600 text-xs`} style={cellStyle}>{loadingCustom ? <span className="text-slate-300">...</span> : displayValue}</td>;
+  };
+
   // Renderizador de cabecera con menú y soporte de key obligatoria
   const renderHeaderWithMenu = (title: string, columnKey: string) => {
     const isSorted = sortColumn === columnKey;
+    const isFrozen = frozenColumns.includes(columnKey);
 
     return (
-      <th key={columnKey} className="sticky top-0 z-20 bg-white px-6 py-4 group/th relative">
+      <th
+        key={columnKey}
+        ref={(element) => { headerCellRefs.current[columnKey] = element; }}
+        style={getFrozenStyle(columnKey, true)}
+        className={`sticky top-0 z-40 bg-white px-6 py-4 group/th relative ${getFrozenDividerClass(columnKey)}`}
+      >
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={() => handleSort(columnKey, sortDirection === "asc" ? "desc" : "asc")}>
             <span>{title}</span>
@@ -185,6 +332,10 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
               <ArrowDown size={14} className="text-slate-400" /> Orden descendente
             </button>
             <div className="my-1 border-t border-slate-100" />
+            <button onClick={() => toggleFrozenColumn(columnKey)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
+              {isFrozen ? <PinOff size={14} className="text-slate-400" /> : <Pin size={14} className="text-slate-400" />}
+              {isFrozen ? "Desinmovilizar columna" : "Inmovilizar columna"}
+            </button>
             <button onClick={() => setOpenHeaderMenu(null)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
               <Filter size={14} className="text-slate-400" /> Filtrar por esta columna
             </button>
@@ -195,11 +346,17 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
   };
 
   return (
-    <div className="overflow-x-auto relative">
+    <div className="relative">
       <table className="w-full border-separate border-spacing-0 text-left text-sm">
-        <thead className="sticky top-0 z-30 bg-white">
+        <thead className="sticky top-0 z-50 bg-white">
           <tr className="border-y border-slate-200 text-xs font-semibold uppercase tracking-wider text-slate-500">
-            <th className="sticky top-0 z-20 w-14 bg-white px-6 py-4">
+            <th
+              ref={selectionCellRef}
+              style={{ left: 0, position: "sticky", zIndex: 70 }}
+              className={`sticky top-0 w-14 bg-white px-6 py-4 ${
+                frozenColumns.length === 0 ? "border-r-2 border-slate-300" : ""
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={isAllSelected}
@@ -207,22 +364,12 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
                 className="h-4 w-4 cursor-pointer rounded border-slate-300 text-[var(--app-brand-deep)] transition-colors focus:ring-[var(--app-brand)]"
               />
             </th>
-            {renderHeaderWithMenu("Cliente", "client")}
-            {renderHeaderWithMenu("Documento", "document")}
-            
-            {definitions.map((def) => renderHeaderWithMenu(def.label, def.id))}
-
-            {renderHeaderWithMenu("Días de Crédito", "payment_terms")}
-            {renderHeaderWithMenu("Límite", "credit_limit")}
-            {renderHeaderWithMenu("Estado", "status")}
-            <th className="sticky top-0 z-20 bg-white px-6 py-4 text-right">Acciones</th>
+            {orderedColumns.map((column) => renderHeaderWithMenu(column.title, column.key))}
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100 bg-white">
           {sortedCustomers.map((customer) => {
-            const isOrg = customer.party.party_type === "ORGANIZATION";
             const isSelected = selectedIds.includes(customer.id);
-            const customerVals = customerValuesMap[customer.id] || {};
 
             return (
               <motion.tr
@@ -233,7 +380,9 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
                   isSelected ? "bg-slate-50/80" : ""
                 }`}
               >
-                <td className="px-6 py-4">
+                <td className={`sticky left-0 z-20 px-6 py-4 group-hover:bg-slate-50 ${
+                  isSelected ? "bg-slate-50" : "bg-white"
+                } ${frozenColumns.length === 0 ? "border-r-2 border-slate-300" : ""}`}>
                   <input
                     type="checkbox"
                     checked={isSelected}
@@ -243,53 +392,7 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
                     }`}
                   />
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3 min-w-[200px]">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                      {isOrg ? <Building2 size={18} /> : <User size={18} />}
-                    </div>
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => onSelectCustomer(customer.id)}
-                        className="font-medium text-slate-900 hover:text-[var(--app-brand-deep)] hover:underline text-left"
-                      >
-                        {getCustomerDisplayName(customer)}
-                      </button>
-                      <p className="text-xs text-slate-500">
-                        {isOrg ? "Empresa" : "Persona Natural"}
-                      </p>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-slate-600">{getCustomerDocument(customer)}</td>
-                
-                {definitions.map((def) => {
-                  const val = customerVals[def.id];
-                  const displayVal = val === "true" ? "Sí" : val === "false" ? "No" : val || "—";
-                  return (
-                    <td key={def.id} className="px-6 py-4 text-slate-600 text-xs">
-                      {loadingCustom ? <span className="text-slate-300">...</span> : displayVal}
-                    </td>
-                  );
-                })}
-
-                <td className="px-6 py-4 text-slate-600">{customer.payment_terms_days} días</td>
-                <td className="px-6 py-4 font-medium text-slate-700">
-                  {formatCurrency(customer.credit_limit)}
-                </td>
-                <td className="px-6 py-4">
-                  <StatusBadge status={customer.status} />
-                </td>
-                <td className="px-6 py-4 text-right">
-                  <button 
-                    type="button" 
-                    onClick={() => onSelectCustomer(customer.id)}
-                    className="text-slate-400 transition-colors hover:text-slate-900"
-                  >
-                    <MoreHorizontal size={18} />
-                  </button>
-                </td>
+                {orderedColumns.map((column) => renderCustomerCell(customer, column.key, isSelected))}
               </motion.tr>
             );
           })}
@@ -298,3 +401,14 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
     </div>
   );
 }
+
+const FROZEN_COLUMNS_STORAGE_KEY = "customers-table-frozen-columns";
+const STATIC_COLUMNS = [
+  { key: "client", title: "Cliente" },
+  { key: "document", title: "Documento" },
+  { key: "payment_terms", title: "Días de Crédito" },
+  { key: "credit_limit", title: "Límite" },
+  { key: "status", title: "Estado" },
+  { key: "actions", title: "Acciones" },
+] as const;
+type ColumnKey = (typeof STATIC_COLUMNS)[number]["key"] | string;

@@ -316,7 +316,8 @@ export default function CustomersPage() {
         </AnimatePresence>
 
         {/* Table Area */}
-        <div className="flex-1 overflow-auto bg-white px-2">
+        <div className="flex-1 min-h-0 bg-white px-2">
+          <div className="h-full min-w-0 overflow-auto">
           {error ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <AlertCircle size={32} className="mb-3 text-red-500" />
@@ -358,6 +359,7 @@ export default function CustomersPage() {
               onSelectCustomer={(id) => setViewCustomerId(id)}
             />
           )}
+          </div>
         </div>
 
         {/* Pagination */}

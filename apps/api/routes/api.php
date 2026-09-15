@@ -18,6 +18,7 @@ use App\Modules\Documents\Http\Controllers\DocumentController;
 use App\Modules\Finance\Http\Controllers\InvoiceController;
 use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
+use App\Modules\Credentials\Http\Controllers\CredentialController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -184,6 +185,18 @@ Route::prefix('v1')->group(function () {
             Route::post('/support-tickets/{ticket}/close', [SupportTicketController::class, 'close']);
             Route::post('/support-tickets/{ticket}/reopen', [SupportTicketController::class, 'reopen']);
         });
+
+        // Rutas de prueba para verificar permisos
+        Route::middleware('permission:credentials.view')->group(function () {
+            Route::get('/credentials', [CredentialController::class, 'index']);
+            Route::get('/credentials/{credential}', [CredentialController::class, 'show']);
+        });
+        Route::middleware('permission:credentials.manage')->group(function () {
+            Route::post('/credentials', [CredentialController::class, 'store']);
+            Route::post('/credentials/{credential}/rotate', [CredentialController::class, 'rotate']);
+        });
+        Route::middleware('permission:credentials.reveal')->post('/credentials/{credential}/reveal', [CredentialController::class, 'reveal']);
+        Route::middleware('permission:credentials.delete')->post('/credentials/{credential}/revoke', [CredentialController::class, 'revoke']);
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {
             return response()->json(['message' => 'Tienes permiso para ver usuarios.']);
