@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { BriefcaseBusiness, FileText, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api";
@@ -13,6 +13,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/services", label: "Servicios", requiredPermission: "services.view", icon: BriefcaseBusiness },
   { href: "/quotations", label: "Cotizaciones", requiredPermission: "quotations.view", icon: FileText },
 ];
+const SIDEBAR_STATE_KEY = "erp-sidebar-open";
 
 type PermissionsResponse = { permissions: string[] };
 
@@ -20,10 +21,26 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarPreferenceLoaded = useRef(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const stored = window.localStorage.getItem(SIDEBAR_STATE_KEY);
+      if (stored !== null) setSidebarOpen(stored === "true");
+      sidebarPreferenceLoaded.current = true;
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, []);
+
+  useEffect(() => {
+    if (!sidebarPreferenceLoaded.current) return;
+    window.localStorage.setItem(SIDEBAR_STATE_KEY, String(sidebarOpen));
+  }, [sidebarOpen]);
 
   useEffect(() => {
     let cancelled = false;

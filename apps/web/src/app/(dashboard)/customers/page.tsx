@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Search,
@@ -12,9 +12,8 @@ import {
   Trash2,
   Download,
   UserPlus,
-  Loader2,
   CheckCircle,
-  X // <-- Aquí está tu icono X
+  X,
 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { Pagination } from "@/components/Pagination";
@@ -27,6 +26,8 @@ import {
   getCustomerDocument,
 } from "@/types/customer";
 import { CustomerOverviewDrawer } from "@/components/dashboard/customers/CustomerOverviewDrawer";
+import { BulkActionModal, CreateCustomFieldModal, DeleteCustomFieldModal } from "@/components/dashboard/customers/CustomerModals";
+import { type CustomFieldDefinition } from "@/types/custom-field";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -37,6 +38,7 @@ export default function CustomersPage() {
   
   const [activeTab, setActiveTab] = useState<string>(""); 
   const [search, setSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -47,6 +49,41 @@ export default function CustomersPage() {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
+
+  // Estado para el Modal de Crear Campo Personalizado al vuelo
+  const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);
+  const [newFieldForm, setNewFieldForm] = useState({
+    label: "",
+    field_type: "text" as "text" | "number" | "date" | "boolean",
+  });
+  const [isCreatingField, setIsCreatingField] = useState(false);
+  const [fieldToDelete, setFieldToDelete] = useState<CustomFieldDefinition | null>(null);
+  const [isDeletingField, setIsDeletingField] = useState(false);
+
+  // Estados para el Modal de Confirmación Masiva
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    type: "activate" | "deactivate" | null;
+    ids: string[];
+  }>({
+    isOpen: false,
+    type: null,
+    ids: [],
+  });
+
+  useEffect(() => {
+    function handleSearchShortcut(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const isEditingControl = target?.matches("input, textarea, select, button, [contenteditable='true']");
+      if (event.key !== "/" || isEditingControl) return;
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    }
+
+    window.addEventListener("keydown", handleSearchShortcut);
+    return () => window.removeEventListener("keydown", handleSearchShortcut);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,55 +142,93 @@ export default function CustomersPage() {
     setSelectedIds(ids);
   };
 
-  const handleBulkDeactivate = async () => {
+  const promptBulkDeactivate = () => {
     const idsToDeactivate = selectedIds.filter(id => {
       const customer = customers.find(c => c.id === id);
       return customer && customer.status !== 'INACTIVE';
     });
-
     if (idsToDeactivate.length === 0) return;
-    if (!window.confirm(`¿Estás seguro de desactivar ${idsToDeactivate.length} cliente(s)?`)) return;
+    setConfirmModal({ isOpen: true, type: "deactivate", ids: idsToDeactivate });
+  };
+
+  const promptBulkActivate = () => {
+    const idsToActivate = selectedIds.filter(id => {
+      const customer = customers.find(c => c.id === id);
+      return customer && customer.status !== 'ACTIVE';
+    });
+    if (idsToActivate.length === 0) return;
+    setConfirmModal({ isOpen: true, type: "activate", ids: idsToActivate });
+  };
+
+  const executeBulkAction = async () => {
+    if (!confirmModal.type || confirmModal.ids.length === 0) return;
 
     setIsProcessing(true);
+    const endpoint = confirmModal.type === "deactivate" 
+      ? "/v1/customers/bulk-deactivate" 
+      : "/v1/customers/bulk-activate";
+
     try {
-      await apiFetch(`/v1/customers/bulk-deactivate`, { 
+      await apiFetch(endpoint, { 
         method: "POST",
-        body: JSON.stringify({ ids: idsToDeactivate })
+        body: JSON.stringify({ ids: confirmModal.ids })
       });
       
       setRefreshTrigger(prev => prev + 1);
       setSelectedIds([]); 
+      setConfirmModal({ isOpen: false, type: null, ids: [] });
     } catch (err) {
       console.error(err);
-      alert(err instanceof ApiError ? err.message : "Ocurrió un error al desactivar los clientes.");
+      alert(err instanceof ApiError ? err.message : "Ocurrió un error al procesar la solicitud.");
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleBulkActivate = async () => {
-    const idsToActivate = selectedIds.filter(id => {
-      const customer = customers.find(c => c.id === id);
-      return customer && customer.status !== 'ACTIVE';
-    });
+  // Guardar nuevo campo personalizado desde el modal flotante
+  const handleCreateCustomFieldSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newFieldForm.label.trim()) return;
 
-    if (idsToActivate.length === 0) return;
-    if (!window.confirm(`¿Estás seguro de reactivar ${idsToActivate.length} cliente(s)?`)) return;
-
-    setIsProcessing(true);
+    setIsCreatingField(true);
     try {
-      await apiFetch(`/v1/customers/bulk-activate`, { 
+      const field_key = newFieldForm.label
+        .toLowerCase()
+        .trim()
+        .replace(/[^\w\s]/gi, '')
+        .replace(/\s+/g, '_');
+
+      await apiFetch("/v1/custom-fields/definitions", {
         method: "POST",
-        body: JSON.stringify({ ids: idsToActivate })
+        body: JSON.stringify({
+          entity_type: "Customer",
+          field_key,
+          label: newFieldForm.label,
+          field_type: newFieldForm.field_type,
+        }),
       });
-      
-      setRefreshTrigger(prev => prev + 1);
-      setSelectedIds([]); 
+
+      setNewFieldForm({ label: "", field_type: "text" });
+      setIsCustomFieldModalOpen(false);
+      setRefreshTrigger(prev => prev + 1); // Recarga la tabla para mostrar la nueva columna automáticamente
     } catch (err) {
-      console.error(err);
-      alert(err instanceof ApiError ? err.message : "Ocurrió un error al activar los clientes.");
+      alert(err instanceof ApiError ? err.message : "No se pudo crear la columna personalizada.");
     } finally {
-      setIsProcessing(false);
+      setIsCreatingField(false);
+    }
+  };
+
+  const handleDeleteCustomField = async () => {
+    if (!fieldToDelete) return;
+    setIsDeletingField(true);
+    try {
+      await apiFetch(`/v1/custom-fields/definitions/${fieldToDelete.id}`, { method: "DELETE" });
+      setFieldToDelete(null);
+      setRefreshTrigger(prev => prev + 1);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "No se pudo eliminar la columna personalizada.");
+    } finally {
+      setIsDeletingField(false);
     }
   };
 
@@ -207,7 +282,7 @@ export default function CustomersPage() {
           ))}
         </div>
 
-        {/* Toolbar (Siempre visible) */}
+        {/* Toolbar */}
         <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-8 py-4 z-20">
           <div className="flex flex-1 items-center gap-3">
             <div className="relative w-full max-w-sm">
@@ -215,11 +290,11 @@ export default function CustomersPage() {
               <input
                 type="text"
                 placeholder="Buscar por nombre, RUC o documento..."
+                ref={searchInputRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-9 text-sm transition-colors focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
               />
-              {/* Botón X dinámico para el buscador */}
               {search && (
                 <button
                   onClick={() => setSearch("")}
@@ -263,7 +338,6 @@ export default function CustomersPage() {
                     cliente(s) seleccionado(s)
                   </span>
                   
-                  {/* BOTÓN X PARA LIMPIAR SELECCIÓN MASIVA */}
                   <button
                     onClick={() => setSelectedIds([])}
                     className="ml-1 rounded-full p-1 text-[var(--app-brand-deep)] transition-colors hover:bg-white/60 focus:outline-none"
@@ -284,29 +358,21 @@ export default function CustomersPage() {
                   
                   {hasInactiveSelected && (
                     <button 
-                      onClick={handleBulkActivate}
+                      onClick={promptBulkActivate}
                       disabled={isProcessing}
                       className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-white/60 disabled:opacity-50"
                     >
-                      {isProcessing ? (
-                        <><Loader2 size={14} className="animate-spin" /> Procesando...</>
-                      ) : (
-                        <><CheckCircle size={14} /> Activar</>
-                      )}
+                      <CheckCircle size={14} /> Activar
                     </button>
                   )}
 
                   {hasActiveSelected && (
                     <button 
-                      onClick={handleBulkDeactivate}
+                      onClick={promptBulkDeactivate}
                       disabled={isProcessing}
                       className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-white/60 disabled:opacity-50"
                     >
-                      {isProcessing ? (
-                        <><Loader2 size={14} className="animate-spin" /> Procesando...</>
-                      ) : (
-                        <><Trash2 size={14} /> Desactivar</>
-                      )}
+                      <Trash2 size={14} /> Desactivar
                     </button>
                   )}
                 </div>
@@ -357,6 +423,8 @@ export default function CustomersPage() {
               onToggleSelection={handleToggleSelection}
               onSelectAll={handleSelectAll}
               onSelectCustomer={(id) => setViewCustomerId(id)}
+              onAddCustomField={() => setIsCustomFieldModalOpen(true)}
+              onRequestDeleteCustomField={setFieldToDelete}
             />
           )}
           </div>
@@ -387,6 +455,29 @@ export default function CustomersPage() {
           onClose={() => setViewCustomerId(null)} 
           onUpdate={() => setRefreshTrigger(prev => prev + 1)}
         />
+
+        <CreateCustomFieldModal
+          isOpen={isCustomFieldModalOpen}
+          form={newFieldForm}
+          isSaving={isCreatingField}
+          onChange={setNewFieldForm}
+          onClose={() => setIsCustomFieldModalOpen(false)}
+          onSubmit={handleCreateCustomFieldSubmit}
+        />
+        <BulkActionModal
+          type={confirmModal.type}
+          ids={confirmModal.ids}
+          isProcessing={isProcessing}
+          onCancel={() => setConfirmModal({ isOpen: false, type: null, ids: [] })}
+          onConfirm={executeBulkAction}
+        />
+        <DeleteCustomFieldModal
+          definition={fieldToDelete}
+          isDeleting={isDeletingField}
+          onCancel={() => setFieldToDelete(null)}
+          onConfirm={handleDeleteCustomField}
+        />
+
       </div>
     </div>
   );
