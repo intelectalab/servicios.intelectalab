@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 interface PaginationProps {
   currentPage: number;
@@ -19,6 +19,39 @@ export function Pagination({
 }: PaginationProps) {
   const start = total === 0 ? 0 : (currentPage - 1) * perPage + 1;
   const end = Math.min(currentPage * perPage, total);
+
+  // Generador de páginas con puntos suspensivos ("...") sin errores de TypeScript
+  const getPageNumbers = () => {
+    const delta = 2;
+    const range: number[] = [];
+    const rangeWithDots: (number | string)[] = [];
+
+    for (let i = 1; i <= lastPage; i++) {
+      if (
+        i === 1 ||
+        i === lastPage ||
+        (i >= currentPage - delta && i <= currentPage + delta)
+      ) {
+        range.push(i);
+      }
+    }
+
+    let lastNum: number | null = null;
+    
+    for (const i of range) {
+      if (lastNum !== null) {
+        if (i - lastNum === 2) {
+          rangeWithDots.push(lastNum + 1);
+        } else if (i - lastNum !== 1) {
+          rangeWithDots.push("...");
+        }
+      }
+      rangeWithDots.push(i);
+      lastNum = i;
+    }
+
+    return rangeWithDots;
+  };
 
   return (
     <div className="flex flex-col items-center justify-between gap-4 border-t border-slate-200 bg-white px-8 py-4 sm:flex-row">
@@ -48,23 +81,77 @@ export function Pagination({
         </div>
       </div>
 
-      {/* Botones de navegación estilo bloque 1 (Derecha) */}
-      <div className="flex gap-2">
+      {/* Botones de navegación estilo paginador avanzado (Derecha) */}
+      <div className="flex items-center gap-1.5">
+        {/* Ir al principio (<<) */}
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage <= 1}
+          title="Primera página"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white"
+        >
+          <ChevronsLeft size={16} strokeWidth={2} />
+        </button>
+
+        {/* Anterior (<) */}
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage <= 1}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-slate-500"
+          title="Página anterior"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white"
         >
           <ChevronLeft size={16} strokeWidth={2} />
-          Anterior
         </button>
+
+        {/* Números de página y puntos suspensivos */}
+        {getPageNumbers().map((page, index) => {
+          if (page === "...") {
+            return (
+              <span
+                key={`dot-${index}`}
+                className="flex h-9 w-9 items-center justify-center text-sm text-slate-400 font-medium"
+              >
+                ...
+              </span>
+            );
+          }
+
+          const pageNum = page as number;
+          const isActive = currentPage === pageNum;
+
+          return (
+            <button
+              key={pageNum}
+              onClick={() => onPageChange(pageNum)}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl border text-sm font-semibold transition-colors ${
+                isActive
+                  ? "border-sky-600 bg-sky-600 text-white shadow-xs" // Forzamos azul sólido y texto blanco
+                  : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+              }`}
+            >
+              {pageNum}
+            </button>
+          );
+        })}
+
+        {/* Siguiente (>) */}
         <button
           onClick={() => onPageChange(Math.min(lastPage, currentPage + 1))}
           disabled={currentPage >= lastPage}
-          className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 disabled:hover:bg-white disabled:hover:text-slate-500"
+          title="Página siguiente"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white"
         >
-          Siguiente
           <ChevronRight size={16} strokeWidth={2} />
+        </button>
+
+        {/* Ir al final (>>) */}
+        <button
+          onClick={() => onPageChange(lastPage)}
+          disabled={currentPage >= lastPage}
+          title="Última página"
+          className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-white"
+        >
+          <ChevronsRight size={16} strokeWidth={2} />
         </button>
       </div>
     </div>

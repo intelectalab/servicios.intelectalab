@@ -7,6 +7,7 @@ use App\Modules\Core\Models\CustomFieldDefinition;
 use App\Modules\Core\Models\CustomFieldValue;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CustomFieldController extends Controller
 {
@@ -113,5 +114,35 @@ class CustomFieldController extends Controller
         );
 
         return response()->json($value->load('definition'));
+    }
+
+    /**
+     * Elimina una definición de campo personalizado y sus valores asociados.
+     */
+    public function destroyDefinition(Request $request, string $id)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        
+        $definition = CustomFieldDefinition::where('tenant_id', $tenantId)->findOrFail($id);
+
+        DB::transaction(function () use ($definition, $tenantId) {
+            // Eliminar los valores asociados a esta definición
+            CustomFieldValue::where('field_id', $definition->id)->delete();
+            
+            // Eliminar la definición
+            $definition->delete();
+        });
+
+        AuditLogger::log(
+            tenantId: $tenantId,
+            userId: $request->user()->id,
+            action: 'custom_field_definition.delete',
+            entityType: 'CustomFieldDefinition',
+            entityId: $id,
+        );
+
+        return response()->json([
+            'message' => 'Campo personalizado eliminado correctamente.'
+        ]);
     }
 }

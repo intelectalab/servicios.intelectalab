@@ -28,6 +28,7 @@ import {
 import { CustomerOverviewDrawer } from "@/components/dashboard/customers/CustomerOverviewDrawer";
 import { BulkActionModal, CreateCustomFieldModal, DeleteCustomFieldModal } from "@/components/dashboard/customers/CustomerModals";
 import { type CustomFieldDefinition } from "@/types/custom-field";
+import { ImportCustomersModal } from "@/components/dashboard/customers/ImportCustomersModal";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -59,6 +60,10 @@ export default function CustomersPage() {
   const [isCreatingField, setIsCreatingField] = useState(false);
   const [fieldToDelete, setFieldToDelete] = useState<CustomFieldDefinition | null>(null);
   const [isDeletingField, setIsDeletingField] = useState(false);
+
+  const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const newDropdownRef = useRef<HTMLDivElement>(null);
 
   // Estados para el Modal de Confirmación Masiva
   const [confirmModal, setConfirmModal] = useState<{
@@ -232,6 +237,16 @@ export default function CustomersPage() {
     }
   };
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (newDropdownRef.current && !newDropdownRef.current.contains(event.target as Node)) {
+        setIsNewDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const TABS = [
     { id: "", label: "Todos" },
     { id: "ACTIVE", label: "Activos" },
@@ -256,13 +271,38 @@ export default function CustomersPage() {
               Gestiona la información de tus clientes y controla sus condiciones comerciales.
             </p>
           </div>
-          <button
-            onClick={() => setIsDrawerOpen(true)}
-            className="flex items-center gap-2 rounded-md bg-[var(--app-brand-deep)] px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-[var(--app-brand)]"
-          >
-            <Plus size={16} />
-            Nuevo cliente
-          </button>
+          <div ref={newDropdownRef} className="relative">
+            <button
+              onClick={() => setIsNewDropdownOpen((prev) => !prev)}
+              className="flex items-center gap-2 rounded-xl bg-[var(--app-brand-deep)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--app-brand)]"
+            >
+              <Plus size={16} />
+              Nuevo cliente
+            </button>
+
+            {isNewDropdownOpen && (
+              <div className="absolute right-0 top-12 z-50 w-48 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl text-xs font-normal">
+                <button
+                  onClick={() => {
+                    setIsNewDropdownOpen(false);
+                    setIsDrawerOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-50 transition-colors font-medium"
+                >
+                  <Plus size={14} className="text-slate-400" /> Crear nuevo
+                </button>
+                <button
+                  onClick={() => {
+                    setIsNewDropdownOpen(false);
+                    setIsImportModalOpen(true);
+                  }}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-slate-700 hover:bg-slate-50 transition-colors font-medium"
+                >
+                  <Download size={14} className="text-slate-400" /> Importar clientes
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -289,7 +329,7 @@ export default function CustomersPage() {
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Buscar por nombre, RUC o documento..."
+                placeholder="Buscar por nombre, RUC o documento... ( / )"
                 ref={searchInputRef}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -476,6 +516,12 @@ export default function CustomersPage() {
           isDeleting={isDeletingField}
           onCancel={() => setFieldToDelete(null)}
           onConfirm={handleDeleteCustomField}
+        />
+
+        <ImportCustomersModal
+          isOpen={isImportModalOpen}
+          onClose={() => setIsImportModalOpen(false)}
+          onSuccess={() => setRefreshTrigger(prev => prev + 1)}
         />
 
       </div>

@@ -19,6 +19,7 @@ use App\Modules\Finance\Http\Controllers\InvoiceController;
 use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
+use App\Modules\Crm\Http\Controllers\CrmLeadController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -33,6 +34,7 @@ Route::prefix('v1')->group(function () {
         // Clientes
         Route::middleware('permission:core.view')->group(function () {
             Route::get('/customers', [CustomerController::class, 'index']);
+            Route::get('/customers/template', [CustomerController::class, 'downloadTemplate']);
             Route::get('/customers/{customer}', [CustomerController::class, 'show']);
         });
 
@@ -42,6 +44,7 @@ Route::prefix('v1')->group(function () {
             // Acciones masivas primero
             Route::post('/customers/bulk-deactivate', [CustomerController::class, 'bulkDeactivate']);
             Route::post('/customers/bulk-activate', [CustomerController::class, 'bulkActivate']);
+            Route::post('/customers/import', [CustomerController::class, 'import']);
             
             // Acciones individuales
             Route::post('/customers', [CustomerController::class, 'store']);
@@ -57,6 +60,7 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware('permission:core.manage')->group(function () {
             Route::post('/custom-fields/definitions', [CustomFieldController::class, 'storeDefinition']);
+            Route::delete('/custom-fields/definitions/{id}', [CustomFieldController::class, 'destroyDefinition']); 
             Route::post('/custom-fields/values', [CustomFieldController::class, 'storeValue']);
         });
         
@@ -197,6 +201,17 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware('permission:credentials.reveal')->post('/credentials/{credential}/reveal', [CredentialController::class, 'reveal']);
         Route::middleware('permission:credentials.delete')->post('/credentials/{credential}/revoke', [CredentialController::class, 'revoke']);
+
+        // CRM - protegido por permiso Y por el switch ON/OFF del tenant
+        Route::middleware(['module:crm', 'permission:crm.view'])->group(function () {
+            Route::get('/crm/leads', [CrmLeadController::class, 'index']);
+            Route::get('/crm/leads/{lead}', [CrmLeadController::class, 'show']);
+        });
+        Route::middleware(['module:crm', 'permission:crm.manage'])->group(function () {
+            Route::post('/crm/leads', [CrmLeadController::class, 'store']);
+            Route::post('/crm/leads/{lead}/qualify', [CrmLeadController::class, 'qualify']);
+            Route::post('/crm/leads/{lead}/convert', [CrmLeadController::class, 'convert']);
+        });
 
         Route::middleware('permission:users.view')->get('/test/users-permission', function () {
             return response()->json(['message' => 'Tienes permiso para ver usuarios.']);
