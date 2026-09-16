@@ -10,6 +10,7 @@ import { apiFetch } from "@/lib/api";
 
 interface CustomerTableProps {
   customers: Customer[];
+  customFieldDefinitions: CustomFieldDefinition[];
   selectedIds: string[];
   onToggleSelection: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
@@ -30,9 +31,8 @@ function formatCurrency(value: string | number | null) {
   });
 }
 
-export function CustomerTable({ customers, selectedIds, onToggleSelection, onSelectAll, onSelectCustomer, onAddCustomField, onRequestDeleteCustomField }: CustomerTableProps) {
+export function CustomerTable({ customers, customFieldDefinitions, selectedIds, onToggleSelection, onSelectAll, onSelectCustomer, onAddCustomField, onRequestDeleteCustomField }: CustomerTableProps) {
   const [tableCustomers, setTableCustomers] = useState(customers);
-  const [definitions, setDefinitions] = useState<CustomFieldDefinition[]>([]);
   const [customerValuesMap, setCustomerValuesMap] = useState<Record<string, Record<string, string>>>({});
   const [loadingCustom, setLoadingCustom] = useState(true);
 
@@ -165,41 +165,26 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
     let cancelled = false;
 
     async function loadTableCustomData() {
-      if (customers.length === 0) {
-        setLoadingCustom(false);
-        return;
-      }
-
       setLoadingCustom(true);
+      setCustomerValuesMap({});
+
       try {
-        const definitionsPromise = apiFetch<CustomFieldDefinition[]>(
-          "/v1/custom-fields/definitions?entity_type=Customer"
-        ).catch(() => []);
-        const valuesPromise = (async () => {
-          const loadedValues: Record<string, Record<string, string>> = {};
-          await Promise.all(
-            customers.map(async (customer) => {
-              const vals = await apiFetch<Array<{ field_id: string; value: string }>>(
-                `/v1/custom-fields/values?entity_type=Customer&entity_id=${customer.id}`
-              ).catch(() => []);
+        const loadedValues: Record<string, Record<string, string>> = {};
+        await Promise.all(
+          customers.map(async (customer) => {
+            const vals = await apiFetch<Array<{ field_id: string; value: string }>>(
+              `/v1/custom-fields/values?entity_type=Customer&entity_id=${customer.id}`
+            ).catch(() => []);
 
-              loadedValues[customer.id] = {};
-              vals.forEach((v) => {
-                loadedValues[customer.id][v.field_id] = v.value;
-              });
-            })
-          );
-          return loadedValues;
-        })();
-
-        const defs = await definitionsPromise;
+            loadedValues[customer.id] = {};
+            vals.forEach((v) => {
+              loadedValues[customer.id][v.field_id] = v.value;
+            });
+          })
+        );
         if (cancelled) return;
-        setDefinitions(defs.filter(d => d.field_key !== "internal_notes"));
 
-        const valuesMap = await valuesPromise;
-
-        if (cancelled) return;
-        setCustomerValuesMap(valuesMap);
+        setCustomerValuesMap(loadedValues);
       } catch (err) {
         console.error("No se pudieron cargar los campos personalizados para la tabla", err);
       } finally {
@@ -232,7 +217,7 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
       });
 
       setEditingCell(null);
-      const definition = definitions.find((item) => item.id === fieldId);
+      const definition = customFieldDefinitions.find((item) => item.id === fieldId);
       showSaveNotice(`"${definition?.label || "Campo"}" cambios guardados`, () => {
         setCustomerValuesMap(prev => ({
           ...prev,
@@ -374,7 +359,9 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
 
   const startEditingCell = (customer: Customer, fieldKey: string, value: string) => {
     setEditingCell({ customerId: customer.id, fieldKey });
-    setTempCellValue(value);
+    setTempCellValue(fieldKey === "credit_limit" && value !== ""
+      ? Number(value).toFixed(2)
+      : value);
     if (fieldKey === "document") {
       setTempDocumentType(customer.party.person?.document_type || "DNI");
     }
@@ -458,9 +445,9 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
 
   const columns = useMemo(() => [
     ...STATIC_COLUMNS.slice(0, 2),
-    ...definitions.filter((def) => !hiddenCustomColumns.includes(def.id)).map((def) => ({ key: def.id, title: def.label, isCustom: true })),
+    ...customFieldDefinitions.filter((def) => !hiddenCustomColumns.includes(def.id)).map((def) => ({ key: def.id, title: def.label, isCustom: true })),
     ...STATIC_COLUMNS.slice(2),
-  ], [definitions, hiddenCustomColumns]);
+  ], [customFieldDefinitions, hiddenCustomColumns]);
 
   const orderedColumnKeys = useMemo(() => {
     const availableKeys = new Set(columns.map((column) => column.key));
@@ -706,10 +693,10 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
       return <td key={columnKey} className={`${cellClassName} text-right`} style={cellStyle}><button type="button" onClick={() => onSelectCustomer(customer.id)} className="text-slate-400 transition-colors hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100"><MoreHorizontal size={18} /></button></td>;
     }
 
-    const isCustomField = definitions.some(d => d.id === columnKey);
+    const isCustomField = customFieldDefinitions.some(d => d.id === columnKey);
 
     if (isCustomField) {
-      const definition = definitions.find(d => d.id === columnKey);
+      const definition = customFieldDefinitions.find(d => d.id === columnKey);
       const isEditing = editingCell?.customerId === customer.id && editingCell?.fieldKey === columnKey;
       const value = customerVals[columnKey] || "";
 
@@ -842,13 +829,13 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
             <button onClick={() => setOpenHeaderMenu(null)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
               <Filter size={14} className="text-slate-400" /> Filtrar por esta columna
             </button>
-            {definitions.some((definition) => definition.id === columnKey) && (
+            {customFieldDefinitions.some((definition) => definition.id === columnKey) && (
               <>
                 <div className="my-1 border-t border-slate-100" />
                 <button onClick={() => { toggleCustomColumnVisibility(columnKey); setOpenHeaderMenu(null); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
                   <EyeOff size={14} className="text-slate-400" /> Ocultar columna
                 </button>
-                <button onClick={() => { onRequestDeleteCustomField(definitions.find((definition) => definition.id === columnKey)!); setOpenHeaderMenu(null); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-red-600 hover:bg-red-50 transition-colors">
+                <button onClick={() => { onRequestDeleteCustomField(customFieldDefinitions.find((definition) => definition.id === columnKey)!); setOpenHeaderMenu(null); }} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-red-600 hover:bg-red-50 transition-colors">
                   <Trash2 size={14} /> Eliminar columna
                 </button>
               </>
@@ -914,10 +901,10 @@ export function CustomerTable({ customers, selectedIds, onToggleSelection, onSel
                     </button>
                     <div className="my-1 border-t border-slate-100" />
                     <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Columnas ocultas</p>
-                    {definitions.filter((definition) => hiddenCustomColumns.includes(definition.id)).length === 0 ? (
+                    {customFieldDefinitions.filter((definition) => hiddenCustomColumns.includes(definition.id)).length === 0 ? (
                       <p className="px-3 py-2 text-slate-400">No hay columnas ocultas</p>
                     ) : (
-                      definitions
+                      customFieldDefinitions
                         .filter((definition) => hiddenCustomColumns.includes(definition.id))
                         .map((definition) => (
                           <button

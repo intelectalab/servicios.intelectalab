@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant.context' => \App\Http\Middleware\SetTenantContext::class,
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'module' => \App\Http\Middleware\CheckModuleEnabled::class,
+            'portal.user' => \App\Http\Middleware\EnsurePortalUser::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

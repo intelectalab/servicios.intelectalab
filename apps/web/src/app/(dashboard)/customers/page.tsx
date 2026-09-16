@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import ExcelJS from "exceljs";
 import {
   Search,
   Plus,
@@ -32,21 +33,23 @@ import { ImportCustomersModal } from "@/components/dashboard/customers/ImportCus
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customFieldDefinitions, setCustomFieldDefinitions] = useState<CustomFieldDefinition[]>([]);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
-  
-  const [activeTab, setActiveTab] = useState<string>(""); 
+
+  const [activeTab, setActiveTab] = useState<string>("");
   const [search, setSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [refreshTrigger, setRefreshTrigger] = useState(0); 
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
@@ -97,19 +100,23 @@ export default function CustomersPage() {
       setLoading(true);
       setError("");
       try {
-        const params = new URLSearchParams({ 
-          page: String(page), 
-          per_page: String(perPage) 
+        const params = new URLSearchParams({
+          page: String(page),
+          per_page: String(perPage),
         });
         if (activeTab) params.set("status", activeTab);
 
-        const res = await apiFetch<PaginatedResponse<Customer>>(`/v1/customers?${params}`);
+        const [res, definitions] = await Promise.all([
+          apiFetch<PaginatedResponse<Customer>>(`/v1/customers?${params}`),
+          apiFetch<CustomFieldDefinition[]>("/v1/custom-fields/definitions?entity_type=Customer").catch(() => []),
+        ]);
         if (cancelled) return;
-        
+
         setCustomers(res.data);
+        setCustomFieldDefinitions(definitions.filter((definition) => definition.field_key !== "internal_notes"));
         setLastPage(res.last_page);
         setTotal(res.total);
-        setSelectedIds([]); 
+        setSelectedIds([]);
       } catch (err) {
         if (cancelled) return;
         setError(err instanceof ApiError ? err.message : "No se pudo cargar la lista de clientes.");
@@ -134,7 +141,7 @@ export default function CustomersPage() {
 
   const handlePerPageChange = (newPerPage: number) => {
     setPerPage(newPerPage);
-    setPage(1); 
+    setPage(1);
   };
 
   const handleToggleSelection = (id: string) => {
@@ -169,18 +176,18 @@ export default function CustomersPage() {
     if (!confirmModal.type || confirmModal.ids.length === 0) return;
 
     setIsProcessing(true);
-    const endpoint = confirmModal.type === "deactivate" 
-      ? "/v1/customers/bulk-deactivate" 
+    const endpoint = confirmModal.type === "deactivate"
+      ? "/v1/customers/bulk-deactivate"
       : "/v1/customers/bulk-activate";
 
     try {
-      await apiFetch(endpoint, { 
+      await apiFetch(endpoint, {
         method: "POST",
         body: JSON.stringify({ ids: confirmModal.ids })
       });
-      
+
       setRefreshTrigger(prev => prev + 1);
-      setSelectedIds([]); 
+      setSelectedIds([]);
       setConfirmModal({ isOpen: false, type: null, ids: [] });
     } catch (err) {
       console.error(err);
@@ -237,6 +244,195 @@ export default function CustomersPage() {
     }
   };
 
+  // ---------------------------------------------------------------------
+  // Exportar a Excel (.xlsx) con el mismo diseño de la maqueta:
+  // título de tabla, encabezado en azul de marca, filas en cebra,
+  // badges de color para Estado, formato de moneda y anchos de columna.
+  // ---------------------------------------------------------------------
+  const handleExport = async () => {
+    const dataToExport = selectedIds.length > 0
+      ? customers.filter(c => selectedIds.includes(c.id))
+      : filtered;
+
+    if (dataToExport.length === 0) {
+      alert("No hay clientes para exportar.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const headers = [
+        "Tipo Persona",
+        "Nombre o Razón Social",
+        "Apellidos",
+        "Tipo Documento",
+        "Número Documento",
+        "Días Crédito",
+        "Límite Crédito",
+        "Estado",
+      ];
+      const customDefs = customFieldDefinitions;
+      const customLabels = customDefs.map((def) => def.label);
+      const allHeaders = [...headers, ...customLabels];
+      const nCols = allHeaders.length;
+
+      // ---- Paleta de marca (Creativas OS) ----
+      const BRAND = "FF2A4FE0";
+      const BRAND_DARK = "FF12225E";
+      const INK = "FF12162A";
+      const SUBTITLE = "FF5B6178";
+      const BORDER_COLOR = "FFD8DCE9";
+      const STRIPE = "FFF7F8FC";
+      const SUCCESS = "FF1E9E6B";
+      const SUCCESS_TINT = "FFE7F7F0";
+      const DANGER = "FFD64545";
+      const DANGER_TINT = "FFFBEAEA";
+
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "Creativas OS";
+      workbook.created = new Date();
+      const ws = workbook.addWorksheet("Clientes");
+
+      const thinBorder = {
+        top: { style: "thin" as const, color: { argb: BORDER_COLOR } },
+        left: { style: "thin" as const, color: { argb: BORDER_COLOR } },
+        bottom: { style: "thin" as const, color: { argb: BORDER_COLOR } },
+        right: { style: "thin" as const, color: { argb: BORDER_COLOR } },
+      };
+
+      // ---- Fila de título ----
+      ws.mergeCells(1, 1, 1, nCols);
+      const titleCell = ws.getCell(1, 1);
+      titleCell.value = "Listado de Clientes";
+      titleCell.font = { name: "Arial", size: 15, bold: true, color: { argb: "FFFFFFFF" } };
+      titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND_DARK } };
+      titleCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      ws.getRow(1).height = 30;
+
+      // ---- Fila de subtítulo ----
+      ws.mergeCells(2, 1, 2, nCols);
+      const subCell = ws.getCell(2, 1);
+      const today = new Date().toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric" });
+      subCell.value = `Exportado el ${today}`;
+      subCell.font = { name: "Arial", size: 9, italic: true, color: { argb: SUBTITLE } };
+      subCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF5F6FA" } };
+      subCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+      ws.getRow(2).height = 18;
+
+      ws.getRow(3).height = 6;
+
+      const HEADER_ROW = 4;
+      const FIRST_DATA_ROW = 5;
+
+      // ---- Fila de encabezado ----
+      allHeaders.forEach((h, i) => {
+        const cell = ws.getCell(HEADER_ROW, i + 1);
+        cell.value = h;
+        cell.font = { name: "Arial", size: 10.5, bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: BRAND } };
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        cell.border = thinBorder;
+      });
+      ws.getRow(HEADER_ROW).height = 32;
+
+      // ---- Filas de datos ----
+      dataToExport.forEach((c, idx) => {
+        const isPerson = c.party?.party_type === "PERSON";
+        const person = c.party?.person;
+        const org = c.party?.organization;
+
+        const rowValues: (string | number)[] = [
+          c.party?.party_type || "PERSON",
+          isPerson ? person?.given_names || "" : org?.legal_name || "",
+          isPerson ? person?.family_name || "" : "",
+          isPerson ? person?.document_type || "" : "RUC",
+          isPerson ? person?.document_number || "" : org?.tax_identifier || "",
+          c.payment_terms_days ?? 30,
+          c.credit_limit ?? 0,
+          c.status || "ACTIVE",
+        ];
+
+        customDefs.forEach((def) => {
+          const partyAny = c.party as any;
+          const valObj = partyAny?.custom_field_values?.find(
+            (v: any) => v.field_id === def.id || v.definition?.field_key === def.field_key
+          );
+          rowValues.push(valObj?.value ?? "");
+        });
+
+        const r = FIRST_DATA_ROW + idx;
+        const stripe = idx % 2 === 0 ? "FFFFFFFF" : STRIPE;
+
+        rowValues.forEach((val, colIdx) => {
+          const cell = ws.getCell(r, colIdx + 1);
+          cell.value = val;
+          cell.font = { name: "Arial", size: 10.5, color: { argb: INK } };
+          cell.border = thinBorder;
+          const headerName = allHeaders[colIdx];
+
+          if (headerName === "Estado") {
+            const isActive = val === "ACTIVE";
+            cell.font = { name: "Arial", size: 10.5, bold: true, color: { argb: isActive ? SUCCESS : DANGER } };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: isActive ? SUCCESS_TINT : DANGER_TINT } };
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+          } else if (headerName === "Días Crédito" || headerName === "Límite Crédito") {
+            cell.alignment = { vertical: "middle", horizontal: "right" };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: stripe } };
+            if (headerName === "Límite Crédito") cell.numFmt = '"S/ "#,##0.00';
+          } else if (headerName === "Tipo Persona" || headerName === "Tipo Documento") {
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: stripe } };
+          } else {
+            cell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: stripe } };
+          }
+        });
+        ws.getRow(r).height = 22;
+      });
+
+      // ---- Anchos de columna ----
+      const widths: Record<string, number> = {
+        "Tipo Persona": 16,
+        "Nombre o Razón Social": 28,
+        "Apellidos": 16,
+        "Tipo Documento": 15,
+        "Número Documento": 18,
+        "Días Crédito": 13,
+        "Límite Crédito": 16,
+        "Estado": 12,
+      };
+      allHeaders.forEach((h, i) => {
+        ws.getColumn(i + 1).width = widths[h] ?? 18;
+      });
+
+      // ---- Encabezado congelado, filtros y sin líneas de cuadrícula ----
+      ws.views = [{ state: "frozen", ySplit: HEADER_ROW, showGridLines: false }];
+      const lastRow = FIRST_DATA_ROW + dataToExport.length - 1;
+      ws.autoFilter = {
+        from: { row: HEADER_ROW, column: 1 },
+        to: { row: lastRow, column: nCols },
+      };
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `clientes_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert("No se pudo generar el archivo Excel.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (newDropdownRef.current && !newDropdownRef.current.contains(event.target as Node)) {
@@ -259,10 +455,10 @@ export default function CustomersPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col p-0.1 text-slate-900">
-      
+
       {/* Contenedor principal con esquinas asimétricas */}
       <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white shadow-sm rounded-tl-[40px] rounded-br-[40px]">
-        
+
         {/* Header */}
         <div className="flex shrink-0 flex-col gap-4 px-8 pt-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -345,7 +541,7 @@ export default function CustomersPage() {
                 </button>
               )}
             </div>
-            
+
             <button className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
               <Filter size={14} />
               Más filtros
@@ -363,7 +559,7 @@ export default function CustomersPage() {
         {/* Barra de Acciones Masivas */}
         <AnimatePresence>
           {selectedIds.length > 0 && (
-            <motion.div 
+            <motion.div
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
@@ -377,7 +573,7 @@ export default function CustomersPage() {
                   <span className="text-sm font-medium text-[var(--app-brand-deep)]">
                     cliente(s) seleccionado(s)
                   </span>
-                  
+
                   <button
                     onClick={() => setSelectedIds([])}
                     className="ml-1 rounded-full p-1 text-[var(--app-brand-deep)] transition-colors hover:bg-white/60 focus:outline-none"
@@ -386,18 +582,23 @@ export default function CustomersPage() {
                     <X size={16} />
                   </button>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--app-brand-deep)] transition-colors hover:bg-white/60">
                     <UserPlus size={14} /> Asignar
                   </button>
-                  <button className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-[var(--app-brand-deep)] transition-colors hover:bg-white/60">
-                    <Download size={14} /> Exportar
+                  <button
+                    onClick={handleExport}
+                    disabled={isExporting}
+                    className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3.5 py-1.5 text-sm font-semibold text-emerald-700 border border-emerald-200 transition-all hover:bg-emerald-100 shadow-xs disabled:opacity-60"
+                  >
+                    <Download size={14} className="text-emerald-600" />
+                    {isExporting ? "Generando..." : "Exportar Excel"}
                   </button>
                   <div className="mx-1 h-4 w-px bg-slate-300" />
-                  
+
                   {hasInactiveSelected && (
-                    <button 
+                    <button
                       onClick={promptBulkActivate}
                       disabled={isProcessing}
                       className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-emerald-600 transition-colors hover:bg-white/60 disabled:opacity-50"
@@ -407,7 +608,7 @@ export default function CustomersPage() {
                   )}
 
                   {hasActiveSelected && (
-                    <button 
+                    <button
                       onClick={promptBulkDeactivate}
                       disabled={isProcessing}
                       className="flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-white/60 disabled:opacity-50"
@@ -457,8 +658,9 @@ export default function CustomersPage() {
               <p className="mt-1 text-sm text-slate-500">Ajusta tu búsqueda o cambia de pestaña.</p>
             </div>
           ) : (
-            <CustomerTable 
-              customers={filtered} 
+            <CustomerTable
+              customers={filtered}
+              customFieldDefinitions={customFieldDefinitions}
               selectedIds={selectedIds}
               onToggleSelection={handleToggleSelection}
               onSelectAll={handleSelectAll}
@@ -473,26 +675,26 @@ export default function CustomersPage() {
         {/* Pagination */}
         {!loading && !error && (
           <div className="shrink-0">
-            <Pagination 
-              currentPage={page} 
-              lastPage={lastPage} 
+            <Pagination
+              currentPage={page}
+              lastPage={lastPage}
               total={total}
               perPage={perPage}
-              onPageChange={setPage} 
+              onPageChange={setPage}
               onPerPageChange={handlePerPageChange}
             />
           </div>
         )}
 
-        <CustomerDrawer 
-          isOpen={isDrawerOpen} 
-          onClose={() => setIsDrawerOpen(false)} 
+        <CustomerDrawer
+          isOpen={isDrawerOpen}
+          onClose={() => setIsDrawerOpen(false)}
           onSuccess={() => setRefreshTrigger(prev => prev + 1)}
         />
 
-        <CustomerOverviewDrawer 
-          customerId={viewCustomerId} 
-          onClose={() => setViewCustomerId(null)} 
+        <CustomerOverviewDrawer
+          customerId={viewCustomerId}
+          onClose={() => setViewCustomerId(null)}
           onUpdate={() => setRefreshTrigger(prev => prev + 1)}
         />
 
