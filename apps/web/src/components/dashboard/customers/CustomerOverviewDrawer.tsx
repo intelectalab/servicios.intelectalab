@@ -931,11 +931,11 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
                         </div>
 
                         {/* Contactos */}
-                        <div className="rounded-2xl border border-slate-200 p-6 space-y-4">
+                        <div className="rounded-2xl border border-slate-200 p-6 space-y-4 bg-white shadow-xs">
                           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
                             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Contactos</h3>
                             <button
-                              onClick={() => { setEditingContactId(null); setContactForm({ contact_type: "EMAIL", value: "", is_primary: false }); setIsContactModalOpen(true); }}
+                              onClick={() => { setEditingContact(null); setIsContactModalOpen(true); }}
                               className="flex items-center gap-1 text-xs font-medium text-[var(--app-brand-deep)] hover:underline"
                             >
                               <Plus size={13} /> Añadir contacto
@@ -943,38 +943,50 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
                           </div>
                           
                           {contacts.length === 0 ? (
-                            <div className="text-center py-4 text-slate-400 text-xs">
+                            <div className="text-center py-6 text-slate-400 text-xs">
                               No hay contactos directos asociados a este cliente.
                             </div>
                           ) : (
-                            <div className="space-y-2">
-                              {contacts.map((contact) => (
-                                <div key={contact.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs">
-                                  <div className="flex items-center gap-2.5">
-                                    {contact.contact_type === 'EMAIL' ? <Mail size={14} className="text-slate-400" /> : <Phone size={14} className="text-slate-400" />}
-                                    <div>
-                                      {contact.contact_name && (
-                                        <p className="font-semibold text-slate-900">{contact.contact_name}</p>
-                                      )}
-                                      <p className="text-slate-600">
-                                        {contact.country_code ? `${contact.country_code} ` : ""}{contact.value}
-                                      </p>
+                            <div className="space-y-2.5">
+                              {contacts.map((contact) => {
+                                const isEmail = contact.contact_type === 'EMAIL';
+                                const isAddress = contact.contact_type === 'ADDRESS';
+                                
+                                return (
+                                  <div key={contact.id} className="flex items-center justify-between rounded-xl border border-slate-200/80 bg-slate-50/60 p-3.5 transition-all hover:bg-slate-50 hover:border-slate-300">
+                                    <div className="flex items-start gap-3">
+                                      <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white border border-slate-200 text-slate-500 shadow-2xs">
+                                        {isEmail ? <Mail size={15} /> : isAddress ? <Building2 size={15} /> : <Phone size={15} />}
+                                      </div>
+                                      <div className="space-y-0.5">
+                                        {contact.contact_name && (
+                                          <p className="text-xs font-semibold text-slate-900">{contact.contact_name}</p>
+                                        )}
+                                        <div className="flex items-center gap-2">
+                                          <p className="text-xs font-medium text-slate-700">
+                                            {contact.country_code ? `${contact.country_code} ` : ""}{contact.value}
+                                          </p>
+                                          {contact.is_primary && (
+                                            <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-100">Principal</span>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                    {contact.is_primary && (
-                                      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 ml-2">Principal</span>
-                                    )}
+
+                                    <div className="flex items-center gap-3">
+                                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{contact.contact_type}</span>
+                                      <div className="flex items-center gap-1 border-l border-slate-200 pl-3">
+                                        <button onClick={() => handleOpenEditContact(contact)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-blue-600 transition-colors" title="Editar">
+                                          <Edit3 size={14} />
+                                        </button>
+                                        <button onClick={() => handleDeleteContact(contact.id)} className="rounded-lg p-1.5 text-slate-400 hover:bg-white hover:text-red-600 transition-colors" title="Eliminar">
+                                          <Trash2 size={14} />
+                                        </button>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-slate-400 uppercase text-[10px]">{contact.contact_type}</span>
-                                    <button onClick={() => handleOpenEditContact(contact)} className="text-blue-500 hover:text-blue-700">
-                                      <Edit3 size={13} />
-                                    </button>
-                                    <button onClick={() => handleDeleteContact(contact.id)} className="text-red-400 hover:text-red-600">
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           )}
                         </div>

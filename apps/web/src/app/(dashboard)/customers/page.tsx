@@ -66,6 +66,7 @@ export default function CustomersPage() {
 
   const [isNewDropdownOpen, setIsNewDropdownOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [customerValuesMap, setCustomerValuesMap] = useState<Record<string, Record<string, string>>>({});
   const newDropdownRef = useRef<HTMLDivElement>(null);
 
   // Estados para el Modal de Confirmación Masiva
@@ -78,6 +79,15 @@ export default function CustomersPage() {
     type: null,
     ids: [],
   });
+
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<Array<{
+    id: string;
+    label: string;
+    type: "text" | "number" | "select" | "date";
+    operator: string;
+    value: string;
+  }>>([]);
 
   useEffect(() => {
     function handleSearchShortcut(event: KeyboardEvent) {
@@ -112,8 +122,26 @@ export default function CustomersPage() {
         ]);
         if (cancelled) return;
 
+        // Cargar los valores personalizados (EAV) para cada cliente de la página actual
+        const loadedValues: Record<string, Record<string, string>> = {};
+        await Promise.all(
+          res.data.map(async (customer) => {
+            const vals = await apiFetch<Array<{ field_id: string; value: string }>>(
+              `/v1/custom-fields/values?entity_type=Customer&entity_id=${customer.id}`
+            ).catch(() => []);
+
+            loadedValues[customer.id] = {};
+            vals.forEach((v) => {
+              loadedValues[customer.id][v.field_id] = v.value;
+            });
+          })
+        );
+
+        if (cancelled) return;
+
         setCustomers(res.data);
         setCustomFieldDefinitions(definitions.filter((definition) => definition.field_key !== "internal_notes"));
+        setCustomerValuesMap(loadedValues);
         setLastPage(res.last_page);
         setTotal(res.total);
         setSelectedIds([]);
@@ -130,14 +158,126 @@ export default function CustomersPage() {
   }, [page, perPage, activeTab, refreshTrigger]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return customers;
-    const q = search.trim().toLowerCase();
-    return customers.filter(
-      (c) =>
-        getCustomerDisplayName(c).toLowerCase().includes(q) ||
-        getCustomerDocument(c).toLowerCase().includes(q)
-    );
-  }, [customers, search]);
+    let result = customers;
+
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      result = result.filter(
+        (c) =>
+          getCustomerDisplayName(c).toLowerCase().includes(q) ||
+          getCustomerDocument(c).toLowerCase().includes(q)
+      );
+    }
+
+    if (activeFilters.length > 0) {
+      result = result.filter((c) => {
+        const customerVals = customerValuesMap[c.id] || {};
+
+        return activeFilters.every((filter) => {
+          let targetValue = "";
+          const def = customFieldDefinitions.find(d => d.id === filter.id);
+          
+          if (filter.id === "name") {
+            targetValue = getCustomerDisplayName(c).toLowerCase();
+          } else if (filter.id === "document") {
+            targetValue = getCustomerDocument(c).toLowerCase();
+          } else if (filter.id === "payment_terms") {
+            targetValue = String(c.payment_terms_days ?? "");
+          } else if (filter.id === "currency") {
+            targetValue = (c.preferred_currency ?? "").toLowerCase();
+          } else if (filter.id === "credit_limit") {
+            targetValue = String(c.credit_limit ?? "");
+          } else if (filter.id === "status") {
+            targetValue = (c.status ?? "").toLowerCase();
+          } else {
+            // Columna personalizada EAV
+            const rawVal = customerVals[filter.id];
+            targetValue = rawVal !== undefined && rawVal !== null 
+              ? String(rawVal) 
+              : (def?.field_type === "boolean" ? "false" : "");
+          }
+
+          // === AQUÍ COLOCAS LA LÓGICA DE FECHAS ===
+          if (filter.type === "date") {
+            if (filter.operator === "all") return true;
+            if (!targetValue) return false;
+            
+            // Limpiamos la fecha del registro ignorando la hora para comparar solo días calendario
+            const itemDateStr = targetValue.split("T")[0];
+            if (!itemDateStr) return false;
+
+            // Obtenemos la fecha actual local del dispositivo del cliente en formato YYYY-MM-DD
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const todayStr = `${year}-${month}-${day}`;
+
+            if (filter.operator === "today") {
+              return itemDateStr === todayStr;
+            }
+            if (filter.operator === "yesterday") {
+              const yesterdayDate = new Date(now);
+              yesterdayDate.setDate(now.getDate() - 1);
+              const yYear = yesterdayDate.getFullYear();
+              const yMonth = String(yesterdayDate.getMonth() + 1).padStart(2, '0');
+              const yDay = String(yesterdayDate.getDate()).padStart(2, '0');
+              const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
+              return itemDateStr === yesterdayStr;
+            }
+            if (filter.operator === "this_week") {
+              const firstDayOfWeek = new Date(now);
+              firstDayOfWeek.setDate(now.getDate() - now.getDay());
+              const firstDayStr = firstDayOfWeek.toISOString().split("T")[0];
+              return itemDateStr >= firstDayStr && itemDateStr <= todayStr;
+            }
+            if (filter.operator === "last_week") {
+              const prevWeekStart = new Date(now);
+              prevWeekStart.setDate(now.getDate() - now.getDay() - 7);
+              const prevWeekEnd = new Date(now);
+              prevWeekEnd.setDate(now.getDate() - now.getDay() - 1);
+              return itemDateStr >= prevWeekStart.toISOString().split("T")[0] && 
+                     itemDateStr <= prevWeekEnd.toISOString().split("T")[0];
+            }
+            if (filter.operator === "last_month") {
+              const targetDate = new Date(targetValue);
+              return targetDate.getMonth() === now.getMonth() - 1 && targetDate.getFullYear() === now.getFullYear();
+            }
+            if (filter.operator === "year_start") {
+              const yearStartStr = `${now.getFullYear()}-01-01`;
+              return itemDateStr >= yearStartStr && itemDateStr <= todayStr;
+            }
+            if (filter.operator === "range") {
+              const [desde, hasta] = filter.value.split("|");
+              if (desde && itemDateStr < desde) return false; // Nota: usa itemDateStr aquí si prefieres
+              if (hasta && itemDateStr > hasta) return false;
+              return true;
+            }
+            return true;
+          }
+          // ==========================================
+
+          const val = filter.value.toLowerCase();
+          if (!val && filter.type !== "select") return true;
+
+          switch (filter.operator) {
+            case "contains":
+              return targetValue.toLowerCase().includes(val);
+            case "equals":
+              return targetValue.toLowerCase() === val;
+            case "greater":
+              return Number(targetValue) > Number(val);
+            case "less":
+              return Number(targetValue) < Number(val);
+            default:
+              return true;
+          }
+        });
+      });
+    }
+
+    return result;
+  }, [customers, search, activeFilters, customFieldDefinitions, customerValuesMap]);
 
   const handlePerPageChange = (newPerPage: number) => {
     setPerPage(newPerPage);
@@ -469,6 +609,32 @@ export default function CustomersPage() {
   const hasActiveSelected = selectedCustomers.some(c => c.status === 'ACTIVE');
   const hasInactiveSelected = selectedCustomers.some(c => c.status === 'INACTIVE');
 
+  const handleAddFilter = (columnId: string, label: string, type: "text" | "number" | "select" | "date") => {
+    if (activeFilters.some(f => f.id === columnId)) return;
+
+    const defaultValue = columnId === "status" ? "ACTIVE" : (type === "select" ? "false" : "");
+
+    setActiveFilters(prev => [
+      ...prev,
+      {
+        id: columnId,
+        label,
+        type,
+        operator: columnId === "status" ? "equals" : type === "date" ? "all" : (type === "select" ? "equals" : "contains"),
+        value: defaultValue,
+      }
+    ]);
+    setShowAdvancedFilters(true);
+  };
+
+  const handleRemoveFilter = (columnId: string) => {
+    setActiveFilters(prev => prev.filter(f => f.id !== columnId));
+  };
+
+  const handleUpdateFilter = (columnId: string, updates: Partial<{ operator: string; value: string }>) => {
+    setActiveFilters(prev => prev.map(f => f.id === columnId ? { ...f, ...updates } : f));
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col p-0.1 text-slate-900">
 
@@ -535,41 +701,199 @@ export default function CustomersPage() {
         </div>
 
         {/* Toolbar */}
-        <div className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-8 py-4 z-20">
-          <div className="flex flex-1 items-center gap-3">
-            <div className="relative w-full max-w-sm">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, RUC o documento... ( / )"
-                ref={searchInputRef}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-9 text-sm transition-colors focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none"
-                  aria-label="Limpiar búsqueda"
-                >
-                  <X size={14} />
-                </button>
-              )}
+        <div className="flex shrink-0 flex-col border-b border-slate-200 bg-white px-8 py-4 z-20 gap-3">
+          <div className="flex items-center justify-between">
+            <div className="flex flex-1 items-center gap-3">
+              <div className="relative w-full max-w-sm">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre, RUC o documento... ( / )"
+                  ref={searchInputRef}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full rounded-md border border-slate-300 bg-white py-1.5 pl-9 pr-9 text-sm transition-colors focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
+                />
+                {search && (
+                  <button
+                    onClick={() => setSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 focus:outline-none"
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  activeFilters.length > 0
+                    ? "border-[var(--app-brand-deep)] bg-blue-50 text-[var(--app-brand-deep)]"
+                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <Filter size={14} />
+                Más filtros
+                {activeFilters.length > 0 && (
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--app-brand-deep)] text-[10px] font-bold text-white">
+                    {activeFilters.length}
+                  </span>
+                )}
+              </button>
             </div>
 
-            <button className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Filter size={14} />
-              Más filtros
-            </button>
+            <div className="flex items-center gap-2">
+              <button className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
+                <Columns size={14} />
+                Columnas
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
-              <Columns size={14} />
-              Columnas
-            </button>
-          </div>
+          {/* Panel interactivo de Filtros Activos debajo del buscador */}
+          <AnimatePresence>
+            {showAdvancedFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden pt-2"
+              >
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <span className="text-xs font-semibold text-slate-500 mr-1">Filtros activos:</span>
+                  
+                  {activeFilters.length === 0 ? (
+                    <span className="text-xs text-slate-400 italic">
+                      No hay filtros activos. Haz clic en los tres puntos de cualquier columna de la tabla para filtrar.
+                    </span>
+                  ) : (
+                    activeFilters.map((filter) => (
+                      <div
+                        key={filter.id}
+                        className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-1.5 shadow-2xs text-xs"
+                      >
+                        {/* Nombre real de la columna en lugar de "Campo:" */}
+                        <span className="font-semibold text-slate-700">{filter.label}:</span>
+                        
+                        {/* Selector de operador dinámico */}
+                        <select
+                          value={filter.operator}
+                          onChange={(e) => {
+                            const newOp = e.target.value;
+                            handleUpdateFilter(filter.id, { 
+                              operator: newOp, 
+                              value: newOp === "range" ? "|" : (["today", "all"].includes(newOp) ? "" : filter.value) 
+                            });
+                          }}
+                          className="rounded border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600 focus:outline-none"
+                        >
+                          {filter.id === "status" ? (
+                            <option value="equals">es igual a</option>
+                          ) : filter.type === "select" ? (
+                            <option value="equals">es igual a</option>
+                          ) : filter.type === "date" ? (
+                            <>
+                              <option value="all">Todos</option>
+                              <option value="today">Hoy</option>
+                              <option value="yesterday">Ayer</option>
+                              <option value="this_week">Al principio de esta semana</option>
+                              <option value="last_week">La semana pasada</option>
+                              <option value="last_month">El mes pasado</option>
+                              <option value="year_start">Al principio de este año</option>
+                              <option value="range">Periodo personalizado</option>
+                            </>
+                          ) : (
+                            <>
+                              <option value="contains">contiene</option>
+                              <option value="equals">es igual a</option>
+                              {filter.type === "number" && (
+                                <>
+                                  <option value="greater">mayor que</option>
+                                  <option value="less">menor que</option>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </select>
+
+                        {/* Renderizado de valores según la columna o tipo */}
+                        {filter.id === "status" ? (
+                          <select
+                            value={filter.value}
+                            onChange={(e) => handleUpdateFilter(filter.id, { value: e.target.value })}
+                            className="w-28 rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-800 focus:outline-none"
+                          >
+                            <option value="ACTIVE">Activo</option>
+                            <option value="INACTIVE">Inactivo</option>
+                          </select>
+                        ) : filter.type === "select" ? (
+                          <select
+                            value={filter.value}
+                            onChange={(e) => handleUpdateFilter(filter.id, { value: e.target.value })}
+                            className="w-28 rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-800 focus:outline-none"
+                          >
+                            <option value="true">Sí</option>
+                            <option value="false">No</option>
+                          </select>
+                        ) : filter.type === "date" && filter.operator === "range" ? (
+                          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded px-2 py-0.5 text-xs">
+                            <span className="text-slate-400">Desde:</span>
+                            <input
+                              type="date"
+                              value={filter.value.split("|")[0] || ""}
+                              onChange={(e) => {
+                                const [, hasta = ""] = filter.value.split("|");
+                                handleUpdateFilter(filter.id, { value: `${e.target.value}|${hasta}` });
+                              }}
+                              className="bg-transparent text-slate-800 focus:outline-none text-xs w-24"
+                            />
+                            <span className="text-slate-300">|</span>
+                            <span className="text-slate-400">Hasta:</span>
+                            <input
+                              type="date"
+                              value={filter.value.split("|")[1] || ""}
+                              onChange={(e) => {
+                                const [desde = ""] = filter.value.split("|");
+                                handleUpdateFilter(filter.id, { value: `${desde}|${e.target.value}` });
+                              }}
+                              className="bg-transparent text-slate-800 focus:outline-none text-xs w-24"
+                            />
+                          </div>
+                        ) : filter.type === "date" ? (
+                          <span className="text-slate-400 text-[11px] italic px-1">Se aplica al período</span>
+                        ) : (
+                          <input
+                            type={filter.type === "number" ? "number" : "text"}
+                            value={filter.value}
+                            onChange={(e) => handleUpdateFilter(filter.id, { value: e.target.value })}
+                            placeholder="Valor..."
+                            className="w-28 rounded border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-800 focus:border-[var(--app-brand)] focus:outline-none"
+                          />
+                        )}
+
+                        <button
+                          onClick={() => handleRemoveFilter(filter.id)}
+                          className="text-slate-400 hover:text-red-500 ml-1"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+
+                  {activeFilters.length > 0 && (
+                    <button
+                      onClick={() => setActiveFilters([])}
+                      className="text-xs font-medium text-red-600 hover:underline ml-auto"
+                    >
+                      Limpiar todos
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* Barra de Acciones Masivas */}
@@ -683,6 +1007,7 @@ export default function CustomersPage() {
               onSelectCustomer={(id) => setViewCustomerId(id)}
               onAddCustomField={() => setIsCustomFieldModalOpen(true)}
               onRequestDeleteCustomField={setFieldToDelete}
+              onAddFilter={handleAddFilter}
             />
           )}
           </div>

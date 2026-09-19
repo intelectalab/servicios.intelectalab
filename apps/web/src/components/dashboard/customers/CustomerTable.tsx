@@ -17,6 +17,7 @@ interface CustomerTableProps {
   onSelectCustomer: (id: string) => void;
   onAddCustomField: () => void;
   onRequestDeleteCustomField: (definition: CustomFieldDefinition) => void;
+  onAddFilter?: (columnId: string, label: string, type: "text" | "number" | "select" | "date") => void; // <-- Añade esta línea
 }
 
 function formatCurrency(value: string | number | null, currency: "PEN" | "USD" = "PEN") {
@@ -31,7 +32,7 @@ function formatCurrency(value: string | number | null, currency: "PEN" | "USD" =
   });
 }
 
-export function CustomerTable({ customers, customFieldDefinitions, selectedIds, onToggleSelection, onSelectAll, onSelectCustomer, onAddCustomField, onRequestDeleteCustomField }: CustomerTableProps) {
+export function CustomerTable({ customers, customFieldDefinitions, selectedIds, onToggleSelection, onSelectAll, onSelectCustomer, onAddCustomField, onRequestDeleteCustomField, onAddFilter }: CustomerTableProps) {
   const [tableCustomers, setTableCustomers] = useState(customers);
   const [customerValuesMap, setCustomerValuesMap] = useState<Record<string, Record<string, string>>>({});
   const [loadingCustom, setLoadingCustom] = useState(true);
@@ -876,7 +877,23 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
               {isFrozen ? <PinOff size={14} className="text-slate-400" /> : <Pin size={14} className="text-slate-400" />}
               {columnKey === "client" ? "Siempre fija" : isFrozen ? "Desinmovilizar columna" : "Inmovilizar columna"}
             </button>
-            <button onClick={() => setOpenHeaderMenu(null)} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors">
+            <button 
+              onClick={() => { 
+                if (onAddFilter) {
+                  const customDef = customFieldDefinitions.find(d => d.id === columnKey);
+                  const isNumeric = ["payment_terms", "credit_limit"].includes(columnKey) || customDef?.field_type === "number";
+                  const isDate = customDef?.field_type === "date";
+                  const isBoolean = customDef?.field_type === "boolean";
+                  
+                  const type = isNumeric ? "number" : isDate ? "date" : isBoolean ? "select" : "text";
+                  const label = customDef?.label || getColumnLabel(columnKey);
+                  
+                  onAddFilter(columnKey, label, type);
+                }
+                setOpenHeaderMenu(null); 
+              }} 
+              className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-slate-50 transition-colors"
+            >
               <Filter size={14} className="text-slate-400" /> Filtrar por esta columna
             </button>
             {customFieldDefinitions.some((definition) => definition.id === columnKey) && (
