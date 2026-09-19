@@ -18,6 +18,7 @@ class Customer extends Model
         'status',
         'credit_limit',
         'payment_terms_days',
+        'preferred_currency',
     ];
 
     protected static function boot()

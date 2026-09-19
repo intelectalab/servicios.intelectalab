@@ -10,8 +10,8 @@ import { apiFetch } from "@/lib/api";
 
 interface CustomerTableProps {
   customers: Customer[];
-  customFieldDefinitions: CustomFieldDefinition[];
   selectedIds: string[];
+  customFieldDefinitions: CustomFieldDefinition[];
   onToggleSelection: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
   onSelectCustomer: (id: string) => void;
@@ -19,13 +19,13 @@ interface CustomerTableProps {
   onRequestDeleteCustomField: (definition: CustomFieldDefinition) => void;
 }
 
-function formatCurrency(value: string | number | null) {
+function formatCurrency(value: string | number | null, currency: "PEN" | "USD" = "PEN") {
   if (value === null || value === undefined) return "—";
   const num = typeof value === "string" ? parseFloat(value) : value;
   if (Number.isNaN(num)) return "—";
   return num.toLocaleString("es-PE", {
     style: "currency",
-    currency: "PEN",
+    currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -165,26 +165,34 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
     let cancelled = false;
 
     async function loadTableCustomData() {
+      if (customers.length === 0) {
+        setLoadingCustom(false);
+        return;
+      }
+
       setLoadingCustom(true);
-      setCustomerValuesMap({});
-
       try {
-        const loadedValues: Record<string, Record<string, string>> = {};
-        await Promise.all(
-          customers.map(async (customer) => {
-            const vals = await apiFetch<Array<{ field_id: string; value: string }>>(
-              `/v1/custom-fields/values?entity_type=Customer&entity_id=${customer.id}`
-            ).catch(() => []);
+        const valuesPromise = (async () => {
+          const loadedValues: Record<string, Record<string, string>> = {};
+          await Promise.all(
+            customers.map(async (customer) => {
+              const vals = await apiFetch<Array<{ field_id: string; value: string }>>(
+                `/v1/custom-fields/values?entity_type=Customer&entity_id=${customer.id}`
+              ).catch(() => []);
 
-            loadedValues[customer.id] = {};
-            vals.forEach((v) => {
-              loadedValues[customer.id][v.field_id] = v.value;
-            });
-          })
-        );
+              loadedValues[customer.id] = {};
+              vals.forEach((v) => {
+                loadedValues[customer.id][v.field_id] = v.value;
+              });
+            })
+          );
+          return loadedValues;
+        })();
+
+        const valuesMap = await valuesPromise;
+
         if (cancelled) return;
-
-        setCustomerValuesMap(loadedValues);
+        setCustomerValuesMap(valuesMap);
       } catch (err) {
         console.error("No se pudieron cargar los campos personalizados para la tabla", err);
       } finally {
@@ -257,6 +265,7 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
       document_number: isOrganization ? organization?.tax_identifier || "" : person?.document_number || "",
       payment_terms_days: customer.payment_terms_days,
       credit_limit: customer.credit_limit == null || customer.credit_limit === "" ? null : Number(customer.credit_limit),
+      preferred_currency: customer.preferred_currency,
       ...(isOrganization
         ? { legal_name: organization?.legal_name || "", trade_name: organization?.trade_name || "" }
         : {
@@ -270,8 +279,11 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
   const applyInlineCustomerChange = (customer: Customer, fieldKey: string): Customer => {
     const nextCustomer: Customer = {
       ...customer,
-      payment_terms_days: fieldKey === "payment_terms" ? Number(tempCellValue) : customer.payment_terms_days,
+      payment_terms_days: fieldKey === "payment_terms"
+        ? (tempCellValue === "" ? null : Number(tempCellValue))
+        : customer.payment_terms_days,
       credit_limit: fieldKey === "credit_limit" ? (tempCellValue ? Number(tempCellValue) : null) : customer.credit_limit,
+      preferred_currency: fieldKey === "currency" ? tempCellValue as "PEN" | "USD" : customer.preferred_currency,
       status: fieldKey === "status" ? tempCellValue : customer.status,
       party: {
         ...customer.party,
@@ -310,6 +322,7 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
       document_number: isOrganization ? organization?.tax_identifier || "" : person?.document_number || "",
       payment_terms_days: customer.payment_terms_days,
       credit_limit: customer.credit_limit == null || customer.credit_limit === "" ? null : Number(customer.credit_limit),
+      preferred_currency: customer.preferred_currency,
       ...(isOrganization
         ? {
             legal_name: fieldKey === "client" ? tempCellValue : organization?.legal_name || "",
@@ -321,8 +334,11 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
             family_name: fieldKey === "client" ? tempFamilyName : person?.family_name || "",
           }),
       ...(fieldKey === "document" ? { document_number: tempCellValue } : {}),
-      ...(fieldKey === "payment_terms" ? { payment_terms_days: Number(tempCellValue) } : {}),
+      ...(fieldKey === "payment_terms"
+        ? { payment_terms_days: tempCellValue === "" ? null : Number(tempCellValue) }
+        : {}),
       ...(fieldKey === "credit_limit" ? { credit_limit: tempCellValue ? Number(tempCellValue) : null } : {}),
+      ...(fieldKey === "currency" ? { preferred_currency: tempCellValue as "PEN" | "USD" } : {}),
       ...(fieldKey === "status" ? { status: tempCellValue } : {}),
     };
     const previousCustomer = tableCustomers.find((item) => item.id === customer.id);
@@ -359,9 +375,11 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
 
   const startEditingCell = (customer: Customer, fieldKey: string, value: string) => {
     setEditingCell({ customerId: customer.id, fieldKey });
-    setTempCellValue(fieldKey === "credit_limit" && value !== ""
-      ? Number(value).toFixed(2)
-      : value);
+    setTempCellValue(fieldKey === "payment_terms" && (value === "null" || value === "undefined")
+      ? ""
+      : fieldKey === "credit_limit" && value !== ""
+        ? Number(value).toFixed(2)
+        : value);
     if (fieldKey === "document") {
       setTempDocumentType(customer.party.person?.document_type || "DNI");
     }
@@ -408,8 +426,8 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
         valA = getCustomerDocument(a);
         valB = getCustomerDocument(b);
       } else if (sortColumn === "payment_terms") {
-        valA = a.payment_terms_days;
-        valB = b.payment_terms_days;
+        valA = a.payment_terms_days ?? 0;
+        valB = b.payment_terms_days ?? 0;
       } else if (sortColumn === "credit_limit") {
         valA = a.credit_limit ?? 0;
         valB = b.credit_limit ?? 0;
@@ -417,8 +435,8 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
         valA = a.status;
         valB = b.status;
       } else {
-        valA = customerValuesMap[a.id]?.[sortColumn] || "";
-        valB = customerValuesMap[b.id]?.[sortColumn] || "";
+        valA = String(customerValuesMap[a.id]?.[sortColumn] ?? "");
+        valB = String(customerValuesMap[b.id]?.[sortColumn] ?? "");
       }
 
       if (valA < valB) return sortDirection === "asc" ? -1 : 1;
@@ -665,15 +683,47 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
     }
     if (columnKey === "payment_terms") {
       return (
-        <td key={columnKey} className={`${editableClassName} text-slate-600`} style={cellStyle} onClick={() => beginEdit(String(customer.payment_terms_days))}>
-          {isEditing ? <div onBlur={(event) => handleEditorBlur(event, customer, columnKey)}><input ref={inputRef} type="number" min="0" {...getInlineInputProps(customer, columnKey)} className="w-24 rounded-md border border-[var(--app-brand-deep)] bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-xs focus:outline-none" /></div> : `${customer.payment_terms_days} días`}
+        <td key={columnKey} className={`${editableClassName} text-slate-600`} style={cellStyle} onClick={() => beginEdit(customer.payment_terms_days == null ? "" : String(customer.payment_terms_days))}>
+          {isEditing ? (
+            <div onBlur={(event) => handleEditorBlur(event, customer, columnKey)}>
+              <select
+                autoFocus
+                {...getInlineInputProps(customer, columnKey)}
+                className="w-28 rounded-md border border-[var(--app-brand-deep)] bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-xs focus:outline-none"
+              >
+                <option value="">---</option>
+                <option value="15">15 días</option>
+                <option value="30">30 días</option>
+                <option value="45">45 días</option>
+                <option value="60">60 días</option>
+              </select>
+            </div>
+          ) : customer.payment_terms_days == null ? "---" : `${customer.payment_terms_days} días`}
         </td>
       );
     }
     if (columnKey === "credit_limit") {
       return (
         <td key={columnKey} className={`${editableClassName} font-semibold text-slate-800`} style={cellStyle} onClick={() => beginEdit(customer.credit_limit == null ? "" : String(customer.credit_limit))}>
-          {isEditing ? <div onBlur={(event) => handleEditorBlur(event, customer, columnKey)}><input ref={inputRef} type="number" min="0" step="0.01" {...getInlineInputProps(customer, columnKey)} className="w-28 rounded-md border border-[var(--app-brand-deep)] bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-xs focus:outline-none" /></div> : formatCurrency(customer.credit_limit)}
+          {isEditing ? <div onBlur={(event) => handleEditorBlur(event, customer, columnKey)}><input ref={inputRef} type="number" min="0" step="0.01" {...getInlineInputProps(customer, columnKey)} className="w-28 rounded-md border border-[var(--app-brand-deep)] bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-xs focus:outline-none" /></div> : formatCurrency(customer.credit_limit, customer.preferred_currency)}
+        </td>
+      );
+    }
+    if (columnKey === "currency") {
+      return (
+        <td key={columnKey} className={`${editableClassName} text-slate-600`} style={cellStyle} onClick={() => beginEdit(customer.preferred_currency)}>
+          {isEditing ? (
+            <div onBlur={(event) => handleEditorBlur(event, customer, columnKey)}>
+              <select
+                autoFocus
+                {...getInlineInputProps(customer, columnKey)}
+                className="w-28 rounded-md border border-[var(--app-brand-deep)] bg-white px-2.5 py-1.5 text-sm text-slate-900 shadow-xs focus:outline-none"
+              >
+                <option value="PEN">PEN (S/)</option>
+                <option value="USD">USD ($)</option>
+              </select>
+            </div>
+          ) : customer.preferred_currency === "USD" ? "USD ($)" : "PEN (S/)"}
         </td>
       );
     }
@@ -689,9 +739,9 @@ export function CustomerTable({ customers, customFieldDefinitions, selectedIds, 
         </td>
       );
     }
-    if (columnKey === "actions") {
-      return <td key={columnKey} className={`${cellClassName} text-right`} style={cellStyle}><button type="button" onClick={() => onSelectCustomer(customer.id)} className="text-slate-400 transition-colors hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100"><MoreHorizontal size={18} /></button></td>;
-    }
+    // if (columnKey === "actions") {
+    //   return <td key={columnKey} className={`${cellClassName} text-right`} style={cellStyle}><button type="button" onClick={() => onSelectCustomer(customer.id)} className="text-slate-400 transition-colors hover:text-slate-700 p-1.5 rounded-lg hover:bg-slate-100"><MoreHorizontal size={18} /></button></td>;
+    // }
 
     const isCustomField = customFieldDefinitions.some(d => d.id === columnKey);
 
@@ -988,6 +1038,7 @@ function getColumnLabel(columnKey: string) {
     document: "Documento",
     payment_terms: "Días de crédito",
     credit_limit: "Límite",
+    currency: "Moneda",
     status: "Estado",
   }[columnKey] || "Campo";
 }
@@ -1000,7 +1051,8 @@ const STATIC_COLUMNS = [
   { key: "document", title: "Documento / RUC" },
   { key: "payment_terms", title: "Días de Crédito" },
   { key: "credit_limit", title: "Límite" },
+  { key: "currency", title: "Moneda" },
   { key: "status", title: "Estado" },
-  { key: "actions", title: "Actions" },
+  // { key: "actions", title: "Actions" },
 ] as const;
 type ColumnKey = (typeof STATIC_COLUMNS)[number]["key"] | string;

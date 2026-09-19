@@ -32,7 +32,8 @@ export interface Customer {
   party_id: string;
   status: string;
   credit_limit: string | number | null;
-  payment_terms_days: number;
+  payment_terms_days: number | null;
+  preferred_currency: "PEN" | "USD";
   party: Party;
   created_at?: string;
 }

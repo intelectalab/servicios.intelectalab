@@ -250,17 +250,34 @@ export default function CustomersPage() {
   // badges de color para Estado, formato de moneda y anchos de columna.
   // ---------------------------------------------------------------------
   const handleExport = async () => {
-    const dataToExport = selectedIds.length > 0
+    const requestedCustomers = selectedIds.length > 0
       ? customers.filter(c => selectedIds.includes(c.id))
       : filtered;
 
-    if (dataToExport.length === 0) {
+    if (requestedCustomers.length === 0) {
       alert("No hay clientes para exportar.");
       return;
     }
 
     setIsExporting(true);
     try {
+      const dataToExport = await Promise.all(
+        requestedCustomers.map(async (customer) => {
+          return apiFetch<Customer>(`/v1/customers/${customer.id}`).catch(() => customer);
+        })
+      );
+      const customValuesByCustomer: Record<string, Record<string, string>> = {};
+      await Promise.all(
+        dataToExport.map(async (customer) => {
+          const values = await apiFetch<Array<{ field_id: string; value: string }>>(
+            `/v1/custom-fields/values?entity_type=Customer&entity_id=${customer.id}`
+          ).catch(() => []);
+          customValuesByCustomer[customer.id] = Object.fromEntries(
+            values.map((value) => [value.field_id, value.value])
+          );
+        })
+      );
+
       const headers = [
         "Tipo Persona",
         "Nombre o Razón Social",
@@ -269,6 +286,7 @@ export default function CustomersPage() {
         "Número Documento",
         "Días Crédito",
         "Límite Crédito",
+        "Moneda",
         "Estado",
       ];
       const customDefs = customFieldDefinitions;
@@ -347,17 +365,14 @@ export default function CustomersPage() {
           isPerson ? person?.family_name || "" : "",
           isPerson ? person?.document_type || "" : "RUC",
           isPerson ? person?.document_number || "" : org?.tax_identifier || "",
-          c.payment_terms_days ?? 30,
-          c.credit_limit ?? 0,
+          c.payment_terms_days ?? "",
+          Number(Number(c.credit_limit ?? 0).toFixed(2)),
+          c.preferred_currency || "PEN",
           c.status || "ACTIVE",
         ];
 
         customDefs.forEach((def) => {
-          const partyAny = c.party as any;
-          const valObj = partyAny?.custom_field_values?.find(
-            (v: any) => v.field_id === def.id || v.definition?.field_key === def.field_key
-          );
-          rowValues.push(valObj?.value ?? "");
+          rowValues.push(customValuesByCustomer[c.id]?.[def.id] ?? "");
         });
 
         const r = FIRST_DATA_ROW + idx;
@@ -378,8 +393,8 @@ export default function CustomersPage() {
           } else if (headerName === "Días Crédito" || headerName === "Límite Crédito") {
             cell.alignment = { vertical: "middle", horizontal: "right" };
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: stripe } };
-            if (headerName === "Límite Crédito") cell.numFmt = '"S/ "#,##0.00';
-          } else if (headerName === "Tipo Persona" || headerName === "Tipo Documento") {
+            if (headerName === "Límite Crédito") cell.numFmt = rowValues[7] === "USD" ? '"USD "#,##0.00' : '"S/ "#,##0.00';
+          } else if (headerName === "Tipo Persona" || headerName === "Tipo Documento" || headerName === "Moneda") {
             cell.alignment = { vertical: "middle", horizontal: "center" };
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: stripe } };
           } else {
@@ -399,6 +414,7 @@ export default function CustomersPage() {
         "Número Documento": 18,
         "Días Crédito": 13,
         "Límite Crédito": 16,
+        "Moneda": 12,
         "Estado": 12,
       };
       allHeaders.forEach((h, i) => {

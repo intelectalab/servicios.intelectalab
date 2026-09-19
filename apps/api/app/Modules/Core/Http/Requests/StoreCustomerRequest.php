@@ -35,7 +35,9 @@ class StoreCustomerRequest extends FormRequest
             'trade_name' => ['nullable', 'string', 'max:200'],
 
             'payment_terms_days' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'credit_limit' => ['nullable', 'numeric', 'min:0'],
             'metadata' => ['nullable', 'array'],
+            'preferred_currency' => ['nullable', 'in:PEN,USD'],
         ];
     }
 }

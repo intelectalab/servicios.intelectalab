@@ -34,8 +34,10 @@ class ContactController extends Controller
             $contact = Contact::create([
                 'tenant_id' => $tenantId,
                 'party_id' => $request->party_id,
+                'contact_name' => $request->contact_name,
                 'contact_type' => $request->contact_type,
                 'value' => $request->value,
+                'country_code' => $request->country_code,
                 'is_primary' => $request->boolean('is_primary'),
             ]);
 

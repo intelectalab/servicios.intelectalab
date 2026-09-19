@@ -24,6 +24,7 @@ import { type Customer, getCustomerDisplayName, getCustomerDocument } from "@/ty
 import { type Contact } from "@/types/contact";
 import { type CustomFieldDefinition, type CustomFieldValue } from "@/types/custom-field";
 import { StatusBadge } from "@/components/StatusBadge";
+import { ContactModal } from "@/components/dashboard/customers/ContactModal";
 
 interface OverviewData {
   customer: Customer;
@@ -62,8 +63,9 @@ type CustomerUpdatePayload = {
   party_type: "ORGANIZATION" | "PERSON";
   document_number?: string;
   document_type?: string;
-  payment_terms_days: number;
+  payment_terms_days: number | null;
   credit_limit: number | string | null;
+  preferred_currency: "PEN" | "USD";
   legal_name?: string;
   trade_name?: string | null;
   given_names?: string;
@@ -111,8 +113,9 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
   });
 
   const [commercialForm, setCommercialForm] = useState({
-    payment_terms_days: 30,
+    payment_terms_days: null as number | null,
     credit_limit: "",
+    preferred_currency: "PEN" as "PEN" | "USD",
   });
 
   const [editableCustomValues, setEditableCustomValues] = useState<Record<string, string | boolean>>({});
@@ -124,6 +127,7 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
 
   // Modal de Contactos
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [contactForm, setContactForm] = useState({
     contact_type: "EMAIL",
@@ -212,8 +216,9 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
       });
 
       setCommercialForm({
-        payment_terms_days: overviewRes.customer.payment_terms_days ?? 30,
-        credit_limit: overviewRes.customer.credit_limit == null ? "" : String(overviewRes.customer.credit_limit),
+        payment_terms_days: overviewRes.customer.payment_terms_days,
+        credit_limit: overviewRes.customer.credit_limit == null ? "" : Number(overviewRes.customer.credit_limit).toFixed(2),
+        preferred_currency: overviewRes.customer.preferred_currency ?? "PEN",
       });
 
       const customMap: Record<string, string | boolean> = {};
@@ -250,6 +255,7 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
         document_number: generalForm.document_number,
         payment_terms_days: data.customer.payment_terms_days,
         credit_limit: data.customer.credit_limit,
+        preferred_currency: data.customer.preferred_currency,
       };
 
       if (isOrg) {
@@ -287,8 +293,9 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
       const payload: CustomerUpdatePayload = {
         party_type: isOrg ? "ORGANIZATION" : "PERSON",
         document_number: isOrg ? orgData?.tax_identifier : personData?.document_number,
-        payment_terms_days: Number(commercialForm.payment_terms_days),
+        payment_terms_days: commercialForm.payment_terms_days,
         credit_limit: commercialForm.credit_limit ? Number(commercialForm.credit_limit) : null,
+        preferred_currency: commercialForm.preferred_currency,
       };
 
       if (isOrg) {
@@ -407,29 +414,35 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
   };
 
   // Guardar o Actualizar Contacto
-  const handleSaveContact = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveContact = async (formData: {
+    contact_name: string;
+    contact_type: string;
+    value: string;
+    country_code: string;
+    is_primary: boolean;
+  }) => {
     if (!data?.customer?.party_id) return;
     setIsSaving(true);
     try {
-      if (editingContactId) {
-        await apiFetch(`/v1/contacts/${editingContactId}`, { method: "DELETE" }).catch(() => {});
+      if (editingContact) {
+        await apiFetch(`/v1/contacts/${editingContact.id}`, { method: "DELETE" }).catch(() => {});
       }
 
       await apiFetch("/v1/contacts", {
         method: "POST",
         body: JSON.stringify({
           party_id: data.customer.party_id,
-          contact_type: contactForm.contact_type,
-          value: contactForm.value,
-          is_primary: contactForm.is_primary,
+          contact_name: formData.contact_name,
+          contact_type: formData.contact_type,
+          value: formData.value,
+          country_code: formData.country_code,
+          is_primary: formData.is_primary,
         }),
       });
 
       await fetchOverview();
       setIsContactModalOpen(false);
-      setEditingContactId(null);
-      setContactForm({ contact_type: "EMAIL", value: "", is_primary: false });
+      setEditingContact(null);
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "No se pudo guardar el contacto.");
     } finally {
@@ -438,12 +451,7 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
   };
 
   const handleOpenEditContact = (contact: Contact) => {
-    setEditingContactId(contact.id);
-    setContactForm({
-      contact_type: contact.contact_type,
-      value: contact.value,
-      is_primary: contact.is_primary,
-    });
+    setEditingContact(contact);
     setIsContactModalOpen(true);
   };
 
@@ -739,28 +747,53 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
                             <div>
                               <span className="block text-xs text-slate-400">Días de Crédito *</span>
                               {isEditingCommercial ? (
-                                <input
-                                  type="number"
-                                  value={commercialForm.payment_terms_days}
-                                  onChange={(e) => setCommercialForm({ ...commercialForm, payment_terms_days: Number(e.target.value) })}
+                                <select
+                                  value={commercialForm.payment_terms_days ?? ""}
+                                  onChange={(e) => setCommercialForm({
+                                    ...commercialForm,
+                                    payment_terms_days: e.target.value === "" ? null : Number(e.target.value),
+                                  })}
                                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm mt-1 focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
-                                />
+                                >
+                                  <option value="">—</option>
+                                  <option value="15">15 días</option>
+                                  <option value="30">30 días</option>
+                                  <option value="45">45 días</option>
+                                  <option value="60">60 días</option>
+                                </select>
                               ) : (
-                                <span className="font-medium text-slate-800">{customer.payment_terms_days} días</span>
+                                <span className="font-medium text-slate-800">{customer.payment_terms_days == null ? "—" : `${customer.payment_terms_days} días`}</span>
                               )}
                             </div>
                             <div>
-                              <span className="block text-xs text-slate-400">Límite de Crédito (S/)</span>
+                              <span className="block text-xs text-slate-400">Límite de Crédito ({commercialForm.preferred_currency === "PEN" ? "S/" : "$"})</span>
                               {isEditingCommercial ? (
                                 <input
                                   type="number"
+                                  min="0"
+                                  step="0.01"
                                   value={commercialForm.credit_limit}
                                   onChange={(e) => setCommercialForm({ ...commercialForm, credit_limit: e.target.value })}
                                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm mt-1 focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
                                   placeholder="0.00"
                                 />
                               ) : (
-                                <span className="font-medium text-slate-800">{formatCurrency(customer.credit_limit)}</span>
+                                <span className="font-medium text-slate-800">{formatCurrency(customer.credit_limit, customer.preferred_currency)}</span>
+                              )}
+                            </div>
+                            <div>
+                              <span className="block text-xs text-slate-400">Moneda *</span>
+                              {isEditingCommercial ? (
+                                <select
+                                  value={commercialForm.preferred_currency}
+                                  onChange={(e) => setCommercialForm({ ...commercialForm, preferred_currency: e.target.value as "PEN" | "USD" })}
+                                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
+                                >
+                                  <option value="PEN">PEN (S/)</option>
+                                  <option value="USD">USD ($)</option>
+                                </select>
+                              ) : (
+                                <span className="font-medium text-slate-800">{customer.preferred_currency === "PEN" ? "PEN (S/)" : "USD ($)"}</span>
                               )}
                             </div>
                           </div>
@@ -917,11 +950,18 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
                             <div className="space-y-2">
                               {contacts.map((contact) => (
                                 <div key={contact.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs">
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2.5">
                                     {contact.contact_type === 'EMAIL' ? <Mail size={14} className="text-slate-400" /> : <Phone size={14} className="text-slate-400" />}
-                                    <span className="font-medium text-slate-800">{contact.value}</span>
+                                    <div>
+                                      {contact.contact_name && (
+                                        <p className="font-semibold text-slate-900">{contact.contact_name}</p>
+                                      )}
+                                      <p className="text-slate-600">
+                                        {contact.country_code ? `${contact.country_code} ` : ""}{contact.value}
+                                      </p>
+                                    </div>
                                     {contact.is_primary && (
-                                      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600">Principal</span>
+                                      <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 ml-2">Principal</span>
                                     )}
                                   </div>
                                   <div className="flex items-center gap-3">
@@ -1073,57 +1113,14 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
             </motion.div>
           </div>
 
-          {/* Modal para Crear / Editar Contacto */}
-          {isContactModalOpen && (
-            <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
-              <form onSubmit={handleSaveContact} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                  <h3 className="text-sm font-bold text-slate-900">{editingContactId ? "Editar Contacto" : "Añadir Contacto"}</h3>
-                  <button type="button" onClick={() => setIsContactModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={16} /></button>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Tipo de Contacto</label>
-                  <select
-                    value={contactForm.contact_type}
-                    onChange={(e) => setContactForm({ ...contactForm, contact_type: e.target.value })}
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
-                  >
-                    <option value="EMAIL">Correo Electrónico</option>
-                    <option value="PHONE">Teléfono</option>
-                    <option value="WHATSAPP">WhatsApp</option>
-                    <option value="OTHER">Otro</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Valor *</label>
-                  <input
-                    required
-                    type="text"
-                    value={contactForm.value}
-                    onChange={(e) => setContactForm({ ...contactForm, value: e.target.value })}
-                    placeholder="Ej. correo@empresa.com o 999888777"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
-                  />
-                </div>
-                <div className="flex items-center gap-2 pt-2">
-                  <input
-                    type="checkbox"
-                    id="is_primary_contact"
-                    checked={contactForm.is_primary}
-                    onChange={(e) => setContactForm({ ...contactForm, is_primary: e.target.checked })}
-                    className="h-4 w-4 rounded border-slate-300 text-[var(--app-brand-deep)]"
-                  />
-                  <label htmlFor="is_primary_contact" className="text-xs font-medium text-slate-700 cursor-pointer">Marcar como principal</label>
-                </div>
-                <div className="flex justify-end gap-2 pt-4">
-                  <button type="button" onClick={() => setIsContactModalOpen(false)} className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50">Cancelar</button>
-                  <button type="submit" disabled={isSaving} className="rounded-lg bg-[var(--app-brand-deep)] px-4 py-2 text-xs font-medium text-white hover:bg-[var(--app-brand)]">
-                    {isSaving ? "Guardando..." : "Guardar Contacto"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
+          {/* Componente Modal de Contactos Independiente */}
+          <ContactModal
+            isOpen={isContactModalOpen}
+            onClose={() => setIsContactModalOpen(false)}
+            onSave={handleSaveContact}
+            initialContact={editingContact}
+            isSaving={isSaving}
+          />
         </div>
       )}
     </AnimatePresence>

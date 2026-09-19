@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Upload, FileSpreadsheet, Loader2, CheckCircle2, Download, Info } from "lucide-react";
-import { apiFetch, ApiError } from "@/lib/api";
 
 interface ImportCustomersModalProps {
   isOpen: boolean;
@@ -14,36 +13,52 @@ interface ImportCustomersModalProps {
 export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCustomersModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ imported?: number; message?: string } | null>(null);
   const [error, setError] = useState("");
 
-  // Generar plantilla CSV profesional separada por punto y coma (;) para que abra perfecto en Excel
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+
+  const authHeaders = () => ({
+    Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
+    "X-Tenant-ID": localStorage.getItem("tenant_id") || "",
+  });
+
+  // Descarga la plantilla .xlsx (antes era .csv)
   const handleDownloadTemplate = async () => {
+    setIsDownloadingTemplate(true);
+    setError("");
     try {
-      const response = await apiFetch<Blob>("/v1/customers/template", {
-        method: "GET",
-        // Asegurar que apiFetch reciba el blob si soporta archivos, o usar fetch nativo con token:
+      const res = await fetch(`${apiUrl}/v1/customers/template`, {
+        headers: authHeaders(),
       });
-      
-      // O si prefieres fetch nativo directo manteniendo el token de auth:
-      const token = localStorage.getItem("token") || ""; // o tu forma de obtener el token
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/v1/customers/template`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': localStorage.getItem("tenant_id") || "" // ajusta según tu arquitectura tenant
+
+      if (!res.ok) {
+        // El endpoint devuelve JSON cuando falla (422/500), no el archivo.
+        // Mostramos el mensaje real en vez de tragárnoslo.
+        let detail = `Error ${res.status} al generar la plantilla.`;
+        try {
+          const data = await res.json();
+          detail = data.message || detail;
+        } catch {
+          // la respuesta no era JSON, nos quedamos con el mensaje genérico
         }
-      });
-      
+        throw new Error(detail);
+      }
+
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", "plantilla_importacion_clientes.csv");
+      link.setAttribute("download", "plantilla_importacion_clientes.xlsx");
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-    } catch (err) {
-      setError("No se pudo descargar la plantilla.");
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setError(err.message || "No se pudo descargar la plantilla.");
+    } finally {
+      setIsDownloadingTemplate(false);
     }
   };
 
@@ -57,7 +72,7 @@ export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCusto
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) {
-      setError("Por favor selecciona un archivo CSV.");
+      setError("Por favor selecciona un archivo Excel o CSV.");
       return;
     }
 
@@ -68,33 +83,32 @@ export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCusto
     formData.append("file", file); // Clave exacta que Laravel valida
 
     try {
-      // Obtenemos las credenciales de tu almacenamiento local (según tu estándar de autenticación)
-      const token = localStorage.getItem("token") || "";
-      const tenantId = localStorage.getItem("tenant_id") || "";
-
-      // Usamos fetch nativo para evitar que apiFetch fuerce application/json a un FormData
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
       const res = await fetch(`${apiUrl}/v1/customers/import`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
-          "X-Tenant-ID": tenantId, // O la cabecera/atributo que use tu middleware tenant.context
-          "Accept": "application/json",
+          ...authHeaders(),
+          Accept: "application/json",
         },
         body: formData, // El navegador asigna automáticamente el multipart/form-data y el boundary correcto
       });
 
-      const data = await res.json();
+      const responseText = await res.text();
+      let data: { errors?: Record<string, string[]>; message?: string } = {};
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = { message: responseText || `Error ${res.status} al importar el archivo.` };
+      }
 
       if (!res.ok) {
         // Muestra el error exacto que devuelve Laravel en consola y pantalla
-        console.error("Detalle del error 422:", data);
-        const errorMessage = data.errors 
-          ? Object.values(data.errors).flat().join(", ") 
-          : (data.message || "Error de validación en el archivo.");
+        console.error("Detalle del error:", data);
+        const errorMessage = data.errors && Object.keys(data.errors).length > 0
+          ? Object.values(data.errors).flat().join(", ")
+          : (data.message || `Error ${res.status} al importar el archivo.`);
         throw new Error(errorMessage);
       }
-      
+
       setUploadResult(data);
       setTimeout(() => {
         onSuccess();
@@ -147,7 +161,7 @@ export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCusto
               </div>
             ) : (
               <form onSubmit={handleUpload} className="space-y-4">
-                {/* Descarga de Plantilla CSV optimizada para Excel */}
+                {/* Descarga de plantilla Excel con formato y ejemplos */}
                 <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                   <div>
                     <p className="text-xs font-semibold text-slate-800">¿Necesitas la estructura correcta?</p>
@@ -156,9 +170,11 @@ export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCusto
                   <button
                     type="button"
                     onClick={handleDownloadTemplate}
-                    className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors shadow-xs"
+                    disabled={isDownloadingTemplate}
+                    className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 transition-colors shadow-xs disabled:opacity-50"
                   >
-                    <Download size={13} /> Plantilla CSV
+                    {isDownloadingTemplate ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />}
+                    Plantilla Excel
                   </button>
                 </div>
 
@@ -173,10 +189,10 @@ export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCusto
                 <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-200 bg-slate-50/50 p-6 text-center hover:bg-slate-50 transition-colors">
                   <Upload size={28} className="mb-2 text-slate-400" />
                   <label className="cursor-pointer text-xs font-semibold text-[var(--app-brand-deep)] hover:underline">
-                    <span>Haz clic para buscar tu archivo CSV</span>
-                    <input type="file" accept=".csv" onChange={handleFileChange} className="hidden" />
+                    <span>Haz clic para buscar tu archivo</span>
+                    <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFileChange} className="hidden" />
                   </label>
-                  <p className="mt-1 text-[11px] text-slate-400">{file ? file.name : "Formato soportado: .csv"}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{file ? file.name : "Formatos soportados: .xlsx, .csv"}</p>
                 </div>
 
                 {error && <p className="text-xs font-medium text-red-600">{error}</p>}

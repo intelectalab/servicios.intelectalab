@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Core\Http\Controllers\CustomerController;
 use App\Modules\Core\Http\Controllers\SupplierController;
@@ -20,6 +21,7 @@ use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmLeadController;
+use App\Modules\Portal\Http\Controllers\PortalController;
 
 Route::prefix('v1')->group(function () {
     Route::post('/login', [AuthController::class, 'login']);
@@ -221,5 +223,12 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:system.admin')->get('/test/no-permission', function () {
             return response()->json(['message' => 'No deberías poder ver esto.']);
         });
+    });
+
+    // Portal del cliente
+    Route::prefix('portal')->middleware(['auth:sanctum', 'tenant.context', 'portal.user'])->group(function () {
+        Route::get('/dashboard', [PortalController::class, 'dashboard']);
+        Route::get('/requests', [PortalController::class, 'requests']);
+        Route::post('/requests', [PortalController::class, 'storeRequest']);
     });
 });

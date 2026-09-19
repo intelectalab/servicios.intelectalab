@@ -13,7 +13,15 @@ class Contact extends Model
     public $incrementing = false;
     public $timestamps = false;
 
-    protected $fillable = ['tenant_id', 'party_id', 'contact_type', 'value', 'is_primary'];
+    protected $fillable = [
+        'tenant_id', 
+        'party_id', 
+        'contact_name', 
+        'contact_type', 
+        'value', 
+        'country_code', 
+        'is_primary'
+    ];
 
     protected $casts = ['is_primary' => 'boolean'];
 

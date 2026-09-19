@@ -26,6 +26,7 @@ type CustomerPayload = {
   document_number: string;
   payment_terms_days: number;
   credit_limit: number | null;
+  preferred_currency?: "PEN" | "USD";
   document_type?: string;
   legal_name?: string;
   trade_name?: string;
@@ -46,8 +47,10 @@ const initialFormState = {
   trade_name: "",
   given_names: "",
   family_name: "",
-  payment_terms_days: 30,
+  has_credit: "no" as "" | "yes" | "no",
+  payment_terms_days: "30",
   credit_limit: "",
+  currency: "PEN",
 };
 
 export function CustomerDrawer({ isOpen, onClose, onSuccess }: CustomerDrawerProps) {
@@ -103,14 +106,12 @@ export function CustomerDrawer({ isOpen, onClose, onSuccess }: CustomerDrawerPro
     setCustomValues((prev) => ({ ...prev, [fieldId]: value }));
   };
 
-  // Función para crear un nuevo campo personalizado al vuelo
   const handleCreateCustomField = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newFieldData.label.trim()) return;
 
     setIsCreatingField(true);
     try {
-      // Generar un field_key automático basado en el label (ej: "Instagram URL" -> "instagram_url")
       const field_key = newFieldData.label
         .toLowerCase()
         .trim()
@@ -127,7 +128,6 @@ export function CustomerDrawer({ isOpen, onClose, onSuccess }: CustomerDrawerPro
         }),
       });
 
-      // Recargar definiciones y limpiar modal rápido
       await loadCustomFields();
       setCustomValues(prev => ({
         ...prev,
@@ -166,15 +166,21 @@ export function CustomerDrawer({ isOpen, onClose, onSuccess }: CustomerDrawerPro
 
   const executeSave = async (action: "close" | "another") => {
     setError("");
+    if (formData.has_credit === "") {
+      setError("Selecciona si el cliente trabaja a crédito.");
+      return;
+    }
     setSaveActionType(action);
     setIsSaving(true);
 
     try {
+      const isCredit = formData.has_credit === "yes";
       const payload: CustomerPayload = {
         party_type: partyType,
         document_number: formData.document_number,
-        payment_terms_days: Number(formData.payment_terms_days),
-        credit_limit: formData.credit_limit ? Number(formData.credit_limit) : null, // <-- Lo mandamos si existe
+        payment_terms_days: isCredit ? Number(formData.payment_terms_days) : 0,
+        credit_limit: isCredit && formData.credit_limit ? Number(formData.credit_limit) : null,
+        preferred_currency: isCredit ? formData.currency as "PEN" | "USD" : undefined,
       };
 
       if (partyType === "ORGANIZATION") {
@@ -404,37 +410,97 @@ export function CustomerDrawer({ isOpen, onClose, onSuccess }: CustomerDrawerPro
                   )}
                 </div>
 
-                {/* Condiciones Comerciales */}
+                {/* Condiciones Comerciales Actualizadas */}
                 <div className="space-y-4">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">Condiciones Comerciales</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">Días de Crédito *</label>
-                      <input
-                        required
-                        type="number"
-                        min="0"
-                        max="365"
-                        name="payment_terms_days"
-                        value={formData.payment_terms_days}
-                        onChange={handleStandardChange}
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-slate-700">Límite de Crédito (S/)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        name="credit_limit"
-                        value={formData.credit_limit}
-                        onChange={handleStandardChange}
-                        placeholder="Ej. 10000.00"
-                        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
-                      />
+
+                  {/* ¿Trabaja a crédito? */}
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-slate-700">¿Trabaja a crédito?</label>
+                    <div className="flex items-center gap-6">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                        <input
+                          type="radio"
+                          name="has_credit"
+                          value="no"
+                          checked={formData.has_credit === "no"}
+                          onChange={handleStandardChange}
+                          className="h-4 w-4 text-[var(--app-brand-deep)] focus:ring-[var(--app-brand)]"
+                        />
+                        No
+                      </label>
+                      <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700">
+                        <input
+                          type="radio"
+                          name="has_credit"
+                          value="yes"
+                          checked={formData.has_credit === "yes"}
+                          onChange={handleStandardChange}
+                          className="h-4 w-4 text-[var(--app-brand-deep)] focus:ring-[var(--app-brand)]"
+                        />
+                        Sí
+                      </label>
                     </div>
                   </div>
+
+                  {/* Campos condicionales si trabaja a crédito */}
+                  {formData.has_credit === "yes" && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-4 pt-2"
+                    >
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Condición de pago desplegable (15, 30, 45, 60) */}
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-slate-700">Condición de Pago *</label>
+                          <select
+                            name="payment_terms_days"
+                            value={formData.payment_terms_days}
+                            onChange={handleStandardChange}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)] bg-white"
+                          >
+                            <option value="15">15 días</option>
+                            <option value="30">30 días</option>
+                            <option value="45">45 días</option>
+                            <option value="60">60 días</option>
+                          </select>
+                        </div>
+
+                        {/* Moneda (PEN / USD) */}
+                        <div>
+                          <label className="mb-1 block text-sm font-medium text-slate-700">Moneda *</label>
+                          <select
+                            name="currency"
+                            value={formData.currency}
+                            onChange={handleStandardChange}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)] bg-white"
+                          >
+                            <option value="PEN">PEN (S/)</option>
+                            <option value="USD">USD ($)</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-slate-700">
+                          Límite de Crédito ({formData.currency === "PEN" ? "S/" : "$"}) *
+                        </label>
+                        <input
+                          required
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          name="credit_limit"
+                          value={formData.credit_limit}
+                          onChange={handleStandardChange}
+                          placeholder="Ej. 10000.00"
+                          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
+                        />
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
 
                 {/* INFORMACIÓN ADICIONAL & NUEVO CAMPO */}
