@@ -30,6 +30,7 @@ import { CustomerOverviewDrawer } from "@/components/dashboard/customers/Custome
 import { BulkActionModal, CreateCustomFieldModal, DeleteCustomFieldModal } from "@/components/dashboard/customers/CustomerModals";
 import { type CustomFieldDefinition } from "@/types/custom-field";
 import { ImportCustomersModal } from "@/components/dashboard/customers/ImportCustomersModal";
+import { useColumnFilters } from "@/hooks/useColumnFilters";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -80,14 +81,32 @@ export default function CustomersPage() {
     ids: [],
   });
 
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [activeFilters, setActiveFilters] = useState<Array<{
-    id: string;
-    label: string;
-    type: "text" | "number" | "select" | "date";
-    operator: string;
-    value: string;
-  }>>([]);
+  // Integración del Hook Reutilizable de Filtros por Columna
+  const {
+    showAdvancedFilters,
+    setShowAdvancedFilters,
+    activeFilters,
+    setActiveFilters,
+    handleAddFilter,
+    handleRemoveFilter,
+    handleUpdateFilter,
+    filteredItems: columnFilteredCustomers,
+  } = useColumnFilters(customers, (customer, columnId) => {
+    const customerVals = customerValuesMap[customer.id] || {};
+    const def = customFieldDefinitions.find(d => d.id === columnId);
+
+    if (columnId === "name") return getCustomerDisplayName(customer);
+    if (columnId === "document") return getCustomerDocument(customer);
+    if (columnId === "payment_terms") return String(customer.payment_terms_days ?? "");
+    if (columnId === "currency") return customer.preferred_currency ?? "";
+    if (columnId === "credit_limit") return String(customer.credit_limit ?? "");
+    if (columnId === "status") return customer.status ?? "";
+
+    const rawVal = customerVals[columnId];
+    return rawVal !== undefined && rawVal !== null
+      ? String(rawVal)
+      : (def?.field_type === "boolean" ? "false" : "");
+  });
 
   useEffect(() => {
     function handleSearchShortcut(event: KeyboardEvent) {
@@ -157,8 +176,9 @@ export default function CustomersPage() {
     return () => { cancelled = true; };
   }, [page, perPage, activeTab, refreshTrigger]);
 
+  // Filtrado final combinando la barra de búsqueda general y el hook de columnas
   const filtered = useMemo(() => {
-    let result = customers;
+    let result = columnFilteredCustomers;
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -169,115 +189,8 @@ export default function CustomersPage() {
       );
     }
 
-    if (activeFilters.length > 0) {
-      result = result.filter((c) => {
-        const customerVals = customerValuesMap[c.id] || {};
-
-        return activeFilters.every((filter) => {
-          let targetValue = "";
-          const def = customFieldDefinitions.find(d => d.id === filter.id);
-          
-          if (filter.id === "name") {
-            targetValue = getCustomerDisplayName(c).toLowerCase();
-          } else if (filter.id === "document") {
-            targetValue = getCustomerDocument(c).toLowerCase();
-          } else if (filter.id === "payment_terms") {
-            targetValue = String(c.payment_terms_days ?? "");
-          } else if (filter.id === "currency") {
-            targetValue = (c.preferred_currency ?? "").toLowerCase();
-          } else if (filter.id === "credit_limit") {
-            targetValue = String(c.credit_limit ?? "");
-          } else if (filter.id === "status") {
-            targetValue = (c.status ?? "").toLowerCase();
-          } else {
-            // Columna personalizada EAV
-            const rawVal = customerVals[filter.id];
-            targetValue = rawVal !== undefined && rawVal !== null 
-              ? String(rawVal) 
-              : (def?.field_type === "boolean" ? "false" : "");
-          }
-
-          // === AQUÍ COLOCAS LA LÓGICA DE FECHAS ===
-          if (filter.type === "date") {
-            if (filter.operator === "all") return true;
-            if (!targetValue) return false;
-            
-            // Limpiamos la fecha del registro ignorando la hora para comparar solo días calendario
-            const itemDateStr = targetValue.split("T")[0];
-            if (!itemDateStr) return false;
-
-            // Obtenemos la fecha actual local del dispositivo del cliente en formato YYYY-MM-DD
-            const now = new Date();
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const day = String(now.getDate()).padStart(2, '0');
-            const todayStr = `${year}-${month}-${day}`;
-
-            if (filter.operator === "today") {
-              return itemDateStr === todayStr;
-            }
-            if (filter.operator === "yesterday") {
-              const yesterdayDate = new Date(now);
-              yesterdayDate.setDate(now.getDate() - 1);
-              const yYear = yesterdayDate.getFullYear();
-              const yMonth = String(yesterdayDate.getMonth() + 1).padStart(2, '0');
-              const yDay = String(yesterdayDate.getDate()).padStart(2, '0');
-              const yesterdayStr = `${yYear}-${yMonth}-${yDay}`;
-              return itemDateStr === yesterdayStr;
-            }
-            if (filter.operator === "this_week") {
-              const firstDayOfWeek = new Date(now);
-              firstDayOfWeek.setDate(now.getDate() - now.getDay());
-              const firstDayStr = firstDayOfWeek.toISOString().split("T")[0];
-              return itemDateStr >= firstDayStr && itemDateStr <= todayStr;
-            }
-            if (filter.operator === "last_week") {
-              const prevWeekStart = new Date(now);
-              prevWeekStart.setDate(now.getDate() - now.getDay() - 7);
-              const prevWeekEnd = new Date(now);
-              prevWeekEnd.setDate(now.getDate() - now.getDay() - 1);
-              return itemDateStr >= prevWeekStart.toISOString().split("T")[0] && 
-                     itemDateStr <= prevWeekEnd.toISOString().split("T")[0];
-            }
-            if (filter.operator === "last_month") {
-              const targetDate = new Date(targetValue);
-              return targetDate.getMonth() === now.getMonth() - 1 && targetDate.getFullYear() === now.getFullYear();
-            }
-            if (filter.operator === "year_start") {
-              const yearStartStr = `${now.getFullYear()}-01-01`;
-              return itemDateStr >= yearStartStr && itemDateStr <= todayStr;
-            }
-            if (filter.operator === "range") {
-              const [desde, hasta] = filter.value.split("|");
-              if (desde && itemDateStr < desde) return false; // Nota: usa itemDateStr aquí si prefieres
-              if (hasta && itemDateStr > hasta) return false;
-              return true;
-            }
-            return true;
-          }
-          // ==========================================
-
-          const val = filter.value.toLowerCase();
-          if (!val && filter.type !== "select") return true;
-
-          switch (filter.operator) {
-            case "contains":
-              return targetValue.toLowerCase().includes(val);
-            case "equals":
-              return targetValue.toLowerCase() === val;
-            case "greater":
-              return Number(targetValue) > Number(val);
-            case "less":
-              return Number(targetValue) < Number(val);
-            default:
-              return true;
-          }
-        });
-      });
-    }
-
     return result;
-  }, [customers, search, activeFilters, customFieldDefinitions, customerValuesMap]);
+  }, [columnFilteredCustomers, search]);
 
   const handlePerPageChange = (newPerPage: number) => {
     setPerPage(newPerPage);
@@ -609,32 +522,6 @@ export default function CustomersPage() {
   const hasActiveSelected = selectedCustomers.some(c => c.status === 'ACTIVE');
   const hasInactiveSelected = selectedCustomers.some(c => c.status === 'INACTIVE');
 
-  const handleAddFilter = (columnId: string, label: string, type: "text" | "number" | "select" | "date") => {
-    if (activeFilters.some(f => f.id === columnId)) return;
-
-    const defaultValue = columnId === "status" ? "ACTIVE" : (type === "select" ? "false" : "");
-
-    setActiveFilters(prev => [
-      ...prev,
-      {
-        id: columnId,
-        label,
-        type,
-        operator: columnId === "status" ? "equals" : type === "date" ? "all" : (type === "select" ? "equals" : "contains"),
-        value: defaultValue,
-      }
-    ]);
-    setShowAdvancedFilters(true);
-  };
-
-  const handleRemoveFilter = (columnId: string) => {
-    setActiveFilters(prev => prev.filter(f => f.id !== columnId));
-  };
-
-  const handleUpdateFilter = (columnId: string, updates: Partial<{ operator: string; value: string }>) => {
-    setActiveFilters(prev => prev.map(f => f.id === columnId ? { ...f, ...updates } : f));
-  };
-
   return (
     <div className="flex h-full min-h-0 flex-col p-0.1 text-slate-900">
 
@@ -743,12 +630,12 @@ export default function CustomersPage() {
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <button className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 <Columns size={14} />
                 Columnas
               </button>
-            </div>
+            </div> */}
           </div>
 
           {/* Panel interactivo de Filtros Activos debajo del buscador */}

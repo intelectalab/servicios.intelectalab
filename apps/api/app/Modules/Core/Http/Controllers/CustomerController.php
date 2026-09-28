@@ -314,6 +314,21 @@ class CustomerController extends Controller
         ]);
     }
 
+    private function parseExcelDate($value): string
+    {
+        if (empty($value)) {
+            return '';
+        }
+        // Si Excel lo leyó como un número serial (ej. 46097)
+        if (is_numeric($value) && (float)$value > 20000) {
+            $unixDate = (\PhpOffice\PhpSpreadsheet\Shared\Date::excelToTimestamp((float)$value));
+            return date('Y-m-d', $unixDate); // <-- Corregido de 'YYYY-MM-DD' a 'Y-m-d'
+        }
+        // Si viene como string normal (ej. 15/09/2026 o 2026-09-15)
+        $parsed = strtotime(str_replace('/', '-', $value));
+        return $parsed ? date('Y-m-d', $parsed) : trim((string)$value);
+    }
+
     public function import(Request $request)
     {
         $request->validate([
@@ -573,6 +588,10 @@ class CustomerController extends Controller
                             'label' => ucwords(str_replace('_', ' ', $key)),
                             'field_type' => 'text',
                         ]);
+                    }
+
+                    if ($definition->field_type === 'date' || str_contains(strtolower($key), 'fecha')) {
+                        $val = $this->parseExcelDate($val);
                     }
 
                     \App\Modules\Core\Models\CustomFieldValue::updateOrCreate(

@@ -72,7 +72,7 @@ export default function Header({
   }
 
   return (
-    <header className="app-surface app-border sticky top-0 z-30 flex h-20 w-full items-center justify-between border-b px-6 shadow-[0_2px_8px_rgba(15,31,46,0.03)] sm:px-10">
+    <header className="app-surface app-border sticky top-0 z-[100] overflow-visible flex h-20 w-full items-center justify-between border-b px-6 shadow-[0_2px_8px_rgba(15,31,46,0.03)] sm:px-10">
       {/* Sección Izquierda: Toggle y Breadcrumbs con aire generoso */}
       <div className="flex items-center gap-5 min-w-0">
         <button
@@ -154,7 +154,7 @@ export default function Header({
 
           {/* Menú Flotante */}
           {menuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-64 rounded-2xl border border-[#E1E7EC] bg-white p-1.5 shadow-[0_10px_25px_rgba(15,31,46,0.1)] z-50">
+            <div className="absolute right-0 top-full z-[110] mt-2 w-64 rounded-2xl border border-[#E1E7EC] bg-white p-1.5 shadow-[0_10px_25px_rgba(15,31,46,0.1)]">
               {/* Tarjeta de usuario interna siempre legible y estructurada */}
               <div className="border-b border-[#F0F4F7] bg-[#F8FAFC] rounded-xl px-3.5 py-3 mb-1">
                 <p className="text-sm font-semibold text-[#0F1F2E] truncate">{userName}</p>

@@ -68,7 +68,8 @@ export function getCustomerDocument(customer: Customer): string {
     return `${party.person.document_type} ${party.person.document_number}`;
   }
   if (party.party_type === "ORGANIZATION" && party.organization) {
-    return party.organization.tax_identifier;
+    const taxId = party.organization.tax_identifier;
+    return taxId ? `RUC ${taxId}` : "—";
   }
   return "—";
 }

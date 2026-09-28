@@ -3,6 +3,8 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
+use App\Modules\Subscription\Http\Controllers\SaasPlanController;
+use App\Modules\Subscription\Http\Controllers\TenantRegisterController;
 use App\Modules\Core\Http\Controllers\CustomerController;
 use App\Modules\Core\Http\Controllers\SupplierController;
 use App\Modules\Core\Http\Controllers\ContactController;
@@ -22,8 +24,12 @@ use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmLeadController;
 use App\Modules\Portal\Http\Controllers\PortalController;
+use App\Modules\Core\Http\Controllers\EmployeeController;
 
 Route::prefix('v1')->group(function () {
+    Route::get('/saas-plans', [SaasPlanController::class, 'index']);
+    Route::post('/tenants/register', [TenantRegisterController::class, 'register']);
+
     Route::post('/login', [AuthController::class, 'login']);
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword']);
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
@@ -69,11 +75,23 @@ Route::prefix('v1')->group(function () {
         // Proveedores
         Route::middleware('permission:core.view')->group(function () {
             Route::get('/suppliers', [SupplierController::class, 'index']);
+            Route::get('/suppliers/template', [SupplierController::class, 'downloadTemplate']);
             Route::get('/suppliers/{supplier}', [SupplierController::class, 'show']);
         });
+
+        Route::middleware('permission:core.view')->get('/suppliers/{supplier}/overview', [SupplierController::class, 'overview']);
+
         Route::middleware('permission:core.manage')->group(function () {
+            // Acciones masivas primero
+            Route::post('/suppliers/bulk-deactivate', [SupplierController::class, 'bulkDeactivate']);
+            Route::post('/suppliers/bulk-activate', [SupplierController::class, 'bulkActivate']);
+            Route::post('/suppliers/import', [SupplierController::class, 'import']);
+
+            // Acciones individuales
             Route::post('/suppliers', [SupplierController::class, 'store']);
+            Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
             Route::post('/suppliers/{supplier}/deactivate', [SupplierController::class, 'deactivate']);
+            Route::post('/suppliers/{supplier}/activate', [SupplierController::class, 'activate']);
         });
 
         // Contactos
@@ -81,6 +99,28 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:core.manage')->group(function () {
             Route::post('/contacts', [ContactController::class, 'store']);
             Route::delete('/contacts/{contact}', [ContactController::class, 'destroy']);
+        });
+
+        // Empleados
+        Route::middleware('permission:core.view')->group(function () {
+            Route::get('/employees', [EmployeeController::class, 'index']);
+            Route::get('/employees/template', [EmployeeController::class, 'downloadTemplate']);
+            Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
+        });
+
+        Route::middleware('permission:core.view')->get('/employees/{employee}/overview', [EmployeeController::class, 'overview']);
+
+        Route::middleware('permission:core.manage')->group(function () {
+            // Acciones masivas primero
+            Route::post('/employees/bulk-deactivate', [EmployeeController::class, 'bulkDeactivate']);
+            Route::post('/employees/bulk-activate', [EmployeeController::class, 'bulkActivate']);
+            Route::post('/employees/import', [EmployeeController::class, 'import']);
+
+            // Acciones individuales
+            Route::post('/employees', [EmployeeController::class, 'store']);
+            Route::put('/employees/{employee}', [EmployeeController::class, 'update']);
+            Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
+            Route::post('/employees/{employee}/activate', [EmployeeController::class, 'activate']);
         });
 
         // Servicios

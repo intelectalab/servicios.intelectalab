@@ -296,7 +296,7 @@ export function ContactModal({
               type={contactType === "EMAIL" ? "email" : "text"}
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder={contactType === "EMAIL" ? "correo@empresa.com" : "Escribe el número completo..."}
+              placeholder={contactType === "EMAIL" ? "correo@empresa.com" : contactType === "ADDRESS" ? "Dirección completa..." : "Escribe el número completo..."}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-[var(--app-brand)] focus:outline-none focus:ring-1 focus:ring-[var(--app-brand)]"
             />
           )}

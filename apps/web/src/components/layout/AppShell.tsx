@@ -2,14 +2,16 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { BriefcaseBusiness, FileText, Users } from "lucide-react";
+import { BriefcaseBusiness, FileText, IdCard, Truck, Users } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
-import Header from "@/components/layout/Header";
+import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
 
 const MENU_ITEMS: MenuItem[] = [
   { href: "/customers", label: "Clientes", requiredPermission: "core.view", icon: Users },
+  { href: "/suppliers", label: "Proveedores", requiredPermission: "core.view", icon: Truck },
+  { href: "/employees", label: "Empleados", requiredPermission: "core.view", icon: IdCard },
   { href: "/services", label: "Servicios", requiredPermission: "services.view", icon: BriefcaseBusiness },
   { href: "/quotations", label: "Cotizaciones", requiredPermission: "quotations.view", icon: FileText },
 ];
@@ -26,6 +28,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -45,16 +48,29 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadPermissions() {
+    async function loadUserDataAndPermissions() {
       try {
-        const response = await apiFetch<PermissionsResponse>("/v1/me/permissions");
-        if (!cancelled) setPermissions(response.permissions);
+        // Cargamos el perfil del usuario autenticado
+        const userResponse = await apiFetch<any>("/v1/me");
+        if (!cancelled && userResponse) {
+          setCurrentUser({
+            name: userResponse.name,
+            email: userResponse.email,
+            role: "Administrador",
+          });
+        }
+
+        // Cargamos los permisos
+        const permResponse = await apiFetch<PermissionsResponse>("/v1/me/permissions");
+        if (!cancelled) setPermissions(permResponse.permissions);
+      } catch (err) {
+        console.error("Error al cargar datos de sesión", err);
       } finally {
         if (!cancelled) setPermissionsLoading(false);
       }
     }
 
-    loadPermissions();
+    loadUserDataAndPermissions();
     return () => {
       cancelled = true;
     };
@@ -116,9 +132,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
             setSidebarOpen((value) => !value);
             setMobileOpen((value) => !value);
           }}
+          user={currentUser}
+          onLogout={handleLogout}
         />
 
-        <main className="min-h-0 flex-1 overflow-hidden p-6 md:p-10">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">{children}</main>
       </div>
     </div>
   );
