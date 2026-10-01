@@ -9,11 +9,11 @@ import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
 
 const MENU_ITEMS: MenuItem[] = [
-  { href: "/customers", label: "Clientes", requiredPermission: "core.view", icon: Users },
-  { href: "/suppliers", label: "Proveedores", requiredPermission: "core.view", icon: Truck },
-  { href: "/employees", label: "Empleados", requiredPermission: "core.view", icon: IdCard },
-  { href: "/services", label: "Servicios", requiredPermission: "services.view", icon: BriefcaseBusiness },
-  { href: "/quotations", label: "Cotizaciones", requiredPermission: "quotations.view", icon: FileText },
+  { href: "/customers", label: "Clientes", requiredPermission: "core.view", icon: Users, superModule: "CORE" },
+  { href: "/suppliers", label: "Proveedores", requiredPermission: "core.view", icon: Truck, superModule: "CORE" },
+  { href: "/employees", label: "Empleados", requiredPermission: "core.view", icon: IdCard, superModule: "CORE" },
+  { href: "/services", label: "Servicios", requiredPermission: "services.view", icon: BriefcaseBusiness, superModule: "OPERACIONES" },
+  { href: "/quotations", label: "Cotizaciones", requiredPermission: "quotations.view", icon: FileText, superModule: "VENTAS" },
 ];
 const SIDEBAR_STATE_KEY = "erp-sidebar-open";
 
@@ -50,7 +50,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     async function loadUserDataAndPermissions() {
       try {
-        // Cargamos el perfil del usuario autenticado
         const userResponse = await apiFetch<any>("/v1/me");
         if (!cancelled && userResponse) {
           setCurrentUser({
@@ -60,7 +59,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
           });
         }
 
-        // Cargamos los permisos
         const permResponse = await apiFetch<PermissionsResponse>("/v1/me/permissions");
         if (!cancelled) setPermissions(permResponse.permissions);
       } catch (err) {
@@ -88,7 +86,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
-  const visibleMenu = MENU_ITEMS.filter((item) => permissions.includes(item.requiredPermission));
+  const menuWithLockState = MENU_ITEMS.map((item) => ({
+    ...item,
+    locked: !permissions.includes(item.requiredPermission),
+  }));
 
   return (
     <div className="app-page flex h-screen min-h-0 overflow-hidden">
@@ -99,7 +100,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         }`}
       >
         <Sidebar
-          items={visibleMenu}
+          items={menuWithLockState}
           compact={sidebarOpen === false}
           permissionsLoading={permissionsLoading}
           onNavigate={() => setMobileOpen(false)}
@@ -109,11 +110,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
       </aside>
       {/* Sidebar mobile (drawer) */}
       {mobileOpen && (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-[200] md:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileOpen(false)} />
           <aside className="app-surface absolute inset-y-0 left-0 w-64 shadow-xl">
             <Sidebar
-              items={visibleMenu}
+              items={menuWithLockState}
               compact={false}
               permissionsLoading={permissionsLoading}
               onNavigate={() => setMobileOpen(false)}

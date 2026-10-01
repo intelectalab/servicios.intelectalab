@@ -9,7 +9,7 @@ export function proxy(request: NextRequest) {
   const hasToken = Boolean(request.cookies.get(TOKEN_COOKIE)?.value);
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-  if (!hasToken && pathname.startsWith("/customers")) {
+  if (!hasToken && (pathname.startsWith("/customers") || pathname.startsWith("/superadmin"))) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -21,5 +21,12 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login/:path*", "/forgot-password/:path*", "/reset-password/:path*", "/customers/:path*"],
+  matcher: [
+    "/", 
+    "/login/:path*", 
+    "/forgot-password/:path*", 
+    "/reset-password/:path*", 
+    "/customers/:path*",
+    "/superadmin/:path*"
+  ],
 };

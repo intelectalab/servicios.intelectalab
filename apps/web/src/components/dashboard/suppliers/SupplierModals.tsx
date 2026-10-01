@@ -19,7 +19,7 @@ export function CreateCustomFieldModal({ isOpen, form, isSaving, onChange, onClo
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
           <motion.form
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -88,7 +88,7 @@ export function BulkActionModal({ type, ids, isProcessing, onCancel, onConfirm }
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
               <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${isDeactivation ? "bg-red-50 text-red-600" : "bg-emerald-50 text-emerald-600"}`}>
@@ -125,7 +125,7 @@ export function DeleteCustomFieldModal({ definition, isDeleting, onCancel, onCon
   return (
     <AnimatePresence>
       {definition && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
+        <div className="fixed inset-0 z-[220] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
           <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="w-full max-w-md space-y-4 rounded-2xl bg-white p-6 text-slate-900 shadow-2xl">
             <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600"><AlertTriangle size={20} /></div>

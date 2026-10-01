@@ -23,6 +23,7 @@ class User extends Authenticatable implements CanResetPasswordContract
         'email',
         'password_hash',
         'name',
+        'is_super_admin',
         'status',
         'mfa_enabled',
     ];
@@ -33,6 +34,7 @@ class User extends Authenticatable implements CanResetPasswordContract
 
     protected $casts = [
         'mfa_enabled' => 'boolean',
+        'is_super_admin' => 'boolean',
         'last_login_at' => 'datetime',
     ];
 

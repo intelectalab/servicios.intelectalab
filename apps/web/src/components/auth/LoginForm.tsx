@@ -38,7 +38,12 @@ export default function LoginForm() {
       }
 
       setAuthToken(data.token);
-      router.push("/customers");
+      // Verificamos si es superadmin para redirigirlo a su panel global
+      if (data.user?.is_super_admin) {
+        router.push("/superadmin/plans");
+      } else {
+        router.push("/customers");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ocurrió un error. Intenta de nuevo.");
     } finally {

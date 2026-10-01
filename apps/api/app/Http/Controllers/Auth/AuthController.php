@@ -63,6 +63,7 @@ class AuthController extends Controller
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
+                'is_super_admin' => (bool) $user->is_super_admin,
             ],
             'token' => $token,
         ]);

@@ -72,7 +72,7 @@ export default function Header({
   }
 
   return (
-    <header className="app-surface app-border sticky top-0 z-[100] overflow-visible flex h-20 w-full items-center justify-between border-b px-6 shadow-[0_2px_8px_rgba(15,31,46,0.03)] sm:px-10">
+    <header className="app-surface app-border sticky top-0 z-[100] overflow-visible flex h-20 w-full items-center justify-between border-b px-3 shadow-[0_2px_8px_rgba(15,31,46,0.03)] sm:px-10">
       {/* Sección Izquierda: Toggle y Breadcrumbs con aire generoso */}
       <div className="flex items-center gap-5 min-w-0">
         <button

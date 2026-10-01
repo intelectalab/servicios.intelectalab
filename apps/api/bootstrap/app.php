@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'module' => \App\Http\Middleware\CheckModuleEnabled::class,
             'portal.user' => \App\Http\Middleware\EnsurePortalUser::class,
+            'super.admin' => \App\Http\Middleware\EnsureIsSuperAdmin::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

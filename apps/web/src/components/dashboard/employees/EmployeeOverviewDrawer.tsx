@@ -364,7 +364,7 @@ export function EmployeeOverviewDrawer({ employeeId, onClose, onUpdate }: Employ
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden">
+        <div className="fixed inset-0 z-[200] overflow-hidden">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

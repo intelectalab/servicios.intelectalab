@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Subscription\Http\Controllers\SaasPlanController;
+use App\Modules\Subscription\Http\Controllers\SuperAdmin\SuperAdminDashboardController;
 use App\Modules\Subscription\Http\Controllers\TenantRegisterController;
 use App\Modules\Core\Http\Controllers\CustomerController;
 use App\Modules\Core\Http\Controllers\SupplierController;
@@ -263,6 +264,20 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:system.admin')->get('/test/no-permission', function () {
             return response()->json(['message' => 'No deberías poder ver esto.']);
         });
+    });
+
+    Route::middleware(['auth:sanctum', 'super.admin'])->prefix('superadmin')->group(function () {
+        // Métricas del Dashboard global
+        Route::get('/dashboard/metrics', [SuperAdminDashboardController::class, 'metrics']);
+
+        // Gestión de Planes SaaS (CRUD completo)
+        Route::get('/plans', [SaasPlanController::class, 'adminIndex']);
+        Route::post('/plans', [SaasPlanController::class, 'store']);
+        Route::put('/plans/{id}', [SaasPlanController::class, 'update']);
+        Route::delete('/plans/{id}', [SaasPlanController::class, 'destroy']);
+
+        // Listado y gestión global de Tenants / Empresas
+        Route::get('/tenants', [SuperAdminDashboardController::class, 'tenants']);
     });
 
     // Portal del cliente

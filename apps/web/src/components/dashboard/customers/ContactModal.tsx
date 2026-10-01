@@ -134,7 +134,7 @@ export function ContactModal({
   );
 
   return (
-    <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
+    <div className="fixed inset-0 z-[210] flex items-center justify-center bg-slate-900/40 backdrop-blur-xs">
       <form onSubmit={handleSubmit} className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <h3 className="text-sm font-bold text-slate-900">
