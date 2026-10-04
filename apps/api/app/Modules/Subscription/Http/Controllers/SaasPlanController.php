@@ -4,6 +4,7 @@ namespace App\Modules\Subscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Subscription\Models\SaasPlan;
+use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class SaasPlanController extends Controller
@@ -18,30 +19,37 @@ class SaasPlanController extends Controller
         return response()->json($plans);
     }
 
-    // Listar TODOS los planes para el panel de SuperAdmin (incluyendo inactivos)
     public function adminIndex(): JsonResponse
     {
         $plans = SaasPlan::orderBy('display_order', 'asc')->get();
         return response()->json($plans);
     }
 
-    // Crear un nuevo plan SaaS
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
             'code' => 'required|string|unique:saas_plans,code',
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'monthly_price' => 'required|numeric|min:0',
-            'annual_price' => 'required|numeric|min:0',
+            'monthly_price' => 'nullable|numeric|min:0',
+            'annual_price' => 'nullable|numeric|min:0',
             'currency' => 'required|string|size:3',
             'has_trial' => 'boolean',
             'trial_days' => 'nullable|integer|min:0',
+            'requires_payment_upon_trial' => 'boolean',
+            'auto_renew_default' => 'boolean',
+            'default_billing_period' => 'string|in:MONTHLY,ANNUAL',
             'active' => 'boolean',
             'is_public' => 'boolean',
             'display_order' => 'integer',
             'limits' => 'nullable|array',
             'modules' => 'nullable|array',
+            'consumption' => 'nullable|array', // <--- Añadido aquí
+            'features' => 'nullable|array',
+            'support_level' => 'string',
+            'support_tickets_month' => 'nullable|integer',
+            'support_sla_hours' => 'nullable|integer',
+            'support_channels' => 'nullable|array',
         ]);
 
         $plan = SaasPlan::create($validated);
@@ -52,7 +60,6 @@ class SaasPlanController extends Controller
         ], 201);
     }
 
-    // Actualizar un plan SaaS existente
     public function update(Request $request, $id): JsonResponse
     {
         $plan = SaasPlan::findOrFail($id);
@@ -61,16 +68,25 @@ class SaasPlanController extends Controller
             'code' => 'sometimes|string|unique:saas_plans,code,' . $id,
             'name' => 'sometimes|string|max:255',
             'description' => 'nullable|string',
-            'monthly_price' => 'sometimes|numeric|min:0',
-            'annual_price' => 'sometimes|numeric|min:0',
+            'monthly_price' => 'sometimes|nullable|numeric|min:0',
+            'annual_price' => 'sometimes|nullable|numeric|min:0',
             'currency' => 'sometimes|string|size:3',
             'has_trial' => 'boolean',
             'trial_days' => 'nullable|integer|min:0',
+            'requires_payment_upon_trial' => 'boolean',
+            'auto_renew_default' => 'boolean',
+            'default_billing_period' => 'string|in:MONTHLY,ANNUAL',
             'active' => 'boolean',
             'is_public' => 'boolean',
             'display_order' => 'integer',
             'limits' => 'nullable|array',
             'modules' => 'nullable|array',
+            'consumption' => 'nullable|array', // <--- Añadido aquí también
+            'features' => 'nullable|array',
+            'support_level' => 'string',
+            'support_tickets_month' => 'nullable|integer',
+            'support_sla_hours' => 'nullable|integer',
+            'support_channels' => 'nullable|array',
         ]);
 
         $plan->update($validated);
@@ -81,15 +97,13 @@ class SaasPlanController extends Controller
         ]);
     }
 
-    // Eliminar o desactivar un plan
     public function destroy($id): JsonResponse
     {
         $plan = SaasPlan::findOrFail($id);
-        
         $plan->update(['active' => false]);
 
         return response()->json([
-            'message' => 'Plan SaaS eliminado correctamente.',
+            'message' => 'Plan SaaS desactivado correctamente.',
         ]);
     }
 }
