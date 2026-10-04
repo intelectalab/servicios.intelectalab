@@ -55,8 +55,8 @@ export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCusto
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      setError(err.message || "No se pudo descargar la plantilla.");
+    } catch (err) {
+      setError((err instanceof Error && err.message) || "No se pudo descargar la plantilla.");
     } finally {
       setIsDownloadingTemplate(false);
     }
@@ -114,8 +114,8 @@ export function ImportCustomersModal({ isOpen, onClose, onSuccess }: ImportCusto
         onSuccess();
         handleClose();
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || "Ocurrió un error al importar el archivo.");
+    } catch (err) {
+      setError((err instanceof Error && err.message) || "Ocurrió un error al importar el archivo.");
     } finally {
       setIsUploading(false);
     }

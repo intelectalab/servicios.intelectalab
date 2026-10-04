@@ -26,6 +26,12 @@ class SetTenantContext
         )?->tenant_id;
 
         if (! $tenantId) {
+            // El super admin no pertenece a ningún tenant: pasa sin contexto
+            // (sin app.tenant_id ni permisos de tenant) para poder usar /me y /logout.
+            if ($user->is_super_admin) {
+                return $next($request);
+            }
+
             return response()->json(['message' => 'El usuario no pertenece a ningún tenant activo.'], 403);
         }
 

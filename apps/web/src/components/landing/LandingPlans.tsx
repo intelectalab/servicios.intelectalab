@@ -2,28 +2,12 @@
 
 import { useState } from "react";
 import { Check, Loader2, Sparkles, Gift } from "lucide-react";
-
-interface SaasPlan {
-  id: string;
-  code: string;
-  name: string;
-  description?: string;
-  monthly_price?: number;
-  annual_price?: number;
-  currency?: string;
-  has_trial?: boolean;
-  trial_days?: number;
-  requires_payment_upfront?: boolean;
-  active: boolean;
-  limits: Record<string, any>;
-  modules: Record<string, any>;
-  features?: Record<string, any>;
-}
+import type { BillingPeriod, SaasPlan } from "@/types/saas-plan";
 
 interface LandingPlansProps {
   plans: SaasPlan[];
   loading: boolean;
-  onSelectPlan: (plan: SaasPlan, billingPeriod: "MONTHLY" | "ANNUAL", isTrial?: boolean) => void;
+  onSelectPlan: (plan: SaasPlan, billingPeriod: BillingPeriod, isTrial?: boolean) => void;
 }
 
 export function LandingPlans({ plans, loading, onSelectPlan }: LandingPlansProps) {
@@ -132,7 +116,7 @@ export function LandingPlans({ plans, loading, onSelectPlan }: LandingPlansProps
                     ))}
                     <li className="flex items-center gap-2">
                       <Check size={14} className="text-emerald-500 shrink-0 font-bold" />
-                      <span>Hasta {plan.limits?.max_users || (isFeatured ? "10" : "3")} usuarios</span>
+                      <span>Hasta {plan.limits?.users || plan.limits?.max_users || (isFeatured ? "10" : "3")} usuarios</span>
                     </li>
                   </ul>
                 </div>

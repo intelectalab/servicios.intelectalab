@@ -1,23 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Edit, Sparkles } from "lucide-react";
-
-interface Plan {
-  id: number | string;
-  name: string;
-  description?: string;
-  monthly_price?: number | null;
-  annual_price?: number | null;
-  has_trial?: boolean;
-  trial_days?: number;
-  active?: boolean;
-  modules?: Record<string, any>;
-}
+import { Edit } from "lucide-react";
+import type { SaasPlan } from "@/types/saas-plan";
 
 interface SaasPlanTableProps {
-  plans: Plan[];
-  onEditPlan: (plan: Plan) => void;
+  plans: SaasPlan[];
+  onEditPlan: (plan: SaasPlan) => void;
 }
 
 export function SaasPlanTable({ plans, onEditPlan }: SaasPlanTableProps) {

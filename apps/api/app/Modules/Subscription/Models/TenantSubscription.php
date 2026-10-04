@@ -25,4 +25,9 @@ class TenantSubscription extends Model
         'ends_at' => 'datetime',
         'configuration' => 'array',
     ];
+
+    public function plan()
+    {
+        return $this->belongsTo(SaasPlan::class, 'plan_id');
+    }
 }

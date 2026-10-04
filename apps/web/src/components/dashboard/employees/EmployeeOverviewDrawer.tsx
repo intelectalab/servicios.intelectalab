@@ -14,7 +14,6 @@ import {
   Mail,
   Phone,
   Trash2,
-  Briefcase,
   Building2
 } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";

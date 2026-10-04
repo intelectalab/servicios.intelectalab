@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   X,
-  User,
   Loader2,
   AlertCircle,
   Plus

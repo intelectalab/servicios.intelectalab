@@ -25,4 +25,14 @@ class Tenant extends Model
     protected $casts = [
         'configuration' => 'array',
     ];
+
+    public function subscriptions()
+    {
+        return $this->hasMany(\App\Modules\Subscription\Models\TenantSubscription::class, 'tenant_id');
+    }
+
+    public function companies()
+    {
+        return $this->hasMany(Company::class, 'tenant_id');
+    }
 }

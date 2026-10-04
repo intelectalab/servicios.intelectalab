@@ -6,18 +6,19 @@ import { Zap, ArrowRight, TrendingUp, Gift } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { LandingPlans } from "@/components/landing/LandingPlans";
 import { TenantRegisterModal } from "@/components/landing/TenantRegisterModal";
+import type { BillingPeriod, SaasPlan, SelectedPlan } from "@/types/saas-plan";
 
 export default function MarketingPage() {
   const router = useRouter();
-  const [plans, setPlans] = useState<any[]>([]);
+  const [plans, setPlans] = useState<SaasPlan[]>([]);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [selectedPlan, setSelectedPlan] = useState<SelectedPlan | null>(null);
 
   useEffect(() => {
     async function fetchPlans() {
       try {
-        const data: any = await apiFetch("/v1/saas-plans");
+        const data = await apiFetch<SaasPlan[]>("/v1/saas-plans");
         setPlans(data);
       } catch (err) {
         console.error("No se pudieron cargar los planes", err);
@@ -28,7 +29,7 @@ export default function MarketingPage() {
     fetchPlans();
   }, []);
 
-  const handleOpenRegister = (plan: any = null, billingPeriod: string = "MONTHLY", isTrial: boolean = false) => {
+  const handleOpenRegister = (plan: SaasPlan | null = null, billingPeriod: BillingPeriod = "MONTHLY", isTrial: boolean = false) => {
     // Si no viene plan (ej. clic en "Probar 30 días gratis"), seleccionamos por defecto el primer plan (Plan Base)
     const targetPlan = plan || plans[0] || null;
     setSelectedPlan({ ...targetPlan, billingPeriod, isTrial });

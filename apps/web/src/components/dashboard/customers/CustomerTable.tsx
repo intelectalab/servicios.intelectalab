@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useMemo, useLayoutEffect } from "react";
 import { motion } from "framer-motion";
-import { Building2, User, MoreHorizontal, MoreVertical, ArrowUp, ArrowDown, Filter, Pin, PinOff, Plus, Loader2, Trash2, Eye, EyeOff, GripVertical } from "lucide-react";
+import { Building2, User, MoreVertical, ArrowUp, ArrowDown, Filter, Pin, PinOff, Plus, Loader2, Trash2, Eye, EyeOff, GripVertical } from "lucide-react";
 import { type Customer, getCustomerDisplayName, getCustomerDocument } from "@/types/customer";
 import { type CustomFieldDefinition } from "@/types/custom-field";
 import { StatusBadge } from "@/components/StatusBadge";

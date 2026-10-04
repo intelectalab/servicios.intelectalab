@@ -48,58 +48,38 @@ const COUNTRIES = [
   { name: "China", code: "+86", iso: "CN" },
 ];
 
-export function ContactModal({
-  isOpen,
+export function ContactModal(props: ContactModalProps) {
+  if (!props.isOpen) return null;
+
+  // Se monta en cada apertura (y por contacto), así el formulario arranca
+  // siempre desde el contacto recibido o vacío.
+  return <ContactModalForm key={props.initialContact?.id ?? "new"} {...props} />;
+}
+
+function ContactModalForm({
   onClose,
   onSave,
   initialContact,
   isSaving,
 }: ContactModalProps) {
-  const [contactName, setContactName] = useState("");
-  const [contactType, setContactType] = useState("PHONE");
-  const [countryCode, setCountryCode] = useState("+51");
-  const [selectedIso, setSelectedIso] = useState("PE");
-  const [value, setValue] = useState("");
-  const [isPrimary, setIsPrimary] = useState(false);
+  const initialCountryCode = initialContact?.country_code || "+51";
+  const initialCountry = COUNTRIES.find(c => c.code === initialCountryCode);
+
+  const [contactName, setContactName] = useState(initialContact?.contact_name || "");
+  const [contactType, setContactType] = useState<string>(initialContact?.contact_type || "PHONE");
+  const [countryCode, setCountryCode] = useState(initialCountryCode);
+  const [selectedIso, setSelectedIso] = useState(initialCountry ? initialCountry.iso : "OT");
+  const [value, setValue] = useState(initialContact?.value || "");
+  const [isPrimary, setIsPrimary] = useState(initialContact?.is_primary || false);
 
   // Estados para el Dropdown con Buscador y opción personalizada
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [isCustomCountry, setIsCustomCountry] = useState(false);
+  const [isCustomCountry, setIsCustomCountry] = useState(!initialCountry);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Estado para Alternar Formato de Número
   const [unformattedMode, setUnformattedMode] = useState(false);
-
-  useEffect(() => {
-    if (initialContact) {
-      setContactName(initialContact.contact_name || "");
-      setContactType(initialContact.contact_type || "PHONE");
-      setValue(initialContact.value || "");
-      const cCode = initialContact.country_code || "+51";
-      setCountryCode(cCode);
-      
-      const found = COUNTRIES.find(c => c.code === cCode);
-      if (found) {
-        setSelectedIso(found.iso);
-        setIsCustomCountry(false);
-      } else {
-        setSelectedIso("OT");
-        setIsCustomCountry(true);
-      }
-
-      setIsPrimary(initialContact.is_primary || false);
-    } else {
-      setContactName("");
-      setContactType("PHONE");
-      setCountryCode("+51");
-      setSelectedIso("PE");
-      setIsCustomCountry(false);
-      setValue("");
-      setIsPrimary(false);
-      setUnformattedMode(false);
-    }
-  }, [initialContact, isOpen]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -110,8 +90,6 @@ export function ContactModal({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -287,7 +265,7 @@ export function ContactModal({
               </div>
 
               <p className="text-[11px] text-slate-400">
-                Selecciona un código de país o usa "Otro país" para introducir uno manual.
+                Selecciona un código de país o usa &quot;Otro país&quot; para introducir uno manual.
               </p>
             </div>
           ) : (

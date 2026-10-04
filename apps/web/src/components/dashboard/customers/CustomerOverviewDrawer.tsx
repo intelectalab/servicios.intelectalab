@@ -128,12 +128,6 @@ export function CustomerOverviewDrawer({ customerId, onClose, onUpdate }: Custom
   // Modal de Contactos
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [editingContactId, setEditingContactId] = useState<string | null>(null);
-  const [contactForm, setContactForm] = useState({
-    contact_type: "EMAIL",
-    value: "",
-    is_primary: false,
-  });
 
   // Modal para Añadir Nuevo Campo Personalizado al vuelo
   const [showNewFieldModal, setShowNewFieldModal] = useState(false);

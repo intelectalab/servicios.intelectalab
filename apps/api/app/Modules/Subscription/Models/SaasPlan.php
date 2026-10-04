@@ -28,6 +28,7 @@ class SaasPlan extends Model
         'default_billing_period',
         'limits',
         'modules',
+        'consumption',
         'features',
         'support_level',
         'support_tickets_month',
@@ -49,6 +50,7 @@ class SaasPlan extends Model
         'support_sla_hours' => 'integer',
         'limits' => 'array',
         'modules' => 'array',
+        'consumption' => 'array',
         'features' => 'array',
         'support_channels' => 'array',
     ];

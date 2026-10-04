@@ -5,11 +5,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, Check, Loader2, Gift } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import type { SelectedPlan } from "@/types/saas-plan";
 
 interface TenantRegisterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  selectedPlan: any;
+  selectedPlan: SelectedPlan | null;
 }
 
 export function TenantRegisterModal({ isOpen, onClose, selectedPlan }: TenantRegisterModalProps) {
@@ -63,7 +64,7 @@ export function TenantRegisterModal({ isOpen, onClose, selectedPlan }: TenantReg
     setErrorMessage("");
 
     try {
-      const response: any = await apiFetch("/v1/tenants/register", {
+      const response = await apiFetch<{ tenant_code?: string }>("/v1/tenants/register", {
         method: "POST",
         body: JSON.stringify({
           ...formData,
@@ -75,8 +76,8 @@ export function TenantRegisterModal({ isOpen, onClose, selectedPlan }: TenantReg
 
       setCreatedTenantCode(response.tenant_code || "EMP-22524");
       setStep(3);
-    } catch (err: any) {
-      setErrorMessage(err.message || "Ocurrió un error al registrar la empresa.");
+    } catch (err) {
+      setErrorMessage((err instanceof Error && err.message) || "Ocurrió un error al registrar la empresa.");
     } finally {
       setIsSubmitting(false);
     }

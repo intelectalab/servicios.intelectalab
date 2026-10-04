@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Loader2, AlertCircle } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
+import type { BillingPeriod, SaasPlan } from "@/types/saas-plan";
 
 interface SaasPlanDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  planToEdit?: any | null;
+  planToEdit?: SaasPlan | null;
 }
 
 const TABS = [
@@ -45,7 +46,7 @@ const MODULE_SECTIONS = [
     modules: [
       { key: "FINANZAS", name: "Finanzas", desc: "Ingresos, gastos y control" },
       { key: "FACTURACION_ELECTRONICA", name: "Facturación electrónica", desc: "Facturación / SUNAT" },
-      { key: "PAGOS", name: "Pagos y cobranzas", desc: "Gestión de pagos" },
+      { key: "PAGOS_COBRANZAS", name: "Pagos y cobranzas", desc: "Gestión de pagos" },
       { key: "RENTABILIDAD", name: "Rentabilidad", desc: "Costos y margen" },
     ],
   },
@@ -100,9 +101,9 @@ const initialFormState = {
   currency: "PEN",
   has_trial: true,
   trial_days: 30,
-  requires_payment_upon_trial: false,
+  requires_payment_upfront: false,
   auto_renew_default: true,
-  default_billing_period: "MONTHLY",
+  default_billing_period: "MONTHLY" as BillingPeriod,
   modules: {
     CLIENTES: true, SERVICIOS: true, COTIZACIONES: true, CONTRATOS: true,
     ORDENES_TRABAJO: true, PROYECTOS: true, TAREAS: true, CHECKLISTS: true,
@@ -131,54 +132,58 @@ const initialFormState = {
   } as Record<string, boolean>,
 };
 
-export function SaasPlanDrawer({ isOpen, onClose, onSuccess, planToEdit }: SaasPlanDrawerProps) {
+type PlanForm = typeof initialFormState;
+
+function buildForm(plan?: SaasPlan | null): PlanForm {
+  if (!plan) return initialFormState;
+
+  return {
+    name: plan.name ?? "",
+    code: plan.code ?? "",
+    description: plan.description ?? "",
+    active: plan.active ?? true,
+    display_order: plan.display_order ?? 1,
+    is_public: plan.is_public ?? true,
+    monthly_price: Number(plan.monthly_price ?? 0),
+    annual_price: Number(plan.annual_price ?? 0),
+    currency: plan.currency ?? "PEN",
+    has_trial: plan.has_trial ?? true,
+    trial_days: plan.trial_days ?? 30,
+    requires_payment_upfront: plan.requires_payment_upfront ?? false,
+    auto_renew_default: plan.auto_renew_default ?? true,
+    default_billing_period: plan.default_billing_period ?? "MONTHLY",
+    modules: { ...initialFormState.modules, ...(plan.modules || {}) },
+    limits: { ...initialFormState.limits, ...(plan.limits || {}) },
+    consumption: { ...initialFormState.consumption, ...(plan.consumption || {}) },
+    support_level: plan.support_level ?? "STANDARD",
+    support_tickets_month: plan.support_tickets_month ?? 10,
+    support_sla_hours: plan.support_sla_hours ?? 24,
+    support_channels: { ...initialFormState.support_channels, ...(plan.support_channels || {}) },
+    features: { ...initialFormState.features, ...(plan.features || {}) },
+  };
+}
+
+export function SaasPlanDrawer(props: SaasPlanDrawerProps) {
+  // El panel se monta en cada apertura, así el formulario y la pestaña
+  // arrancan siempre desde el plan recibido (o vacío si es uno nuevo).
+  return (
+    <AnimatePresence>
+      {props.isOpen && <SaasPlanDrawerPanel key="panel" {...props} />}
+    </AnimatePresence>
+  );
+}
+
+function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerProps) {
   const [activeTabIdx, setActiveTabIdx] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState(initialFormState);
+  const [form, setForm] = useState(() => buildForm(planToEdit));
 
-  // Cada vez que se abre el modal o cambia el plan a editar, reiniciamos la pestaña a 0 y cargamos los datos
-  useEffect(() => {
-    if (isOpen) {
-      setActiveTabIdx(0); // <--- Resetea siempre a la primera pestaña al abrir
-      setError("");
-
-      if (planToEdit) {
-        setForm({
-          name: planToEdit.name ?? "",
-          code: planToEdit.code ?? "",
-          description: planToEdit.description ?? "",
-          active: planToEdit.active ?? true,
-          display_order: planToEdit.display_order ?? 1,
-          is_public: planToEdit.is_public ?? true,
-          monthly_price: planToEdit.monthly_price ?? 0,
-          annual_price: planToEdit.annual_price ?? 0,
-          currency: planToEdit.currency ?? "PEN",
-          has_trial: planToEdit.has_trial ?? true,
-          trial_days: planToEdit.trial_days ?? 30,
-          requires_payment_upon_trial: planToEdit.requires_payment_upon_trial ?? false,
-          auto_renew_default: planToEdit.auto_renew_default ?? true,
-          default_billing_period: planToEdit.default_billing_period ?? "MONTHLY",
-          modules: { ...initialFormState.modules, ...(planToEdit.modules || {}) },
-          limits: { ...initialFormState.limits, ...(planToEdit.limits || {}) },
-          consumption: { ...initialFormState.consumption, ...(planToEdit.consumption || {}) },
-          support_level: planToEdit.support_level ?? "STANDARD",
-          support_tickets_month: planToEdit.support_tickets_month ?? 10,
-          support_sla_hours: planToEdit.support_sla_hours ?? 24,
-          support_channels: { ...initialFormState.support_channels, ...(planToEdit.support_channels || {}) },
-          features: { ...initialFormState.features, ...(planToEdit.features || {}) },
-        });
-      } else {
-        setForm(initialFormState);
-      }
-    }
-  }, [planToEdit, isOpen]);
-
-  const handleChange = (field: string, value: any) => {
+  const handleChange = (field: keyof PlanForm, value: string | number | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleNestedChange = (category: "limits" | "consumption" | "support_channels" | "features" | "modules", key: string, value: any) => {
+  const handleNestedChange = (category: "limits" | "consumption" | "support_channels" | "features" | "modules", key: string, value: number | boolean) => {
     setForm((prev) => ({
       ...prev,
       [category]: { ...prev[category], [key]: value },
@@ -206,8 +211,6 @@ export function SaasPlanDrawer({ isOpen, onClose, onSuccess, planToEdit }: SaasP
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
         <div className="fixed inset-0 z-[200] overflow-hidden">
           <motion.div
             initial={{ opacity: 0 }}
@@ -406,8 +409,8 @@ export function SaasPlanDrawer({ isOpen, onClose, onSuccess, planToEdit }: SaasP
                         <div>
                           <label className="mb-1.5 block text-xs font-bold text-slate-700">¿Solicitar pago al iniciar?</label>
                           <select
-                            value={form.requires_payment_upon_trial ? "true" : "false"}
-                            onChange={(e) => handleChange("requires_payment_upon_trial", e.target.value === "true")}
+                            value={form.requires_payment_upfront ? "true" : "false"}
+                            onChange={(e) => handleChange("requires_payment_upfront", e.target.value === "true")}
                             className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
                           >
                             <option value="true">Sí</option>
@@ -741,7 +744,5 @@ export function SaasPlanDrawer({ isOpen, onClose, onSuccess, planToEdit }: SaasP
             </motion.div>
           </div>
         </div>
-      )}
-    </AnimatePresence>
   );
 }

@@ -15,7 +15,7 @@ class CheckModuleEnabled
 
         $moduleRow = DB::table('tenant_modules')
             ->where('tenant_id', $tenantId)
-            ->where('module_code', $moduleCode)
+            ->whereRaw('UPPER(module_code) = ?', [strtoupper($moduleCode)])
             ->first();
 
         // Si no existe una fila explícita, se asume DESACTIVADO por defecto

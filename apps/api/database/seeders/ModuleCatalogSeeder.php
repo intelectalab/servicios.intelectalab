@@ -1,5 +1,7 @@
 <?php
 
+namespace Database\Seeders;
+
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -38,15 +40,21 @@ class ModuleCatalogSeeder extends Seeder
         ];
 
         foreach ($modules as $module) {
-            DB::table('module_catalog')->updateOrInsert(
-                ['code' => $module['code']],
-                array_merge($module, [
-                    'id' => (string) Str::uuid(),
-                    'active' => true,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ])
-            );
+            $exists = DB::table('module_catalog')->where('code', $module['code'])->exists();
+
+            if ($exists) {
+                DB::table('module_catalog')->where('code', $module['code'])->update(
+                    array_merge($module, ['updated_at' => now()])
+                );
+                continue;
+            }
+
+            DB::table('module_catalog')->insert(array_merge($module, [
+                'id' => (string) Str::uuid(),
+                'active' => true,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]));
         }
     }
 }

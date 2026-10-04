@@ -4,12 +4,14 @@ import { TOKEN_COOKIE } from "@/lib/auth";
 
 const AUTH_ROUTES = ["/", "/login", "/forgot-password", "/reset-password"];
 
+const PROTECTED_PREFIXES = ["/customers", "/suppliers", "/employees", "/superadmin"];
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasToken = Boolean(request.cookies.get(TOKEN_COOKIE)?.value);
   const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
-  if (!hasToken && (pathname.startsWith("/customers") || pathname.startsWith("/superadmin"))) {
+  if (!hasToken && PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -27,6 +29,8 @@ export const config = {
     "/forgot-password/:path*", 
     "/reset-password/:path*", 
     "/customers/:path*",
+    "/suppliers/:path*",
+    "/employees/:path*",
     "/superadmin/:path*"
   ],
 };

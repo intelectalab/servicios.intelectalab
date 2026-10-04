@@ -2,19 +2,11 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, CreditCard, Receipt, Building2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
-import SuperAdminSidebar, { type AdminMenuItem } from "@/components/superadmin/SuperAdminSidebar";
+import SuperAdminSidebar from "@/components/superadmin/SuperAdminSidebar";
 import SuperAdminHeader from "@/components/superadmin/SuperAdminHeader";
 import { type UserProfile } from "@/components/layout/Header";
-
-const ADMIN_MENU_ITEMS: AdminMenuItem[] = [
-  { href: "/superadmin/dashboard", label: "Dashboard", icon: LayoutDashboard, superModule: "Administración SaaS" },
-  { href: "/superadmin/plans", label: "Planes SaaS", icon: CreditCard, superModule: "Administración SaaS" },
-  { href: "/superadmin/subscriptions", label: "Suscripciones", icon: Receipt, superModule: "Administración SaaS" },
-  { href: "/superadmin/tenants", label: "Tenants / Empresas", icon: Building2, superModule: "Administración SaaS" },
-];
 
 const SIDEBAR_STATE_KEY = "erp-superadmin-sidebar-open";
 
@@ -47,7 +39,7 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
 
     async function loadUserData() {
       try {
-        const userResponse = await apiFetch<any>("/v1/me");
+        const userResponse = await apiFetch<{ name: string; email: string }>("/v1/me");
         if (!cancelled && userResponse) {
           setCurrentUser({
             name: userResponse.name,

@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Lock, Sparkles, X, ChevronDown, Layers, Loader2 } from "lucide-react";
+import { LogOut, Lock, Sparkles, X, ChevronDown, Layers } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useState, type ComponentType } from "react";
 

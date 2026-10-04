@@ -50,7 +50,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
 
     async function loadUserDataAndPermissions() {
       try {
-        const userResponse = await apiFetch<any>("/v1/me");
+        const userResponse = await apiFetch<{ name: string; email: string }>("/v1/me");
         if (!cancelled && userResponse) {
           setCurrentUser({
             name: userResponse.name,

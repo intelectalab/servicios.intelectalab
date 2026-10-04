@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import { apiFetch } from "@/lib/api";
-import { Plus, Search, X, Loader2, RefreshCw, AlertCircle, CreditCard, Users, Clock, DollarSign } from "lucide-react";
+import { Plus, Search, X, RefreshCw, AlertCircle, CreditCard, Users, Clock, DollarSign } from "lucide-react";
 import { SaasPlanTable } from "@/components/superadmin/plans/SaasPlanTable";
 import { SaasPlanDrawer } from "@/components/superadmin/plans/SaasPlanDrawer";
+import type { SaasPlan, SuperAdminMetrics } from "@/types/saas-plan";
 
 export default function SuperAdminPlansPage() {
-  const [plans, setPlans] = useState<any[]>([]);
-  const [metrics, setMetrics] = useState<any>({});
+  const [plans, setPlans] = useState<SaasPlan[]>([]);
+  const [metrics, setMetrics] = useState<SuperAdminMetrics>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -18,7 +19,7 @@ export default function SuperAdminPlansPage() {
 
   // Estados para controlar el Drawer (Crear o Editar)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [selectedPlanToEdit, setSelectedPlanToEdit] = useState<any | null>(null);
+  const [selectedPlanToEdit, setSelectedPlanToEdit] = useState<SaasPlan | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,14 +28,14 @@ export default function SuperAdminPlansPage() {
       setLoading(true);
       setError("");
       try {
-        const [plansData, metricsData]: [any, any] = await Promise.all([
-          apiFetch("/v1/superadmin/plans"),
-          apiFetch("/v1/superadmin/dashboard/metrics"),
+        const [plansData, metricsData] = await Promise.all([
+          apiFetch<SaasPlan[]>("/v1/superadmin/plans"),
+          apiFetch<SuperAdminMetrics>("/v1/superadmin/dashboard/metrics"),
         ]);
         if (cancelled) return;
         setPlans(plansData);
         setMetrics(metricsData);
-      } catch (err) {
+      } catch {
         if (cancelled) return;
         setError("No se pudieron cargar los datos del panel de superadmin.");
       } finally {
@@ -114,7 +115,7 @@ export default function SuperAdminPlansPage() {
               <DollarSign size={18} className="text-emerald-500" />
             </div>
             <div className="text-3xl font-extrabold text-slate-900">
-              S/ {(metrics.monthly_revenue ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              S/ {Number(metrics.monthly_revenue ?? 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
           </div>
         </div>

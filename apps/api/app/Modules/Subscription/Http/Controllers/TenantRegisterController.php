@@ -11,6 +11,7 @@ use App\Modules\Subscription\Models\SaasPlan;
 use App\Modules\Subscription\Models\TenantSubscription;
 use App\Modules\Subscription\Models\TenantModule;
 use App\Modules\Subscription\Http\Requests\StoreTenantRequest;
+use App\Modules\Subscription\Support\ModulePermissions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
@@ -94,35 +95,15 @@ class TenantRegisterController extends Controller
             // 6. Buscar el Plan SaaS seleccionado y procesar módulos/permisos
             $plan = SaasPlan::findOrFail($validated['plan_id']);
             
-            // Diccionario para relacionar módulos con permisos en la tabla 'permissions'
-            $modulePermissionMap = [
-                'CLIENTES' => ['customers', 'parties', 'contacts'],
-                'PROVEEDORES' => ['suppliers'],
-                'EMPLEADOS' => ['employees'],
-                'SERVICIOS' => ['services'],
-                'COTIZACIONES' => ['quotations'],
-                'CRM' => ['crm'],
-                'FINANZAS' => ['invoices', 'payments', 'receivables', 'budgets'],
-            ];
+            // Recorrer los módulos habilitados en el JSON del plan y guardarlos en tenant_modules
+            $enabledModules = [];
 
-            // Permisos base obligatorios para que el usuario pueda ver el core y gestionar el tenant
-            $permissionCodesToAssign = ['core.view', 'core.manage', 'users.view', 'users.manage', 'tenant.manage'];
-
-            // Recorrer los módulos habilitados en el JSON del plan
             if (!empty($plan->modules) && is_array($plan->modules)) {
                 foreach ($plan->modules as $moduleCode => $isEnabled) {
                     if ($isEnabled) {
                         $upperCode = strtoupper($moduleCode);
-                        
-                        // Si el módulo está mapeado, agregamos sus prefijos de permisos permitidos
-                        if (isset($modulePermissionMap[$upperCode])) {
-                            foreach ($modulePermissionMap[$upperCode] as $prefix) {
-                                $permissionCodesToAssign[] = "{$prefix}.view";
-                                $permissionCodesToAssign[] = "{$prefix}.manage";
-                            }
-                        }
+                        $enabledModules[] = $upperCode;
 
-                        // Guardar en la tabla tenant_modules
                         TenantModule::create([
                             'tenant_id' => $tenant->id,
                             'module_code' => $upperCode,
@@ -136,7 +117,7 @@ class TenantRegisterController extends Controller
 
             // Buscar los IDs de todos los permisos calculados y asociarlos al rol en role_permissions
             $permissionIds = DB::table('permissions')
-                ->whereIn('code', array_unique($permissionCodesToAssign))
+                ->whereIn('code', ModulePermissions::codesFor($enabledModules))
                 ->pluck('id');
 
             foreach ($permissionIds as $permId) {
