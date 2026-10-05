@@ -1,23 +1,36 @@
 "use client";
 
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
+import type { ReactNode } from "react";
 import Image from "next/image";
-import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { Users, ShieldCheck, Building2 } from "lucide-react";
+import { motion, type Variants } from "framer-motion";
+import { FileText, Wrench, Receipt } from "lucide-react";
+import { Poppins } from "next/font/google";
 
 /**
  * ─────────────────────────────────────────────────────────
- * Paleta — tomada directo del logo de Grupo de Soluciones Creativas.
- * El celeste es el protagonista (ícono + "grupo de soluciones"),
- * así que es el primario. Los nombres NAVY/TEAL quedaron del
- * branding anterior; si el logo cambia otra vez, edita estos valores.
+ * Paleta — medida sobre el logo de Grupo de Soluciones Creativas
+ * (public/logo.png): azul de marca + negro cálido sobre blanco.
+ * BRAND_DARK / BRAND_DEEP son el mismo azul oscurecido, para hover
+ * y para el fondo del panel de marca. Si el logo cambia, edita aquí.
  * ─────────────────────────────────────────────────────────
  */
-export const NAVY = "#0C74A6";
-export const NAVY_DEEP = "#064D6E";
-export const NAVY_HOVER = "#1791C4";
-export const TEAL = "#7FD4F5";
-export const TEAL_DARK = "#1B92C9";
+export const BRAND = "#1B8FC9";
+export const BRAND_DARK = "#1679AB";
+export const BRAND_DEEP = "#0F5A82";
+export const BRAND_SOFT = "#E3F2FA";
+export const INK = "#1D1D1B";
+
+const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap" });
+
+/** Estilos de formulario compartidos por las pantallas de auth. */
+export const authLabel = "mb-1.5 block text-[12.5px] font-medium text-[color:var(--app-muted)]";
+export const authInput =
+  "min-h-[42px] w-full rounded-[9px] border border-[#CFD5DE] bg-white px-3 py-2 pr-[42px] text-[14px] text-[#1D1D1B] transition-[border-color,box-shadow] placeholder:text-[#8A93A3] focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_#E3F2FA] focus:outline-none";
+export const authInputIcon = "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#8A93A3]";
+export const authGhostButton =
+  "flex h-9 w-full items-center justify-center rounded-[9px] text-[13.5px] font-medium text-[color:var(--app-muted)] transition-colors hover:bg-[#F3F5F8] hover:text-[#1D1D1B]";
+export const authButton =
+  "flex h-[46px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#1B8FC9] text-[14px] font-semibold text-white transition-colors hover:bg-[#1679AB] disabled:cursor-not-allowed disabled:opacity-60";
 
 export const container: Variants = {
   hidden: {},
@@ -46,24 +59,10 @@ export function Logo({ variant = "dark" }: { variant?: "dark" | "light" }) {
   );
 }
 
-/** Link con la línea que se dibuja al hover, usado en toda la sección de auth. */
-export function UnderlineLink({
-  className = "",
-  children,
-  ...props
-}: ComponentPropsWithoutRef<"a">) {
-  return (
-    <a className={`group relative ${className}`} {...props}>
-      {children}
-      <span className="absolute -bottom-0.5 left-0 h-px w-0 bg-current transition-[width] duration-200 ease-out group-hover:w-full" />
-    </a>
-  );
-}
-
 const FEATURES = [
-  { icon: Users, text: "Gestión de clientes centralizada" },
-  { icon: ShieldCheck, text: "Permisos y roles por equipo" },
-  { icon: Building2, text: "Multi-tenant, pensado para escalar" },
+  { icon: FileText, title: "Cotiza y contrata", text: "Precios con snapshot y aprobación por roles" },
+  { icon: Wrench, title: "Ejecuta con SLA", text: "OT, proyectos, checklists y evidencias" },
+  { icon: Receipt, title: "Factura y cobra", text: "SUNAT, cuentas por cobrar y pagos en línea" },
 ];
 
 export default function AuthShell({
@@ -73,108 +72,85 @@ export default function AuthShell({
   footer,
 }: {
   title: string;
-  subtitle: string;
+  subtitle: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
 }) {
-  const prefersReducedMotion = useReducedMotion();
-
   return (
-    <div className="app-page flex min-h-screen">
-      {/* Panel izquierdo — marca (oculto en mobile) */}
+    <div className={`${poppins.className} app-surface grid min-h-screen w-full lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]`}>
+      {/* Panel izquierdo — marca (oculto bajo lg) */}
       <aside
-        className="relative hidden w-1/2 lg:w-[45%] flex-col justify-between overflow-hidden p-14 text-white md:flex"
-        style={{ background: `linear-gradient(165deg, ${NAVY} 0%, ${NAVY_DEEP} 100%)` }}
+        className="relative hidden flex-col justify-between gap-8 overflow-hidden px-12 py-10 text-white lg:flex"
+        style={{
+          background: [
+            "radial-gradient(circle at 80% 15%, rgba(142,205,235,.55), transparent 40%)",
+            "radial-gradient(circle at 10% 90%, rgba(27,143,201,.45), transparent 45%)",
+            "repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 2px, transparent 2px 22px)",
+            `linear-gradient(150deg, ${BRAND} 0%, ${BRAND_DARK} 40%, ${BRAND_DEEP} 100%)`,
+          ].join(", "),
+        }}
       >
-        <div
-          className="absolute inset-0"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.07) 1px, transparent 1px)",
-            backgroundSize: "40px 40px",
-            maskImage: "radial-gradient(ellipse 95% 85% at 35% 30%, black 35%, transparent 95%)",
-            WebkitMaskImage:
-              "radial-gradient(ellipse 95% 85% at 35% 30%, black 35%, transparent 95%)",
-          }}
-        />
+        <Logo variant="light" />
 
-        <motion.div
-          className="absolute -bottom-32 -right-24 h-[340px] w-[340px] rounded-full blur-[60px]"
-          style={{ background: `radial-gradient(circle, ${TEAL}3d 0%, transparent 70%)` }}
-          animate={
-            prefersReducedMotion ? undefined : { x: [0, 24, 0], y: [0, -30, 0], scale: [1, 1.12, 1] }
-          }
-          transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute -left-20 -top-16 h-[260px] w-[260px] rounded-full blur-[60px]"
-          style={{ background: `radial-gradient(circle, ${TEAL}26 0%, transparent 70%)` }}
-          animate={
-            prefersReducedMotion ? undefined : { x: [0, -18, 0], y: [0, 22, 0], scale: [1, 1.08, 1] }
-          }
-          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-        />
-
-        <div className="relative mt-8 max-w-2xl">
-          <Logo variant="light" />
-          <p className="mt-12 text-[38px] font-bold leading-tight tracking-tight">
-            Toda tu operación,<br />en un solo lugar.
-          </p>
-          <p className="mt-5 max-w-[400px] text-[16px] leading-relaxed text-[#C7D6E4]">
-            Clientes, permisos y equipos — administrados desde un mismo panel,
-            con el control que tu empresa necesita.
+        <div>
+          <h1 className="max-w-[16ch] text-[clamp(28px,3.2vw,40px)] font-bold leading-[1.12] tracking-[-0.02em]">
+            Servicios bajo control, <span className="text-[#BFE6F8]">clientes satisfechos.</span>
+          </h1>
+          <p className="mt-3.5 max-w-[46ch] text-[14.5px] leading-relaxed text-white/90">
+            Plataforma SaaS para empresas de servicios: CRM, cotizaciones, contratos,
+            órdenes de trabajo, facturación electrónica, cobranza, soporte y portal de
+            clientes en un solo lugar.
           </p>
 
-          {/* Nuevo diseño de contenedores para características */}
-          <div className="mt-12 grid grid-cols-1 gap-4 xl:grid-cols-3">
-            {FEATURES.map(({ icon: Icon, text }) => (
-              <div 
-                key={text} 
-                className="flex flex-col items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-sm transition-all hover:bg-white/[0.07]"
+          <div className="mt-6 grid max-w-[620px] grid-cols-3 gap-3">
+            {FEATURES.map(({ icon: Icon, title, text }) => (
+              <div
+                key={title}
+                className="rounded-xl border border-white/20 bg-white/[0.07] p-3 text-[12px] leading-[1.35]"
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.06] ring-1 ring-white/10">
-                  <Icon size={20} className="text-[#7FD4F5]" />
-                </span>
-                <span className="text-[14px] font-medium leading-snug text-[#DCE7F0]">
-                  {text}
-                </span>
+                <Icon size={20} className="mb-1.5 text-[#BFE6F8]" />
+                <strong className="block text-[12.5px]">{title}</strong>
+                <span className="text-white/85">{text}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative text-[13px] text-[#7C93A8]">
-          © {new Date().getFullYear()} Grupo de Soluciones Creativas
+        <p className="text-[12px] text-white/70">
+          © {new Date().getFullYear()} · Grupo de Soluciones Creativas
         </p>
       </aside>
 
       {/* Panel derecho — contenido de la pantalla */}
-      <main className="app-page flex flex-1 items-center justify-center p-6">
+      <main className="flex flex-col items-center justify-center gap-[18px] px-6 pb-6 pt-10">
         <motion.div
-          className="app-surface app-border w-full max-w-[420px] rounded-3xl border p-8 shadow-[0_8px_40px_-12px_rgba(15,31,46,0.08)] sm:p-10"
+          className="my-auto w-full max-w-[400px]"
           variants={container}
           initial="hidden"
           animate="show"
         >
-          <motion.div variants={item} className="mb-8 md:hidden">
-            <Logo variant="dark" />
+          <motion.div variants={item} className="mb-7">
+            <span className="logo-light block"><Logo variant="dark" /></span>
+            <span className="logo-dark"><Logo variant="light" /></span>
           </motion.div>
 
           <motion.div variants={item}>
-            <h1 className="app-text text-[28px] font-bold tracking-tight">{title}</h1>
-            <p className="app-muted mt-2.5 text-[15px]">{subtitle}</p>
+            <h2 className="app-text text-[24px] font-bold tracking-[-0.01em]">{title}</h2>
+            <p className="app-muted mt-1 text-[13px]">{subtitle}</p>
           </motion.div>
 
-          <div className="mt-8">
+          <div className="mt-[18px]">
             {children}
           </div>
 
           {footer && (
-            <motion.p variants={item} className="app-muted mt-8 text-center text-[14px]">
+            <motion.p variants={item} className="app-muted mt-3.5 text-[12.5px]">
               {footer}
             </motion.p>
           )}
         </motion.div>
+
+        <p className="text-[12px] text-[#8A93A3]">Desarrollado por GSCREATIVAS</p>
       </main>
     </div>
   );

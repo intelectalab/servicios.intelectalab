@@ -1,22 +1,43 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { TOKEN_COOKIE } from "@/lib/auth";
+import { SCOPE_COOKIE, TOKEN_COOKIE } from "@/lib/auth";
 
-const AUTH_ROUTES = ["/", "/login", "/forgot-password", "/reset-password"];
+// La landing ("/") es pública: se ve con o sin sesión.
+const AUTH_ROUTES = ["/login", "/forgot-password", "/reset-password"];
 
-const PROTECTED_PREFIXES = ["/customers", "/suppliers", "/employees", "/superadmin"];
+// Cada tipo de cuenta tiene su propia consola y no entra a la otra.
+const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees"];
+const PLATFORM_PREFIXES = ["/superadmin"];
+const TENANT_HOME = "/customers";
+const PLATFORM_HOME = "/superadmin/plans";
+
+const matches = (pathname: string, routes: string[]) =>
+  routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasToken = Boolean(request.cookies.get(TOKEN_COOKIE)?.value);
-  const isAuthRoute = AUTH_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  // Solo decide a dónde redirigir; los permisos reales los valida la API.
+  const scope = request.cookies.get(SCOPE_COOKIE)?.value;
+  const inTenantArea = matches(pathname, TENANT_PREFIXES);
+  const inPlatformArea = matches(pathname, PLATFORM_PREFIXES);
 
-  if (!hasToken && PROTECTED_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  if (!hasToken) {
+    return inTenantArea || inPlatformArea
+      ? NextResponse.redirect(new URL("/login", request.url))
+      : NextResponse.next();
   }
 
-  if (hasToken && isAuthRoute) {
-    return NextResponse.redirect(new URL("/customers", request.url));
+  if (matches(pathname, AUTH_ROUTES)) {
+    return NextResponse.redirect(new URL(scope === "platform" ? PLATFORM_HOME : TENANT_HOME, request.url));
+  }
+
+  if (scope === "platform" && inTenantArea) {
+    return NextResponse.redirect(new URL(PLATFORM_HOME, request.url));
+  }
+
+  if (scope === "tenant" && inPlatformArea) {
+    return NextResponse.redirect(new URL(TENANT_HOME, request.url));
   }
 
   return NextResponse.next();
@@ -24,13 +45,12 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/", 
-    "/login/:path*", 
-    "/forgot-password/:path*", 
-    "/reset-password/:path*", 
+    "/login/:path*",
+    "/forgot-password/:path*",
+    "/reset-password/:path*",
     "/customers/:path*",
     "/suppliers/:path*",
     "/employees/:path*",
-    "/superadmin/:path*"
+    "/superadmin/:path*",
   ],
 };

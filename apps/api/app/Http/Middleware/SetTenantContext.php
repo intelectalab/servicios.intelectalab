@@ -36,6 +36,12 @@ class SetTenantContext
         }
 
         $tenantId = (string) $tenantId;
+
+        // Una empresa suspendida tampoco puede seguir usando sesiones ya abiertas.
+        if (DB::table('tenants')->where('id', $tenantId)->value('status') !== 'ACTIVE') {
+            return response()->json(['message' => 'El acceso de su empresa está suspendido.'], 403);
+        }
+
         DB::statement("SET app.tenant_id = '{$tenantId}'");
         $request->attributes->set('tenant_id', $tenantId);
 

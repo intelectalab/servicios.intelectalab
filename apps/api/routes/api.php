@@ -32,8 +32,9 @@ Route::prefix('v1')->group(function () {
     Route::post('/tenants/register', [TenantRegisterController::class, 'register']);
 
     Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword']);
-    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword']);
+    Route::post('/login/mfa', [AuthController::class, 'verifyMfa'])->middleware('throttle:10,1');
+    Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])->middleware('throttle:5,1');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:10,1');
 
     Route::middleware(['auth:sanctum', 'tenant.context'])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
