@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\TenantAccess;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,9 +38,14 @@ class SetTenantContext
 
         $tenantId = (string) $tenantId;
 
-        // Una empresa suspendida tampoco puede seguir usando sesiones ya abiertas.
-        if (DB::table('tenants')->where('id', $tenantId)->value('status') !== 'ACTIVE') {
-            return response()->json(['message' => 'El acceso de su empresa está suspendido.'], 403);
+        // Una empresa que no está activa tampoco puede seguir usando sesiones ya
+        // abiertas; el código le indica al frontend que muestre la pantalla de bloqueo.
+        if ($blocked = TenantAccess::blocked($tenantId)) {
+            return response()->json([
+                'message' => $blocked['message'],
+                'code' => TenantAccess::BLOCKED_CODE,
+                'tenant_status' => $blocked['status'],
+            ], 403);
         }
 
         DB::statement("SET app.tenant_id = '{$tenantId}'");

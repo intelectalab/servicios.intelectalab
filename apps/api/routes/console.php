@@ -6,3 +6,6 @@ use Illuminate\Support\Facades\Artisan;
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// Limpia de la base las sesiones (tokens) que ya vencieron hace más de un día.
+Illuminate\Support\Facades\Schedule::command('sanctum:prune-expired --hours=24')->daily();

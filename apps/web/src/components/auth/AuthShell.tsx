@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Image from "next/image";
 import { motion, type Variants } from "framer-motion";
 import { FileText, Wrench, Receipt } from "lucide-react";
-import { Poppins } from "next/font/google";
+import { poppins } from "@/lib/fonts";
 
 /**
  * ─────────────────────────────────────────────────────────
@@ -19,8 +19,6 @@ export const BRAND_DARK = "#1679AB";
 export const BRAND_DEEP = "#0F5A82";
 export const BRAND_SOFT = "#E3F2FA";
 export const INK = "#1D1D1B";
-
-const poppins = Poppins({ subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap" });
 
 /** Estilos de formulario compartidos por las pantallas de auth. */
 export const authLabel = "mb-1.5 block text-[12.5px] font-medium text-[color:var(--app-muted)]";

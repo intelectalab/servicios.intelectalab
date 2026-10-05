@@ -3,12 +3,15 @@ import { clearAuthToken, getAuthToken } from "./auth";
 export class ApiError extends Error {
   status: number;
   errors?: Record<string, string[]>;
+  /** Cuerpo JSON de la respuesta de error, tal como lo devolvió la API. */
+  body?: unknown;
 
-  constructor(message: string, status: number, errors?: Record<string, string[]>) {
+  constructor(message: string, status: number, errors?: Record<string, string[]>, body?: unknown) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.errors = errors;
+    this.body = body;
   }
 }
 
@@ -42,7 +45,14 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       clearAuthToken();
       window.location.href = "/login";
     }
-    throw new ApiError(data?.message ?? "Error al comunicarse con el servidor.", res.status, data?.errors);
+    // La empresa dejó de estar activa (suspendida, en mantenimiento, cerrada…):
+    // se saca al usuario de la consola hacia la pantalla de bloqueo.
+    if (res.status === 403 && data?.code === "TENANT_BLOCKED" && typeof window !== "undefined") {
+      if (window.location.pathname !== "/blocked") {
+        window.location.href = `/blocked?status=${encodeURIComponent(data.tenant_status ?? "")}`;
+      }
+    }
+    throw new ApiError(data?.message ?? "Error al comunicarse con el servidor.", res.status, data?.errors, data);
   }
 
   return data as T;

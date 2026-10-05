@@ -7,6 +7,7 @@ use App\Mail\MfaCodeMail;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\LoginThrottle;
+use App\Services\TenantAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,10 @@ class AuthController extends Controller
         $credentials = $request->validate([
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
+            'remember' => ['sometimes', 'boolean'],
         ]);
+
+        $remember = (bool) ($credentials['remember'] ?? false);
 
         $email = $credentials['email'];
 
@@ -62,10 +66,10 @@ class AuthController extends Controller
         // Con verificación en dos pasos no se entrega sesión todavía:
         // se envía un código por correo y el login termina en verifyMfa().
         if ($this->requiresMfa($user, $tenantId)) {
-            return $this->startMfaChallenge($user);
+            return $this->startMfaChallenge($user, $remember);
         }
 
-        return $this->issueSession($user);
+        return $this->issueSession($user, $remember);
     }
 
     public function verifyMfa(Request $request)
@@ -112,10 +116,10 @@ class AuthController extends Controller
             ]);
         }
 
-        return $this->issueSession($user, ['mfa' => true]);
+        return $this->issueSession($user, $challenge['remember'] ?? false, ['mfa' => true]);
     }
 
-    private function startMfaChallenge(User $user)
+    private function startMfaChallenge(User $user, bool $remember)
     {
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         $token = Str::random(64);
@@ -125,6 +129,7 @@ class AuthController extends Controller
             'user_id' => $user->id,
             'code_hash' => Hash::make($code),
             'attempts' => 0,
+            'remember' => $remember,
             'expires_at' => $expiresAt,
         ], $expiresAt);
 
@@ -136,12 +141,14 @@ class AuthController extends Controller
         ]);
     }
 
-    private function issueSession(User $user, array $auditMetadata = [])
+    private function issueSession(User $user, bool $remember, array $auditMetadata = [])
     {
         $this->resolveActiveTenant($user);
-        $this->audit($user, 'auth.login', ['email' => $user->email] + $auditMetadata);
+        $this->audit($user, 'auth.login', ['email' => $user->email, 'remember' => $remember] + $auditMetadata);
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        // "Recordarme" alarga la sesión; sin marcar dura una jornada.
+        $minutes = config($remember ? 'sanctum.remember_minutes' : 'sanctum.session_minutes');
+        $token = $user->createToken('api-token', ['*'], now()->addMinutes($minutes))->plainTextToken;
 
         $user->last_login_at = now();
         $user->save();
@@ -160,7 +167,7 @@ class AuthController extends Controller
     /**
      * Resuelve el tenant del usuario con la misma función segura que usa el
      * middleware TenantContext, deja app.tenant_id en la conexión y rechaza el
-     * acceso si la empresa no está activa (suspendida, cerrada, etc.).
+     * acceso, con un mensaje según el estado, si la empresa no está activa.
      */
     private function resolveActiveTenant(User $user): ?string
     {
@@ -173,9 +180,9 @@ class AuthController extends Controller
             return null;
         }
 
-        if (DB::table('tenants')->where('id', $tenantId)->value('status') !== 'ACTIVE') {
+        if ($blocked = TenantAccess::blocked($tenantId)) {
             throw ValidationException::withMessages([
-                'email' => ['El acceso de su empresa está suspendido. Comuníquese con el administrador de la plataforma.'],
+                'email' => [$blocked['message']],
             ]);
         }
 
@@ -258,17 +265,9 @@ class AuthController extends Controller
 
     public function logout(Request $request)
     {
-        $tenantId = $request->attributes->get('tenant_id');
-
-        if ($tenantId) {
-            AuditLogger::log(
-                tenantId: $tenantId,
-                userId: $request->user()->id,
-                action: 'auth.logout',
-                entityType: 'User',
-                entityId: $request->user()->id,
-            );
-        }
+        // Esta ruta no pasa por tenant.context: cerrar sesión tiene que funcionar
+        // aunque la empresa esté suspendida o cerrada.
+        $this->audit($request->user(), 'auth.logout');
 
         $request->user()->currentAccessToken()->delete();
 

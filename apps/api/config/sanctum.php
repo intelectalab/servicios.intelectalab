@@ -50,7 +50,16 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Tope general: ninguna sesión vive más que una "recordada".
+    'expiration' => (int) env('SANCTUM_REMEMBER_EXPIRATION', 43200),
+
+    /*
+    | Duración de cada sesión, en minutos. Se guarda en el expires_at del token
+    | al iniciar sesión: la normal (8 horas) o, con "Recordarme" marcado, la
+    | larga (30 días).
+    */
+    'session_minutes' => (int) env('SANCTUM_TOKEN_EXPIRATION', 480),
+    'remember_minutes' => (int) env('SANCTUM_REMEMBER_EXPIRATION', 43200),
 
     /*
     |--------------------------------------------------------------------------

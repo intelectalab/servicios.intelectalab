@@ -138,7 +138,7 @@ class LoginSecurityTest extends TestCase
         $this->makeTenantFor($user, 'SUSPENDED');
 
         $message = $this->login($user)->assertStatus(422)->assertJsonMissingPath('token')->json('errors.email.0');
-        $this->assertStringContainsString('suspendido', $message);
+        $this->assertStringContainsString('Test Tenant está suspendida', $message);
     }
 
     public function test_open_session_of_a_suspended_tenant_is_rejected(): void
@@ -150,7 +150,87 @@ class LoginSecurityTest extends TestCase
         $this->getJson('/api/v1/me')->assertOk();
 
         DB::table('tenants')->where('id', $tenantId)->update(['status' => 'SUSPENDED']);
-        $this->getJson('/api/v1/me')->assertStatus(403);
+        $this->getJson('/api/v1/me')->assertStatus(403)
+            ->assertJson(['code' => 'TENANT_BLOCKED', 'tenant_status' => 'SUSPENDED']);
+    }
+
+    public function test_user_of_a_blocked_tenant_can_still_log_out(): void
+    {
+        $user = $this->makeUser();
+        $tenantId = $this->makeTenantFor($user);
+        $token = $user->createToken('api-token')->plainTextToken;
+
+        DB::table('tenants')->where('id', $tenantId)->update(['status' => 'CLOSED']);
+
+        $this->withToken($token)->postJson('/api/v1/logout')->assertOk();
+        $this->assertSame(0, $user->tokens()->count());
+    }
+
+    public function test_session_lasts_a_workday_unless_remember_is_checked(): void
+    {
+        $user = $this->makeUser();
+
+        $this->login($user)->assertOk();
+        $normal = $user->tokens()->latest('id')->first();
+        $this->assertEqualsWithDelta(config('sanctum.session_minutes'), now()->diffInMinutes($normal->expires_at), 1);
+
+        $this->postJson('/api/v1/login', ['email' => $user->email, 'password' => 'password123', 'remember' => true])
+            ->assertOk();
+        $remembered = $user->tokens()->latest('id')->first();
+        $this->assertEqualsWithDelta(config('sanctum.remember_minutes'), now()->diffInMinutes($remembered->expires_at), 1);
+    }
+
+    public function test_remember_survives_the_second_step(): void
+    {
+        Mail::fake();
+        $user = $this->makeUser(['mfa_enabled' => true]);
+
+        $mfaToken = $this->postJson('/api/v1/login', ['email' => $user->email, 'password' => 'password123', 'remember' => true])
+            ->json('mfa_token');
+
+        $code = null;
+        Mail::assertSent(MfaCodeMail::class, function (MfaCodeMail $mail) use (&$code) {
+            $code = $mail->code;
+
+            return true;
+        });
+
+        $this->postJson('/api/v1/login/mfa', ['mfa_token' => $mfaToken, 'code' => $code])->assertOk();
+        $token = $user->tokens()->latest('id')->first();
+        $this->assertEqualsWithDelta(config('sanctum.remember_minutes'), now()->diffInMinutes($token->expires_at), 1);
+    }
+
+    public function test_expired_session_is_rejected(): void
+    {
+        $user = $this->makeUser();
+        $this->makeTenantFor($user);
+        $token = $user->createToken('api-token', ['*'], now()->addMinutes(config('sanctum.session_minutes')));
+
+        $this->withToken($token->plainTextToken)->getJson('/api/v1/me')->assertOk();
+
+        $token->accessToken->forceFill(['expires_at' => now()->subMinute()])->save();
+        $this->app['auth']->forgetGuards();
+
+        $this->withToken($token->plainTextToken)->getJson('/api/v1/me')->assertStatus(401);
+    }
+
+    public function test_each_blocked_tenant_status_has_its_own_message(): void
+    {
+        Mail::fake();
+        $expected = [
+            'SUSPENDED' => 'está suspendida',
+            'PROVISIONING' => 'se está configurando',
+            'MAINTENANCE' => 'está en mantenimiento',
+            'CLOSED' => 'está cerrada',
+        ];
+
+        foreach ($expected as $status => $word) {
+            $user = $this->makeUser();
+            $this->makeTenantFor($user, $status);
+
+            $message = $this->login($user)->assertStatus(422)->assertJsonMissingPath('token')->json('errors.email.0');
+            $this->assertStringContainsString($word, $message, $status);
+        }
     }
 
     public function test_tenant_admin_always_needs_the_second_step(): void

@@ -36,10 +36,11 @@ Route::prefix('v1')->group(function () {
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])->middleware('throttle:5,1');
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:10,1');
 
+    Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
+
     Route::middleware(['auth:sanctum', 'tenant.context'])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::get('/me/permissions', [AuthController::class, 'permissions']);
-        Route::post('/logout', [AuthController::class, 'logout']);
 
         // Clientes
         Route::middleware('permission:core.view')->group(function () {

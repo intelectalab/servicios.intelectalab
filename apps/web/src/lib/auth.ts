@@ -1,7 +1,9 @@
 const TOKEN_COOKIE = "auth_token";
 // Tipo de cuenta de la sesión: lo usa el proxy para llevar a cada quien a su consola.
 const SCOPE_COOKIE = "auth_scope";
-const TOKEN_MAX_AGE = 60 * 60 * 24 * 30;
+// Con "Recordarme": igual que la sesión larga de la API (SANCTUM_REMEMBER_EXPIRATION, 30 días).
+// Sin marcar, la cookie es de sesión: se borra al cerrar el navegador.
+const REMEMBER_MAX_AGE = 60 * 60 * 24 * 30;
 
 export type AuthScope = "platform" | "tenant";
 
@@ -16,11 +18,12 @@ export function getAuthToken() {
   return token ? decodeURIComponent(token) : null;
 }
 
-export function setAuthToken(token: string, scope: AuthScope) {
+export function setAuthToken(token: string, scope: AuthScope, remember: boolean) {
   if (typeof document === "undefined") return;
 
-  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${TOKEN_MAX_AGE}; SameSite=Lax`;
-  document.cookie = `${SCOPE_COOKIE}=${scope}; Path=/; Max-Age=${TOKEN_MAX_AGE}; SameSite=Lax`;
+  const lifetime = remember ? `; Max-Age=${REMEMBER_MAX_AGE}` : "";
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/${lifetime}; SameSite=Lax`;
+  document.cookie = `${SCOPE_COOKIE}=${scope}; Path=/${lifetime}; SameSite=Lax`;
 }
 
 export function clearAuthToken() {

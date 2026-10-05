@@ -49,7 +49,7 @@ export default function LoginForm() {
   function finishLogin(data: LoginResponse) {
     if (!data.token) throw new Error("No se pudo iniciar sesión.");
 
-    setAuthToken(data.token, data.user?.is_super_admin ? "platform" : "tenant");
+    setAuthToken(data.token, data.user?.is_super_admin ? "platform" : "tenant", remember);
     // Verificamos si es superadmin para redirigirlo a su panel global
     if (data.user?.is_super_admin) {
       router.push("/superadmin/plans");
@@ -64,7 +64,7 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      const data = await postJson("/v1/login", { email, password });
+      const data = await postJson("/v1/login", { email, password, remember });
 
       if (data.mfa_required && data.mfa_token) {
         setMfaToken(data.mfa_token);
