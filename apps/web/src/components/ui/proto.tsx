@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
-import { AlertCircle, Check, Info, Search, Upload, X } from "lucide-react";
+import {
+  AlertCircle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Info, Search, Upload, X,
+} from "lucide-react";
 import { poppins } from "@/lib/fonts";
 
 /**
@@ -216,13 +218,23 @@ export const TH = "app-muted whitespace-nowrap border-b border-[color:var(--app-
 export const TD = "border-b border-[color:var(--app-border)] px-3.5 py-[13px] align-middle";
 const NUM = "text-right tabular-nums whitespace-nowrap";
 
+export type Selection<T> = {
+  ids: ReadonlySet<string>;
+  onToggle: (row: T) => void;
+  /** Marca o desmarca todas las filas visibles. */
+  onToggleAll: (rows: T[], checked: boolean) => void;
+};
+
+const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[#CFD5DE] accent-[#1B8FC9]";
+
 export function DataTable<T>({
-  cols, rows, rowKey, onRowClick, loading = false, empty = "No hay registros con estos filtros.", dense = false,
+  cols, rows, rowKey, onRowClick, selection, loading = false, empty = "No hay registros con estos filtros.", dense = false,
 }: {
   cols: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  selection?: Selection<T>;
   loading?: boolean;
   empty?: string;
   dense?: boolean;
@@ -239,32 +251,110 @@ export function DataTable<T>({
 
   if (!rows.length) return <Empty text={empty} />;
 
+  const allSelected = selection ? rows.every((row) => selection.ids.has(rowKey(row))) : false;
+
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-[13px]">
         <thead>
           <tr>
+            {selection && (
+              <th className={`${TH} w-10 !pr-0`}>
+                <input
+                  type="checkbox"
+                  className={CHECKBOX}
+                  checked={allSelected}
+                  onChange={(event) => selection.onToggleAll(rows, event.target.checked)}
+                  aria-label="Seleccionar todas las filas de esta página"
+                />
+              </th>
+            )}
             {cols.map((col) => (
               <th key={col.label} className={`${TH} ${col.num ? "text-right" : ""}`}>{col.label}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr
-              key={rowKey(row)}
-              tabIndex={onRowClick ? 0 : undefined}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              onKeyDown={onRowClick ? (event) => { if (event.key === "Enter") onRowClick(row); } : undefined}
-              className={`[&:last-child>td]:border-b-0 ${onRowClick ? "cursor-pointer hover:bg-[var(--app-surface-muted)]" : ""}`}
-            >
-              {cols.map((col) => (
-                <td key={col.label} className={`${TD} ${dense ? "!py-[7px]" : ""} ${col.num ? NUM : ""}`}>{col.render(row)}</td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const key = rowKey(row);
+            const selected = selection?.ids.has(key) ?? false;
+            return (
+              <tr
+                key={key}
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={onRowClick ? (event) => { if (event.key === "Enter" && event.target === event.currentTarget) onRowClick(row); } : undefined}
+                className={`[&:last-child>td]:border-b-0 ${selected ? "bg-[rgb(27_143_201/0.08)]" : ""} ${onRowClick ? "cursor-pointer hover:bg-[var(--app-surface-muted)]" : ""}`}
+              >
+                {selection && (
+                  // El clic en la casilla no abre la ficha.
+                  <td className={`${TD} w-10 !pr-0`} onClick={(event) => event.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      className={CHECKBOX}
+                      checked={selected}
+                      onChange={() => selection.onToggle(row)}
+                      aria-label="Seleccionar fila"
+                    />
+                  </td>
+                )}
+                {cols.map((col) => (
+                  <td key={col.label} className={`${TD} ${dense ? "!py-[7px]" : ""} ${col.num ? NUM : ""}`}>{col.render(row)}</td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/**
+ * Selección de filas que se conserva al cambiar de página o de filtro: guarda
+ * el registro completo para poder exportarlo aunque ya no esté a la vista.
+ */
+export function useRowSelection<T>(rowKey: (row: T) => string) {
+  const [selected, setSelected] = useState<Map<string, T>>(new Map());
+
+  const selection: Selection<T> = {
+    ids: new Set(selected.keys()),
+    onToggle: (row) =>
+      setSelected((current) => {
+        const next = new Map(current);
+        const key = rowKey(row);
+        if (!next.delete(key)) next.set(key, row);
+        return next;
+      }),
+    onToggleAll: (rows, checked) =>
+      setSelected((current) => {
+        const next = new Map(current);
+        rows.forEach((row) => (checked ? next.set(rowKey(row), row) : next.delete(rowKey(row))));
+        return next;
+      }),
+  };
+
+  return { selection, selectedRows: [...selected.values()], clear: () => setSelected(new Map()) };
+}
+
+/** Barra que aparece sobre la tabla cuando hay filas marcadas. */
+export function SelectionBar({
+  count, busy, onExport, onClear,
+}: { count: number; busy: boolean; onExport: (format: "xlsx" | "csv") => void; onClear: () => void }) {
+  if (!count) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-[#BFE6F8] bg-[#E3F2FA] px-3.5 py-2 text-[13px] text-[#0F5A82]">
+      <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#1B8FC9] px-1.5 text-xs font-semibold text-[#fff]">{count}</span>
+      <span className="mr-auto font-medium">{count === 1 ? "fila seleccionada" : "filas seleccionadas"}</span>
+      <Btn size="sm" disabled={busy} onClick={() => onExport("xlsx")}>
+        <Upload size={14} />
+        <span>{busy ? "Exportando…" : "Exportar selección a Excel"}</span>
+      </Btn>
+      <Btn variant="secondary" size="sm" disabled={busy} onClick={() => onExport("csv")}>CSV</Btn>
+      <button type="button" onClick={onClear} className="cursor-pointer px-1.5 text-xs font-medium underline-offset-2 hover:underline">
+        Quitar selección
+      </button>
     </div>
   );
 }
@@ -278,25 +368,91 @@ export function Empty({ text }: { text: string }) {
   );
 }
 
+export const PAGE_SIZES = [10, 25, 50, 100];
+
+/** Números de página a mostrar, con "…" donde se saltan páginas. */
+function pageNumbers(page: number, lastPage: number) {
+  const visible: number[] = [];
+  for (let n = 1; n <= lastPage; n++) {
+    if (n === 1 || n === lastPage || Math.abs(n - page) <= 2) visible.push(n);
+  }
+
+  const withGaps: (number | "gap")[] = [];
+  visible.forEach((n, index) => {
+    const previous = visible[index - 1];
+    if (previous !== undefined) {
+      if (n - previous === 2) withGaps.push(previous + 1);
+      else if (n - previous > 2) withGaps.push("gap");
+    }
+    withGaps.push(n);
+  });
+  return withGaps;
+}
+
+const PAGE_BTN = "grid h-8 min-w-8 cursor-pointer place-items-center rounded-lg border px-1.5 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
+const PAGE_BTN_IDLE = "app-surface app-text border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]";
+
+/** Pie de un listado: exportar, "Mostrando X a Y de N", filas por página y páginas numeradas. */
 export function Pager({
-  page, lastPage, total, perPage, onPage, left,
-}: { page: number; lastPage: number; total: number; perPage: number; onPage: (page: number) => void; left?: ReactNode }) {
+  page, lastPage, total, perPage, onPage, onPerPage, left,
+}: {
+  page: number;
+  lastPage: number;
+  total: number;
+  perPage: number;
+  onPage: (page: number) => void;
+  onPerPage: (perPage: number) => void;
+  left?: ReactNode;
+}) {
   if (!total) return null;
   const from = (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
+  const jump = (target: number, label: string, icon: ReactNode, disabled: boolean) => (
+    <button type="button" onClick={() => onPage(target)} disabled={disabled} title={label} aria-label={label} className={`${PAGE_BTN} ${PAGE_BTN_IDLE}`}>
+      {icon}
+    </button>
+  );
 
   return (
-    <div className="app-muted flex items-center justify-end gap-2 border-t border-[color:var(--app-border)] px-3.5 py-3 text-[12.5px]">
+    <div className="app-muted flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-[color:var(--app-border)] px-3.5 py-3 text-[12.5px]">
       {left}
-      {lastPage > 1 ? (
-        <>
-          <span>{from}–{to} de {total}</span>
-          <Btn variant="ghost" size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>Anterior</Btn>
-          <Btn variant="ghost" size="sm" disabled={page >= lastPage} onClick={() => onPage(page + 1)}>Siguiente</Btn>
-        </>
-      ) : (
-        <span>{total} {total === 1 ? "registro" : "registros"}</span>
-      )}
+      <span className={left ? "" : "mr-auto"}>
+        Mostrando <strong className="app-text font-semibold">{from}</strong> a <strong className="app-text font-semibold">{to}</strong> de{" "}
+        <strong className="app-text font-semibold">{total}</strong>
+      </span>
+      <label className="flex items-center gap-1.5">
+        Filas por página:
+        <select
+          value={perPage}
+          onChange={(event) => onPerPage(Number(event.target.value))}
+          className="app-surface app-text h-8 cursor-pointer rounded-lg border border-[color:var(--app-border)] px-1.5 outline-none focus:border-[#1B8FC9]"
+        >
+          {PAGE_SIZES.map((size) => (
+            <option key={size} value={size}>{size}</option>
+          ))}
+        </select>
+      </label>
+      <nav aria-label="Paginación" className="flex items-center gap-1">
+        {jump(1, "Primera página", <ChevronsLeft size={15} />, page <= 1)}
+        {jump(page - 1, "Página anterior", <ChevronLeft size={15} />, page <= 1)}
+        {pageNumbers(page, lastPage).map((n, index) =>
+          n === "gap" ? (
+            <span key={`gap-${index}`} className="grid h-8 w-6 place-items-center">…</span>
+          ) : (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onPage(n)}
+              aria-current={n === page ? "page" : undefined}
+              className={`${PAGE_BTN} ${n === page ? "border-[#1B8FC9] bg-[#1B8FC9] text-[#fff]" : PAGE_BTN_IDLE}`}
+            >
+              {n}
+            </button>
+          ),
+        )}
+        {jump(page + 1, "Página siguiente", <ChevronRight size={15} />, page >= lastPage)}
+        {jump(lastPage, "Última página", <ChevronsRight size={15} />, page >= lastPage)}
+      </nav>
     </div>
   );
 }

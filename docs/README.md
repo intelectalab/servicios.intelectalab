@@ -18,6 +18,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-04 / 05 | Login, sidebar, cabecera, superadmin | [cambios/2026-10-04_login-sidebar-cabecera.md](cambios/2026-10-04_login-sidebar-cabecera.md) |
 | 2026-10-05 | Comercial: Servicios y Cotizaciones | [cambios/2026-10-05_comercial.md](cambios/2026-10-05_comercial.md) |
 | 2026-10-05 | Comercial: campos y funciones que faltaban | [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md) |
+| 2026-10-05 | Comercial: selección de filas, Excel con formato y paginación | [cambios/2026-10-05_comercial-seleccion-exportar-paginacion.md](cambios/2026-10-05_comercial-seleccion-exportar-paginacion.md) |
 
 ## Cómo se escribe cada entrada
 

@@ -6,16 +6,15 @@ import { useRouter } from "next/navigation";
 import { Check, Clock, FileText, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
-import { QUOTATION_STATES, customerDocument, customerName, money, shortDate, stateOf } from "@/lib/commercial";
+import { QUOTATION_STATES, customerDocument, customerName, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
-  Badge, Card, Chip, DataTable, ExportButtons, Filters, Kpi, Kpis, LoadError, PageHead, Pager, Screen, SearchInput, Tabs,
-  btnClass, useToasts, type Column,
+  Badge, Card, Chip, DataTable, ExportButtons, Filters, Kpi, Kpis, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
+  SearchInput, SelectionBar, Tabs, btnClass, useRowSelection, useToasts, type Column,
 } from "@/components/ui/proto";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Quotation, QuotationStatus, QuotationSummary } from "@/types/commercial";
 
-const PER_PAGE = 12;
 const THREE_DAYS = 3 * 864e5;
 
 function expiresSoon(quotation: Quotation) {
@@ -57,19 +56,27 @@ const COLUMNS: Column<Quotation>[] = [
 ];
 
 const EXPORT_COLUMNS: ExportColumn<Quotation>[] = [
-  { label: "Número", value: (quotation) => quotation.quotation_number, width: 18 },
-  { label: "Versión", value: (quotation) => quotation.version, width: 10 },
+  { label: "Número", value: (quotation) => quotation.quotation_number, width: 18, kind: "center" },
+  { label: "Versión", value: (quotation) => quotation.version, width: 10, kind: "center" },
   { label: "Cliente", value: (quotation) => customerName(quotation.customer), width: 36 },
-  { label: "Documento", value: (quotation) => customerDocument(quotation.customer) },
-  { label: "Emitida", value: (quotation) => quotation.created_at.slice(0, 10), width: 14 },
-  { label: "Válida hasta", value: (quotation) => (quotation.valid_until ?? "").slice(0, 10), width: 14 },
-  { label: "Moneda", value: (quotation) => quotation.currency, width: 10 },
-  { label: "Subtotal", value: (quotation) => Number(quotation.subtotal), width: 14 },
-  { label: "IGV", value: (quotation) => Number(quotation.tax_total), width: 14 },
-  { label: "Total", value: (quotation) => Number(quotation.total), width: 14 },
-  { label: "Responsable", value: (quotation) => quotation.creator?.name ?? "" },
-  { label: "Estado", value: (quotation) => stateOf(QUOTATION_STATES, quotation.status)[0], width: 14 },
+  { label: "Documento", value: (quotation) => customerDocument(quotation.customer), width: 20 },
+  { label: "Emitida", value: (quotation) => shortDate(quotation.created_at), width: 15, kind: "center" },
+  { label: "Válida hasta", value: (quotation) => (quotation.valid_until ? shortDate(quotation.valid_until) : ""), width: 15, kind: "center" },
+  { label: "Moneda", value: (quotation) => quotation.currency, width: 10, kind: "center" },
+  { label: "Subtotal", value: (quotation) => Number(quotation.subtotal), width: 15, kind: "money", currency: (quotation) => quotation.currency },
+  { label: "IGV", value: (quotation) => Number(quotation.tax_total), width: 15, kind: "money", currency: (quotation) => quotation.currency },
+  { label: "Total", value: (quotation) => Number(quotation.total), width: 16, kind: "money", currency: (quotation) => quotation.currency },
+  { label: "Responsable", value: (quotation) => quotation.creator?.name ?? "", width: 24 },
+  {
+    label: "Estado",
+    value: (quotation) => stateOf(QUOTATION_STATES, quotation.status)[0],
+    width: 14,
+    kind: "status",
+    tone: (quotation) => excelTone(stateOf(QUOTATION_STATES, quotation.status)[1]),
+  },
 ];
+
+const quotationKey = (quotation: Quotation) => quotation.id;
 
 /** Monto de un estado; si hay más de una moneda se muestran todas. */
 function amountOf(summary: QuotationSummary | null, status: QuotationStatus) {
@@ -88,7 +95,9 @@ export default function QuotationsList() {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
+  const { selection, selectedRows, clear: clearSelection } = useRowSelection(quotationKey);
 
   const [data, setData] = useState<PaginatedResponse<Quotation> | null>(null);
   const [summary, setSummary] = useState<QuotationSummary | null>(null);
@@ -116,7 +125,7 @@ export default function QuotationsList() {
 
     async function load() {
       setLoading(true);
-      const params = new URLSearchParams({ per_page: String(PER_PAGE), page: String(page) });
+      const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
 
@@ -134,16 +143,16 @@ export default function QuotationsList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, search, tab, reload]);
+  }, [page, perPage, search, tab, reload]);
 
-  /** Exporta todas las filas de la pestaña y búsqueda actuales, no solo la página visible. */
-  async function runExport(format: "xlsx" | "csv") {
+  /** Exporta las filas marcadas o, sin `picked`, todas las de la pestaña y búsqueda actuales. */
+  async function runExport(format: "xlsx" | "csv", picked?: Quotation[]) {
     setExporting(true);
     try {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
-      const rows = await fetchAllPages<Quotation>("/v1/quotations", params);
+      const rows = picked ?? (await fetchAllPages<Quotation>("/v1/quotations", params));
       if (format === "xlsx") await exportXlsx("cotizaciones", "Cotizaciones", EXPORT_COLUMNS, rows);
       else exportCsv("cotizaciones", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -209,10 +218,17 @@ export default function QuotationsList() {
           <LoadError text={error} onRetry={() => setReload((n) => n + 1)} />
         ) : (
           <>
+            <SelectionBar
+              count={selectedRows.length}
+              busy={exporting}
+              onExport={(format) => runExport(format, selectedRows)}
+              onClear={clearSelection}
+            />
             <DataTable
               cols={COLUMNS}
               rows={data?.data ?? []}
-              rowKey={(quotation) => quotation.id}
+              rowKey={quotationKey}
+              selection={selection}
               onRowClick={(quotation) => router.push(`/quotations/${quotation.id}`)}
               loading={loading && !data}
             />
@@ -223,7 +239,11 @@ export default function QuotationsList() {
                 total={data.total}
                 perPage={data.per_page}
                 onPage={setPage}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={runExport} />}
+                onPerPage={(size) => {
+                  setPerPage(size);
+                  setPage(1);
+                }}
+                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>

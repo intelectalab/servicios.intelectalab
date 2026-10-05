@@ -67,6 +67,11 @@ export function stateOf<S extends string>(states: [S, string, Tone][], status: s
   return found ? [found[1], found[2]] : [status, "neutral"];
 }
 
+/** Color de la celda de estado en el Excel exportado. */
+export function excelTone(tone: Tone): "success" | "danger" | "warning" | "info" | "neutral" {
+  return tone === "muted" ? "neutral" : tone === "accent" ? "info" : tone;
+}
+
 export function money(value: string | number | null | undefined, currency = "PEN") {
   const amount = Number(value ?? 0);
   const formatted = (Number.isFinite(amount) ? amount : 0).toLocaleString("es-PE", {

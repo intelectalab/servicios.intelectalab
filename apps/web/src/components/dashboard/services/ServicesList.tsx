@@ -5,17 +5,15 @@ import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
-import { BILLING_MODES, SERVICE_STATES, billingLabel, money, stateOf } from "@/lib/commercial";
+import { BILLING_MODES, SERVICE_STATES, billingLabel, excelTone, money, stateOf } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
-  Badge, Btn, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, LoadError, PageHead, Pager, Screen,
-  SearchInput, useToasts, type Column,
+  Badge, Btn, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
+  SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
 } from "@/components/ui/proto";
 import ServiceFormModal from "./ServiceFormModal";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Service, ServiceCategory } from "@/types/commercial";
-
-const PER_PAGE = 12;
 
 const warranty = (service: Service) => (service.warranty_months ? `${service.warranty_months} meses` : "—");
 
@@ -58,15 +56,28 @@ const COLUMNS: Column<Service>[] = [
 ];
 
 const EXPORT_COLUMNS: ExportColumn<Service>[] = [
-  { label: "Código", value: (service) => service.code, width: 14 },
+  { label: "Código", value: (service) => service.code, width: 14, kind: "center" },
   { label: "Servicio", value: (service) => service.name, width: 36 },
-  { label: "Categoría", value: (service) => service.category?.name ?? "" },
-  { label: "Modalidad", value: billingLabel },
-  { label: "Unidad", value: (service) => service.unit ?? "", width: 14 },
-  { label: "Precio vigente (S/, sin IGV)", value: (service) => (service.current_price ? Number(service.current_price.amount) : ""), width: 26 },
-  { label: "Garantía (meses)", value: (service) => service.warranty_months, width: 18 },
-  { label: "Estado", value: (service) => stateOf(SERVICE_STATES, service.status)[0], width: 14 },
+  { label: "Categoría", value: (service) => service.category?.name ?? "", width: 22 },
+  { label: "Modalidad", value: billingLabel, width: 24, kind: "center" },
+  { label: "Unidad", value: (service) => service.unit ?? "", width: 14, kind: "center" },
+  {
+    label: "Precio vigente (sin IGV)",
+    value: (service) => (service.current_price ? Number(service.current_price.amount) : ""),
+    width: 20,
+    kind: "money",
+  },
+  { label: "Garantía (meses)", value: (service) => service.warranty_months || "", width: 14, kind: "number" },
+  {
+    label: "Estado",
+    value: (service) => stateOf(SERVICE_STATES, service.status)[0],
+    width: 14,
+    kind: "status",
+    tone: (service) => excelTone(stateOf(SERVICE_STATES, service.status)[1]),
+  },
 ];
+
+const serviceKey = (service: Service) => service.id;
 
 export default function ServicesList() {
   const router = useRouter();
@@ -79,7 +90,9 @@ export default function ServicesList() {
   const [mode, setMode] = useState("");
   const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
+  const { selection, selectedRows, clear: clearSelection } = useRowSelection(serviceKey);
 
   const [data, setData] = useState<PaginatedResponse<Service> | null>(null);
   const [categories, setCategories] = useState<ServiceCategory[]>([]);
@@ -120,7 +133,7 @@ export default function ServicesList() {
     async function load() {
       setLoading(true);
       const params = filterParams();
-      params.set("per_page", String(PER_PAGE));
+      params.set("per_page", String(perPage));
       params.set("page", String(page));
 
       try {
@@ -139,19 +152,19 @@ export default function ServicesList() {
     return () => { cancelled = true; };
     // filterParams solo lee los filtros que ya están en las dependencias.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, category, mode, status, reload]);
+  }, [page, perPage, search, category, mode, status, reload]);
 
   const pick = (setter: (value: string) => void) => (value: string) => {
     setter(value);
     setPage(1);
   };
 
-  /** Exporta todas las filas que cumplen los filtros, no solo la página visible. */
-  async function runExport(format: "xlsx" | "csv") {
+  /** Exporta las filas marcadas o, sin `rows`, todas las que cumplen los filtros (no solo la página visible). */
+  async function runExport(format: "xlsx" | "csv", picked?: Service[]) {
     setExporting(true);
     try {
-      const rows = await fetchAllPages<Service>("/v1/services", filterParams());
-      if (format === "xlsx") await exportXlsx("catalogo_servicios", "Servicios", EXPORT_COLUMNS, rows);
+      const rows = picked ?? (await fetchAllPages<Service>("/v1/services", filterParams()));
+      if (format === "xlsx") await exportXlsx("catalogo_servicios", "Catálogo de servicios", EXPORT_COLUMNS, rows);
       else exportCsv("catalogo_servicios", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
     } catch {
@@ -194,10 +207,17 @@ export default function ServicesList() {
           <LoadError text={error} onRetry={() => setReload((n) => n + 1)} />
         ) : (
           <>
+            <SelectionBar
+              count={selectedRows.length}
+              busy={exporting}
+              onExport={(format) => runExport(format, selectedRows)}
+              onClear={clearSelection}
+            />
             <DataTable
               cols={COLUMNS}
               rows={data?.data ?? []}
-              rowKey={(service) => service.id}
+              rowKey={serviceKey}
+              selection={selection}
               onRowClick={(service) => router.push(`/services/${service.id}`)}
               loading={loading && !data}
             />
@@ -208,7 +228,11 @@ export default function ServicesList() {
                 total={data.total}
                 perPage={data.per_page}
                 onPage={setPage}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={runExport} />}
+                onPerPage={(size) => {
+                  setPerPage(size);
+                  setPage(1);
+                }}
+                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>
