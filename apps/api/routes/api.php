@@ -11,6 +11,7 @@ use App\Modules\Core\Http\Controllers\SupplierController;
 use App\Modules\Core\Http\Controllers\ContactController;
 use App\Modules\Core\Http\Controllers\CustomFieldController;
 use App\Modules\Services\Http\Controllers\ServiceController;
+use App\Modules\Services\Http\Controllers\ServiceCategoryController;
 use App\Modules\Services\Http\Controllers\QuotationController;
 use App\Modules\Services\Http\Controllers\ContractController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
@@ -134,17 +135,24 @@ Route::prefix('v1')->group(function () {
 
         // Servicios
         Route::middleware('permission:services.view')->group(function () {
+            Route::get('/service-categories', [ServiceCategoryController::class, 'index']);
             Route::get('/services', [ServiceController::class, 'index']);
             Route::get('/services/{service}', [ServiceController::class, 'show']);
         });
         Route::middleware('permission:services.manage')->group(function () {
             Route::post('/services', [ServiceController::class, 'store']);
+            Route::put('/services/{service}', [ServiceController::class, 'update']);
             Route::post('/services/{service}/activate', [ServiceController::class, 'activate']);
+            Route::post('/services/{service}/deactivate', [ServiceController::class, 'deactivate']);
+            Route::post('/services/{service}/archive', [ServiceController::class, 'archive']);
+            Route::post('/services/{service}/prices', [ServiceController::class, 'storePrice']);
+            Route::post('/service-categories', [ServiceCategoryController::class, 'store']);
         });
 
         // Cotizaciones
         Route::middleware('permission:quotations.view')->group(function () {
             Route::get('/quotations', [QuotationController::class, 'index']);
+            Route::get('/quotations/summary', [QuotationController::class, 'summary']);
             Route::get('/quotations/{quotation}', [QuotationController::class, 'show']);
         });
         Route::middleware('permission:quotations.manage')->group(function () {
@@ -152,6 +160,10 @@ Route::prefix('v1')->group(function () {
             Route::post('/quotations/{quotation}/submit', [QuotationController::class, 'submit']);
             Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
             Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject']);
+            Route::put('/quotations/{quotation}', [QuotationController::class, 'update']);
+            Route::post('/quotations/{quotation}/expire', [QuotationController::class, 'expire']);
+            Route::post('/quotations/{quotation}/cancel', [QuotationController::class, 'cancel']);
+            Route::post('/quotations/{quotation}/versions', [QuotationController::class, 'newVersion']);
         });
 
         // Contratos

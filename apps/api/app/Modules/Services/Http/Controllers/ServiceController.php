@@ -4,16 +4,36 @@ namespace App\Modules\Services\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Services\Http\Requests\StoreServiceRequest;
+use App\Modules\Services\Models\QuotationItem;
 use App\Modules\Services\Models\Service;
+use App\Modules\Services\Models\ServiceCategory;
+use App\Modules\Services\Models\ServicePrice;
+use App\Modules\Services\Models\ServiceRecurringConfig;
+use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ServiceController extends Controller
 {
+    private const LIST_RELATIONS = ['category:id,name', 'currentPrice', 'recurrence'];
+
     public function index(Request $request)
     {
-        $query = Service::query()
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')));
+        $search = trim((string) $request->query('search', ''));
+
+        $query = Service::with(self::LIST_RELATIONS)
+            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
+            ->when($request->filled('category_id'), fn ($q) => $q->where('category_id', $request->query('category_id')))
+            ->when($request->filled('billing_mode'), fn ($q) => $q->where('billing_mode', $request->query('billing_mode')))
+            ->when($search !== '', function ($q) use ($search) {
+                $like = '%'.addcslashes($search, '%_\\').'%';
+                $q->where(fn ($w) => $w->where('code', 'ILIKE', $like)->orWhere('name', 'ILIKE', $like));
+            })
+            ->orderBy('name')
+            ->orderBy('id');
 
         return response()->json($query->paginate($request->integer('per_page', 20)));
     }
@@ -21,49 +41,239 @@ class ServiceController extends Controller
     public function show(string $service)
     {
         $service = Service::findOrFail($service);
+        $service->load([...self::LIST_RELATIONS, 'prices']);
 
-        return response()->json($service);
+        // Cotizaciones que usan el servicio, con el precio que guardó cada una.
+        $usage = QuotationItem::where('service_id', $service->id)
+            ->join('quotations', 'quotations.id', '=', 'quotation_items.quotation_id')
+            ->orderByDesc('quotations.created_at')
+            ->limit(50)
+            ->get([
+                'quotations.id as quotation_id', 'quotations.quotation_number', 'quotations.status',
+                'quotations.currency', 'quotation_items.unit_price',
+            ]);
+
+        return response()->json([
+            ...$service->toArray(),
+            'quotations' => $usage,
+            'history' => AuditHistory::for('Service', $service->id),
+        ]);
     }
 
     public function store(StoreServiceRequest $request)
     {
         $tenantId = $request->attributes->get('tenant_id');
+        $this->assertUniqueCode($request->code);
+        $this->assertCategory($request->category_id);
 
-        $service = Service::create([
-            'tenant_id' => $tenantId,
+        $service = DB::transaction(function () use ($request, $tenantId) {
+            $service = Service::create([
+                'tenant_id' => $tenantId,
+                'status' => 'DRAFT',
+                ...$this->attributes($request),
+            ]);
+            $this->syncRecurrence($service, $request->frequency);
+
+            if ($request->filled('price') && (float) $request->price > 0) {
+                ServicePrice::create([
+                    'tenant_id' => $tenantId,
+                    'service_id' => $service->id,
+                    'currency' => 'PEN',
+                    'amount' => $request->price,
+                    'valid_from' => now()->toDateString(),
+                    'active' => true,
+                ]);
+            }
+
+            return $service;
+        });
+
+        $this->audit($request, $service, 'service.create');
+
+        return response()->json($service->load(self::LIST_RELATIONS), 201);
+    }
+
+    public function update(string $service, StoreServiceRequest $request)
+    {
+        $service = Service::findOrFail($service);
+        $this->assertUniqueCode($request->code, $service->id);
+        $this->assertCategory($request->category_id);
+
+        if ($service->status === 'ARCHIVED') {
+            throw ValidationException::withMessages(['status' => ['Un servicio archivado no se puede editar.']]);
+        }
+
+        DB::transaction(function () use ($request, $service) {
+            $service->update($this->attributes($request));
+            $this->syncRecurrence($service, $request->frequency);
+        });
+
+        $this->audit($request, $service, 'service.update');
+
+        return response()->json($service->load(self::LIST_RELATIONS));
+    }
+
+    /** DRAFT → ACTIVE (exige precio vigente) e INACTIVE → ACTIVE (reactivar). */
+    public function activate(string $service, Request $request)
+    {
+        $service = Service::findOrFail($service);
+        $this->assertStatus($service, ['DRAFT', 'INACTIVE'], 'activar');
+
+        if ($service->status === 'DRAFT' && !$service->currentPrice()->exists()) {
+            throw ValidationException::withMessages([
+                'status' => ['El servicio necesita un precio vigente antes de activarse.'],
+            ]);
+        }
+
+        return $this->transition($request, $service, 'ACTIVE', 'service.activate');
+    }
+
+    public function deactivate(string $service, Request $request)
+    {
+        $service = Service::findOrFail($service);
+        $this->assertStatus($service, ['ACTIVE'], 'inactivar');
+
+        return $this->transition($request, $service, 'INACTIVE', 'service.deactivate');
+    }
+
+    public function archive(string $service, Request $request)
+    {
+        $service = Service::findOrFail($service);
+        $this->assertStatus($service, ['INACTIVE'], 'archivar');
+
+        return $this->transition($request, $service, 'ARCHIVED', 'service.archive');
+    }
+
+    /**
+     * Nueva versión de precio: la vigente se cierra con fecha de fin y no se
+     * sobrescribe. Lo ya cotizado conserva su precio (snapshot en la línea).
+     */
+    public function storePrice(string $service, Request $request)
+    {
+        $service = Service::findOrFail($service);
+        $tenantId = $request->attributes->get('tenant_id');
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'valid_from' => ['nullable', 'date'],
+        ], ['amount.gt' => 'Precio inválido.']);
+
+        $validFrom = isset($data['valid_from'])
+            ? Carbon::parse($data['valid_from'])->toDateString()
+            : now()->toDateString();
+
+        $price = DB::transaction(function () use ($service, $tenantId, $data, $validFrom) {
+            foreach (ServicePrice::where('service_id', $service->id)->where('active', true)->get() as $current) {
+                // valid_to no puede quedar antes de valid_from (check de la tabla).
+                $from = $current->valid_from?->toDateString();
+                $current->update([
+                    'active' => false,
+                    'valid_to' => $from !== null && $from > $validFrom ? $from : $validFrom,
+                ]);
+            }
+
+            return ServicePrice::create([
+                'tenant_id' => $tenantId,
+                'service_id' => $service->id,
+                'currency' => 'PEN',
+                'amount' => $data['amount'],
+                'valid_from' => $validFrom,
+                'active' => true,
+            ]);
+        });
+
+        $this->audit($request, $service, 'service.price.create', ['amount' => $price->amount, 'valid_from' => $validFrom]);
+
+        return response()->json($price, 201);
+    }
+
+    private function attributes(StoreServiceRequest $request): array
+    {
+        return [
             'category_id' => $request->category_id,
             'code' => $request->code,
             'name' => $request->name,
             'description' => $request->description,
             'unit' => $request->unit,
-            'status' => 'DRAFT',
-        ]);
-
-        AuditLogger::log(
-            tenantId: $tenantId,
-            userId: $request->user()->id,
-            action: 'service.create',
-            entityType: 'Service',
-            entityId: $service->id,
-        );
-
-        return response()->json($service, 201);
+            'billing_mode' => $request->billing_mode ?? 'ONE_TIME',
+            'warranty_months' => (int) ($request->warranty_months ?? 0),
+        ];
     }
 
-    public function activate(string $service, Request $request)
+    /** La recurrencia vive en service_recurring_configs: una fila activa si el servicio es recurrente. */
+    private function syncRecurrence(Service $service, ?string $frequency): void
     {
-        $service = Service::findOrFail($service);
+        $current = ServiceRecurringConfig::where('service_id', $service->id)->where('active', true)->first();
 
-        $service->update(['status' => 'ACTIVE']);
+        if ($service->billing_mode !== 'RECURRING') {
+            $current?->update(['active' => false]);
 
+            return;
+        }
+
+        if ($current && $current->frequency === $frequency) {
+            return;
+        }
+
+        $current?->update(['active' => false]);
+        ServiceRecurringConfig::create([
+            'tenant_id' => $service->tenant_id,
+            'service_id' => $service->id,
+            'frequency' => $frequency,
+            'interval_value' => 1,
+            'active' => true,
+        ]);
+    }
+
+    private function assertUniqueCode(string $code, ?string $exceptId = null): void
+    {
+        $taken = Service::where('code', $code)
+            ->when($exceptId, fn ($q) => $q->where('id', '!=', $exceptId))
+            ->exists();
+
+        if ($taken) {
+            throw ValidationException::withMessages([
+                'code' => ['El código de servicio debe ser único en la empresa.'],
+            ]);
+        }
+    }
+
+    private function assertCategory(string $categoryId): void
+    {
+        if (!ServiceCategory::whereKey($categoryId)->exists()) {
+            throw ValidationException::withMessages([
+                'category_id' => ['La categoría seleccionada no existe.'],
+            ]);
+        }
+    }
+
+    private function assertStatus(Service $service, array $expected, string $action): void
+    {
+        if (!in_array($service->status, $expected, true)) {
+            throw ValidationException::withMessages([
+                'status' => ["No se puede {$action} un servicio en estado {$service->status}."],
+            ]);
+        }
+    }
+
+    private function transition(Request $request, Service $service, string $to, string $action)
+    {
+        $from = $service->status;
+        $service->update(['status' => $to]);
+        $this->audit($request, $service, $action, ['from' => $from, 'to' => $to]);
+
+        return response()->json($service);
+    }
+
+    private function audit(Request $request, Service $service, string $action, array $metadata = []): void
+    {
         AuditLogger::log(
             tenantId: $request->attributes->get('tenant_id'),
             userId: $request->user()->id,
-            action: 'service.activate',
+            action: $action,
             entityType: 'Service',
             entityId: $service->id,
+            metadata: $metadata,
         );
-
-        return response()->json($service);
     }
 }

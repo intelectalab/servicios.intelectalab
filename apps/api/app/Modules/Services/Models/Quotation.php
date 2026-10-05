@@ -27,6 +27,7 @@ class Quotation extends Model
         'notes',
         'source_type',
         'source_id',
+        'previous_id',
         'created_by',
         'approved_at',
     ];
@@ -54,5 +55,36 @@ class Quotation extends Model
     public function items()
     {
         return $this->hasMany(QuotationItem::class, 'quotation_id');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(\App\Modules\Core\Models\Customer::class, 'customer_id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'created_by');
+    }
+
+    public function approvals()
+    {
+        return $this->hasMany(QuotationApproval::class, 'quotation_id')->orderByDesc('decided_at');
+    }
+
+    // Versión de la que nace esta cotización, y la que la reemplazó.
+    public function previous()
+    {
+        return $this->belongsTo(self::class, 'previous_id');
+    }
+
+    public function supersededBy()
+    {
+        return $this->hasOne(self::class, 'previous_id');
+    }
+
+    public function contract()
+    {
+        return $this->hasOne(Contract::class, 'quotation_id');
     }
 }

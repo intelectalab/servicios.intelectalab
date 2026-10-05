@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
+import { AccessProvider } from "@/lib/access-context";
 import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
 
@@ -32,7 +33,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/customers", label: "Clientes", module: "CLIENTES", requiredPermission: "core.view", icon: Users, superModule: "Comercial" },
   { href: "/suppliers", label: "Proveedores", module: "PROVEEDORES", requiredPermission: "core.view", icon: Truck, superModule: "Comercial" },
   { href: "/employees", label: "Empleados", module: "EMPLEADOS", requiredPermission: "core.view", icon: IdCard, superModule: "Comercial" },
-  { href: "/services", label: "Servicios", module: "SERVICIOS", requiredPermission: "services.view", icon: BriefcaseBusiness, superModule: "Comercial" },
+  { href: "/services", label: "Catálogo de servicios", module: "SERVICIOS", requiredPermission: "services.view", icon: BriefcaseBusiness, superModule: "Comercial" },
   { href: "/quotations", label: "Cotizaciones", module: "COTIZACIONES", requiredPermission: "quotations.view", icon: FileText, superModule: "Comercial" },
   { label: "Contratos", icon: FileSignature, superModule: "Comercial", soon: true },
   { label: "Órdenes", icon: Package, superModule: "Comercial", soon: true },
@@ -259,7 +260,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           canSearchRecords={permissions.includes("core.view")}
         />
 
-        <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">
+          <AccessProvider value={{ permissions, loading: permissionsLoading }}>{children}</AccessProvider>
+        </main>
       </div>
     </div>
   );
