@@ -10,6 +10,8 @@ import { useState, type ComponentType } from "react";
 export type MenuItem = {
   href: string;
   label: string;
+  /** Código del módulo en el catálogo; si la empresa no lo tiene, el ítem sale con candado. */
+  module: string;
   requiredPermission: string;
   icon: ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
   locked?: boolean;

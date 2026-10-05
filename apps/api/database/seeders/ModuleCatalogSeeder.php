@@ -8,53 +8,73 @@ use Illuminate\Support\Str;
 
 class ModuleCatalogSeeder extends Seeder
 {
+    /**
+     * Catálogo maestro de módulos. Cada fila: código, nombre, descripción,
+     * categoría, is_core y los prefijos de permisos que el módulo otorga
+     * (tabla 'permissions': "<prefijo>.view" y "<prefijo>.manage").
+     *
+     * is_core = obligatorio: está activo en todos los tenants sin depender del
+     * plan. Son los tres que comparten el permiso "core". El resto de la
+     * categoría CORE viene marcado por defecto en los planes, pero sigue al plan.
+     */
+    private const MODULES = [
+        // CORE — base del ERP
+        ['CLIENTES', 'Clientes', 'Gestión de clientes', 'CORE', true, ['core']],
+        ['PROVEEDORES', 'Proveedores', 'Gestión de proveedores', 'CORE', true, ['core']],
+        ['EMPLEADOS', 'Empleados', 'Gestión de empleados', 'CORE', true, ['core']],
+        ['SERVICIOS', 'Servicios', 'Catálogo y motor de servicios', 'CORE', false, ['services']],
+        ['COTIZACIONES', 'Cotizaciones', 'Propuestas comerciales', 'CORE', false, ['quotations']],
+        ['CONTRATOS', 'Contratos', 'Gestión contractual', 'CORE', false, ['contracts']],
+        ['ORDENES_TRABAJO', 'Órdenes de trabajo', 'Operación y ejecución', 'CORE', false, ['operations']],
+        ['PROYECTOS', 'Proyectos', 'Planificación de proyectos', 'CORE', false, []],
+        ['TAREAS', 'Tareas', 'Actividades y seguimiento', 'CORE', false, ['operations']],
+        ['CHECKLISTS', 'Checklists', 'Listas de verificación', 'CORE', false, ['operations']],
+        ['AGENDA', 'Agenda', 'Citas y programación', 'CORE', false, []],
+        ['RECURSOS', 'Recursos', 'Personas y recursos', 'CORE', false, ['operations']],
+        ['DOCUMENTOS', 'Documentos', 'Gestión documental', 'CORE', false, ['documents']],
+        ['ENTREGABLES', 'Entregables', 'Control de entregas', 'CORE', false, []],
+
+        // Finanzas y facturación
+        ['FINANZAS', 'Finanzas', 'Ingresos, gastos y control', 'FINANZAS_FACTURACION', false, ['billing', 'finance']],
+        ['FACTURACION_ELECTRONICA', 'Facturación electrónica', 'Facturación / SUNAT', 'FINANZAS_FACTURACION', false, ['billing']],
+        ['PAGOS_COBRANZAS', 'Pagos y cobranzas', 'Gestión de pagos', 'FINANZAS_FACTURACION', false, ['billing']],
+        ['RENTABILIDAD', 'Rentabilidad', 'Costos y margen', 'FINANZAS_FACTURACION', false, []],
+
+        // Soporte y atención al cliente
+        ['SOPORTE', 'Soporte', 'Atención al cliente', 'SOPORTE_ATENCION_CLIENTE', false, ['support']],
+        ['TICKETS', 'Tickets', 'Gestión de tickets de soporte', 'SOPORTE_ATENCION_CLIENTE', false, ['support']],
+
+        // Operaciones y servicio
+        ['TIMESHEETS', 'Timesheets', 'Horas trabajadas', 'OPERACIONES_SERVICIO', false, ['operations']],
+
+        // CRM — opcional
+        ['CRM', 'CRM', 'Leads, oportunidades y pipeline', 'CRM', false, ['crm']],
+    ];
+
     public function run(): void
     {
-        $modules = [
-            // CORE — base del ERP (obligatorios)
-            ['code' => 'CLIENTES',       'name' => 'Clientes',       'description' => 'Gestión de clientes',            'category' => 'CORE', 'is_core' => true,  'display_order' => 1],
-            ['code' => 'PROVEEDORES',    'name' => 'Proveedores',    'description' => 'Gestión de proveedores',          'category' => 'CORE', 'is_core' => true,  'display_order' => 2],
-            ['code' => 'EMPLEADOS',      'name' => 'Empleados',      'description' => 'Gestión de empleados',            'category' => 'CORE', 'is_core' => true,  'display_order' => 3],
-            ['code' => 'SERVICIOS',      'name' => 'Servicios',      'description' => 'Catálogo y motor de servicios',   'category' => 'CORE', 'is_core' => true,  'display_order' => 4],
-            ['code' => 'COTIZACIONES',   'name' => 'Cotizaciones',   'description' => 'Propuestas comerciales',          'category' => 'CORE', 'is_core' => true,  'display_order' => 5],
-            ['code' => 'CONTRATOS',      'name' => 'Contratos',      'description' => 'Gestión contractual',             'category' => 'CORE', 'is_core' => true,  'display_order' => 6],
-            ['code' => 'ORDENES_TRABAJO','name' => 'Órdenes de trabajo', 'description' => 'Operación y ejecución',       'category' => 'CORE', 'is_core' => true,  'display_order' => 7],
-            ['code' => 'PROYECTOS',      'name' => 'Proyectos',      'description' => 'Planificación de proyectos',      'category' => 'CORE', 'is_core' => true,  'display_order' => 8],
-            ['code' => 'TAREAS',         'name' => 'Tareas',         'description' => 'Actividades y seguimiento',       'category' => 'CORE', 'is_core' => true,  'display_order' => 9],
-            ['code' => 'CHECKLISTS',     'name' => 'Checklists',     'description' => 'Listas de verificación',          'category' => 'CORE', 'is_core' => true,  'display_order' => 10],
-            ['code' => 'AGENDA',         'name' => 'Agenda',         'description' => 'Citas y programación',            'category' => 'CORE', 'is_core' => true,  'display_order' => 11],
-            ['code' => 'RECURSOS',       'name' => 'Recursos',       'description' => 'Personas y recursos',             'category' => 'CORE', 'is_core' => true,  'display_order' => 12],
-            ['code' => 'DOCUMENTOS',     'name' => 'Documentos',     'description' => 'Gestión documental',              'category' => 'CORE', 'is_core' => true,  'display_order' => 13],
-            ['code' => 'ENTREGABLES',    'name' => 'Entregables',    'description' => 'Control de entregas',             'category' => 'CORE', 'is_core' => true,  'display_order' => 14],
+        foreach (self::MODULES as $order => [$code, $name, $description, $category, $isCore, $prefixes]) {
+            $module = [
+                'code' => $code,
+                'name' => $name,
+                'description' => $description,
+                'category' => $category,
+                'is_core' => $isCore,
+                'permission_prefixes' => json_encode($prefixes),
+                'display_order' => $order + 1,
+                'updated_at' => now(),
+            ];
 
-            // Finanzas y facturación (opcionales)
-            ['code' => 'FINANZAS',            'name' => 'Finanzas',            'description' => 'Ingresos, gastos y control', 'category' => 'FINANZAS_FACTURACION', 'is_core' => false, 'display_order' => 15],
-            ['code' => 'FACTURACION_ELECTRONICA', 'name' => 'Facturación electrónica', 'description' => 'Facturación / SUNAT', 'category' => 'FINANZAS_FACTURACION', 'is_core' => false, 'display_order' => 16],
-            ['code' => 'PAGOS_COBRANZAS',     'name' => 'Pagos y cobranzas',   'description' => 'Gestión de pagos',            'category' => 'FINANZAS_FACTURACION', 'is_core' => false, 'display_order' => 17],
-            ['code' => 'RENTABILIDAD',        'name' => 'Rentabilidad',        'description' => 'Costos y margen',             'category' => 'FINANZAS_FACTURACION', 'is_core' => false, 'display_order' => 18],
-
-            // Soporte y atención al cliente (opcionales)
-            ['code' => 'SOPORTE',          'name' => 'Soporte',          'description' => 'Atención al cliente',         'category' => 'SOPORTE_ATENCION_CLIENTE', 'is_core' => false, 'display_order' => 19],
-            ['code' => 'TICKETS',          'name' => 'Tickets',          'description' => 'Gestión de tickets de soporte','category' => 'SOPORTE_ATENCION_CLIENTE', 'is_core' => false, 'display_order' => 20],
-            ['code' => 'TIMESHEETS',  'name' => 'Timesheets',  'description' => 'Horas trabajadas',    'category' => 'OPERACIONES_SERVICIO', 'is_core' => false, 'display_order' => 21],
-        ];
-
-        foreach ($modules as $module) {
-            $exists = DB::table('module_catalog')->where('code', $module['code'])->exists();
-
-            if ($exists) {
-                DB::table('module_catalog')->where('code', $module['code'])->update(
-                    array_merge($module, ['updated_at' => now()])
-                );
+            if (DB::table('module_catalog')->where('code', $code)->exists()) {
+                DB::table('module_catalog')->where('code', $code)->update($module);
                 continue;
             }
 
-            DB::table('module_catalog')->insert(array_merge($module, [
+            DB::table('module_catalog')->insert($module + [
                 'id' => (string) Str::uuid(),
                 'active' => true,
                 'created_at' => now(),
-                'updated_at' => now(),
-            ]));
+            ]);
         }
     }
 }

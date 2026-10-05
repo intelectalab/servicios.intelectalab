@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\MfaCodeMail;
 use App\Models\User;
+use App\Modules\Subscription\Support\TenantModules;
 use App\Services\AuditLogger;
 use App\Services\LoginThrottle;
 use App\Services\PlatformAuditLogger;
@@ -272,6 +273,20 @@ class AuthController extends Controller
     public function permissions(Request $request)
     {
         return response()->json([
+            'permissions' => $request->user()->permissionCodes(),
+        ]);
+    }
+
+    /**
+     * Lo que el frontend necesita para armar el menú: los módulos que la
+     * empresa puede usar (plan) y los permisos del usuario (rol), por separado.
+     */
+    public function access(Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+
+        return response()->json([
+            'modules' => $tenantId ? TenantModules::enabledCodes($tenantId) : [],
             'permissions' => $request->user()->permissionCodes(),
         ]);
     }

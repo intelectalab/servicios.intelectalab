@@ -41,6 +41,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'tenant.context'])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::get('/me/permissions', [AuthController::class, 'permissions']);
+        Route::get('/me/access', [AuthController::class, 'access']);
 
         // Clientes
         Route::middleware('permission:core.view')->group(function () {

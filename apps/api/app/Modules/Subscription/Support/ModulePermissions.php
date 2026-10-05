@@ -2,48 +2,36 @@
 
 namespace App\Modules\Subscription\Support;
 
+use Illuminate\Support\Facades\DB;
+
 class ModulePermissions
 {
     /**
-     * Permisos base para que el administrador del tenant pueda ver el core
-     * (clientes, proveedores, empleados) y gestionar su tenant.
+     * Permisos de administración del propio tenant; no dependen de ningún módulo.
      */
-    public const BASE = ['core.view', 'core.manage', 'users.view', 'users.manage', 'tenant.manage'];
+    public const BASE = ['users.view', 'users.manage', 'tenant.manage'];
 
     /**
-     * Relaciona cada módulo del plan con los prefijos de permisos que exigen
-     * las rutas (tabla 'permissions').
-     */
-    public const MAP = [
-        'SERVICIOS' => ['services'],
-        'COTIZACIONES' => ['quotations'],
-        'CONTRATOS' => ['contracts'],
-        'ORDENES_TRABAJO' => ['operations'],
-        'TAREAS' => ['operations'],
-        'CHECKLISTS' => ['operations'],
-        'RECURSOS' => ['operations'],
-        'TIMESHEETS' => ['operations'],
-        'DOCUMENTOS' => ['documents'],
-        'FINANZAS' => ['billing', 'finance'],
-        'FACTURACION_ELECTRONICA' => ['billing'],
-        'PAGOS_COBRANZAS' => ['billing'],
-        'SOPORTE' => ['support'],
-        'TICKETS' => ['support'],
-        'CRM' => ['crm'],
-    ];
-
-    /**
-     * Códigos de permiso (base + view/manage de cada módulo habilitado).
+     * Códigos de permiso para el administrador de un tenant con esos módulos:
+     * los de administración, más view/manage de cada prefijo que el catálogo
+     * (module_catalog.permission_prefixes) asocia a los módulos obligatorios y
+     * a los indicados.
      */
     public static function codesFor(iterable $moduleCodes): array
     {
+        $requested = collect($moduleCodes)->map(fn (string $code) => strtoupper($code))->all();
+
+        $prefixes = DB::table('module_catalog')
+            ->where('active', true)
+            ->where(fn ($query) => $query->where('is_core', true)->orWhereIn('code', $requested))
+            ->pluck('permission_prefixes')
+            ->flatMap(fn ($json) => json_decode($json, true) ?: []);
+
         $codes = self::BASE;
 
-        foreach ($moduleCodes as $moduleCode) {
-            foreach (self::MAP[strtoupper($moduleCode)] ?? [] as $prefix) {
-                $codes[] = "{$prefix}.view";
-                $codes[] = "{$prefix}.manage";
-            }
+        foreach ($prefixes->unique() as $prefix) {
+            $codes[] = "{$prefix}.view";
+            $codes[] = "{$prefix}.manage";
         }
 
         return array_values(array_unique($codes));

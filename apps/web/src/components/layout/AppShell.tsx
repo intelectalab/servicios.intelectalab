@@ -8,16 +8,18 @@ import { clearAuthToken } from "@/lib/auth";
 import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
 
+// "module" es el código del catálogo (module_catalog): decide si la empresa lo
+// tiene en su plan. "requiredPermission" decide si el rol del usuario lo ve.
 const MENU_ITEMS: MenuItem[] = [
-  { href: "/customers", label: "Clientes", requiredPermission: "core.view", icon: Users, superModule: "CORE" },
-  { href: "/suppliers", label: "Proveedores", requiredPermission: "core.view", icon: Truck, superModule: "CORE" },
-  { href: "/employees", label: "Empleados", requiredPermission: "core.view", icon: IdCard, superModule: "CORE" },
-  { href: "/services", label: "Servicios", requiredPermission: "services.view", icon: BriefcaseBusiness, superModule: "OPERACIONES" },
-  { href: "/quotations", label: "Cotizaciones", requiredPermission: "quotations.view", icon: FileText, superModule: "VENTAS" },
+  { href: "/customers", label: "Clientes", module: "CLIENTES", requiredPermission: "core.view", icon: Users, superModule: "CORE" },
+  { href: "/suppliers", label: "Proveedores", module: "PROVEEDORES", requiredPermission: "core.view", icon: Truck, superModule: "CORE" },
+  { href: "/employees", label: "Empleados", module: "EMPLEADOS", requiredPermission: "core.view", icon: IdCard, superModule: "CORE" },
+  { href: "/services", label: "Servicios", module: "SERVICIOS", requiredPermission: "services.view", icon: BriefcaseBusiness, superModule: "OPERACIONES" },
+  { href: "/quotations", label: "Cotizaciones", module: "COTIZACIONES", requiredPermission: "quotations.view", icon: FileText, superModule: "VENTAS" },
 ];
 const SIDEBAR_STATE_KEY = "erp-sidebar-open";
 
-type PermissionsResponse = { permissions: string[] };
+type AccessResponse = { modules: string[]; permissions: string[] };
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -27,6 +29,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [modules, setModules] = useState<string[]>([]);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
@@ -59,8 +62,11 @@ export default function AppShell({ children }: { children: ReactNode }) {
           });
         }
 
-        const permResponse = await apiFetch<PermissionsResponse>("/v1/me/permissions");
-        if (!cancelled) setPermissions(permResponse.permissions);
+        const access = await apiFetch<AccessResponse>("/v1/me/access");
+        if (!cancelled) {
+          setModules(access.modules);
+          setPermissions(access.permissions);
+        }
       } catch (err) {
         console.error("Error al cargar datos de sesión", err);
       } finally {
@@ -86,10 +92,13 @@ export default function AppShell({ children }: { children: ReactNode }) {
     }
   }
 
+  // Dos preguntas distintas por ítem:
+  //  - la empresa no tiene el módulo en su plan → se muestra con candado y aviso de plan;
+  //  - lo tiene, pero el rol del usuario no lo incluye → se oculta.
   const menuWithLockState = MENU_ITEMS.map((item) => ({
     ...item,
-    locked: !permissions.includes(item.requiredPermission),
-  }));
+    locked: !modules.includes(item.module),
+  })).filter((item) => item.locked || permissions.includes(item.requiredPermission));
 
   return (
     <div className="app-page flex h-screen min-h-0 overflow-hidden">
