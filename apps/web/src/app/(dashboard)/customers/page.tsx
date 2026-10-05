@@ -1,5 +1,6 @@
 "use client";
 
+import { onOpenRecord } from "@/lib/open-record";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ExcelJS from "exceljs";
@@ -53,6 +54,9 @@ export default function CustomersPage() {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
+
+  // El buscador global de la cabecera puede pedir que se abra una ficha.
+  useEffect(() => onOpenRecord("customer", setViewCustomerId), []);
 
   // Estado para el Modal de Crear Campo Personalizado al vuelo
   const [isCustomFieldModalOpen, setIsCustomFieldModalOpen] = useState(false);

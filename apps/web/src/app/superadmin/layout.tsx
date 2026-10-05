@@ -2,11 +2,32 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Building2, CreditCard, LayoutDashboard, Receipt, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
-import SuperAdminSidebar from "@/components/superadmin/SuperAdminSidebar";
-import SuperAdminHeader from "@/components/superadmin/SuperAdminHeader";
-import { type UserProfile } from "@/components/layout/Header";
+import Header, { type UserProfile } from "@/components/layout/Header";
+import Sidebar, { type BuiltMenuItem } from "@/components/layout/Sidebar";
+
+const GROUP = "Administración SaaS";
+const PLATFORM_NAME = "Plataforma SaaS";
+const PROFILE_HREF = "/superadmin/profile";
+
+// La consola de plataforma usa la misma barra lateral y cabecera que el ERP.
+// Aquí no hay módulos por plan ni permisos por rol (el acceso lo decide
+// is_super_admin), así que "module" y "requiredPermission" son solo de relleno.
+const ADMIN_MENU_ITEMS: BuiltMenuItem[] = [
+  { href: "/superadmin/dashboard", label: "Dashboard", icon: LayoutDashboard, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
+  { href: "/superadmin/plans", label: "Planes SaaS", icon: CreditCard, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
+  { href: "/superadmin/subscriptions", label: "Suscripciones", icon: Receipt, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
+  { href: "/superadmin/tenants", label: "Tenants / Empresas", icon: Building2, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
+];
+
+const GROUP_ICONS = { [GROUP]: ShieldCheck };
+
+const SEARCH_SCREENS = [
+  ...ADMIN_MENU_ITEMS.map((item) => ({ label: item.label, href: item.href, group: item.superModule })),
+  { label: "Mi perfil", href: PROFILE_HREF, group: "Cuenta" },
+];
 
 const SIDEBAR_STATE_KEY = "erp-superadmin-sidebar-open";
 
@@ -70,13 +91,25 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
     }
   }
 
-  const sectionTitles: Record<string, string> = {
-    "/superadmin/dashboard": "Dashboard",
-    "/superadmin/plans": "Planes SaaS",
-    "/superadmin/subscriptions": "Suscripciones",
-    "/superadmin/tenants": "Tenants / Empresas",
-  };
-  const currentSection = sectionTitles[pathname ?? ""] ?? "Administración Global";
+  const currentItem = ADMIN_MENU_ITEMS.find((item) => pathname?.startsWith(item.href));
+  const onProfile = Boolean(pathname?.startsWith(PROFILE_HREF));
+  const currentSection = currentItem?.label ?? (onProfile ? "Mi perfil" : "Administración Global");
+  const currentGroup = currentItem?.superModule ?? (onProfile ? "Cuenta" : undefined);
+
+  const sidebar = (compact: boolean) => (
+    <Sidebar
+      items={ADMIN_MENU_ITEMS}
+      compact={compact}
+      permissionsLoading={false}
+      onNavigate={() => setMobileOpen(false)}
+      onLogout={handleLogout}
+      loggingOut={loggingOut}
+      groupIcons={GROUP_ICONS}
+      user={currentUser}
+      tenantName={PLATFORM_NAME}
+      profileHref={PROFILE_HREF}
+    />
+  );
 
   return (
     <div className="app-page flex h-screen min-h-0 overflow-hidden">
@@ -86,38 +119,32 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
           sidebarOpen ? "w-64" : "w-16"
         }`}
       >
-        <SuperAdminSidebar
-          compact={!sidebarOpen}
-          onLogout={handleLogout}
-          loggingOut={loggingOut}
-        />
+        {sidebar(!sidebarOpen)}
       </aside>
 
       {/* Sidebar mobile (drawer) */}
       {mobileOpen && (
         <div className="fixed inset-0 z-[200] md:hidden">
           <div className="absolute inset-0 bg-black/30" onClick={() => setMobileOpen(false)} />
-          <aside className="app-surface absolute inset-y-0 left-0 w-64 shadow-xl">
-            <SuperAdminSidebar
-              compact={false}
-              onLogout={handleLogout}
-              loggingOut={loggingOut}
-            />
-          </aside>
+          <aside className="app-surface absolute inset-y-0 left-0 w-64 shadow-xl">{sidebar(false)}</aside>
         </div>
       )}
 
       {/* Contenedor Principal */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <SuperAdminHeader
+        <Header
           open={sidebarOpen || mobileOpen}
           currentSection={currentSection}
+          currentGroup={currentGroup}
           onToggle={() => {
             setSidebarOpen((value) => !value);
             setMobileOpen((value) => !value);
           }}
           user={currentUser}
           onLogout={handleLogout}
+          tenantName={PLATFORM_NAME}
+          screens={SEARCH_SCREENS}
+          profileHref={PROFILE_HREF}
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">{children}</main>

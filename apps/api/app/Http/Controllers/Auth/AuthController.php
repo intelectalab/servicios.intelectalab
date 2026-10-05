@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -288,7 +289,45 @@ class AuthController extends Controller
         return response()->json([
             'modules' => $tenantId ? TenantModules::enabledCodes($tenantId) : [],
             'permissions' => $request->user()->permissionCodes(),
+            // Para la cabecera: a qué empresa pertenece la sesión y con qué rol.
+            'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->first(['name', 'code']) : null,
+            'roles' => $tenantId
+                ? DB::table('user_roles')
+                    ->join('roles', 'roles.id', '=', 'user_roles.role_id')
+                    ->where('user_roles.user_id', $request->user()->id)
+                    ->where('user_roles.tenant_id', $tenantId)
+                    ->orderBy('roles.name')
+                    ->pluck('roles.name')
+                    ->unique()
+                    ->values()
+                : [],
         ]);
+    }
+
+    /**
+     * Cambio de contraseña desde la sesión abierta: pide la actual.
+     */
+    public function changePassword(Request $request)
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'different:current_password', Password::min(8)->mixedCase()->numbers()],
+        ], [
+            'password.different' => 'La nueva contraseña debe ser distinta de la actual.',
+        ]);
+
+        $user = $request->user();
+
+        if (! Hash::check($data['current_password'], $user->password_hash)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['La contraseña actual no es correcta.'],
+            ]);
+        }
+
+        $user->forceFill(['password_hash' => Hash::make($data['password'])])->save();
+        $this->audit($user, 'auth.password_changed');
+
+        return response()->json(['message' => 'Tu contraseña se actualizó correctamente.']);
     }
 
     public function logout(Request $request)

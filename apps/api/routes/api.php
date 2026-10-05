@@ -26,6 +26,7 @@ use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmLeadController;
 use App\Modules\Portal\Http\Controllers\PortalController;
 use App\Modules\Core\Http\Controllers\EmployeeController;
+use App\Modules\Core\Http\Controllers\SearchController;
 
 Route::prefix('v1')->group(function () {
     Route::get('/saas-plans', [SaasPlanController::class, 'index']);
@@ -42,6 +43,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::get('/me/permissions', [AuthController::class, 'permissions']);
         Route::get('/me/access', [AuthController::class, 'access']);
+        Route::post('/me/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
+
+        // Buscador global de la cabecera
+        Route::middleware('permission:core.view')->get('/search', [SearchController::class, 'index']);
 
         // Clientes
         Route::middleware('permission:core.view')->group(function () {

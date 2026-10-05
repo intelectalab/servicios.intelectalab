@@ -3,20 +3,35 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Lock, Sparkles, X, ChevronDown, Layers } from "lucide-react";
+import { LogOut, Lock, Sparkles, X, ChevronRight, Layers, Clock3, UserRound, Building2 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useState, type ComponentType } from "react";
+import { poppins } from "@/lib/fonts";
 
-export type MenuItem = {
+type MenuIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string; className?: string }>;
+
+/** Pantalla ya construida: navega, y se bloquea u oculta según módulo y permiso. */
+export type BuiltMenuItem = {
   href: string;
   label: string;
   /** Código del módulo en el catálogo; si la empresa no lo tiene, el ítem sale con candado. */
   module: string;
   requiredPermission: string;
-  icon: ComponentType<{ size?: number; strokeWidth?: number; color?: string }>;
+  icon: MenuIcon;
   locked?: boolean;
   superModule?: string;
+  soon?: false;
 };
+
+/** Pantalla del prototipo que aún no existe: ocupa su lugar en el menú, sin navegar. */
+export type SoonMenuItem = {
+  label: string;
+  icon: MenuIcon;
+  superModule?: string;
+  soon: true;
+};
+
+export type MenuItem = BuiltMenuItem | SoonMenuItem;
 
 type SidebarProps = {
   items: MenuItem[];
@@ -25,13 +40,36 @@ type SidebarProps = {
   onNavigate: () => void;
   onLogout: () => void;
   loggingOut: boolean;
+  /** Ícono de cada grupo (clave = superModule). */
+  groupIcons?: Record<string, MenuIcon>;
+  /** Usuario de la sesión, para la tarjeta bajo el logo. */
+  user?: { name: string; role?: string } | null;
+  /** Empresa de la sesión, bajo la tarjeta de usuario. */
+  tenantName?: string;
+  /** Ruta de "Mi perfil" (la consola de plataforma usa la suya). */
+  profileHref?: string;
 };
+
+/**
+ * Colores de la barra: el azul del logo (#1B8FC9) oscureciéndose hacia abajo,
+ * con texto e indicadores en blanco. Igual en tema claro y oscuro.
+ */
+// Ojo: aquí no se usan clases "bg-white…": globals.css las repinta en tema oscuro.
+const SIDEBAR_BACKGROUND = "linear-gradient(180deg, #1B8FC9 0%, #1679AB 22%, #0F5A82 100%)";
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 function Logo() {
   return (
     <div className="relative h-9 w-[164px]">
-      <Image src="/logo.png" alt="Creativas" fill priority sizes="164px" className="logo-light object-contain object-left" />
-      <Image src="/logo-blanco.png" alt="Creativas" fill priority sizes="164px" className="logo-dark object-contain object-left" />
+      <Image src="/logo-blanco.png" alt="Creativas" fill priority sizes="164px" className="object-contain object-left" />
     </div>
   );
 }
@@ -43,12 +81,25 @@ export default function Sidebar({
   onNavigate,
   onLogout,
   loggingOut,
+  groupIcons = {},
+  user,
+  tenantName,
+  profileHref = "/profile",
 }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
   const [upgradeModalModule, setUpgradeModalModule] = useState<string | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  // Los grupos que todavía no tienen ninguna pantalla construida arrancan plegados.
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    const builtGroups = new Set(items.filter((item) => !item.soon).map((item) => item.superModule || "CORE"));
+    const initial: Record<string, boolean> = {};
+    for (const item of items) {
+      const group = item.superModule || "CORE";
+      if (!builtGroups.has(group)) initial[group] = true;
+    }
+    return initial;
+  });
 
   const toggleGroup = (group: string) => {
     setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
@@ -60,7 +111,12 @@ export default function Sidebar({
     setTooltip({ label: text, top: rect.top + rect.height / 2, left: rect.right + 12 });
   }
 
-  const groupedItems = items.reduce((acc, item) => {
+  const isActive = (href: string) => pathname === href || Boolean(pathname?.startsWith(`${href}/`));
+
+  // Con la barra en modo íconos solo se muestran las pantallas que ya existen.
+  const visibleItems = compact ? items.filter((item) => !item.soon) : items;
+
+  const groupedItems = visibleItems.reduce((acc, item) => {
     const group = item.superModule || "CORE";
     if (!acc[group]) acc[group] = [];
     acc[group].push(item);
@@ -68,51 +124,140 @@ export default function Sidebar({
   }, {} as Record<string, MenuItem[]>);
 
   return (
-    <div className="flex h-full flex-col relative">
-      <div className={compact ? "flex justify-center px-2 py-6" : "px-6 py-6"}>
+    <div
+      className={`${poppins.className} relative flex h-full flex-col text-white`}
+      style={{ background: SIDEBAR_BACKGROUND }}
+    >
+      <div className={`flex h-16 shrink-0 items-center ${compact ? "justify-center px-2" : "px-5"}`}>
         {compact ? <CompactLogo /> : <Logo />}
       </div>
 
+      {!compact && user && (
+        <div className="relative mx-3.5 mb-2 mt-1 flex items-center gap-2.5 rounded-[10px] bg-[rgb(255_255_255/0.09)] px-3 py-2.5">
+          <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-white/70 bg-[rgb(255_255_255/0.15)] text-[12px] font-semibold">
+            {initials(user.name)}
+            <span
+              title="Sesión activa"
+              className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#1679AB] bg-[#3DDC84]"
+            />
+          </span>
+          <div className="min-w-0">
+            <strong className="block truncate text-[13px] font-semibold">{user.name}</strong>
+            {user.role && <small className="block truncate text-[11.5px] text-white/60">{user.role}</small>}
+          </div>
+        </div>
+      )}
+
+      {!compact && tenantName && (
+        <div
+          title="Empresa (tenant) resuelta a partir de tu cuenta"
+          className="mx-4 mb-1.5 flex items-center gap-1.5 text-[11.5px] text-white/60"
+        >
+          <Building2 size={13} className="shrink-0" />
+          <span className="truncate">{tenantName}</span>
+        </div>
+      )}
+
+      {!compact && (
+        <div className="px-[22px] pb-1.5 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-white/55">
+          Menú
+        </div>
+      )}
+
       <nav
-        className={`min-h-0 flex-1 overflow-y-auto space-y-4 ${compact ? "px-2" : "px-3"}`}
+        className={`min-h-0 flex-1 overflow-y-auto pb-2.5 [scrollbar-color:rgba(255,255,255,.2)_transparent] [scrollbar-width:thin] ${
+          compact ? "space-y-1 px-2 pt-1" : ""
+        }`}
         aria-label="Navegación principal"
         onScroll={() => setTooltip(null)}
       >
         {permissionsLoading ? (
           /* Esqueleto de carga fluido para evitar el parpadeo y los saltos visuales */
-          <div className="space-y-4 px-2 pt-2">
-            {[1, 2, 3].map((n) => (
-              <div key={n} className="space-y-2">
-                <div className="h-3 w-20 bg-slate-200 rounded animate-pulse" />
-                <div className="h-10 w-full bg-slate-100 rounded-xl animate-pulse" />
-              </div>
+          <div className={`space-y-3 pt-2 ${compact ? "" : "px-[22px]"}`}>
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="h-8 w-full animate-pulse rounded-lg bg-[rgb(255_255_255/0.15)]" />
             ))}
           </div>
         ) : (
           Object.entries(groupedItems).map(([superModule, groupItems]) => {
             const isCollapsed = collapsedGroups[superModule];
+            const GroupIcon = groupIcons[superModule] ?? Layers;
+            const hasActive = groupItems.some((item) => !item.soon && isActive(item.href));
+
+            // Modo íconos: un ícono por pantalla construida, con su tooltip.
+            if (compact) {
+              return groupItems.map((item) => {
+                if (item.soon) return null;
+                const { href, label, icon: Icon, locked } = item;
+                const active = isActive(href);
+
+                return (
+                  <Link
+                    key={href}
+                    href={locked ? "#" : href}
+                    onClick={(e) => {
+                      if (locked) {
+                        e.preventDefault();
+                        setUpgradeModalModule(label);
+                      } else {
+                        onNavigate();
+                      }
+                    }}
+                    onMouseEnter={(event) => showTooltip(event, label, locked)}
+                    onMouseLeave={() => setTooltip(null)}
+                    onFocus={(event) => showTooltip(event, label, locked)}
+                    onBlur={() => setTooltip(null)}
+                    aria-label={label}
+                    aria-current={active ? "page" : undefined}
+                    className={`relative flex h-10 items-center justify-center rounded-lg transition-colors ${
+                      active ? "bg-[rgb(255_255_255/0.20)] text-white" : "text-white/85 hover:bg-[rgb(255_255_255/0.10)] hover:text-white"
+                    } ${locked ? "opacity-60" : ""}`}
+                  >
+                    <Icon size={18} strokeWidth={2} />
+                    {locked && (
+                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#fff] ring-2 ring-[#1679AB]" />
+                    )}
+                  </Link>
+                );
+              });
+            }
 
             return (
-              <div key={superModule} className="space-y-1">
-                {!compact && (
-                  <button
-                    onClick={() => toggleGroup(superModule)}
-                    className="w-full px-3 text-[11px] font-extrabold uppercase tracking-wider text-slate-500 hover:text-slate-800 flex items-center justify-between py-1.5 transition-colors cursor-pointer"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <Layers size={13} /> {superModule}
-                    </span>
-                    <ChevronDown
-                      size={14}
-                      className={`transition-transform duration-200 ${isCollapsed ? "-rotate-90" : ""}`}
-                    />
-                  </button>
-                )}
+              <div key={superModule}>
+                <button
+                  onClick={() => toggleGroup(superModule)}
+                  aria-expanded={!isCollapsed}
+                  className={`flex w-full cursor-pointer items-center gap-3 px-[22px] py-2.5 text-left text-[13.5px] font-medium transition-colors hover:bg-[rgb(255_255_255/0.07)] hover:text-white ${
+                    hasActive ? "text-white" : "text-white/85"
+                  }`}
+                >
+                  <GroupIcon size={18} strokeWidth={2} className="shrink-0 opacity-90" />
+                  <span className="truncate">{superModule}</span>
+                  <ChevronRight
+                    size={15}
+                    className={`ml-auto shrink-0 transition-transform duration-200 ${isCollapsed ? "" : "rotate-90"}`}
+                  />
+                </button>
 
-                {(!isCollapsed || compact) && (
-                  <div className="space-y-1 pl-1">
-                    {groupItems.map(({ href, label, icon: Icon, locked }) => {
-                      const active = pathname === href || pathname?.startsWith(`${href}/`);
+                {!isCollapsed && (
+                  <div className="bg-black/[0.14] py-1">
+                    {groupItems.map((item) => {
+                      if (item.soon) {
+                        return (
+                          <div
+                            key={`soon-${item.label}`}
+                            aria-disabled="true"
+                            title="Próximamente"
+                            className="flex cursor-default items-center gap-2 py-2 pl-[52px] pr-[18px] text-[12.8px] text-white/45"
+                          >
+                            <span className="truncate">{item.label}</span>
+                            <Clock3 size={12} aria-label="Próximamente" className="ml-auto shrink-0" />
+                          </div>
+                        );
+                      }
+
+                      const { href, label, locked } = item;
+                      const active = isActive(href);
 
                       return (
                         <Link
@@ -126,44 +271,23 @@ export default function Sidebar({
                               onNavigate();
                             }
                           }}
-                          onMouseEnter={compact ? (event) => showTooltip(event, label, locked) : undefined}
-                          onMouseLeave={compact ? () => setTooltip(null) : undefined}
-                          onFocus={compact ? (event) => showTooltip(event, label, locked) : undefined}
-                          onBlur={compact ? () => setTooltip(null) : undefined}
-                          aria-label={compact ? label : undefined}
-                          className={`group relative flex items-center justify-between rounded-xl py-2.5 text-sm font-medium transition-all ${
-                            compact ? "justify-center px-0" : "gap-3 px-3"
-                          } ${
-                            active 
-                              ? "text-white shadow-sm" 
-                              : locked 
-                              ? "opacity-75 cursor-pointer bg-slate-100 text-slate-500 hover:bg-slate-200 border border-slate-300" 
-                              : "app-muted app-hover"
+                          aria-current={active ? "page" : undefined}
+                          className={`relative flex items-center gap-2 py-2 pl-[52px] pr-[18px] text-[12.8px] transition-colors ${
+                            active
+                              ? "bg-[rgb(255_255_255/0.16)] font-semibold text-white"
+                              : locked
+                              ? "text-white/60 hover:text-white"
+                              : "text-white/80 hover:text-white"
                           }`}
-                          style={active && !locked ? { backgroundColor: "var(--app-brand-deep)" } : undefined}
                         >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <Icon 
-                              size={17} 
-                              strokeWidth={2} 
-                              color={active && !locked ? "var(--app-brand)" : locked ? "#475569" : undefined} 
-                            />
-                            {!compact && (
-                              <span className="whitespace-nowrap truncate font-semibold">
-                                {label}
-                              </span>
-                            )}
-                          </div>
+                          {active && <span className="absolute inset-y-0 left-0 w-1 bg-[#fff]" />}
+                          <span className="truncate">{label}</span>
 
-                          {locked && !compact && (
-                            <div className="flex items-center gap-1 shrink-0 bg-blue-100 text-[var(--app-brand-deep)] px-2 py-0.5 rounded-md border border-blue-200 text-[11px] font-bold">
-                              <Lock size={12} color="var(--app-brand-deep)" />
-                              <span>Plan</span>
-                            </div>
-                          )}
-
-                          {locked && compact && (
-                            <span className="absolute right-1 top-1 h-2.5 w-2.5 rounded-full bg-[var(--app-brand-deep)] ring-2 ring-white" />
+                          {locked && (
+                            <span className="ml-auto flex shrink-0 items-center gap-1 rounded-[5px] bg-[rgb(255_255_255/0.15)] px-1.5 text-[10px] font-semibold leading-[18px] text-white">
+                              <Lock size={10} />
+                              Plan
+                            </span>
                           )}
                         </Link>
                       );
@@ -176,7 +300,7 @@ export default function Sidebar({
         )}
 
         {!permissionsLoading && items.length === 0 && (
-          <p className="app-muted px-3 py-2 text-sm">No hay módulos disponibles.</p>
+          <p className="px-[22px] py-2 text-sm text-white/70">No hay módulos disponibles.</p>
         )}
       </nav>
 
@@ -234,21 +358,49 @@ export default function Sidebar({
         document.body,
       )}
 
-      <div className={`app-border ${compact ? "border-t p-2" : "border-t p-3"}`}>
-        <button
-          onClick={onLogout}
-          disabled={loggingOut}
-          aria-label={compact ? "Cerrar sesión" : undefined}
-          className={`app-muted group relative flex w-full items-center rounded-xl py-2.5 text-sm font-medium transition-colors hover:bg-[#FCEAE8] hover:text-[#C4453B] disabled:opacity-60 ${
-            compact ? "justify-center px-0" : "gap-3 px-3"
+      <div className={`shrink-0 border-t border-white/[0.12] ${compact ? "p-2" : "pb-2.5 pt-1"}`}>
+        {!compact && (
+          <div className="px-[22px] pb-1.5 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-white/55">
+            Cuenta
+          </div>
+        )}
+        <Link
+          href={profileHref}
+          onClick={onNavigate}
+          aria-label={compact ? "Mi perfil" : undefined}
+          aria-current={isActive(profileHref) ? "page" : undefined}
+          className={`group relative flex w-full items-center text-[13.5px] font-medium transition-colors hover:text-white ${
+            compact ? "h-10 justify-center rounded-lg" : "gap-3 px-[22px] py-2"
+          } ${
+            isActive(profileHref)
+              ? "bg-[rgb(255_255_255/0.16)] text-white"
+              : "text-white/85 hover:bg-[rgb(255_255_255/0.07)]"
           }`}
         >
-          <LogOut size={17} />
-          {!compact && (loggingOut ? "Cerrando sesión..." : "Cerrar sesión")}
+          {isActive(profileHref) && !compact && <span className="absolute inset-y-0 left-0 w-1 bg-[#fff]" />}
+          <UserRound size={18} className="shrink-0 opacity-90" />
+          {!compact && "Mi perfil"}
           {compact && (
             <span className="invisible pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium opacity-0 shadow-lg transition-all duration-150 group-hover:visible group-hover:translate-x-0 group-hover:opacity-100" style={{ backgroundColor: "var(--app-tooltip)", color: "var(--app-tooltip-text)" }}>
               <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent" style={{ borderRightColor: "var(--app-tooltip)" }} />
-              Cerrar sesión
+              Mi perfil
+            </span>
+          )}
+        </Link>
+        <button
+          onClick={onLogout}
+          disabled={loggingOut}
+          aria-label={compact ? "Salir" : undefined}
+          className={`group relative flex w-full cursor-pointer items-center text-[13.5px] font-medium text-white/85 transition-colors hover:bg-[rgb(255_255_255/0.07)] hover:text-white disabled:opacity-60 ${
+            compact ? "h-10 justify-center rounded-lg" : "gap-3 px-[22px] py-2"
+          }`}
+        >
+          <LogOut size={18} className="shrink-0 opacity-90" />
+          {!compact && (loggingOut ? "Saliendo..." : "Salir")}
+          {compact && (
+            <span className="invisible pointer-events-none absolute left-full top-1/2 z-50 ml-3 -translate-x-2 -translate-y-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium opacity-0 shadow-lg transition-all duration-150 group-hover:visible group-hover:translate-x-0 group-hover:opacity-100" style={{ backgroundColor: "var(--app-tooltip)", color: "var(--app-tooltip-text)" }}>
+              <span className="absolute right-full top-1/2 -translate-y-1/2 border-[5px] border-transparent" style={{ borderRightColor: "var(--app-tooltip)" }} />
+              Salir
             </span>
           )}
         </button>

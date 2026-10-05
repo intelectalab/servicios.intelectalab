@@ -1,18 +1,22 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import {
-  Menu, 
-  Bell, 
-  ChevronDown, 
-  User as UserIcon, 
-  Settings, 
-  LogOut, 
-  HelpCircle, 
-  Building2,
+  Menu,
+  Bell,
+  ChevronDown,
+  User as UserIcon,
+  KeyRound,
+  RotateCcw,
+  LogOut,
+  Home,
   Moon,
   Sun,
 } from "lucide-react";
+import { poppins } from "@/lib/fonts";
+import GlobalSearch, { type SearchScreen } from "@/components/layout/GlobalSearch";
+import ChangePasswordModal from "@/components/layout/ChangePasswordModal";
 
 export type UserProfile = {
   name: string;
@@ -24,19 +28,47 @@ export type UserProfile = {
 type HeaderProps = {
   open: boolean;
   currentSection: string;
+  /** Grupo del menú al que pertenece la pantalla actual; va en las migas. */
+  currentGroup?: string;
   onToggle: () => void;
   user?: UserProfile | null;
   onLogout?: () => void;
+  /** Empresa de la sesión; va en las migas y en el menú de usuario. */
+  tenantName?: string;
+  /** Pantallas disponibles para el buscador global. */
+  screens?: SearchScreen[];
+  canSearchRecords?: boolean;
+  /** Ruta de "Mi perfil y seguridad" (la consola de plataforma usa la suya). */
+  profileHref?: string;
 };
+
+// Botón de ícono de la barra: azul del logo, igual en tema claro y oscuro.
+const ICON_BUTTON =
+  "relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[#1B8FC9] transition-colors hover:bg-[rgb(27_143_201/0.1)] active:scale-95";
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 export default function Header({
   open,
   currentSection,
+  currentGroup,
   onToggle,
   user,
   onLogout,
+  tenantName,
+  screens = [],
+  canSearchRecords = false,
+  profileHref = "/profile",
 }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window === "undefined") return false;
     const savedTheme = window.localStorage.getItem("theme");
@@ -47,7 +79,11 @@ export default function Header({
   const userName = user?.name ?? "Usuario";
   const userRole = user?.role ?? "Administrador";
   const userEmail = user?.email ?? "online";
-  const initial = userName.charAt(0).toUpperCase();
+  const avatar = (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1B8FC9] text-[12.5px] font-semibold text-white">
+      {initials(userName)}
+    </span>
+  );
 
   // Cerrar el menú al hacer clic fuera
   useEffect(() => {
@@ -71,143 +107,127 @@ export default function Header({
     document.documentElement.dataset.theme = nextIsDark ? "dark" : "light";
   }
 
+  const menuItem =
+    "app-text flex w-full cursor-pointer items-center gap-2.5 px-3.5 py-2.5 text-left text-[13px] transition-colors hover:bg-[var(--app-surface-muted)]";
+
   return (
-    <header className="app-surface app-border sticky top-0 z-[100] overflow-visible flex h-20 w-full items-center justify-between border-b px-3 shadow-[0_2px_8px_rgba(15,31,46,0.03)] sm:px-10">
-      {/* Sección Izquierda: Toggle y Breadcrumbs con aire generoso */}
-      <div className="flex items-center gap-5 min-w-0">
-        <button
-          onClick={onToggle}
-          aria-label={open ? "Cerrar menú" : "Abrir menú"}
-          className="app-muted app-hover flex h-10 w-10 shrink-0 items-center justify-center rounded-xl p-2 transition-colors active:scale-95"
-        >
-          <Menu size={22} />
-        </button>
+    <header
+      className={`${poppins.className} app-surface app-border sticky top-0 z-[100] flex h-16 w-full shrink-0 items-center gap-3.5 overflow-visible border-b px-3 sm:px-6`}
+    >
+      {/* Izquierda: hamburguesa, migas y título de la pantalla */}
+      <button onClick={onToggle} aria-label={open ? "Cerrar menú" : "Abrir menú"} className={ICON_BUTTON}>
+        <Menu size={21} />
+      </button>
 
-        <div className="app-border h-5 w-[1px] bg-current opacity-40" />
-
-        <div className="flex items-center gap-3 text-sm sm:text-base truncate">
-          <span className="app-muted hidden items-center gap-2 font-medium sm:flex">
-            <Building2 size={18} />
-            ERP SaaS
-          </span>
-          <span className="app-muted hidden text-lg sm:inline">/</span>
-          <span className="app-text truncate font-semibold tracking-tight">
-            {currentSection}
-          </span>
-        </div>
+      <div className="mr-auto min-w-0">
+        <nav aria-label="Ruta" className="app-muted flex items-center gap-[5px] overflow-hidden whitespace-nowrap text-[11.5px]">
+          <Home size={13} className="shrink-0" />
+          <span className="truncate">{tenantName ?? "ERP SaaS"}</span>
+          {currentGroup && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="truncate">{currentGroup}</span>
+            </>
+          )}
+        </nav>
+        <h1 className="app-text truncate text-[17px] font-semibold leading-tight tracking-[-0.01em]">
+          {currentSection}
+        </h1>
       </div>
 
-      {/* Sección Derecha: Notificaciones y Perfil */}
-      <div className="flex items-center gap-4 sm:gap-6 shrink-0">
-        <button
-          type="button"
-          onClick={toggleTheme}
-          aria-label="Cambiar tema"
-          title="Cambiar tema"
-          className="app-muted app-hover flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
-        >
-          <Moon size={20} className="theme-moon-icon" />
-          <Sun size={20} className="theme-sun-icon" />
-        </button>
-        {/* Notificaciones */}
-        <button
-          className="app-muted app-hover relative flex h-10 w-10 items-center justify-center rounded-xl transition-colors"
-          aria-label="Ver notificaciones"
-        >
-          <Bell size={21} />
-          <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[#35B6D5] ring-2 ring-[var(--app-surface)]" />
+      {/* Derecha: buscador, tema, notificaciones y menú de usuario */}
+      <div className="flex shrink-0 items-center gap-1.5 sm:gap-2.5">
+        <GlobalSearch screens={screens} canSearchRecords={canSearchRecords} />
+
+        <button type="button" onClick={toggleTheme} aria-label="Cambiar tema" title="Cambiar tema" className={ICON_BUTTON}>
+          <Moon size={19} className="theme-moon-icon" />
+          <Sun size={19} className="theme-sun-icon" />
         </button>
 
-        <div className="app-border h-6 w-[1px] bg-current opacity-40" />
+        <button className={ICON_BUTTON} aria-label="Ver notificaciones">
+          <Bell size={20} />
+          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#1B8FC9] ring-2 ring-[var(--app-surface)]" />
+        </button>
 
-        {/* Menú de Usuario con Dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setMenuOpen((prev) => !prev)}
-            className="app-hover flex items-center gap-3 rounded-2xl p-1.5 transition-all"
+            aria-haspopup="true"
+            aria-expanded={menuOpen}
+            className="flex cursor-pointer items-center gap-2.5 rounded-xl py-1 pl-2.5 pr-1.5 transition-colors hover:bg-[rgb(27_143_201/0.08)]"
           >
-            {/* Avatar destacado */}
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[var(--app-brand-deep)] text-base font-bold text-[var(--app-brand)] shadow-sm">
-              {initial}
-            </div>
-
-            {/* Datos de usuario en barra */}
-            <div className="hidden text-left md:block">
-              <div className="flex items-center gap-2">
-                <span className="app-text text-sm font-semibold leading-tight">
-                  {userName}
-                </span>
-                <span className="rounded-md bg-[var(--app-brand-soft)] px-2 py-0.5 text-[11px] font-semibold text-[var(--app-brand)] leading-tight">
-                  {userRole}
-                </span>
-              </div>
-              <p className="app-muted mt-1 text-xs leading-none">{userEmail}</p>
-            </div>
-
+            <span className="hidden text-right md:grid">
+              <strong className="app-text text-[13px] font-medium leading-tight">{userName}</strong>
+              <small className="app-muted text-[11.5px] leading-tight">{userRole}</small>
+            </span>
+            {avatar}
             <ChevronDown
-              size={17}
-              className={`app-muted transition-transform duration-200 ${
-                menuOpen ? "rotate-180" : ""
-              }`}
+              size={15}
+              className={`app-muted transition-transform duration-200 ${menuOpen ? "rotate-180" : ""}`}
             />
           </button>
 
-          {/* Menú Flotante */}
           {menuOpen && (
-            <div className="absolute right-0 top-full z-[110] mt-2 w-64 rounded-2xl border border-[#E1E7EC] bg-white p-1.5 shadow-[0_10px_25px_rgba(15,31,46,0.1)]">
-              {/* Tarjeta de usuario interna siempre legible y estructurada */}
-              <div className="border-b border-[#F0F4F7] bg-[#F8FAFC] rounded-xl px-3.5 py-3 mb-1">
-                <p className="text-sm font-semibold text-[#0F1F2E] truncate">{userName}</p>
-                <div className="mt-1.5 flex items-center justify-between gap-2">
-                  <span className="rounded-md bg-[#EBF8FA] px-2 py-0.5 text-[11px] font-semibold text-[#006070]">
-                    {userRole}
-                  </span>
-                  <span className="text-xs text-[#8A9BA8] truncate">{userEmail}</span>
+            <div
+              role="menu"
+              className="app-surface app-border absolute right-0 top-[calc(100%+8px)] z-[110] w-[290px] overflow-hidden rounded-xl border shadow-[0_20px_50px_rgba(8,25,55,0.28)]"
+            >
+              <div className="app-surface-muted app-border flex items-center gap-3 border-b p-3.5">
+                {avatar}
+                <div className="min-w-0">
+                  <strong className="app-text block truncate text-[13px] font-semibold">{userName}</strong>
+                  <small className="app-muted block truncate text-[11.5px]">{userEmail}</small>
+                  <small className="app-muted block truncate text-[11.5px]">
+                    {tenantName ? `${tenantName} · ${userRole}` : userRole}
+                  </small>
                 </div>
               </div>
 
-              {/* Enlaces con nowrap para evitar saltos de línea indeseados */}
-              <div className="space-y-0.5">
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#5C6F81] transition-colors hover:bg-[#F6F8FA] hover:text-[#0F1F2E]"
-                >
-                  <UserIcon size={18} className="shrink-0" />
-                  <span className="whitespace-nowrap">Mi Perfil</span>
-                </button>
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#5C6F81] transition-colors hover:bg-[#F6F8FA] hover:text-[#0F1F2E]"
-                >
-                  <Settings size={18} className="shrink-0" />
-                  <span className="whitespace-nowrap">Configuración</span>
-                </button>
-                <button
-                  onClick={() => setMenuOpen(false)}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#5C6F81] transition-colors hover:bg-[#F6F8FA] hover:text-[#0F1F2E]"
-                >
-                  <HelpCircle size={18} className="shrink-0" />
-                  <span className="whitespace-nowrap">Centro de Ayuda</span>
-                </button>
-              </div>
+              <Link href={profileHref} role="menuitem" onClick={() => setMenuOpen(false)} className={menuItem}>
+                <UserIcon size={16} className="shrink-0" />
+                Mi perfil y seguridad
+              </Link>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setChangingPassword(true);
+                }}
+                className={menuItem}
+              >
+                <KeyRound size={16} className="shrink-0" />
+                Cambiar contraseña
+              </button>
+              {/* Cierra esta sesión y vuelve al login para entrar con otra cuenta. */}
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout?.();
+                }}
+                className={menuItem}
+              >
+                <RotateCcw size={16} className="shrink-0" />
+                Cambiar de cuenta
+              </button>
 
-              {/* Botón de cierre */}
-              <div className="border-t border-[#F0F4F7] mt-1 pt-1">
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onLogout?.();
-                  }}
-                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-[#C4453B] transition-colors hover:bg-[#FCEAE8]"
-                >
-                  <LogOut size={18} className="shrink-0" />
-                  <span className="whitespace-nowrap">Cerrar sesión</span>
-                </button>
-              </div>
+              <button
+                role="menuitem"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onLogout?.();
+                }}
+                className="app-border flex w-full cursor-pointer items-center gap-2.5 border-t px-3.5 py-2.5 text-left text-[13px] text-[#D93A40] transition-colors hover:bg-[var(--app-surface-muted)]"
+              >
+                <LogOut size={16} className="shrink-0" />
+                Cerrar sesión
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {changingPassword && <ChangePasswordModal onClose={() => setChangingPassword(false)} />}
     </header>
   );
 }
