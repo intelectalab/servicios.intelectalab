@@ -280,6 +280,9 @@ Route::prefix('v1')->group(function () {
 
         // Listado y gestión global de Tenants / Empresas
         Route::get('/tenants', [SuperAdminDashboardController::class, 'tenants']);
+
+        // Auditoría de plataforma (acciones del super admin)
+        Route::get('/audit', [SuperAdminDashboardController::class, 'audit']);
     });
 
     // Portal del cliente

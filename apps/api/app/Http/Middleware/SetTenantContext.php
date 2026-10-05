@@ -18,6 +18,13 @@ class SetTenantContext
             return response()->json(['message' => 'No autenticado.'], 401);
         }
 
+        // La cuenta de plataforma nunca toma contexto de un tenant, aunque tenga
+        // una membresía antigua: pasa sin app.tenant_id ni permisos de tenant
+        // (le alcanza para /me) y no ve datos de negocio de ninguna empresa.
+        if ($user->is_super_admin) {
+            return $next($request);
+        }
+
         // Buscamos a qué tenant(s) pertenece este usuario.
         // Por ahora tomamos el primero (más adelante se puede
         // permitir elegir tenant si el usuario pertenece a varios).
@@ -27,12 +34,6 @@ class SetTenantContext
         )?->tenant_id;
 
         if (! $tenantId) {
-            // El super admin no pertenece a ningún tenant: pasa sin contexto
-            // (sin app.tenant_id ni permisos de tenant) para poder usar /me y /logout.
-            if ($user->is_super_admin) {
-                return $next($request);
-            }
-
             return response()->json(['message' => 'El usuario no pertenece a ningún tenant activo.'], 403);
         }
 

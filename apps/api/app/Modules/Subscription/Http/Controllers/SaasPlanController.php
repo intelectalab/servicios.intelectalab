@@ -4,6 +4,7 @@ namespace App\Modules\Subscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Subscription\Models\SaasPlan;
+use App\Services\PlatformAuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -54,6 +55,8 @@ class SaasPlanController extends Controller
 
         $plan = SaasPlan::create($validated);
 
+        PlatformAuditLogger::log($request->user()->id, 'plan.created', 'SaasPlan', $plan->id, afterData: $plan->toArray());
+
         return response()->json([
             'message' => 'Plan SaaS creado exitosamente.',
             'plan' => $plan,
@@ -89,7 +92,10 @@ class SaasPlanController extends Controller
             'support_channels' => 'nullable|array',
         ]);
 
+        $before = $plan->toArray();
         $plan->update($validated);
+
+        PlatformAuditLogger::log($request->user()->id, 'plan.updated', 'SaasPlan', $plan->id, $before, $plan->fresh()->toArray());
 
         return response()->json([
             'message' => 'Plan SaaS actualizado exitosamente.',
@@ -97,10 +103,12 @@ class SaasPlanController extends Controller
         ]);
     }
 
-    public function destroy($id): JsonResponse
+    public function destroy(Request $request, $id): JsonResponse
     {
         $plan = SaasPlan::findOrFail($id);
         $plan->update(['active' => false]);
+
+        PlatformAuditLogger::log($request->user()->id, 'plan.deactivated', 'SaasPlan', $plan->id);
 
         return response()->json([
             'message' => 'Plan SaaS desactivado correctamente.',

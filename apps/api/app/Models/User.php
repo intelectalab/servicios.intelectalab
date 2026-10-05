@@ -19,11 +19,12 @@ class User extends Authenticatable implements CanResetPasswordContract
     protected $keyType = 'string';
     public $incrementing = false;
 
+    // is_super_admin NO va aquí a propósito: da acceso a toda la plataforma y
+    // solo debe asignarse de forma explícita (forceFill), nunca desde un request.
     protected $fillable = [
         'email',
         'password_hash',
         'name',
-        'is_super_admin',
         'status',
         'mfa_enabled',
     ];

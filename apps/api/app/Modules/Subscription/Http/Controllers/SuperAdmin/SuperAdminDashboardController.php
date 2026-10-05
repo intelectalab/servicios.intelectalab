@@ -68,4 +68,15 @@ class SuperAdminDashboardController extends Controller
 
         return response()->json($tenants);
     }
+
+    public function audit(Request $request)
+    {
+        $logs = DB::table('platform_audit_logs')
+            ->leftJoin('users', 'users.id', '=', 'platform_audit_logs.user_id')
+            ->orderByDesc('platform_audit_logs.created_at')
+            ->select('platform_audit_logs.*', 'users.name as user_name', 'users.email as user_email')
+            ->paginate(min((int) $request->query('per_page', 50), 100));
+
+        return response()->json($logs);
+    }
 }

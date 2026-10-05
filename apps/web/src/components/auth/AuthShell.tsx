@@ -75,10 +75,10 @@ export default function AuthShell({
   footer?: ReactNode;
 }) {
   return (
-    <div className={`${poppins.className} app-surface grid min-h-screen w-full lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]`}>
-      {/* Panel izquierdo — marca (oculto bajo lg) */}
+    <div className={`${poppins.className} app-surface grid min-h-screen w-full grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:grid-rows-1`}>
+      {/* Panel de marca: columna izquierda en escritorio; bajo lg queda como franja superior con solo logo y titular */}
       <aside
-        className="relative hidden flex-col justify-between gap-8 overflow-hidden px-12 py-10 text-white lg:flex"
+        className="relative flex flex-col justify-between gap-4 overflow-hidden px-[22px] py-[26px] text-white lg:gap-8 lg:px-12 lg:py-10"
         style={{
           background: [
             "radial-gradient(circle at 80% 15%, rgba(142,205,235,.55), transparent 40%)",
@@ -91,16 +91,16 @@ export default function AuthShell({
         <Logo variant="light" />
 
         <div>
-          <h1 className="max-w-[16ch] text-[clamp(28px,3.2vw,40px)] font-bold leading-[1.12] tracking-[-0.02em]">
+          <h1 className="max-w-[16ch] text-[24px] font-bold lg:text-[clamp(28px,3.2vw,40px)] leading-[1.12] tracking-[-0.02em]">
             Servicios bajo control, <span className="text-[#BFE6F8]">clientes satisfechos.</span>
           </h1>
-          <p className="mt-3.5 max-w-[46ch] text-[14.5px] leading-relaxed text-white/90">
+          <p className="mt-3.5 hidden max-w-[46ch] text-[14.5px] leading-relaxed text-white/90 lg:block">
             Plataforma SaaS para empresas de servicios: CRM, cotizaciones, contratos,
             órdenes de trabajo, facturación electrónica, cobranza, soporte y portal de
             clientes en un solo lugar.
           </p>
 
-          <div className="mt-6 grid max-w-[620px] grid-cols-3 gap-3">
+          <div className="mt-6 hidden max-w-[620px] grid-cols-3 gap-3 lg:grid">
             {FEATURES.map(({ icon: Icon, title, text }) => (
               <div
                 key={title}
@@ -114,7 +114,7 @@ export default function AuthShell({
           </div>
         </div>
 
-        <p className="text-[12px] text-white/70">
+        <p className="hidden text-[12px] text-white/70 lg:block">
           © {new Date().getFullYear()} · Grupo de Soluciones Creativas
         </p>
       </aside>

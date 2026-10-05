@@ -18,12 +18,16 @@ class LoginSecurityTest extends TestCase
 
     private function makeUser(array $attributes = []): User
     {
-        return User::create($attributes + [
+        // forceFill: is_super_admin no es asignable en masa.
+        $user = new User();
+        $user->forceFill($attributes + [
             'email' => 'sec-'.Str::random(8).'@erp-saas.test',
             'password_hash' => bcrypt('password123'),
             'name' => 'Test Seguridad',
             'status' => 'ACTIVE',
-        ]);
+        ])->save();
+
+        return $user;
     }
 
     /** Crea un tenant con el usuario como miembro y, si se indica, con ese rol. */

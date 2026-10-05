@@ -7,6 +7,7 @@ use App\Mail\MfaCodeMail;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\LoginThrottle;
+use App\Services\PlatformAuditLogger;
 use App\Services\TenantAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -171,6 +172,11 @@ class AuthController extends Controller
      */
     private function resolveActiveTenant(User $user): ?string
     {
+        // La cuenta de plataforma no opera dentro de ningún tenant.
+        if ($user->is_super_admin) {
+            return null;
+        }
+
         $tenantId = DB::selectOne(
             'SELECT resolve_active_tenant_for_user(?) AS tenant_id',
             [$user->id]
@@ -220,10 +226,17 @@ class AuthController extends Controller
     }
 
     /**
-     * Auditoría de eventos de acceso. audit_logs es por tenant: sin tenant no se registra.
+     * Auditoría de eventos de acceso: la cuenta de plataforma va a la auditoría
+     * de plataforma; el resto a audit_logs, que es por tenant (sin tenant no se registra).
      */
     private function audit(User $user, string $action, array $metadata = []): void
     {
+        if ($user->is_super_admin) {
+            PlatformAuditLogger::log($user->id, $action, 'User', $user->id, metadata: $metadata);
+
+            return;
+        }
+
         $tenantId = DB::selectOne(
             'SELECT resolve_active_tenant_for_user(?) AS tenant_id',
             [$user->id]
