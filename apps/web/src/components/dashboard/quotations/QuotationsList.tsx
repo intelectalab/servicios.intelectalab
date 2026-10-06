@@ -1,16 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Clock, FileText, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { useAccess } from "@/lib/access-context";
 import { QUOTATION_STATES, customerDocument, customerName, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
-  Badge, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, Kpi, Kpis, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
-  SearchInput, SelectionBar, Tabs, Who, btnClass, useRowSelection, useToasts, type Column,
+  Badge, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, Kpi, Kpis, LinkBtn, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
+  SearchInput, SelectionBar, Tabs, Who, useRowSelection, useToasts, type Column,
 } from "@/components/ui/proto";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Quotation, QuotationStatus, QuotationSummary } from "@/types/commercial";
@@ -102,7 +100,6 @@ function amountOf(summary: QuotationSummary | null, status: QuotationStatus) {
 
 export default function QuotationsList() {
   const router = useRouter();
-  const { can } = useAccess();
   const { toast, toasts } = useToasts();
   const [exporting, setExporting] = useState(false);
 
@@ -183,24 +180,16 @@ export default function QuotationsList() {
 
   const count = (status: QuotationStatus) => summary?.by_status[status]?.count ?? 0;
   const shown = (value: number) => (summary ? value : "—");
-  const canCreate = can("quotations.manage");
 
   return (
     <Screen>
       <PageHead
         title="Cotizaciones"
         actions={
-          canCreate ? (
-            <Link href="/quotations/new" className={btnClass("primary")}>
-              <Plus size={16} />
-              <span>Nueva cotización</span>
-            </Link>
-          ) : (
-            <span className={`${btnClass("primary")} cursor-not-allowed opacity-45`} aria-disabled="true" title="Tu rol no puede crear cotizaciones">
-              <Plus size={16} />
-              <span>Nueva cotización</span>
-            </span>
-          )
+          <LinkBtn href="/quotations/new" permission="quotations.manage">
+            <Plus size={16} />
+            <span>Nueva cotización</span>
+          </LinkBtn>
         }
       />
 

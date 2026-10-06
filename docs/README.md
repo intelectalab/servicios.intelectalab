@@ -28,6 +28,9 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-05 | Cotización: permiso de aprobar y segregación de funciones, Descargar PDF, Visible en portal | [cambios/2026-10-05_cotizacion-aprobacion-pdf-portal.md](cambios/2026-10-05_cotizacion-aprobacion-pdf-portal.md) |
 | 2026-10-05 | PDF de cotización completo (RUC, dirección, correo) y pantalla Roles y permisos | [cambios/2026-10-05_roles-y-permisos-pdf-completo.md](cambios/2026-10-05_roles-y-permisos-pdf-completo.md) |
 | 2026-10-05 | Pantalla Usuarios (Administración) | [cambios/2026-10-05_usuarios.md](cambios/2026-10-05_usuarios.md) |
+| 2026-10-05 | Botones sin permiso: a la vista, con candado y mensaje | [cambios/2026-10-05_botones-sin-permiso.md](cambios/2026-10-05_botones-sin-permiso.md) |
+| 2026-10-05 | Cotización: botón Orden directa | [cambios/2026-10-05_orden-directa.md](cambios/2026-10-05_orden-directa.md) |
+| 2026-10-05 | Cotización: botones por estado, revisados contra el prototipo | [cambios/2026-10-05_cotizacion-botones-por-estado.md](cambios/2026-10-05_cotizacion-botones-por-estado.md) |
 
 ## Cómo se escribe cada entrada
 

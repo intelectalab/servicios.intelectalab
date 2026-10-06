@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
-import { Btn, Card, Field, INPUT, LoadError, Modal, PageHead, Screen, TD, TH, useToasts } from "@/components/ui/proto";
+import { Btn, Card, Field, INPUT, LoadError, Modal, PageHead, Screen, TD, TH, deniedText, useToasts } from "@/components/ui/proto";
 
 type Role = {
   id: string;
@@ -19,6 +19,26 @@ type Role = {
 type Permission = { code: string; name: string; description: string | null };
 
 type RolesResponse = { roles: Role[]; permissions: Permission[] };
+
+type Settings = { segregation: boolean; direct_order: boolean };
+
+// Reglas de la empresa que se activan o desactivan desde esta pantalla.
+const RULES: { key: keyof Settings; label: string; hint: string; on: string; off: string }[] = [
+  {
+    key: "segregation",
+    label: "Quien crea una cotización no puede aprobarla",
+    hint: "Segregación de funciones: aunque su rol tenga el permiso de aprobar, la decisión debe tomarla otra persona.",
+    on: "Segregación de funciones activada",
+    off: "Segregación de funciones desactivada",
+  },
+  {
+    key: "direct_order",
+    label: "Permitir orden directa desde una cotización aprobada",
+    hint: "La cotización aprobada se puede convertir en orden sin pasar por contrato.",
+    on: "Orden directa permitida",
+    off: "Orden directa no permitida",
+  },
+];
 
 // Cómo se llama cada recurso (prefijo del permiso) en la matriz.
 const RESOURCES: Record<string, string> = {
@@ -105,7 +125,7 @@ export default function RolesPermissions() {
 
   const [data, setData] = useState<RolesResponse | null>(null);
   const [selected, setSelected] = useState("");
-  const [segregation, setSegregation] = useState<boolean | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [modal, setModal] = useState(false);
@@ -116,13 +136,13 @@ export default function RolesPermissions() {
 
     async function load() {
       try {
-        const [roles, settings] = await Promise.all([
+        const [roles, current] = await Promise.all([
           apiFetch<RolesResponse>("/v1/roles"),
-          apiFetch<{ segregation: boolean }>("/v1/tenant/settings").catch(() => null),
+          apiFetch<Settings>("/v1/tenant/settings").catch(() => null),
         ]);
         if (cancelled) return;
         setData(roles);
-        setSegregation(settings?.segregation ?? null);
+        setSettings(current);
         // Como el prototipo, se abre en un rol editable (no en el Administrador).
         setSelected((current) => current || (roles.roles.find((role) => !role.is_admin) ?? roles.roles[0])?.id || "");
         setError("");
@@ -172,14 +192,14 @@ export default function RolesPermissions() {
     }
   }
 
-  async function toggleSegregation(on: boolean) {
-    const before = segregation;
-    setSegregation(on);
+  async function toggleRule(rule: (typeof RULES)[number], on: boolean) {
+    const before = settings;
+    setSettings((current) => current && { ...current, [rule.key]: on });
     try {
-      await apiFetch("/v1/tenant/settings", { method: "PUT", body: JSON.stringify({ segregation: on }) });
-      toast(on ? "Segregación de funciones activada" : "Segregación de funciones desactivada");
+      await apiFetch("/v1/tenant/settings", { method: "PUT", body: JSON.stringify({ [rule.key]: on }) });
+      toast(on ? rule.on : rule.off);
     } catch (err) {
-      setSegregation(before);
+      setSettings(before);
       toast(firstError(err, "No se pudo guardar el ajuste."), "danger");
     }
   }
@@ -198,12 +218,10 @@ export default function RolesPermissions() {
       <PageHead
         title="Roles y permisos"
         actions={
-          can("users.manage") && (
-            <Btn variant="secondary" onClick={() => setModal(true)}>
-              <Plus size={16} />
-              <span>Nuevo rol</span>
-            </Btn>
-          )
+          <Btn variant="secondary" onClick={() => setModal(true)} permission="users.manage">
+            <Plus size={16} />
+            <span>Nuevo rol</span>
+          </Btn>
         }
       />
 
@@ -263,7 +281,11 @@ export default function RolesPermissions() {
                                   disabled={!canEdit || saving}
                                   onChange={(event) => toggle(code, event.target.checked)}
                                   aria-label={`${ACTIONS[action]} ${RESOURCES[resource] ?? resource}`}
-                                  title={data.permissions.find((permission) => permission.code === code)?.name}
+                                  title={
+                                    can("users.manage")
+                                      ? data.permissions.find((permission) => permission.code === code)?.name
+                                      : deniedText("users.manage")
+                                  }
                                 />
                               ) : (
                                 <span className="app-muted">—</span>
@@ -284,23 +306,26 @@ export default function RolesPermissions() {
             </Card>
           )}
 
-          {segregation !== null && (
-            <Card title="Segregación de funciones">
-              <label className="flex cursor-pointer items-start gap-2.5">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 h-[17px] w-[17px] accent-[#1B8FC9] disabled:cursor-not-allowed"
-                  checked={segregation}
-                  disabled={!can("tenant.manage")}
-                  onChange={(event) => toggleSegregation(event.target.checked)}
-                />
-                <span>
-                  Quien crea una cotización no puede aprobarla
-                  <small className="app-muted block text-[12.5px]">
-                    Aunque su rol tenga el permiso de aprobar, la decisión debe tomarla otra persona.
-                  </small>
-                </span>
-              </label>
+          {settings && (
+            <Card title="Reglas de la empresa">
+              <div className="grid gap-3">
+                {RULES.map((rule) => (
+                  <label key={rule.key} className="flex cursor-pointer items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 h-[17px] w-[17px] accent-[#1B8FC9] disabled:cursor-not-allowed"
+                      checked={settings[rule.key]}
+                      disabled={!can("tenant.manage")}
+                      title={can("tenant.manage") ? undefined : deniedText("tenant.manage")}
+                      onChange={(event) => toggleRule(rule, event.target.checked)}
+                    />
+                    <span>
+                      {rule.label}
+                      <small className="app-muted block text-[12.5px]">{rule.hint}</small>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </Card>
           )}
         </>

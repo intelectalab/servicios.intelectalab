@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { useAccess } from "@/lib/access-context";
 import { BILLING_MODES, SERVICE_STATES, billingLabel, excelTone, money, stateOf } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
@@ -81,7 +80,6 @@ const serviceKey = (service: Service) => service.id;
 
 export default function ServicesList() {
   const router = useRouter();
-  const { can } = useAccess();
   const { toast, toasts } = useToasts();
 
   const [searchInput, setSearchInput] = useState("");
@@ -181,8 +179,7 @@ export default function ServicesList() {
         actions={
           <Btn
             onClick={() => setCreating(true)}
-            disabled={!can("services.manage")}
-            title={can("services.manage") ? undefined : "Tu rol no tiene permiso services.manage"}
+            permission="services.manage"
           >
             <Plus size={16} />
             <span>Nuevo servicio</span>

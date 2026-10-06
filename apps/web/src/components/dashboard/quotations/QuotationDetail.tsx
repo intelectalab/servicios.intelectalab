@@ -11,8 +11,8 @@ import {
   FREQUENCIES, QUOTATION_STATES, customerName, historyLabel, money, setFlash, shortDate, stateOf, takeFlash,
 } from "@/lib/commercial";
 import {
-  Badge, Btn, Card, Field, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline, Who,
-  btnClass, useToasts, type Tone,
+  Badge, Btn, Card, Field, INPUT, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline, Who,
+  useToasts, type Tone,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import type { Quotation } from "@/types/commercial";
@@ -48,6 +48,11 @@ const CONFIRMS: Record<"approve" | "reject" | "cancel", Confirm> = {
 const CONTRACT_STATUS: Record<string, [string, Tone]> = {
   DRAFT: ["Borrador", "neutral"], ACTIVE: ["Vigente", "success"], SUSPENDED: ["Suspendido", "warning"],
   TERMINATED: ["Terminado", "muted"], EXPIRED: ["Vencido", "warning"],
+};
+
+const ORDER_STATUS: Record<string, [string, Tone]> = {
+  DRAFT: ["Borrador", "neutral"], CONFIRMED: ["Confirmada", "info"], IN_PROGRESS: ["En curso", "warning"],
+  COMPLETED: ["Completada", "success"], CANCELLED: ["Cancelada", "muted"],
 };
 
 // Origen de la cotización; sin dato es una cotización directa.
@@ -186,15 +191,15 @@ export default function QuotationDetail() {
     );
   }
 
-  const canManage = can("quotations.manage");
   const canApprove = can("quotations.approve");
   // Segregación de funciones: quien creó la cotización no la aprueba.
   const ownBlocked = Boolean(quotation.own_approval_blocked);
-  const noApprove = canApprove ? undefined : "Tu rol no tiene permiso quotations.approve";
-  const canContract = can("contracts.manage");
-  const noPermission = canManage ? undefined : "Tu rol no tiene permiso quotations.manage";
   const status = quotation.status;
   const expired = quotation.valid_until !== null && new Date(`${quotation.valid_until.slice(0, 10)}T23:59:59`) < new Date();
+  // Motivo por el que no se puede aprobar aunque el rol tenga el permiso.
+  const approveBlocked = ownBlocked
+    ? "Segregación de funciones: no puedes aprobar tu propia cotización"
+    : expired ? "Vencida: no se puede aprobar" : undefined;
   const currency = quotation.currency;
   const gross = Number(quotation.subtotal) + Number(quotation.discount_total);
   const history = quotation.history ?? [];
@@ -219,35 +224,24 @@ export default function QuotationDetail() {
         }
         actions={
           <>
-            {status === "DRAFT" &&
-              (canManage ? (
-                <Link href={`/quotations/${quotation.id}/edit`} className={btnClass("secondary")}>
-                  <Settings size={16} />
-                  <span>Editar</span>
-                </Link>
-              ) : (
-                <span className={`${btnClass("secondary")} cursor-not-allowed opacity-45`} aria-disabled="true" title={noPermission}>
-                  <Settings size={16} />
-                  <span>Editar</span>
-                </span>
-              ))}
+            {status === "DRAFT" && (
+              <LinkBtn href={`/quotations/${quotation.id}/edit`} permission="quotations.manage" variant="secondary">
+                <Settings size={16} />
+                <span>Editar</span>
+              </LinkBtn>
+            )}
             {status === "SUBMITTED" && (
               <>
                 <Btn
                   onClick={() => ask(CONFIRMS.approve)}
-                  disabled={!canApprove || busy || expired || ownBlocked}
-                  title={
-                    !canApprove
-                      ? noApprove
-                      : ownBlocked
-                        ? "Segregación de funciones: no puedes aprobar tu propia cotización"
-                        : expired ? "Vencida: no se puede aprobar" : undefined
-                  }
+                  permission="quotations.approve"
+                  disabled={busy || expired || ownBlocked}
+                  title={approveBlocked}
                 >
                   <Check size={16} />
                   <span>Aprobar</span>
                 </Btn>
-                <Btn variant="danger-ghost" onClick={() => ask(CONFIRMS.reject)} disabled={!canApprove || busy} title={noApprove}>
+                <Btn variant="danger-ghost" onClick={() => ask(CONFIRMS.reject)} permission="quotations.approve" disabled={busy}>
                   Rechazar
                 </Btn>
               </>
@@ -255,19 +249,27 @@ export default function QuotationDetail() {
             {status === "APPROVED" && (
               <Btn
                 onClick={() => run("contract", "Contrato creado en borrador", "No se pudo crear el contrato.")}
-                disabled={!canContract || busy || Boolean(quotation.contract)}
-                title={
-                  quotation.contract
-                    ? "Ya se convirtió en contrato"
-                    : canContract ? undefined : "Tu rol no tiene permiso contracts.manage"
-                }
+                permission="contracts.manage"
+                disabled={busy || Boolean(quotation.contract)}
+                title={quotation.contract ? "Ya se convirtió en contrato" : undefined}
               >
                 <FileSignature size={16} />
                 <span>Convertir en contrato</span>
               </Btn>
             )}
+            {status === "APPROVED" && quotation.direct_order_enabled && (
+              <Btn
+                variant="secondary"
+                onClick={() => run("order", "Orden creada", "No se pudo crear la orden.")}
+                permission="orders.manage"
+                disabled={busy || Boolean(quotation.order)}
+                title={quotation.order ? "Ya tiene orden" : undefined}
+              >
+                Orden directa
+              </Btn>
+            )}
             {canVersion && (
-              <Btn variant="ghost" onClick={newVersion} disabled={!canManage || busy} title={noPermission}>
+              <Btn variant="ghost" onClick={newVersion} permission="quotations.manage" disabled={busy}>
                 Nueva versión
               </Btn>
             )}
@@ -384,23 +386,38 @@ export default function QuotationDetail() {
                     <Btn
                       variant="secondary"
                       onClick={() => run("submit", "Enviar a aprobación: listo", "No se pudo enviar a aprobación.")}
-                      disabled={!canManage || busy}
-                      title={noPermission}
+                      permission="quotations.manage"
+                      disabled={busy}
                     >
                       Enviar a aprobación
                     </Btn>
                   )}
                   {status === "SUBMITTED" && (
-                    <Btn
-                      variant="secondary"
-                      onClick={() => run("expire", "Marcar vencida: listo", "No se pudo marcar vencida.")}
-                      disabled={!canManage || busy}
-                      title={noPermission}
-                    >
-                      Marcar vencida
-                    </Btn>
+                    <>
+                      {/* Como el prototipo, las decisiones también están aquí, además de arriba. */}
+                      <Btn
+                        variant="secondary"
+                        onClick={() => ask(CONFIRMS.approve)}
+                        permission="quotations.approve"
+                        disabled={busy || expired || ownBlocked}
+                        title={approveBlocked}
+                      >
+                        Aprobar
+                      </Btn>
+                      <Btn variant="danger-ghost" onClick={() => ask(CONFIRMS.reject)} permission="quotations.approve" disabled={busy}>
+                        Rechazar
+                      </Btn>
+                      <Btn
+                        variant="secondary"
+                        onClick={() => run("expire", "Marcar vencida: listo", "No se pudo marcar vencida.")}
+                        permission="quotations.approve"
+                        disabled={busy}
+                      >
+                        Marcar vencida
+                      </Btn>
+                    </>
                   )}
-                  <Btn variant="danger-ghost" onClick={() => ask(CONFIRMS.cancel)} disabled={!canManage || busy} title={noPermission}>
+                  <Btn variant="danger-ghost" onClick={() => ask(CONFIRMS.cancel)} permission="quotations.manage" disabled={busy}>
                     Cancelar
                   </Btn>
                 </div>
@@ -433,6 +450,17 @@ export default function QuotationDetail() {
                         {quotation.contract.contract_number}
                         <Badge tone={CONTRACT_STATUS[quotation.contract.status]?.[1] ?? "neutral"}>
                           {CONTRACT_STATUS[quotation.contract.status]?.[0] ?? quotation.contract.status}
+                        </Badge>
+                      </span>,
+                    ]
+                  : null,
+                quotation.order
+                  ? [
+                      "Orden",
+                      <span key="order" className="inline-flex flex-wrap items-center gap-1.5">
+                        {quotation.order.order_number}
+                        <Badge tone={ORDER_STATUS[quotation.order.status]?.[1] ?? "neutral"}>
+                          {ORDER_STATUS[quotation.order.status]?.[0] ?? quotation.order.status}
                         </Badge>
                       </span>,
                     ]

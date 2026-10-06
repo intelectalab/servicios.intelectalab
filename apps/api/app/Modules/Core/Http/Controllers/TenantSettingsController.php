@@ -12,17 +12,22 @@ class TenantSettingsController extends Controller
 {
     public function show(Request $request)
     {
-        return response()->json($this->settings($request->attributes->get('tenant_id')));
+        return response()->json(self::settings($request->attributes->get('tenant_id')));
     }
 
     public function update(Request $request)
     {
         $tenantId = $request->attributes->get('tenant_id');
-        $data = $request->validate(['segregation' => ['required', 'boolean']]);
+        $data = $request->validate([
+            'segregation' => ['sometimes', 'boolean'],
+            'direct_order' => ['sometimes', 'boolean'],
+        ]);
 
-        $configuration = $this->configuration($tenantId);
-        $before = (bool) ($configuration['segregation'] ?? true);
-        $configuration['segregation'] = (bool) $data['segregation'];
+        $configuration = self::configuration($tenantId);
+        $before = self::settings($tenantId);
+        foreach ($data as $key => $value) {
+            $configuration[$key] = (bool) $value;
+        }
 
         DB::table('tenants')->where('id', $tenantId)->update([
             'configuration' => json_encode($configuration),
@@ -35,20 +40,27 @@ class TenantSettingsController extends Controller
             action: 'tenant.settings.update',
             entityType: 'Tenant',
             entityId: $tenantId,
-            beforeData: ['segregation' => $before],
-            afterData: ['segregation' => $configuration['segregation']],
+            beforeData: $before,
+            afterData: self::settings($tenantId),
         );
 
-        return response()->json($this->settings($tenantId));
+        return response()->json(self::settings($tenantId));
     }
 
-    private function settings(string $tenantId): array
+    /** Ajustes vigentes; los dos están activos mientras la empresa no los desactive. */
+    public static function settings(string $tenantId): array
     {
-        // Segregación de funciones: activa mientras la empresa no la desactive.
-        return ['segregation' => (bool) ($this->configuration($tenantId)['segregation'] ?? true)];
+        $configuration = self::configuration($tenantId);
+
+        return [
+            // Segregación de funciones: quien crea una cotización no la aprueba.
+            'segregation' => (bool) ($configuration['segregation'] ?? true),
+            // Orden directa: convertir una cotización aprobada en orden sin pasar por contrato.
+            'direct_order' => (bool) ($configuration['direct_order'] ?? true),
+        ];
     }
 
-    private function configuration(string $tenantId): array
+    private static function configuration(string $tenantId): array
     {
         return json_decode(DB::table('tenants')->where('id', $tenantId)->value('configuration') ?: '{}', true) ?: [];
     }

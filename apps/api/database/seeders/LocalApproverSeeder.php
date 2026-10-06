@@ -20,8 +20,14 @@ class LocalApproverSeeder extends Seeder
 
     private const EMAIL = 'gerencia@erp-saas.test';
 
-    // Contraseña de prueba, solo para la base local.
+    // Contraseña de prueba, solo para la base local. Solo se usa al crear la cuenta:
+    // si después se cambia desde la aplicación, el seeder no la pisa.
     private const PASSWORD = 'contrasena-de-prueba';
+
+    // Usuario del rol Ventas (cotiza pero no aprueba), para probar botones sin permiso.
+    private const SALES_EMAIL = 'ventas@erp-saas.test';
+
+    private const SALES_PASSWORD = 'contrasena-de-prueba';
 
     // Gerencia en la matriz del prototipo: ve y edita cotizaciones y las aprueba; gestiona contratos.
     private const PERMISSIONS = [
@@ -78,6 +84,11 @@ class LocalApproverSeeder extends Seeder
                 'scope' => 'TENANT', 'created_at' => now(),
             ]);
         }
+
+        // La cuenta de Ventas se crea desde la pantalla Usuarios (nace sin contraseña conocida);
+        // aquí solo se le pone la de prueba mientras nunca haya iniciado sesión.
+        User::where('email', self::SALES_EMAIL)->whereNull('last_login_at')
+            ->update(['password_hash' => bcrypt(self::SALES_PASSWORD)]);
 
         DB::statement("SELECT set_config('app.tenant_id', '', false)");
 

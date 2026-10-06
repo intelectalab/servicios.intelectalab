@@ -89,4 +89,10 @@ class Quotation extends Model
     {
         return $this->hasOne(Contract::class, 'quotation_id');
     }
+
+    // Orden directa generada desde esta cotización, si existe.
+    public function order()
+    {
+        return $this->hasOne(Order::class, 'quotation_id');
+    }
 }

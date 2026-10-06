@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { useAccess } from "@/lib/access-context";
 import {
   BILLING_MODES, FREQUENCIES, QUOTATION_STATES, SERVICE_STATES, historyLabel, isoDateFromNow, money, shortDate, stateOf,
 } from "@/lib/commercial";
@@ -90,7 +89,6 @@ function PriceModal({ serviceId, onClose, onSaved }: { serviceId: string; onClos
 export default function ServiceDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { can } = useAccess();
   const { toast, toasts } = useToasts();
 
   const [service, setService] = useState<Service | null>(null);
@@ -168,8 +166,6 @@ export default function ServiceDetail() {
   const prices = service.prices ?? [];
   const usage = service.quotations ?? [];
   const history = service.history ?? [];
-  const canManage = can("services.manage");
-  const noPermission = canManage ? undefined : "Tu rol no tiene permiso services.manage";
   const archived = service.status === "ARCHIVED";
   const transitions = TRANSITIONS[service.status] ?? [];
   const visited = history.flatMap((entry) => (entry.metadata.to ? [entry.metadata.to] : [])).concat("DRAFT");
@@ -207,10 +203,10 @@ export default function ServiceDetail() {
         sub={[service.code, service.category?.name, BILLING_MODES[service.billing_mode]].filter(Boolean).join(" · ")}
         actions={
           <>
-            <Btn variant="secondary" onClick={openEditor} disabled={!canManage || archived} title={archived ? "Un servicio archivado no se edita" : noPermission}>
+            <Btn variant="secondary" onClick={openEditor} permission="services.manage" disabled={archived} title={archived ? "Un servicio archivado no se edita" : undefined}>
               Editar
             </Btn>
-            <Btn onClick={() => setPricing(true)} disabled={!canManage || archived} title={archived ? "Un servicio archivado no cambia de precio" : noPermission}>
+            <Btn onClick={() => setPricing(true)} permission="services.manage" disabled={archived} title={archived ? "Un servicio archivado no cambia de precio" : undefined}>
               <Plus size={16} />
               <span>Nueva versión de precio</span>
             </Btn>
@@ -235,8 +231,8 @@ export default function ServiceDetail() {
                     key={transition.path}
                     variant={transition.danger ? "danger-ghost" : "secondary"}
                     onClick={() => run(transition)}
-                    disabled={!canManage || busy}
-                    title={noPermission}
+                    permission="services.manage"
+                    disabled={busy}
                   >
                     {transition.label}
                   </Btn>

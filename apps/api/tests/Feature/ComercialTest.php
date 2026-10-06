@@ -419,6 +419,7 @@ class ComercialTest extends TestCase
         $this->postJson("/api/v1/quotations/{$own}/submit")->assertOk();
         $this->postJson("/api/v1/quotations/{$own}/approve")->assertStatus(403);
         $this->postJson("/api/v1/quotations/{$own}/reject", ['reason' => 'No'])->assertStatus(403);
+        $this->postJson("/api/v1/quotations/{$own}/expire")->assertStatus(403);
         // Gerencia aprueba, pero no cotiza.
         Sanctum::actingAs($manager);
         $this->postJson('/api/v1/quotations', $payload)->assertStatus(403);
@@ -578,6 +579,52 @@ class ComercialTest extends TestCase
         $this->getJson('/api/v1/exchange-rates/current')->assertOk();
         $this->getJson('/api/v1/exchange-rates')->assertStatus(403);
         $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(403);
+    }
+
+    public function test_approved_quotation_becomes_a_direct_order_once(): void
+    {
+        [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'tenant.manage']);
+        $manager = $this->makeColleague($tenantId, 'Gerente', ['quotations.view', 'quotations.approve', 'orders.manage']);
+        $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
+        Sanctum::actingAs($seller);
+
+        $quotation = $this->postJson('/api/v1/quotations', [
+            'customer_id' => $customerId,
+            'items' => [['description' => 'Auditoría', 'quantity' => 2, 'unit_price' => 100, 'tax_rate' => 18]],
+        ])->json('id');
+        $this->postJson("/api/v1/quotations/{$quotation}/submit")->assertOk();
+        // Sin el permiso orders.manage no se convierte.
+        $this->postJson("/api/v1/quotations/{$quotation}/order")->assertStatus(403);
+
+        Sanctum::actingAs($manager);
+        // Solo desde una cotización aprobada.
+        $this->postJson("/api/v1/quotations/{$quotation}/order")->assertStatus(422);
+        $this->postJson("/api/v1/quotations/{$quotation}/approve")->assertOk();
+        $this->getJson("/api/v1/quotations/{$quotation}")->assertOk()
+            ->assertJsonPath('direct_order_enabled', true)
+            ->assertJsonPath('order', null);
+
+        // La empresa puede no permitir órdenes directas.
+        Sanctum::actingAs($seller);
+        $this->putJson('/api/v1/tenant/settings', ['direct_order' => false])->assertOk()
+            ->assertJsonPath('direct_order', false)
+            ->assertJsonPath('segregation', true);
+        Sanctum::actingAs($manager);
+        $this->postJson("/api/v1/quotations/{$quotation}/order")->assertStatus(422);
+        Sanctum::actingAs($seller);
+        $this->putJson('/api/v1/tenant/settings', ['direct_order' => true])->assertOk();
+
+        Sanctum::actingAs($manager);
+        $order = $this->postJson("/api/v1/quotations/{$quotation}/order")->assertCreated()
+            ->assertJsonPath('status', 'DRAFT')
+            ->assertJsonPath('total', '236.0000')
+            ->assertJsonPath('items.0.description', 'Auditoría')
+            ->json();
+        $this->assertStringStartsWith('ORD-', $order['order_number']);
+
+        // Una sola orden por cotización; la ficha la muestra.
+        $this->postJson("/api/v1/quotations/{$quotation}/order")->assertStatus(422);
+        $this->getJson("/api/v1/quotations/{$quotation}")->assertOk()->assertJsonPath('order.order_number', $order['order_number']);
     }
 
     public function test_roles_matrix_is_edited_through_the_permission_tables(): void

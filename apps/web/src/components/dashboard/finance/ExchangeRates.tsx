@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Coins, FileText, Plus, Receipt, TrendingUp } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { useAccess } from "@/lib/access-context";
 import { isoDateFromNow, shortDate } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
@@ -90,7 +89,6 @@ function RateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
 }
 
 export default function ExchangeRates() {
-  const { can } = useAccess();
   const { toast, toasts } = useToasts();
 
   const [page, setPage] = useState(1);
@@ -156,12 +154,10 @@ export default function ExchangeRates() {
       <PageHead
         title="Monedas y tipo de cambio"
         actions={
-          can("billing.manage") && (
-            <Btn variant="secondary" onClick={() => setModal(true)}>
-              <Plus size={16} />
-              <span>Registrar tipo de cambio</span>
-            </Btn>
-          )
+          <Btn variant="secondary" onClick={() => setModal(true)} permission="billing.manage">
+            <Plus size={16} />
+            <span>Registrar tipo de cambio</span>
+          </Btn>
         }
       />
 

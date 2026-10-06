@@ -3,7 +3,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { useAccess } from "@/lib/access-context";
 import { exportCsv, exportXlsx, type ExportColumn } from "@/lib/export-table";
 import {
   Btn, Card, Chip, DataTable, ExportButtons, Field, FilterSelect, Filters, FormGrid, INPUT, LoadError, Modal, PAGE_SIZES,
@@ -157,9 +156,7 @@ function UserModal({
 }
 
 export default function UsersList() {
-  const { can } = useAccess();
   const { toast, toasts } = useToasts();
-  const canManage = can("users.manage");
 
   const [data, setData] = useState<UsersResponse | null>(null);
   const [error, setError] = useState("");
@@ -237,8 +234,8 @@ export default function UsersList() {
       label: "Acciones",
       render: (user) => (
         <div className="flex flex-wrap gap-1.5">
-          <Btn variant="ghost" size="sm" onClick={() => setEditing(user)} disabled={!canManage || busy}>Editar</Btn>
-          <Btn variant={isActive(user) ? "danger-ghost" : "secondary"} size="sm" onClick={() => toggleStatus(user)} disabled={!canManage || busy}>
+          <Btn variant="ghost" size="sm" onClick={() => setEditing(user)} permission="users.manage" disabled={busy}>Editar</Btn>
+          <Btn variant={isActive(user) ? "danger-ghost" : "secondary"} size="sm" onClick={() => toggleStatus(user)} permission="users.manage" disabled={busy}>
             {isActive(user) ? "Desactivar" : "Activar"}
           </Btn>
         </div>
@@ -280,12 +277,10 @@ export default function UsersList() {
       <PageHead
         title="Usuarios"
         actions={
-          canManage && (
-            <Btn onClick={() => setEditing("new")} disabled={!data}>
-              <Plus size={16} />
-              <span>Nuevo usuario</span>
-            </Btn>
-          )
+          <Btn onClick={() => setEditing("new")} permission="users.manage" disabled={!data}>
+            <Plus size={16} />
+            <span>Nuevo usuario</span>
+          </Btn>
         }
       />
 

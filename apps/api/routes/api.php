@@ -14,6 +14,7 @@ use App\Modules\Services\Http\Controllers\ServiceController;
 use App\Modules\Services\Http\Controllers\ServiceCategoryController;
 use App\Modules\Services\Http\Controllers\QuotationController;
 use App\Modules\Services\Http\Controllers\ContractController;
+use App\Modules\Services\Http\Controllers\OrderController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
 use App\Modules\Operations\Http\Controllers\TaskController;
 use App\Modules\Operations\Http\Controllers\ChecklistController;
@@ -182,7 +183,6 @@ Route::prefix('v1')->group(function () {
             Route::post('/quotations', [QuotationController::class, 'store']);
             Route::post('/quotations/{quotation}/submit', [QuotationController::class, 'submit']);
             Route::put('/quotations/{quotation}', [QuotationController::class, 'update']);
-            Route::post('/quotations/{quotation}/expire', [QuotationController::class, 'expire']);
             Route::post('/quotations/{quotation}/cancel', [QuotationController::class, 'cancel']);
             Route::post('/quotations/{quotation}/versions', [QuotationController::class, 'newVersion']);
         });
@@ -191,6 +191,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:quotations.approve')->group(function () {
             Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
             Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject']);
+            // Marcar vencida también es una decisión sobre la cotización enviada.
+            Route::post('/quotations/{quotation}/expire', [QuotationController::class, 'expire']);
         });
 
         // Contratos
@@ -202,6 +204,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/quotations/{quotation}/contract', [ContractController::class, 'generateFromQuotation']);
             Route::post('/contracts/{contract}/activate', [ContractController::class, 'activate']);
         });
+
+        // Orden directa desde una cotización aprobada
+        Route::middleware('permission:orders.manage')->post('/quotations/{quotation}/order', [OrderController::class, 'generateFromQuotation']);
 
         // Checklists (plantillas)
         Route::middleware('permission:operations.view')->group(function () {

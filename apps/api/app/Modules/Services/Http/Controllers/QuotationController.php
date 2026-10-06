@@ -3,6 +3,7 @@
 namespace App\Modules\Services\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Http\Controllers\TenantSettingsController;
 use App\Modules\Core\Models\Customer;
 use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Services\Http\Requests\StoreQuotationRequest;
@@ -29,6 +30,7 @@ class QuotationController extends Controller
         'customer.party.organization',
         'creator:id,name',
         'contract:id,quotation_id,contract_number,status',
+        'order:id,quotation_id,order_number,status',
         'approvals.approver:id,name',
         'previous:id,quotation_number',
         'supersededBy:id,previous_id,quotation_number',
@@ -372,9 +374,7 @@ class QuotationController extends Controller
             return false;
         }
 
-        $configuration = DB::table('tenants')->where('id', $quotation->tenant_id)->value('configuration');
-
-        return (bool) (json_decode($configuration ?: '{}', true)['segregation'] ?? true);
+        return TenantSettingsController::settings($quotation->tenant_id)['segregation'];
     }
 
     /** Tipo de cambio (venta) con el que se emite una cotización; en soles no aplica. */
@@ -508,6 +508,8 @@ class QuotationController extends Controller
                 'address' => $contacts->firstWhere('contact_type', 'ADDRESS')?->value,
                 'email' => $contacts->firstWhere('contact_type', 'EMAIL')?->value,
             ],
+            // La empresa permite convertir la cotización en orden sin pasar por contrato.
+            'direct_order_enabled' => TenantSettingsController::settings($quotation->tenant_id)['direct_order'],
             // Para que la ficha avise antes de intentar aprobar.
             'own_approval_blocked' => $this->ownApprovalBlocked($quotation, request()),
             'history' => AuditHistory::for('Quotation', $quotation->id),

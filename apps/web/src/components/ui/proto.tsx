@@ -6,8 +6,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Search, Upload, X,
+  AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Lock, Search, Upload, X,
 } from "lucide-react";
+import Link from "next/link";
+import { useAccess } from "@/lib/access-context";
 import { poppins } from "@/lib/fonts";
 import { useCardDrag } from "./sortable-cards";
 
@@ -88,10 +90,58 @@ export function btnClass(variant: BtnVariant = "primary", size: "md" | "sm" = "m
   return `inline-flex cursor-pointer items-center gap-[7px] whitespace-nowrap border border-transparent font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${sizing} ${BTN_VARIANTS[variant]} ${block ? "w-full justify-center" : ""}`;
 }
 
+/** Mensaje que ve quien pasa el cursor por una acción que su rol no permite. */
+export const deniedText = (permission: string) => `Tu rol no tiene permiso ${permission}`;
+
+/**
+ * Si se indica `permission` y el rol del usuario no lo tiene, devuelve el mensaje a mostrar.
+ * Como en el prototipo, la acción no se esconde: queda a la vista, deshabilitada, con candado y su motivo.
+ */
+export function useDenied(permission?: string) {
+  const { can, loading } = useAccess();
+  return permission && !loading && !can(permission) ? deniedText(permission) : undefined;
+}
+
+/** Enlace con aspecto de botón; sin el permiso queda deshabilitado, con candado y su motivo. */
+export function LinkBtn({
+  href, permission, variant = "primary", size = "md", children,
+}: { href: string; permission?: string; variant?: BtnVariant; size?: "md" | "sm"; children: ReactNode }) {
+  const denied = useDenied(permission);
+  if (!denied) return <Link href={href} className={btnClass(variant, size)}>{children}</Link>;
+
+  return (
+    <span className={`${btnClass(variant, size)} cursor-not-allowed opacity-45`} aria-disabled="true" title={denied}>
+      {children}
+      <Lock size={13} className="-ml-0.5 shrink-0" aria-hidden="true" />
+    </span>
+  );
+}
+
 export function Btn({
-  variant = "primary", size = "md", block = false, className = "", type = "button", ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; size?: "md" | "sm"; block?: boolean }) {
-  return <button type={type} className={`${btnClass(variant, size, block)} ${className}`} {...props} />;
+  variant = "primary", size = "md", block = false, className = "", type = "button", permission, disabled, title, children, ...props
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: BtnVariant;
+  size?: "md" | "sm";
+  block?: boolean;
+  /** Permiso que exige la acción: sin él el botón queda deshabilitado, con candado y el motivo al pasar el cursor. */
+  permission?: string;
+}) {
+  const denied = useDenied(permission);
+  if (denied) {
+    return (
+      <button type={type} className={`${btnClass(variant, size, block)} ${className}`} {...props} disabled aria-disabled="true" title={denied}>
+        {children}
+        <Lock size={13} className="-ml-0.5 shrink-0" aria-hidden="true" />
+      </button>
+    );
+  }
+
+
+  return (
+    <button type={type} className={`${btnClass(variant, size, block)} ${className}`} {...props} disabled={disabled} title={title}>
+      {children}
+    </button>
+  );
 }
 
 export type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "muted" | "accent";

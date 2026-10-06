@@ -102,6 +102,10 @@ export interface Quotation {
   /** Solo en el detalle. */
   previous?: { id: string; quotation_number: string } | null;
   contract?: { id: string; contract_number: string; status: string } | null;
+  /** Orden directa generada desde la cotización. Solo en el detalle. */
+  order?: { id: string; order_number: string; status: string } | null;
+  /** La empresa permite convertir la cotización en orden sin pasar por contrato. */
+  direct_order_enabled?: boolean;
   approvals?: QuotationApproval[];
   history?: HistoryEntry[];
   /** Dirección y correo del cliente, para el PDF. Solo en el detalle. */
