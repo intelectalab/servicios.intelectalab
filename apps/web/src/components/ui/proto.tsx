@@ -26,7 +26,7 @@ export function PageHead({
   return (
     <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
       <div className="min-w-0 flex-[1_1_380px]">
-        <h1 className={showTitle ? "text-[22px] font-semibold leading-tight tracking-[-0.01em]" : "sr-only"}>{title}</h1>
+        <h1 className={showTitle ? "text-[19px] font-semibold leading-tight tracking-[-0.01em] sm:text-[22px]" : "sr-only"}>{title}</h1>
         {sub && <p className={`app-muted max-w-[78ch] text-[13px] ${showTitle ? "mt-1" : ""}`}>{sub}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
@@ -113,7 +113,7 @@ export function SearchInput({
   value, onChange, placeholder,
 }: { value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
-    <label className="app-muted flex h-10 max-w-[360px] flex-[1_1_260px] items-center gap-2 rounded-[9px] border border-transparent bg-[var(--app-surface-muted)] px-2.5 focus-within:border-[#1B8FC9] focus-within:bg-[var(--app-surface)]">
+    <label className="app-muted flex h-10 flex-[1_1_260px] items-center sm:max-w-[360px] gap-2 rounded-[9px] border border-transparent bg-[var(--app-surface-muted)] px-2.5 focus-within:border-[#1B8FC9] focus-within:bg-[var(--app-surface)]">
       <Search size={18} className="shrink-0" />
       <input
         type="search"
@@ -131,13 +131,13 @@ export function FilterSelect({
   label, value, onChange, options,
 }: { label: string; value: string; onChange: (value: string) => void; options: [string, string][] }) {
   return (
-    <label>
+    <label className="flex-[1_1_140px] sm:flex-none">
       <span className="sr-only">{label}</span>
       <select
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={label}
-        className="app-surface app-text h-10 max-w-[220px] cursor-pointer rounded-[9px] border border-[color:var(--app-border)] pl-2.5 pr-7 text-[13px] outline-none focus:border-[#1B8FC9]"
+        className="app-surface app-text h-10 w-full cursor-pointer rounded-[9px] sm:w-auto sm:max-w-[220px] border border-[color:var(--app-border)] pl-2.5 pr-7 text-[13px] outline-none focus:border-[#1B8FC9]"
       >
         <option value="">{label}: todos</option>
         {options.map(([optionValue, optionLabel]) => (
@@ -201,7 +201,7 @@ export function Kpi({
       <span className={`grid h-[46px] w-[46px] shrink-0 place-items-center rounded-xl ${iconTone}`}>{icon}</span>
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className="app-muted text-[10.5px] font-semibold uppercase tracking-[.04em]">{label}</span>
-        <span className="text-2xl font-semibold leading-[1.15] tabular-nums">{value}</span>
+        <span className="text-[21px] font-semibold leading-[1.15] tabular-nums sm:text-2xl">{value}</span>
         {sub && <span className="app-muted text-[11.5px]">{sub}</span>}
       </div>
     </div>
@@ -254,8 +254,8 @@ export function DataTable<T>({
   const allSelected = selection ? rows.every((row) => selection.ids.has(rowKey(row))) : false;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-[13px]">
+    <div className="proto-tbl-wrap overflow-x-auto">
+      <table className="proto-tbl w-full border-collapse text-[13px]">
         <thead>
           <tr>
             {selection && (
@@ -288,7 +288,7 @@ export function DataTable<T>({
               >
                 {selection && (
                   // El clic en la casilla no abre la ficha.
-                  <td className={`${TD} w-10 !pr-0`} onClick={(event) => event.stopPropagation()}>
+                  <td className={`${TD} w-10 !pr-0`} data-label="" onClick={(event) => event.stopPropagation()}>
                     <input
                       type="checkbox"
                       className={CHECKBOX}
@@ -299,7 +299,7 @@ export function DataTable<T>({
                   </td>
                 )}
                 {cols.map((col) => (
-                  <td key={col.label} className={`${TD} ${dense ? "!py-[7px]" : ""} ${col.num ? NUM : ""}`}>{col.render(row)}</td>
+                  <td key={col.label} data-label={col.label} className={`${TD} ${dense ? "!py-[7px]" : ""} ${col.num ? NUM : ""}`}>{col.render(row)}</td>
                 ))}
               </tr>
             );
@@ -520,10 +520,10 @@ export function FormGrid({ children }: { children: ReactNode }) {
 /** Lista "etiqueta → valor" de las fichas. */
 export function Kv({ rows }: { rows: ([string, ReactNode] | null)[] }) {
   return (
-    <dl className="mb-2 grid grid-cols-[minmax(110px,38%)_1fr]">
+    <dl className="mb-2 grid grid-cols-1 sm:grid-cols-[minmax(110px,38%)_1fr]">
       {rows.filter((row): row is [string, ReactNode] => row !== null).map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="app-muted border-b border-[color:var(--app-border)] py-1.5 pr-2.5 text-[12.5px]">{label}</dt>
+          <dt className="app-muted pt-1.5 pr-2.5 text-[12.5px] sm:border-b sm:border-[color:var(--app-border)] sm:py-1.5">{label}</dt>
           <dd className="min-w-0 border-b border-[color:var(--app-border)] py-1.5 [overflow-wrap:anywhere]">{value}</dd>
         </div>
       ))}

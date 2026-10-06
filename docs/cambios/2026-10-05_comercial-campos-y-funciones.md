@@ -106,7 +106,7 @@ Para seguir las reglas del prototipo, cuatro cosas de la API ya no se comportan 
 | "Descargar PDF" de la cotización | No está | Pendiente. |
 | "Convertir en contrato" lleva a la ficha del contrato | Muestra el número en Trazabilidad | La pantalla de Contratos no existe. |
 | "Visible en portal" en Trazabilidad | No está | El portal del cliente no muestra cotizaciones todavía. |
-| En móvil la tabla se apila en tarjetas | Se desplaza en horizontal | Pendiente. |
+| En móvil la tabla se apila en tarjetas | Hecho el mismo día: ver [2026-10-05_comercial-responsive.md](2026-10-05_comercial-responsive.md). | — |
 
 ## Base de datos
 

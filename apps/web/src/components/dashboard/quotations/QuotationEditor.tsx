@@ -283,8 +283,8 @@ export default function QuotationEditor() {
           </Card>
 
           <Card title="Líneas">
-            <div className="-mx-5 overflow-x-auto">
-              <table className="w-full border-collapse text-[13px]">
+            <div className="proto-tbl-wrap -mx-5 overflow-x-auto">
+              <table className="proto-tbl w-full border-collapse text-[13px]">
                 <thead>
                   <tr>
                     <th className={TH}>Servicio</th>
@@ -304,7 +304,7 @@ export default function QuotationEditor() {
                       const priceMoved = catalog && Number(catalog.amount) !== line.unit_price;
                       return (
                         <tr key={line.key}>
-                          <td className={TD}>
+                          <td className={TD} data-label="Servicio">
                             <strong className="font-semibold">{line.name}</strong>
                             <small className="app-muted block text-xs">
                               {[line.unit, line.frequency && `recurrente ${FREQUENCIES[line.frequency]}`].filter(Boolean).join(" · ")}
@@ -315,7 +315,7 @@ export default function QuotationEditor() {
                               )}
                             </small>
                           </td>
-                          <td className={`${TD} text-right`}>
+                          <td className={`${TD} text-right`} data-label="Cantidad">
                             <input
                               className={NUM_INPUT}
                               type="number"
@@ -326,8 +326,8 @@ export default function QuotationEditor() {
                               aria-label="Cantidad"
                             />
                           </td>
-                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>{money(line.unit_price)}</td>
-                          <td className={`${TD} text-right`}>
+                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Precio unit.">{money(line.unit_price)}</td>
+                          <td className={`${TD} text-right`} data-label="Desc. %">
                             <input
                               className={NUM_INPUT}
                               type="number"
@@ -339,9 +339,9 @@ export default function QuotationEditor() {
                               aria-label="Descuento"
                             />
                           </td>
-                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>{money(amounts.tax)}</td>
-                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`}><strong>{money(amounts.total)}</strong></td>
-                          <td className={TD}>
+                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="IGV">{money(amounts.tax)}</td>
+                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Total"><strong>{money(amounts.total)}</strong></td>
+                          <td className={TD} data-label="">
                             <button
                               type="button"
                               onClick={() => setLines((current) => current.filter((item) => item.key !== line.key))}
@@ -356,7 +356,7 @@ export default function QuotationEditor() {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} className={`${TD} app-muted border-b-0`}>Agrega al menos una línea para poder enviar.</td>
+                      <td colSpan={7} className={`${TD} app-muted border-b-0`} data-label="">Agrega al menos una línea para poder enviar.</td>
                     </tr>
                   )}
                 </tbody>

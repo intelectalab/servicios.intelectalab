@@ -254,8 +254,8 @@ export default function QuotationDetail() {
       <div className="grid grid-cols-1 gap-x-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           <Card title="Líneas cotizadas (snapshot comercial)">
-            <div className="-mx-5 overflow-x-auto">
-              <table className="w-full border-collapse text-[13px]">
+            <div className="proto-tbl-wrap -mx-5 overflow-x-auto">
+              <table className="proto-tbl w-full border-collapse text-[13px]">
                 <thead>
                   <tr>
                     <th className={TH}>Servicio</th>
@@ -281,14 +281,14 @@ export default function QuotationDetail() {
                     const pct = grossLine > 0 ? Math.round((Number(item.discount) / grossLine) * 1000) / 10 : 0;
                     return (
                       <tr key={item.id}>
-                        <td className={TD}>
+                        <td className={TD} data-label="Servicio">
                           <strong className="font-semibold">{item.description}</strong>
                           {details.length > 0 && <small className="app-muted block text-xs">{details.join(" · ")}</small>}
                         </td>
-                        <td className={`${TD} text-right tabular-nums`}>{Number(item.quantity)}</td>
-                        <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>{money(item.unit_price, currency)}</td>
-                        <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>{pct}%</td>
-                        <td className={`${TD} whitespace-nowrap text-right tabular-nums`}><strong>{money(item.line_total, currency)}</strong></td>
+                        <td className={`${TD} text-right tabular-nums`} data-label="Cant.">{Number(item.quantity)}</td>
+                        <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="P. unit.">{money(item.unit_price, currency)}</td>
+                        <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Desc.">{pct}%</td>
+                        <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Total"><strong>{money(item.line_total, currency)}</strong></td>
                       </tr>
                     );
                   })}

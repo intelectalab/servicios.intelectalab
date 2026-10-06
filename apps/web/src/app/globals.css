@@ -100,3 +100,20 @@ body {
 [data-theme="dark"] [class*="border-[#F0F2F5]"] { border-color: var(--app-border) !important; }
 [data-theme="dark"] [class*="border-[#F0F4F7]"] { border-color: var(--app-border) !important; }
 [data-theme="dark"] [class*="divide-[#F0F2F5]"] > :not(:last-child) { border-color: var(--app-border) !important; }
+
+/* Tablas del prototipo: en teléfonos cada fila se muestra como tarjeta
+   (la etiqueta de cada dato sale de data-label; sin etiqueta ocupa todo el ancho). */
+@media (max-width: 639px) {
+  .proto-tbl-wrap { overflow-x: visible; }
+  .proto-tbl thead { display: none; }
+  .proto-tbl, .proto-tbl tbody, .proto-tbl tr, .proto-tbl td { display: block; width: 100%; }
+  .proto-tbl tr { border-bottom: 1px solid var(--app-border); padding: 8px 12px; }
+  .proto-tbl tr:last-child { border-bottom: 0; }
+  .proto-tbl td { display: grid; grid-template-columns: 38% 1fr; gap: 0 8px; align-items: start; border: 0 !important; padding: 3px 0 !important; text-align: left !important; white-space: normal !important; }
+  .proto-tbl td::before { content: attr(data-label); grid-row: 1 / span 6; font-size: 11.5px; color: var(--app-muted); text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .proto-tbl td > * { grid-column: 2; min-width: 0; }
+  .proto-tbl td[data-label=""]::before { content: none; }
+  .proto-tbl td[data-label=""] { grid-template-columns: 1fr; }
+  .proto-tbl td[data-label=""] > * { grid-column: 1; }
+}
+
