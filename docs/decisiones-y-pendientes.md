@@ -27,6 +27,7 @@ Estado al 2026-10-05.
 - El historial de servicios y cotizaciones se lee de `audit_logs`; no hay tabla de historial aparte.
 - Los listados nuevos llevan casillas de selección, barra de exportar, Excel con el formato del de Clientes (en azul del logo) y la paginación completa; todo sale de `proto.tsx` y `lib/export-table.ts`, para que las pantallas siguientes lo reutilicen.
 - En teléfono (hasta 639 px) las tablas se muestran como tarjetas con la regla `.proto-tbl` de `globals.css`: toda tabla nueva debe llevar la clase y `data-label` en cada celda (`DataTable` ya lo hace).
+- Las tarjetas de las fichas se pueden reordenar (`SortableBoard` en `components/ui/sortable-cards.tsx`); el orden se guarda en el navegador de cada persona, no en el servidor. Las fichas nuevas deben armarse con él.
 
 ### Acceso
 - Verificación en dos pasos por **código enviado al correo** (no aplicación autenticadora). Obligatoria para superadmin, rol ADMIN del tenant y usuarios de portal.

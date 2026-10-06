@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import {
-  AlertCircle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Info, Search, Upload, X,
+  AlertCircle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Search, Upload, X,
 } from "lucide-react";
 import { poppins } from "@/lib/fonts";
+import { useCardDrag } from "./sortable-cards";
 
 /**
  * Piezas de interfaz con las medidas y la estructura del prototipo (page-head,
@@ -37,11 +38,28 @@ export function PageHead({
 export function Card({
   title, children, flush = false, className = "",
 }: { title?: ReactNode; children: ReactNode; flush?: boolean; className?: string }) {
+  // Dentro de un SortableBoard la tarjeta lleva un asa para moverla.
+  const drag = useCardDrag();
   return (
-    <section className={`app-surface mb-[18px] min-w-0 overflow-hidden rounded-xl ${SHADOW} ${className}`}>
+    <section
+      className={`app-surface mb-[18px] min-w-0 overflow-hidden rounded-xl outline outline-2 transition-[box-shadow,outline-color,scale] duration-200 ease-out ${
+        drag?.dragging ? "scale-[1.012] outline-[#1B8FC9] shadow-[0_14px_34px_rgba(8,25,55,.22)]" : `outline-transparent ${SHADOW}`
+      } ${className}`}
+    >
       {title && (
-        <div className="px-5 pt-4">
-          <h2 className="text-[15px] font-semibold">{title}</h2>
+        <div className="flex items-start justify-between gap-2 px-5 pt-4">
+          <h2 className="min-w-0 text-[15px] font-semibold">{title}</h2>
+          {drag && (
+            <button
+              type="button"
+              {...drag.handleProps}
+              title="Arrastra para mover esta tarjeta (o usa las flechas del teclado)"
+              aria-label="Mover tarjeta"
+              className={`app-muted -mr-2 -mt-1 grid h-8 w-8 shrink-0 touch-none place-items-center rounded-lg hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)] ${drag.dragging ? "cursor-grabbing" : "cursor-grab"}`}
+            >
+              <GripVertical size={16} />
+            </button>
+          )}
         </div>
       )}
       <div className={flush ? "" : "px-5 pb-[18px] pt-4"}>{children}</div>
@@ -470,12 +488,12 @@ export function Modal({
 
   return (
     <div className={`${poppins.className} fixed inset-0 z-[300] text-sm`}>
-      <div className="absolute inset-0 bg-[rgb(5_20_45/0.55)]" onClick={onClose} />
+      <div className="proto-fade-in absolute inset-0 bg-[rgb(5_20_45/0.55)]" onClick={onClose} />
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`app-surface app-text absolute left-1/2 top-[6vh] flex max-h-[88vh] -translate-x-1/2 flex-col overflow-hidden rounded-[14px] shadow-[0_20px_50px_rgba(8,25,55,.28)] ${width}`}
+        className={`proto-pop-in app-surface app-text absolute left-1/2 top-[6vh] flex max-h-[88vh] -translate-x-1/2 flex-col overflow-hidden rounded-[14px] shadow-[0_20px_50px_rgba(8,25,55,.28)] ${width}`}
       >
         <header className="flex items-center justify-between gap-2.5 bg-[#1B8FC9] px-[18px] py-3.5 text-[#fff]">
           <h3 className="text-base font-medium">{title}</h3>

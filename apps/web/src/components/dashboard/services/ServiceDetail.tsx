@@ -13,6 +13,7 @@ import {
   Badge, Btn, Card, Chip, DataTable, Field, INPUT, Kv, LoadError, Modal, PageHead, Screen, StateTrack, Timeline,
   useToasts, type Column,
 } from "@/components/ui/proto";
+import { SortableBoard } from "@/components/ui/sortable-cards";
 import ServiceFormModal from "./ServiceFormModal";
 import type { Service, ServiceCategory, ServicePrice, ServiceStatus } from "@/types/commercial";
 
@@ -217,7 +218,13 @@ export default function ServiceDetail() {
         }
       />
 
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] gap-x-4">
+      <SortableBoard
+        storageKey="erp.cards.service-detail"
+        zones={[{ className: "grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] gap-x-4", cards: ["lifecycle", "config", "prices", "usage"] }]}
+        cards={[
+          {
+            id: "lifecycle",
+            node: (
         <Card title="Ciclo de vida">
           <div className="grid gap-2.5">
             <StateTrack states={SERVICE_STATES} current={service.status} visited={visited} />
@@ -257,7 +264,11 @@ export default function ServiceDetail() {
             }))}
           />
         </Card>
-
+            ),
+          },
+          {
+            id: "config",
+            node: (
         <Card title="Configuración">
           <Kv
             rows={[
@@ -270,32 +281,47 @@ export default function ServiceDetail() {
             ]}
           />
         </Card>
-      </div>
-
+            ),
+          },
+          {
+            id: "prices",
+            className: "col-span-full",
+            node: (
       <Card title="Versiones de precio (historial, no se sobrescribe)" flush>
-        <div className="pt-3">
+        <div className="pt-3 sm:px-1.5 sm:pb-2.5">
           <DataTable cols={priceColumns} rows={prices} rowKey={(price) => price.id} dense empty="Este servicio aún no tiene precio." />
         </div>
       </Card>
-
+            ),
+          },
+          {
+            id: "usage",
+            className: "col-span-full",
+            node: (
       <Card title={`Usado en ${usage.length} cotización(es)`} flush={usage.length > 0}>
         {usage.length ? (
           <>
             <p className="app-muted px-5 pt-3 text-[12.5px]">
               Cada cotización guarda el precio que tenía el servicio al cotizar (snapshot).
             </p>
-            <DataTable
-              cols={usageColumns}
-              rows={usage}
-              rowKey={(row) => `${row.quotation_id}-${usage.indexOf(row)}`}
-              onRowClick={(row) => router.push(`/quotations/${row.quotation_id}`)}
-              dense
-            />
+            <div className="pt-1 sm:px-1.5 sm:pb-2.5">
+              <DataTable
+                cols={usageColumns}
+                rows={usage}
+                rowKey={(row) => `${row.quotation_id}-${usage.indexOf(row)}`}
+                onRowClick={(row) => router.push(`/quotations/${row.quotation_id}`)}
+                dense
+              />
+            </div>
           </>
         ) : (
           <p className="app-muted">Aún no se cotiza.</p>
         )}
       </Card>
+            ),
+          },
+        ]}
+      />
 
       {editing && (
         <ServiceFormModal

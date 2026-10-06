@@ -13,6 +13,7 @@ import {
   Badge, Btn, Card, Field, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline,
   btnClass, useToasts,
 } from "@/components/ui/proto";
+import { SortableBoard } from "@/components/ui/sortable-cards";
 import type { Quotation } from "@/types/commercial";
 
 // Acciones que piden confirmación; "reason" indica si llevan comentario y si es obligatorio.
@@ -251,8 +252,17 @@ export default function QuotationDetail() {
         <Notice tone="warn">Esta cotización ya pasó su fecha de validez: no se puede aprobar. Puedes marcarla vencida o crear una nueva versión.</Notice>
       )}
 
-      <div className="grid grid-cols-1 gap-x-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <div className="min-w-0">
+      <SortableBoard
+        storageKey="erp.cards.quotation-detail"
+        className="grid grid-cols-1 gap-x-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
+        zones={[
+          { className: "min-w-0 lg:min-h-24", cards: ["lines", "states"] },
+          { className: "min-w-0 lg:min-h-24", cards: ["trace", "approvals", "history"] },
+        ]}
+        cards={[
+          {
+            id: "lines",
+            node: (
           <Card title="Líneas cotizadas (snapshot comercial)">
             <div className="proto-tbl-wrap -mx-5 overflow-x-auto">
               <table className="proto-tbl w-full border-collapse text-[13px]">
@@ -308,7 +318,11 @@ export default function QuotationDetail() {
             </div>
             {quotation.notes && <p className="app-muted text-[12.5px]">{quotation.notes}</p>}
           </Card>
-
+            ),
+          },
+          {
+            id: "states",
+            node: (
           <Card title="Estados">
             <div className="grid gap-2.5">
               <StateTrack states={QUOTATION_STATES} current={status} visited={visited} />
@@ -343,9 +357,11 @@ export default function QuotationDetail() {
               )}
             </div>
           </Card>
-        </div>
-
-        <div className="min-w-0">
+            ),
+          },
+          {
+            id: "trace",
+            node: (
           <Card title="Trazabilidad">
             <Kv
               rows={[
@@ -367,7 +383,11 @@ export default function QuotationDetail() {
               ]}
             />
           </Card>
-
+            ),
+          },
+          {
+            id: "approvals",
+            node: (
           <Card title="Aprobaciones">
             {approvals.length ? (
               <ul>
@@ -387,7 +407,11 @@ export default function QuotationDetail() {
               <p className="app-muted">Sin decisiones registradas.</p>
             )}
           </Card>
-
+            ),
+          },
+          {
+            id: "history",
+            node: (
           <Card title="Historial">
             <Timeline
               items={history.map((entry, index) => ({
@@ -407,8 +431,10 @@ export default function QuotationDetail() {
               }))}
             />
           </Card>
-        </div>
-      </div>
+            ),
+          },
+        ]}
+      />
 
       {confirming && (
         <Modal
