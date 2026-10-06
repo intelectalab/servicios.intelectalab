@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Mail\PasswordResetCodeMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -16,6 +18,36 @@ class ComercialTest extends TestCase
     private const PERMISSIONS = [
         'core.view', 'services.view', 'services.manage', 'quotations.view', 'quotations.manage',
     ];
+
+    /** Otro usuario del mismo tenant, con su propio rol y permisos (p. ej. Gerencia, que aprueba). */
+    private function makeColleague(string $tenantId, string $name, array $permissions): User
+    {
+        $user = User::create([
+            'email' => 'col-'.Str::random(8).'@erp-saas.test',
+            'password_hash' => bcrypt('Actual123'),
+            'name' => $name,
+            'status' => 'ACTIVE',
+        ]);
+        DB::table('tenant_users')->insert([
+            'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'user_id' => $user->id,
+            'status' => 'ACTIVE', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        $roleId = (string) Str::uuid();
+        DB::table('roles')->insert([
+            'id' => $roleId, 'tenant_id' => $tenantId, 'code' => 'ROL-'.Str::random(6), 'name' => $name,
+            'is_system' => false, 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('user_roles')->insert([
+            'tenant_id' => $tenantId, 'user_id' => $user->id, 'role_id' => $roleId,
+            'scope' => 'TENANT', 'created_at' => now(),
+        ]);
+        foreach (DB::table('permissions')->whereIn('code', $permissions)->pluck('id') as $permissionId) {
+            DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
+        }
+
+        return $user;
+    }
 
     /** Usuario con rol "Ventas" (y esos permisos) en un tenant nuevo. Devuelve [usuario, tenantId]. */
     private function makeTenantUser(array $permissions = self::PERMISSIONS): array
@@ -213,7 +245,24 @@ class ComercialTest extends TestCase
         $this->getJson('/api/v1/quotations?search='.$first['quotation_number'])->assertOk()->assertJsonPath('total', 1);
         $this->getJson('/api/v1/quotations?status=DRAFT')->assertOk()->assertJsonPath('total', 1);
 
+        // Sin origen registrado cuenta como directa.
+        $this->getJson('/api/v1/quotations?source=DIRECT')->assertOk()
+            ->assertJsonPath('total', 2)
+            ->assertJsonPath('data.0.source_type', null);
+        $this->getJson('/api/v1/quotations?source=PORTAL')->assertOk()->assertJsonPath('total', 0);
+
+        // La ficha trae la dirección y el correo del cliente (sus contactos), para el PDF.
+        $partyId = DB::table('customers')->where('id', $customerId)->value('party_id');
+        foreach ([['ADDRESS', 'Av. Ejército 812, Arequipa'], ['EMAIL', 'contacto@minera.example'], ['PHONE', '999888777']] as [$type, $value]) {
+            DB::table('contacts')->insert([
+                'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'party_id' => $partyId,
+                'contact_type' => $type, 'value' => $value, 'is_primary' => true, 'created_at' => now(),
+            ]);
+        }
+
         $this->getJson("/api/v1/quotations/{$first['id']}")->assertOk()
+            ->assertJsonPath('customer_contact.address', 'Av. Ejército 812, Arequipa')
+            ->assertJsonPath('customer_contact.email', 'contacto@minera.example')
             ->assertJsonPath('customer.party.organization.legal_name', 'Minera Los Andes SAC')
             ->assertJsonPath('creator.name', 'Vendedora de Prueba')
             ->assertJsonPath('contract', null)
@@ -357,11 +406,26 @@ class ComercialTest extends TestCase
 
     public function test_quotation_decisions_keep_who_decided_and_why(): void
     {
-        [$user, $tenantId] = $this->makeTenantUser();
+        [$seller, $tenantId] = $this->makeTenantUser();
+        $manager = $this->makeColleague($tenantId, 'Gerente de Prueba', ['quotations.view', 'quotations.approve']);
+        // Ella misma con el permiso de aprobar: la segregación le impide aprobar lo suyo.
+        $user = $this->makeColleague($tenantId, 'Vendedora de Prueba', [...self::PERMISSIONS, 'quotations.approve']);
         $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
-        Sanctum::actingAs($user);
         $payload = ['customer_id' => $customerId, 'items' => [['description' => 'X', 'quantity' => 1, 'unit_price' => 10]]];
 
+        // Sin el permiso quotations.approve no se aprueba ni se rechaza.
+        Sanctum::actingAs($seller);
+        $own = $this->postJson('/api/v1/quotations', $payload)->json('id');
+        $this->postJson("/api/v1/quotations/{$own}/submit")->assertOk();
+        $this->postJson("/api/v1/quotations/{$own}/approve")->assertStatus(403);
+        $this->postJson("/api/v1/quotations/{$own}/reject", ['reason' => 'No'])->assertStatus(403);
+        // Gerencia aprueba, pero no cotiza.
+        Sanctum::actingAs($manager);
+        $this->postJson('/api/v1/quotations', $payload)->assertStatus(403);
+        $this->getJson("/api/v1/quotations/{$own}")->assertOk()->assertJsonPath('own_approval_blocked', false);
+        $this->postJson("/api/v1/quotations/{$own}/approve")->assertOk()->assertJsonPath('status', 'APPROVED');
+
+        Sanctum::actingAs($user);
         $rejected = $this->postJson('/api/v1/quotations', $payload)->json('id');
         $this->postJson("/api/v1/quotations/{$rejected}/submit")->assertOk();
         $this->postJson("/api/v1/quotations/{$rejected}/reject")->assertStatus(422)->assertJsonValidationErrors('reason');
@@ -385,11 +449,26 @@ class ComercialTest extends TestCase
         $this->postJson("/api/v1/quotations/{$expired}/expire")->assertOk()->assertJsonPath('status', 'EXPIRED');
         $this->postJson("/api/v1/quotations/{$expired}/cancel")->assertStatus(422);
 
+        // Segregación de funciones: quien la creó no la aprueba; otra persona con el permiso, sí.
         $approved = $this->postJson('/api/v1/quotations', [...$payload, 'valid_until' => now()->toDateString()])->json('id');
         $this->postJson("/api/v1/quotations/{$approved}/submit")->assertOk();
+        $this->getJson("/api/v1/quotations/{$approved}")->assertOk()->assertJsonPath('own_approval_blocked', true);
+        $this->postJson("/api/v1/quotations/{$approved}/approve", ['comment' => 'Conforme'])
+            ->assertStatus(422)->assertJsonValidationErrors('status');
+
+        Sanctum::actingAs($manager);
         $this->postJson("/api/v1/quotations/{$approved}/approve", ['comment' => 'Conforme'])
             ->assertOk()->assertJsonPath('status', 'APPROVED');
-        $this->getJson("/api/v1/quotations/{$approved}")->assertJsonPath('approvals.0.comments', 'Conforme');
+        $this->getJson("/api/v1/quotations/{$approved}")
+            ->assertJsonPath('approvals.0.comments', 'Conforme')
+            ->assertJsonPath('approvals.0.approver.name', 'Gerente de Prueba');
+
+        // La empresa puede desactivar la segregación en su configuración.
+        Sanctum::actingAs($user);
+        $relaxed = $this->postJson('/api/v1/quotations', $payload)->json('id');
+        $this->postJson("/api/v1/quotations/{$relaxed}/submit")->assertOk();
+        DB::table('tenants')->where('id', $tenantId)->update(['configuration' => json_encode(['segregation' => false])]);
+        $this->postJson("/api/v1/quotations/{$relaxed}/approve")->assertOk()->assertJsonPath('status', 'APPROVED');
 
         $cancelled = $this->postJson('/api/v1/quotations', $payload)->json('id');
         $this->postJson("/api/v1/quotations/{$cancelled}/cancel")->assertOk()->assertJsonPath('status', 'CANCELLED');
@@ -431,8 +510,193 @@ class ComercialTest extends TestCase
             ->assertJsonPath('total', '212.4000')
             ->assertJsonPath('superseded_by.id', $version['id']);
         $this->getJson("/api/v1/quotations/{$version['id']}")->assertOk()
-            ->assertJsonPath('previous.quotation_number', $original['quotation_number']);
+            ->assertJsonPath('previous.quotation_number', $original['quotation_number'])
+            // La nueva versión se cotizó con la segunda versión del precio.
+            ->assertJsonPath('items.0.price_version', 2);
 
         $this->postJson("/api/v1/quotations/{$original['id']}/versions")->assertStatus(422);
+    }
+
+    public function test_quotation_in_dollars_needs_and_keeps_the_exchange_rate(): void
+    {
+        [$user, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'billing.view', 'billing.manage']);
+        $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
+        Sanctum::actingAs($user);
+        $serviceId = $this->makeActiveService($this->makeCategory(), 'SRV-100', 375);
+
+        $payload = [
+            'customer_id' => $customerId,
+            'currency' => 'USD',
+            'items' => [['service_id' => $serviceId, 'description' => 'Servicio', 'quantity' => 1, 'unit_price' => 100, 'discount' => 0, 'tax_rate' => 18]],
+        ];
+
+        // Sin tipo de cambio registrado no se cotiza en dólares; otras monedas no existen.
+        $this->getJson('/api/v1/exchange-rates/current')->assertOk()->assertContent('{}');
+        $this->postJson('/api/v1/quotations', $payload)->assertStatus(422)->assertJsonValidationErrors('currency');
+        $this->postJson('/api/v1/quotations', [...$payload, 'currency' => 'EUR'])->assertStatus(422);
+
+        $this->postJson('/api/v1/exchange-rates', ['date' => now()->addDay()->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(422);
+        $this->postJson('/api/v1/exchange-rates', ['date' => now()->subDay()->toDateString(), 'buy' => 3.69, 'sell' => 3.70])->assertCreated();
+        $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.74, 'sell' => 3.80])->assertCreated();
+        // Registrar otra vez el mismo día corrige el valor, no lo duplica.
+        $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.74, 'sell' => 3.75])
+            ->assertOk()->assertJsonPath('source', 'Manual');
+
+        $this->getJson('/api/v1/exchange-rates')->assertOk()->assertJsonPath('total', 2);
+        $this->getJson('/api/v1/exchange-rates/current')->assertOk()->assertJsonPath('sell', '3.7500');
+
+        $quotation = $this->postJson('/api/v1/quotations', $payload)->assertCreated()
+            ->assertJsonPath('currency', 'USD')
+            ->assertJsonPath('exchange_rate', '3.7500')
+            ->assertJsonPath('total', '118.0000')
+            ->json();
+
+        $this->getJson('/api/v1/exchange-rates/summary')->assertOk()
+            ->assertJsonPath('current.sell', '3.7500')
+            ->assertJsonPath('quotations_usd', 1);
+
+        // Volver a soles quita el tipo de cambio.
+        $this->putJson("/api/v1/quotations/{$quotation['id']}", [...$payload, 'currency' => 'PEN'])->assertOk()
+            ->assertJsonPath('currency', 'PEN')
+            ->assertJsonPath('exchange_rate', null);
+        $this->putJson("/api/v1/quotations/{$quotation['id']}", $payload)->assertOk()->assertJsonPath('exchange_rate', '3.7500');
+
+        // La nueva versión toma el precio del catálogo (S/ 375) convertido: 375 / 3.75 = US$ 100.
+        $this->postJson("/api/v1/quotations/{$quotation['id']}/submit")->assertOk();
+        $this->postJson("/api/v1/services/{$serviceId}/prices", ['amount' => 750])->assertCreated();
+        $this->postJson("/api/v1/quotations/{$quotation['id']}/versions")->assertCreated()
+            ->assertJsonPath('currency', 'USD')
+            ->assertJsonPath('exchange_rate', '3.7500')
+            ->assertJsonPath('items.0.unit_price', '200.0000');
+    }
+
+    public function test_registering_exchange_rates_needs_permission(): void
+    {
+        [$user] = $this->makeTenantUser();
+        Sanctum::actingAs($user);
+
+        $this->getJson('/api/v1/exchange-rates/current')->assertOk();
+        $this->getJson('/api/v1/exchange-rates')->assertStatus(403);
+        $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(403);
+    }
+
+    public function test_roles_matrix_is_edited_through_the_permission_tables(): void
+    {
+        [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage']);
+        DB::table('tenant_modules')->insert([
+            ['id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => 'COTIZACIONES', 'enabled' => true],
+        ]);
+        $seller = $this->makeColleague($tenantId, 'Vendedor', ['quotations.view', 'quotations.manage']);
+        $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
+        Sanctum::actingAs($admin);
+
+        // El catálogo solo ofrece los permisos de los módulos de la empresa (sin CRM, sin contratos).
+        $list = $this->getJson('/api/v1/roles')->assertOk()->json();
+        $codes = collect($list['permissions'])->pluck('code');
+        $this->assertTrue($codes->contains('quotations.approve'));
+        $this->assertTrue($codes->contains('core.view'));
+        $this->assertFalse($codes->contains('crm.view'));
+
+        // Rol nuevo, sin permisos; no se repite el nombre.
+        $roleId = $this->postJson('/api/v1/roles', ['name' => 'Gerencia comercial', 'description' => 'Aprueba'])
+            ->assertCreated()->assertJsonPath('code', 'GERENCIA_COMERCIAL')->json('id');
+        $this->postJson('/api/v1/roles', ['name' => 'Gerencia Comercial'])->assertStatus(422);
+
+        $this->putJson("/api/v1/roles/{$roleId}/permissions", ['permissions' => ['quotations.view', 'crm.view']])->assertStatus(422);
+        $this->putJson("/api/v1/roles/{$roleId}/permissions", ['permissions' => ['quotations.view', 'quotations.approve']])
+            ->assertOk()->assertJsonPath('permissions', ['quotations.approve', 'quotations.view']);
+        $this->putJson("/api/v1/roles/{$roleId}/permissions", ['permissions' => ['quotations.view']])
+            ->assertOk()->assertJsonPath('permissions', ['quotations.view']);
+
+        // Darle "Aprobar" al rol del vendedor surte efecto de inmediato.
+        $sellerRole = collect($this->getJson('/api/v1/roles')->json('roles'))->firstWhere('name', 'Vendedor');
+        $this->assertSame(1, $sellerRole['users']);
+        $quotation = $this->postJson('/api/v1/quotations', [
+            'customer_id' => $customerId, 'items' => [['description' => 'X', 'quantity' => 1, 'unit_price' => 10]],
+        ])->json('id');
+        $this->postJson("/api/v1/quotations/{$quotation}/submit")->assertOk();
+
+        Sanctum::actingAs($seller);
+        $this->postJson("/api/v1/quotations/{$quotation}/approve")->assertStatus(403);
+        $this->putJson("/api/v1/roles/{$sellerRole['id']}/permissions", ['permissions' => []])->assertStatus(403);
+
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/roles/{$sellerRole['id']}/permissions", [
+            'permissions' => ['quotations.view', 'quotations.manage', 'quotations.approve'],
+        ])->assertOk();
+        Sanctum::actingAs($seller);
+        $this->postJson("/api/v1/quotations/{$quotation}/approve")->assertOk();
+
+        // El rol Administrador no se recorta; un rol de otra empresa no existe.
+        Sanctum::actingAs($admin);
+        DB::table('roles')->where('tenant_id', $tenantId)->where('code', 'VENTAS')->update(['code' => 'ADMIN']);
+        $adminRole = collect($this->getJson('/api/v1/roles')->json('roles'))->firstWhere('is_admin', true);
+        $this->putJson("/api/v1/roles/{$adminRole['id']}/permissions", ['permissions' => []])->assertStatus(422);
+        $this->putJson('/api/v1/roles/'.Str::uuid().'/permissions', ['permissions' => []])->assertStatus(404);
+
+        // Ajuste de segregación de la empresa.
+        $this->getJson('/api/v1/tenant/settings')->assertOk()->assertJsonPath('segregation', true);
+        $this->putJson('/api/v1/tenant/settings', ['segregation' => false])->assertOk()->assertJsonPath('segregation', false);
+        Sanctum::actingAs($seller);
+        $this->putJson('/api/v1/tenant/settings', ['segregation' => true])->assertStatus(403);
+    }
+
+    public function test_company_users_are_managed_with_their_role(): void
+    {
+        Mail::fake();
+        [$admin, $tenantId] = $this->makeTenantUser(['users.view', 'users.manage', 'quotations.view']);
+        DB::table('roles')->where('tenant_id', $tenantId)->where('code', 'VENTAS')->update(['code' => 'ADMIN', 'name' => 'Administrador']);
+        $adminRoleId = DB::table('roles')->where('tenant_id', $tenantId)->where('code', 'ADMIN')->value('id');
+        Sanctum::actingAs($admin);
+
+        $salesRoleId = $this->postJson('/api/v1/roles', ['name' => 'Ventas'])->assertCreated()->json('id');
+        $this->putJson("/api/v1/roles/{$salesRoleId}/permissions", ['permissions' => ['users.view']])->assertOk();
+
+        // Alta: queda activa, con su rol, y recibe el código para crear su contraseña.
+        $email = 'nueva-'.strtolower(Str::random(6)).'@erp-saas.test';
+        $this->postJson('/api/v1/users', ['name' => 'Lucía Paredes', 'email' => $email])->assertStatus(422);
+        $userId = $this->postJson('/api/v1/users', ['name' => 'Lucía Paredes', 'email' => strtoupper($email), 'role_id' => $salesRoleId])
+            ->assertCreated()->json('id');
+        Mail::assertSent(PasswordResetCodeMail::class, fn ($mail) => $mail->hasTo($email));
+        $this->postJson('/api/v1/users', ['name' => 'Otra', 'email' => $email, 'role_id' => $salesRoleId])
+            ->assertStatus(422)->assertJsonValidationErrors('email');
+        $this->postJson('/api/v1/users', ['name' => 'Otra', 'email' => 'x-'.$email, 'role_id' => (string) Str::uuid()])
+            ->assertStatus(422)->assertJsonValidationErrors('role_id');
+
+        $list = $this->getJson('/api/v1/users')->assertOk()->assertJsonCount(2, 'users')->json();
+        $created = collect($list['users'])->firstWhere('id', $userId);
+        $this->assertSame('Ventas', $created['role']['name']);
+        $this->assertSame('ACTIVE', $created['status']);
+        $this->assertFalse($created['mfa']);
+        $this->assertTrue(collect($list['users'])->firstWhere('id', $admin->id)['mfa']);
+        $this->assertNull($list['limit']);
+
+        // Nadie cambia su propio rol ni se desactiva; la empresa no se queda sin administrador.
+        $own = ['name' => $admin->name, 'email' => $admin->email, 'role_id' => $salesRoleId];
+        $this->putJson("/api/v1/users/{$admin->id}", $own)->assertStatus(422)->assertJsonValidationErrors('role_id');
+        $this->postJson("/api/v1/users/{$admin->id}/status", ['status' => 'INACTIVE'])->assertStatus(422);
+
+        // Cambiar el rol y exigir verificación en dos pasos.
+        $this->putJson("/api/v1/users/{$userId}", ['name' => 'Lucía P.', 'email' => $email, 'role_id' => $adminRoleId, 'mfa' => true])->assertOk();
+        $updated = collect($this->getJson('/api/v1/users')->json('users'))->firstWhere('id', $userId);
+        $this->assertSame('Lucía P.', $updated['name']);
+        $this->assertTrue($updated['role']['is_admin']);
+        $this->assertSame(1, DB::table('user_roles')->where('user_id', $userId)->count());
+
+        // Desactivada no entra a la empresa; se puede reactivar.
+        $this->postJson("/api/v1/users/{$userId}/status", ['status' => 'INACTIVE'])->assertOk()->assertJsonPath('status', 'INACTIVE');
+        $this->assertNull(DB::selectOne('SELECT resolve_active_tenant_for_user(?) AS id', [$userId])->id);
+        $this->postJson("/api/v1/users/{$userId}/status", ['status' => 'ACTIVE'])->assertOk();
+
+        // Un usuario de otra empresa no existe; sin permiso no se gestiona.
+        [$outsider] = $this->makeTenantUser(['users.view']);
+        DB::statement("SET app.tenant_id = '{$tenantId}'");
+        Sanctum::actingAs($admin);
+        $this->postJson("/api/v1/users/{$outsider->id}/status", ['status' => 'INACTIVE'])->assertStatus(404);
+
+        $viewer = $this->makeColleague($tenantId, 'Solo lectura', ['users.view']);
+        Sanctum::actingAs($viewer);
+        $this->getJson('/api/v1/users')->assertOk();
+        $this->postJson('/api/v1/users', ['name' => 'X', 'email' => 'y-'.$email, 'role_id' => $salesRoleId])->assertStatus(403);
     }
 }

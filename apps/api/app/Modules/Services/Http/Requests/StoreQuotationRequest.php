@@ -15,7 +15,7 @@ class StoreQuotationRequest extends FormRequest
     {
         return [
             'customer_id' => ['required', 'uuid'],
-            'currency' => ['nullable', 'string', 'size:3'],
+            'currency' => ['nullable', 'in:PEN,USD'],
             'valid_until' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
 

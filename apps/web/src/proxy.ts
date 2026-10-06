@@ -6,7 +6,7 @@ import { SCOPE_COOKIE, TOKEN_COOKIE } from "@/lib/auth";
 const AUTH_ROUTES = ["/login", "/forgot-password", "/reset-password"];
 
 // Cada tipo de cuenta tiene su propia consola y no entra a la otra.
-const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/services", "/quotations", "/profile"];
+const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/services", "/quotations", "/exchange-rates", "/roles", "/users", "/profile"];
 const PLATFORM_PREFIXES = ["/superadmin"];
 const TENANT_HOME = "/customers";
 const PLATFORM_HOME = "/superadmin/plans";
@@ -53,6 +53,9 @@ export const config = {
     "/employees/:path*",
     "/services/:path*",
     "/quotations/:path*",
+    "/exchange-rates/:path*",
+    "/roles/:path*",
+    "/users/:path*",
     "/profile/:path*",
     "/superadmin/:path*",
   ],

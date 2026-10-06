@@ -9,8 +9,8 @@ import { useAccess } from "@/lib/access-context";
 import { QUOTATION_STATES, customerDocument, customerName, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
-  Badge, Card, Chip, DataTable, ExportButtons, Filters, Kpi, Kpis, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
-  SearchInput, SelectionBar, Tabs, btnClass, useRowSelection, useToasts, type Column,
+  Badge, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, Kpi, Kpis, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
+  SearchInput, SelectionBar, Tabs, Who, btnClass, useRowSelection, useToasts, type Column,
 } from "@/components/ui/proto";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Quotation, QuotationStatus, QuotationSummary } from "@/types/commercial";
@@ -20,6 +20,13 @@ const THREE_DAYS = 3 * 864e5;
 function expiresSoon(quotation: Quotation) {
   if (quotation.status !== "SUBMITTED" || !quotation.valid_until) return false;
   return new Date(quotation.valid_until).getTime() < Date.now() + THREE_DAYS;
+}
+
+/** Origen de la cotización; sin dato es una cotización directa. */
+function sourceOf(quotation: Quotation): [string, "accent" | "neutral"] {
+  if (quotation.source_type === "OPPORTUNITY") return ["CRM", "accent"];
+  if (quotation.source_type === "PORTAL") return ["Portal", "neutral"];
+  return ["Directa", "neutral"];
 }
 
 const COLUMNS: Column<Quotation>[] = [
@@ -36,6 +43,13 @@ const COLUMNS: Column<Quotation>[] = [
   },
   { label: "Cliente", render: (quotation) => customerName(quotation.customer) },
   {
+    label: "Origen",
+    render: (quotation) => {
+      const [label, tone] = sourceOf(quotation);
+      return <Chip tone={tone}>{label}</Chip>;
+    },
+  },
+  {
     label: "Válida hasta",
     render: (quotation) => (
       <span className="inline-flex flex-wrap items-center gap-1.5">
@@ -45,7 +59,7 @@ const COLUMNS: Column<Quotation>[] = [
     ),
   },
   { label: "Total", num: true, render: (quotation) => money(quotation.total, quotation.currency) },
-  { label: "Responsable", render: (quotation) => quotation.creator?.name ?? "—" },
+  { label: "Responsable", render: (quotation) => <Who name={quotation.creator?.name} /> },
   {
     label: "Estado",
     render: (quotation) => {
@@ -60,6 +74,7 @@ const EXPORT_COLUMNS: ExportColumn<Quotation>[] = [
   { label: "Versión", value: (quotation) => quotation.version, width: 10, kind: "center" },
   { label: "Cliente", value: (quotation) => customerName(quotation.customer), width: 36 },
   { label: "Documento", value: (quotation) => customerDocument(quotation.customer), width: 20 },
+  { label: "Origen", value: (quotation) => sourceOf(quotation)[0], width: 12, kind: "center" },
   { label: "Emitida", value: (quotation) => shortDate(quotation.created_at), width: 15, kind: "center" },
   { label: "Válida hasta", value: (quotation) => (quotation.valid_until ? shortDate(quotation.valid_until) : ""), width: 15, kind: "center" },
   { label: "Moneda", value: (quotation) => quotation.currency, width: 10, kind: "center" },
@@ -94,6 +109,7 @@ export default function QuotationsList() {
   const [tab, setTab] = useState("ALL");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
@@ -128,6 +144,7 @@ export default function QuotationsList() {
       const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
+      if (source) params.set("source", source);
 
       try {
         const response = await apiFetch<PaginatedResponse<Quotation>>(`/v1/quotations?${params}`);
@@ -143,7 +160,7 @@ export default function QuotationsList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, tab, reload]);
+  }, [page, perPage, search, tab, source, reload]);
 
   /** Exporta las filas marcadas o, sin `picked`, todas las de la pestaña y búsqueda actuales. */
   async function runExport(format: "xlsx" | "csv", picked?: Quotation[]) {
@@ -152,6 +169,7 @@ export default function QuotationsList() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
+      if (source) params.set("source", source);
       const rows = picked ?? (await fetchAllPages<Quotation>("/v1/quotations", params));
       if (format === "xlsx") await exportXlsx("cotizaciones", "Cotizaciones", EXPORT_COLUMNS, rows);
       else exportCsv("cotizaciones", EXPORT_COLUMNS, rows);
@@ -211,6 +229,15 @@ export default function QuotationsList() {
 
       <Filters>
         <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Buscar número o cliente" />
+        <FilterSelect
+          label="Origen"
+          value={source}
+          onChange={(value) => {
+            setSource(value);
+            setPage(1);
+          }}
+          options={[["DIRECT", "Directa ERP"], ["OPPORTUNITY", "Desde oportunidad CRM"], ["PORTAL", "Solicitud del portal"]]}
+        />
       </Filters>
 
       <Card flush>

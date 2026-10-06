@@ -3,15 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, FileSignature, Settings } from "lucide-react";
+import { ArrowLeft, Check, FileSignature, FileText, Settings } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
+import { downloadQuotationPdf } from "@/lib/quotation-pdf";
 import {
   FREQUENCIES, QUOTATION_STATES, customerName, historyLabel, money, setFlash, shortDate, stateOf, takeFlash,
 } from "@/lib/commercial";
 import {
-  Badge, Btn, Card, Field, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline,
-  btnClass, useToasts,
+  Badge, Btn, Card, Field, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline, Who,
+  btnClass, useToasts, type Tone,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import type { Quotation } from "@/types/commercial";
@@ -44,8 +45,18 @@ const CONFIRMS: Record<"approve" | "reject" | "cancel", Confirm> = {
   },
 };
 
-const CONTRACT_STATUS: Record<string, string> = {
-  DRAFT: "Borrador", ACTIVE: "Vigente", SUSPENDED: "Suspendido", TERMINATED: "Terminado", EXPIRED: "Vencido",
+const CONTRACT_STATUS: Record<string, [string, Tone]> = {
+  DRAFT: ["Borrador", "neutral"], ACTIVE: ["Vigente", "success"], SUSPENDED: ["Suspendido", "warning"],
+  TERMINATED: ["Terminado", "muted"], EXPIRED: ["Vencido", "warning"],
+};
+
+// Origen de la cotización; sin dato es una cotización directa.
+const SOURCES: Record<string, string> = { OPPORTUNITY: "Oportunidad CRM", PORTAL: "Solicitud del portal" };
+
+// Estado en el que cada movimiento deja la cotización, para cuando la auditoría no lo guardó.
+const ACTION_STATE: Record<string, string> = {
+  "quotation.create": "DRAFT", "quotation.version": "DRAFT", "quotation.submit": "SUBMITTED", "quotation.approve": "APPROVED",
+  "quotation.reject": "REJECTED", "quotation.expire": "EXPIRED", "quotation.cancel": "CANCELLED",
 };
 
 function firstError(err: unknown, fallback: string) {
@@ -68,6 +79,7 @@ export default function QuotationDetail() {
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -135,6 +147,19 @@ export default function QuotationDetail() {
     }
   }
 
+  async function downloadPdf() {
+    if (!quotation) return;
+    setPrinting(true);
+    toast("Generando PDF…");
+    try {
+      await downloadQuotationPdf(quotation);
+    } catch {
+      toast("No se pudo generar el PDF", "danger");
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   const back = (
     <Link href="/quotations" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1679AB] hover:underline">
       <ArrowLeft size={15} /> Cotizaciones
@@ -162,11 +187,14 @@ export default function QuotationDetail() {
   }
 
   const canManage = can("quotations.manage");
+  const canApprove = can("quotations.approve");
+  // Segregación de funciones: quien creó la cotización no la aprueba.
+  const ownBlocked = Boolean(quotation.own_approval_blocked);
+  const noApprove = canApprove ? undefined : "Tu rol no tiene permiso quotations.approve";
   const canContract = can("contracts.manage");
   const noPermission = canManage ? undefined : "Tu rol no tiene permiso quotations.manage";
   const status = quotation.status;
   const expired = quotation.valid_until !== null && new Date(`${quotation.valid_until.slice(0, 10)}T23:59:59`) < new Date();
-  const [statusLabel, statusTone] = stateOf(QUOTATION_STATES, status);
   const currency = quotation.currency;
   const gross = Number(quotation.subtotal) + Number(quotation.discount_total);
   const history = quotation.history ?? [];
@@ -183,7 +211,9 @@ export default function QuotationDetail() {
         title={`Cotización ${quotation.quotation_number}`}
         sub={
           <>
-            {customerName(quotation.customer)} · emitida {shortDate(quotation.created_at)} · válida hasta {shortDate(quotation.valid_until)}
+            {customerName(quotation.customer)} ·{" "}
+            {currency === "USD" && `en dólares${quotation.exchange_rate ? ` (T.C. ${Number(quotation.exchange_rate).toFixed(3)})` : ""} · `}
+            emitida {shortDate(quotation.created_at)} · válida hasta {shortDate(quotation.valid_until)}
             {expired && status === "SUBMITTED" && <span className="text-[#D93A40]"> · vencida</span>}
           </>
         }
@@ -205,13 +235,19 @@ export default function QuotationDetail() {
               <>
                 <Btn
                   onClick={() => ask(CONFIRMS.approve)}
-                  disabled={!canManage || busy || expired}
-                  title={expired ? "Vencida: no se puede aprobar" : noPermission}
+                  disabled={!canApprove || busy || expired || ownBlocked}
+                  title={
+                    !canApprove
+                      ? noApprove
+                      : ownBlocked
+                        ? "Segregación de funciones: no puedes aprobar tu propia cotización"
+                        : expired ? "Vencida: no se puede aprobar" : undefined
+                  }
                 >
                   <Check size={16} />
                   <span>Aprobar</span>
                 </Btn>
-                <Btn variant="danger-ghost" onClick={() => ask(CONFIRMS.reject)} disabled={!canManage || busy} title={noPermission}>
+                <Btn variant="danger-ghost" onClick={() => ask(CONFIRMS.reject)} disabled={!canApprove || busy} title={noApprove}>
                   Rechazar
                 </Btn>
               </>
@@ -235,10 +271,19 @@ export default function QuotationDetail() {
                 Nueva versión
               </Btn>
             )}
+            <Btn variant="ghost" onClick={downloadPdf} disabled={printing} title="Descargar en PDF">
+              <FileText size={16} />
+              <span>Descargar PDF</span>
+            </Btn>
           </>
         }
       />
 
+      {ownBlocked && status === "SUBMITTED" && canApprove && (
+        <Notice>
+          Creaste esta cotización: por segregación de funciones debe aprobarla otra persona (por ejemplo, Gerencia).
+        </Notice>
+      )}
       {quotation.superseded_by && (
         <Notice tone="warn">
           Esta versión fue reemplazada por{" "}
@@ -264,7 +309,7 @@ export default function QuotationDetail() {
             id: "lines",
             node: (
           <Card title="Líneas cotizadas (snapshot comercial)">
-            <div className="proto-tbl-wrap -mx-5 overflow-x-auto">
+            <div className="proto-tbl-wrap -mx-3 overflow-x-auto sm:-mx-5">
               <table className="proto-tbl w-full border-collapse text-[13px]">
                 <thead>
                   <tr>
@@ -278,13 +323,17 @@ export default function QuotationDetail() {
                 <tbody>
                   {quotation.items.map((item) => {
                     const snapshot = item.service_snapshot;
-                    const catalog = item.service?.current_price;
+                    // El catálogo está en soles: en dólares se compara al tipo de cambio de la cotización.
+                    const rate = currency === "USD" ? Number(quotation.exchange_rate ?? 0) : 1;
+                    const catalog = rate > 0 ? item.service?.current_price : null;
+                    const catalogPrice = catalog ? Math.round((Number(catalog.amount) / rate) * 100) / 100 : 0;
                     const details = [
                       snapshot?.code,
                       snapshot?.unit ?? item.service?.unit,
                       snapshot?.frequency && `recurrente ${FREQUENCIES[snapshot.frequency]}`,
-                      catalog && Number(catalog.amount) !== Number(item.unit_price)
-                        ? `hoy el catálogo dice ${money(catalog.amount)} (esta cotización no cambia)`
+                      item.price_version && `precio v${item.price_version}`,
+                      catalog && catalogPrice !== Number(item.unit_price)
+                        ? `hoy el catálogo dice ${money(catalogPrice, currency)} (esta cotización no cambia)`
                         : null,
                     ].filter(Boolean);
                     const grossLine = Number(item.quantity) * Number(item.unit_price);
@@ -313,6 +362,9 @@ export default function QuotationDetail() {
                   ["Descuentos", `− ${money(quotation.discount_total, currency)}`],
                   ["IGV 18%", money(quotation.tax_total, currency)],
                   ["Total", <strong key="total" className="text-xl font-semibold">{money(quotation.total, currency)}</strong>],
+                  currency === "USD" && quotation.exchange_rate
+                    ? ["Equivalente", money(Number(quotation.total) * Number(quotation.exchange_rate))]
+                    : null,
                 ]}
               />
             </div>
@@ -365,9 +417,7 @@ export default function QuotationDetail() {
           <Card title="Trazabilidad">
             <Kv
               rows={[
-                ["Estado", <Badge key="status" tone={statusTone}>{statusLabel}</Badge>],
-                ["Origen", "Cotización directa ERP"],
-                ["Versión", String(quotation.version)],
+                ["Origen", SOURCES[quotation.source_type ?? ""] ?? "Cotización directa ERP"],
                 quotation.previous
                   ? [
                       "Versión anterior",
@@ -377,9 +427,18 @@ export default function QuotationDetail() {
                     ]
                   : null,
                 quotation.contract
-                  ? ["Contrato", `${quotation.contract.contract_number} · ${CONTRACT_STATUS[quotation.contract.status] ?? quotation.contract.status}`]
+                  ? [
+                      "Contrato",
+                      <span key="contract" className="inline-flex flex-wrap items-center gap-1.5">
+                        {quotation.contract.contract_number}
+                        <Badge tone={CONTRACT_STATUS[quotation.contract.status]?.[1] ?? "neutral"}>
+                          {CONTRACT_STATUS[quotation.contract.status]?.[0] ?? quotation.contract.status}
+                        </Badge>
+                      </span>,
+                    ]
                   : null,
-                ["Responsable", quotation.creator?.name ?? "—"],
+                ["Responsable", <Who key="owner" name={quotation.creator?.name} />],
+                ["Visible en portal", status !== "DRAFT" ? "Sí: el cliente puede verla y aprobarla" : "No (borrador)"],
               ]}
             />
           </Card>
@@ -397,6 +456,7 @@ export default function QuotationDetail() {
                       {approval.decision === "APPROVED" ? "Aprobada" : "Rechazada"}
                     </Badge>
                     <strong className="font-semibold">{approval.approver?.name ?? "—"}</strong>
+                    <span>· backoffice</span>
                     <small className="app-muted w-full text-xs">
                       {dateTime(approval.decided_at)}{approval.comments ? ` · ${approval.comments}` : ""}
                     </small>
@@ -414,21 +474,25 @@ export default function QuotationDetail() {
             node: (
           <Card title="Historial">
             <Timeline
-              items={history.map((entry, index) => ({
-                key: `${entry.at}-${index}`,
-                head: entry.metadata.to ? (
-                  <>
-                    <Badge tone={stateOf(QUOTATION_STATES, entry.metadata.to)[1]}>{stateOf(QUOTATION_STATES, entry.metadata.to)[0]}</Badge>
-                    {entry.metadata.from && (
-                      <span className="app-muted text-[12.5px]">desde {stateOf(QUOTATION_STATES, entry.metadata.from)[0]}</span>
-                    )}
-                  </>
-                ) : (
-                  <span className="font-medium">{historyLabel(entry)}</span>
-                ),
-                meta: `${entry.user ?? "Sistema"} · ${dateTime(entry.at)}`,
-                note: entry.metadata.note,
-              }))}
+              items={history.map((entry, index) => {
+                // Como el prototipo: cada movimiento se lee por el estado en el que deja la cotización.
+                const to = entry.metadata.to ?? ACTION_STATE[entry.action];
+                return {
+                  key: `${entry.at}-${index}`,
+                  head: to ? (
+                    <>
+                      <Badge tone={stateOf(QUOTATION_STATES, to)[1]}>{stateOf(QUOTATION_STATES, to)[0]}</Badge>
+                      {entry.metadata.from && entry.metadata.from !== to && (
+                        <span className="app-muted text-[12.5px]">desde {stateOf(QUOTATION_STATES, entry.metadata.from)[0]}</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="font-medium">{historyLabel(entry)}</span>
+                  ),
+                  meta: `${entry.user ?? "Sistema"} · ${dateTime(entry.at)}`,
+                  note: entry.metadata.note,
+                };
+              })}
             />
           </Card>
             ),

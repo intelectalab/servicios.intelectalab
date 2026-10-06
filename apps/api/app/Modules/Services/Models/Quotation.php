@@ -19,6 +19,7 @@ class Quotation extends Model
         'status',
         'version',
         'currency',
+        'exchange_rate',
         'valid_until',
         'subtotal',
         'tax_total',
@@ -35,6 +36,7 @@ class Quotation extends Model
     protected $casts = [
         'valid_until' => 'date',
         'approved_at' => 'datetime',
+        'exchange_rate' => 'decimal:4',
         'subtotal' => 'decimal:4',
         'tax_total' => 'decimal:4',
         'discount_total' => 'decimal:4',

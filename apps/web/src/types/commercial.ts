@@ -62,6 +62,8 @@ export interface QuotationItem {
   line_total: string;
   service_snapshot: { code: string; name: string; unit?: string | null; billing_mode?: BillingMode; frequency?: Frequency | null } | null;
   service?: Service | null;
+  /** Versión del precio del catálogo con la que se cotizó la línea; solo en el detalle. */
+  price_version?: number | null;
 }
 
 export interface QuotationApproval {
@@ -80,6 +82,10 @@ export interface Quotation {
   version: number;
   previous_id: string | null;
   currency: string;
+  /** Tipo de cambio (venta) con el que se emitió; solo en dólares. */
+  exchange_rate: string | null;
+  /** Origen: vacío o DIRECT (directa), OPPORTUNITY (CRM), PORTAL. */
+  source_type: string | null;
   valid_until: string | null;
   subtotal: string;
   tax_total: string;
@@ -98,6 +104,26 @@ export interface Quotation {
   contract?: { id: string; contract_number: string; status: string } | null;
   approvals?: QuotationApproval[];
   history?: HistoryEntry[];
+  /** Dirección y correo del cliente, para el PDF. Solo en el detalle. */
+  customer_contact?: { address: string | null; email: string | null };
+  /** Segregación de funciones: quien la creó no puede aprobarla. Solo en el detalle. */
+  own_approval_blocked?: boolean;
+}
+
+export interface ExchangeRate {
+  id: string;
+  rate_date: string;
+  currency: string;
+  buy: string;
+  sell: string;
+  source: string;
+}
+
+export interface ExchangeRateSummary {
+  current: ExchangeRate | null;
+  variation_30: number | null;
+  quotations_usd: number;
+  invoices_usd: number;
 }
 
 export interface QuotationSummary {

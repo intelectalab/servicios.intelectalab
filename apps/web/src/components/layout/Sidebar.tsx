@@ -14,8 +14,8 @@ type MenuIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: str
 export type BuiltMenuItem = {
   href: string;
   label: string;
-  /** Código del módulo en el catálogo; si la empresa no lo tiene, el ítem sale con candado. */
-  module: string;
+  /** Código del módulo en el catálogo; si la empresa no lo tiene, el ítem sale con candado. Sin él, no depende del plan. */
+  module?: string;
   requiredPermission: string;
   icon: MenuIcon;
   locked?: boolean;

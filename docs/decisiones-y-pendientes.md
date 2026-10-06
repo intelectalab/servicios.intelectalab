@@ -14,11 +14,21 @@ Estado al 2026-10-05.
 ### Módulos y permisos
 - Solo CLIENTES, PROVEEDORES y EMPLEADOS son obligatorios (`is_core`) y comparten el permiso `core`. El resto sigue al plan.
 - La relación módulo → permisos vive en `module_catalog.permission_prefixes`.
+- Aprobar o rechazar cotizaciones es un permiso propio, `quotations.approve` (2026-10-05). Los permisos de un módulo son todos los de la tabla `permissions` que empiezan con su prefijo, no solo `view` y `manage`.
+- La matriz de "Roles y permisos" muestra las acciones que existen en la tabla `permissions` (Ver, Gestionar, Aprobar), no las seis del prototipo, y no tiene Alcance. Ver y editar la matriz depende de `users.view` / `users.manage`. El rol Administrador no se recorta.
+- Un ítem del menú sin `module` no depende del plan (pantallas de administración de la empresa).
+- Usuarios: un rol por usuario; desactivar es quitar el acceso a la empresa (`tenant_users.status`), no borrar la cuenta. El usuario nuevo no recibe contraseña: la crea con un código por correo. La cuenta se vincula a un empleado existente (`employees.user_id`), no se crea el empleado.
+- Segregación de funciones: quien crea una cotización no la aprueba. Es un ajuste por empresa (`tenants.configuration.segregation`), activo si no se indica; rechazar no tiene esa restricción.
 
 ### Comercial
 - Las pantallas nuevas se arman con las piezas de `apps/web/src/components/ui/proto.tsx` (medidas del prototipo, colores del logo, tema oscuro incluido).
 - Verde, rojo y ámbar se usan solo como colores de estado; todo lo demás es el azul del logo.
-- Las cotizaciones se emiten solo en soles hasta que exista tipo de cambio.
+- Las cotizaciones se emiten en soles o en dólares. En dólares usan el tipo de cambio de venta vigente (el más reciente registrado hasta hoy) y lo guardan; sin tipo de cambio registrado no se puede cotizar en dólares.
+- El tipo de cambio se registra a mano en Finanzas → Monedas y tipo de cambio (permiso `billing.manage`); no hay sincronización con SUNAT. Uno por día: registrar otro el mismo día lo corrige.
+- Los desplegables con muchas opciones usan `SearchSelect` (`proto.tsx`), con buscador.
+- El precio del catálogo siempre está en soles y sin IGV, como en el prototipo: los servicios no tienen moneda propia. La moneda (PEN o USD) se elige en la cotización y el precio se convierte con el tipo de cambio del día; la pantalla "Monedas y tipo de cambio" ya existe (2026-10-05).
+- "Afecto a IGV: Sí (18%)" en la ficha del servicio es un texto fijo, igual que en el prototipo (todos los servicios nacen afectos). Se deja así por ahora (2026-10-05).
+- Una cotización sin origen registrado (`source_type` vacío) es "Directa".
 - El precio de un servicio no se edita: cada cambio es una versión nueva y la anterior se cierra.
 - Los textos explicativos que el prototipo pone bajo el título de cada pantalla (flujos tipo "Categoría → Servicio → …") son de la demo y no se traen.
 - Cuando el prototipo pide una regla que la API no tenía (activar solo con precio, motivo al rechazar, categoría obligatoria), se implementa la regla del prototipo y se anota en el registro de cambios como lógica que cambió.
@@ -46,4 +56,5 @@ Estado al 2026-10-05.
 - Correo real: falta configurar SMTP en `apps/api/.env` (hoy `MAIL_MAILER=log`).
 - El contenido de Clientes, Proveedores, Empleados, Planes SaaS y la landing sigue con el estilo anterior.
 - Comercial: faltan las pantallas de Contratos, Órdenes y Solicitudes del portal. Lo que Servicios y Cotizaciones aún no tienen respecto al prototipo está en [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md).
-- `database/schema_reference.sql` no incluye la migración `2026_10_05_000300` (modalidad, garantía, estado archivado, versión anterior).
+- `database/schema_reference.sql` no incluye las migraciones `2026_10_05_000300` (modalidad, garantía, estado archivado, versión anterior) ni `2026_10_05_000400` (tipo de cambio).
+- Dólares: falta llevarlos a contratos, comprobantes y cobros (diferencia de cambio), y una fuente automática del tipo de cambio. Detalle en [cambios/2026-10-05_cotizaciones-dolares-y-buscador.md](cambios/2026-10-05_cotizaciones-dolares-y-buscador.md).

@@ -21,6 +21,13 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-05 | Comercial: selección de filas, Excel con formato y paginación | [cambios/2026-10-05_comercial-seleccion-exportar-paginacion.md](cambios/2026-10-05_comercial-seleccion-exportar-paginacion.md) |
 | 2026-10-05 | Comercial: vista en teléfono como el prototipo | [cambios/2026-10-05_comercial-responsive.md](cambios/2026-10-05_comercial-responsive.md) |
 | 2026-10-05 | Comercial: tarjetas en teléfono, padding de tablas y tarjetas movibles | [cambios/2026-10-05_comercial-tarjetas-movibles.md](cambios/2026-10-05_comercial-tarjetas-movibles.md) |
+| 2026-10-05 | Comercial: revisión de lo que quedó sin ver, asa táctil más grande y líneas alineadas en teléfono | [cambios/2026-10-05_comercial-revision-a-la-vista.md](cambios/2026-10-05_comercial-revision-a-la-vista.md) |
+| 2026-10-05 | Cotizaciones: indicadores a todo el ancho, pestañas en teléfono, columna y filtro Origen, avatar del responsable | [cambios/2026-10-05_cotizaciones-listado-ajustes.md](cambios/2026-10-05_cotizaciones-listado-ajustes.md) |
+| 2026-10-05 | Cotizaciones en dólares, pantalla Monedas y tipo de cambio y desplegables con buscador | [cambios/2026-10-05_cotizaciones-dolares-y-buscador.md](cambios/2026-10-05_cotizaciones-dolares-y-buscador.md) |
+| 2026-10-05 | Ficha de cotización: precio versión, Trazabilidad, Aprobaciones e Historial como el prototipo | [cambios/2026-10-05_cotizacion-ficha-como-prototipo.md](cambios/2026-10-05_cotizacion-ficha-como-prototipo.md) |
+| 2026-10-05 | Cotización: permiso de aprobar y segregación de funciones, Descargar PDF, Visible en portal | [cambios/2026-10-05_cotizacion-aprobacion-pdf-portal.md](cambios/2026-10-05_cotizacion-aprobacion-pdf-portal.md) |
+| 2026-10-05 | PDF de cotización completo (RUC, dirección, correo) y pantalla Roles y permisos | [cambios/2026-10-05_roles-y-permisos-pdf-completo.md](cambios/2026-10-05_roles-y-permisos-pdf-completo.md) |
+| 2026-10-05 | Pantalla Usuarios (Administración) | [cambios/2026-10-05_usuarios.md](cambios/2026-10-05_usuarios.md) |
 
 ## Cómo se escribe cada entrada
 

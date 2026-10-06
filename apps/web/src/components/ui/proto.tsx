@@ -1,8 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
 import {
-  AlertCircle, Check, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Search, Upload, X,
+  useCallback, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
+import {
+  AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Search, Upload, X,
 } from "lucide-react";
 import { poppins } from "@/lib/fonts";
 import { useCardDrag } from "./sortable-cards";
@@ -55,8 +59,10 @@ export function Card({
               {...drag.handleProps}
               title="Arrastra para mover esta tarjeta (o usa las flechas del teclado)"
               aria-label="Mover tarjeta"
-              className={`app-muted -mr-2 -mt-1 grid h-8 w-8 shrink-0 touch-none place-items-center rounded-lg hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)] ${drag.dragging ? "cursor-grabbing" : "cursor-grab"}`}
+              className={`app-muted -mr-2 -mt-1 relative grid h-8 w-8 shrink-0 touch-none place-items-center rounded-lg hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)] ${drag.dragging ? "cursor-grabbing" : "cursor-grab"}`}
             >
+              {/* Agranda el área táctil a 44 px sin cambiar el tamaño visible del asa. */}
+              <span aria-hidden="true" className="absolute -inset-1.5" />
               <GripVertical size={16} />
             </button>
           )}
@@ -119,6 +125,20 @@ export function Chip({ tone = "neutral", children }: { tone?: Tone; children: Re
   );
 }
 
+/** Persona con su avatar de iniciales, como en las columnas "Responsable" del prototipo. */
+export function Who({ name }: { name?: string | null }) {
+  if (!name) return <span className="app-muted">Sin asignar</span>;
+  const initials = name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span aria-hidden="true" className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-[#E3F2FA] text-[9.5px] font-semibold text-[#0F5A82]">
+        {initials}
+      </span>
+      <span>{name}</span>
+    </span>
+  );
+}
+
 export function Filters({ children }: { children: ReactNode }) {
   return (
     <div role="search" className={`app-surface mb-4 flex flex-wrap items-center gap-2.5 rounded-xl px-3.5 py-3 ${SHADOW}`}>
@@ -170,7 +190,7 @@ export function Tabs({
   tabs, value, onChange,
 }: { tabs: [string, string, number | null][]; value: string; onChange: (value: string) => void }) {
   return (
-    <div role="tablist" className="mb-3.5 flex gap-0.5 overflow-x-auto border-b border-[color:var(--app-border)] [scrollbar-width:none]">
+    <div role="tablist" className="mb-3.5 flex flex-wrap gap-0.5 overflow-x-auto border-b sm:flex-nowrap border-[color:var(--app-border)] [scrollbar-width:none]">
       {tabs.map(([key, label, count]) => {
         const on = key === value;
         return (
@@ -207,7 +227,7 @@ const KPI_TONES: Record<KpiTone, [string, string]> = {
 };
 
 export function Kpis({ children }: { children: ReactNode }) {
-  return <div className="mb-4 grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3">{children}</div>;
+  return <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3">{children}</div>;
 }
 
 export function Kpi({
@@ -517,6 +537,191 @@ export function Modal({
 
 export const INPUT = "app-surface app-text min-h-10 w-full rounded-[9px] border border-[#CFD5DE] px-2.5 py-2 text-[13.5px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)] disabled:bg-[var(--app-surface-muted)]";
 
+export type SelectOption = { value: string; label: string; hint?: string; disabled?: boolean };
+
+/** Sin tildes ni mayúsculas, para que "garcia" encuentre "García". */
+const plain = (text: string) => text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+/**
+ * Desplegable con buscador, para listas largas (clientes, servicios). Se usa como un
+ * `select`: `value` + `onChange`. La lista se pinta fuera de la tarjeta para que no se recorte.
+ */
+export function SearchSelect({
+  value, onChange, options, placeholder = "Seleccionar…", searchPlaceholder = "Buscar…", empty = "Sin resultados.", disabled = false,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: SelectOption[];
+  placeholder?: string;
+  searchPlaceholder?: string;
+  empty?: string;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(-1);
+  const [box, setBox] = useState<CSSProperties>({});
+  const trigger = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const listId = useId();
+
+  const selected = options.find((option) => option.value === value);
+  const needle = plain(query.trim());
+  const shown = needle ? options.filter((option) => plain(`${option.label} ${option.hint ?? ""}`).includes(needle)) : options;
+
+  // La lista se abre hacia donde haya más sitio y sigue al campo si la página se mueve.
+  const place = useCallback(() => {
+    const rect = trigger.current?.getBoundingClientRect();
+    if (!rect) return;
+    const below = window.innerHeight - rect.bottom - 12;
+    const above = rect.top - 12;
+    const up = below < 240 && above > below;
+    setBox({
+      left: rect.left,
+      width: rect.width,
+      maxHeight: Math.max(160, Math.min(340, up ? above : below)),
+      ...(up ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (!trigger.current?.contains(target) && !panel.current?.contains(target)) setOpen(false);
+    };
+    const follow = (event: Event) => {
+      // El desplazamiento de la propia lista no la mueve de sitio.
+      if (event.type === "scroll" && panel.current?.contains(event.target as Node)) return;
+      place();
+    };
+    document.addEventListener("mousedown", outside);
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    return () => {
+      document.removeEventListener("mousedown", outside);
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+    };
+  }, [open, place]);
+
+  function toggle() {
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    place();
+    setQuery("");
+    setActive(-1);
+    setOpen(true);
+  }
+
+  function pick(option: SelectOption) {
+    if (option.disabled) return;
+    onChange(option.value);
+    setOpen(false);
+    trigger.current?.focus();
+  }
+
+  function move(step: 1 | -1) {
+    let index = active;
+    for (let tries = 0; tries < shown.length; tries++) {
+      index = (index + step + shown.length) % shown.length;
+      if (!shown[index].disabled) break;
+    }
+    if (!shown[index] || shown[index].disabled) return;
+    setActive(index);
+    window.requestAnimationFrame(() => panel.current?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: "nearest" }));
+  }
+
+  function onKeyDown(event: ReactKeyboardEvent<HTMLInputElement>) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      move(event.key === "ArrowDown" ? 1 : -1);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const option = shown[active] ?? (shown.length === 1 ? shown[0] : undefined);
+      if (option) pick(option);
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      trigger.current?.focus();
+    } else if (event.key === "Tab") {
+      setOpen(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        ref={trigger}
+        type="button"
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listId}
+        disabled={disabled}
+        onClick={toggle}
+        className={`${INPUT} flex cursor-pointer items-center justify-between gap-2 text-left disabled:cursor-default`}
+      >
+        <span className={`min-w-0 truncate ${selected ? "" : "app-muted"}`}>
+          {selected ? <>{selected.label}{selected.hint && <span className="app-muted"> · {selected.hint}</span>}</> : placeholder}
+        </span>
+        <ChevronDown size={16} className={`app-muted shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && createPortal(
+        <div
+          ref={panel}
+          style={box}
+          className={`${poppins.className} app-surface app-text fixed z-[350] flex flex-col overflow-hidden rounded-[10px] border border-[color:var(--app-border)] text-[13.5px] shadow-[0_14px_34px_rgba(8,25,55,.22)]`}
+        >
+          <div className="app-muted flex items-center gap-2 border-b border-[color:var(--app-border)] px-2.5">
+            <Search size={16} className="shrink-0" />
+            <input
+              autoFocus
+              type="search"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setActive(-1);
+              }}
+              onKeyDown={onKeyDown}
+              placeholder={searchPlaceholder}
+              aria-label={searchPlaceholder}
+              className="app-text h-10 min-w-0 flex-1 border-0 bg-transparent outline-none"
+            />
+          </div>
+          <div id={listId} role="listbox" className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
+            {shown.length ? (
+              shown.map((option, index) => (
+                <div
+                  key={option.value}
+                  role="option"
+                  data-index={index}
+                  aria-selected={option.value === value}
+                  aria-disabled={option.disabled}
+                  onMouseEnter={() => !option.disabled && setActive(index)}
+                  onClick={() => pick(option)}
+                  title={option.label}
+                  className={`grid gap-px border-b border-[color:color-mix(in_srgb,var(--app-border)_55%,transparent)] px-3 py-2 last:border-b-0 ${
+                    option.disabled ? "app-muted cursor-not-allowed opacity-60" : "cursor-pointer"
+                  } ${index === active ? "bg-[var(--app-surface-muted)]" : ""} ${option.value === value ? "font-semibold text-[#1679AB]" : ""}`}
+                >
+                  <span className="line-clamp-2 min-w-0 leading-snug">{option.label}</span>
+                  {option.hint && <span className="app-muted truncate text-xs font-normal">{option.hint}</span>}
+                </div>
+              ))
+            ) : (
+              <p className="app-muted px-3 py-3">{empty}</p>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
+
 export function Field({
   label, required = false, hint, error, span, children,
 }: { label: string; required?: boolean; hint?: ReactNode; error?: string; span?: 2 | 3; children: ReactNode }) {
@@ -536,13 +741,16 @@ export function FormGrid({ children }: { children: ReactNode }) {
 }
 
 /** Lista "etiqueta → valor" de las fichas. */
+// Línea suave entre datos, como la del prototipo (más tenue que el borde de las tarjetas).
+const KV_LINE = "border-[color:color-mix(in_srgb,var(--app-border)_55%,transparent)]";
+
 export function Kv({ rows }: { rows: ([string, ReactNode] | null)[] }) {
   return (
     <dl className="mb-2 grid grid-cols-1 sm:grid-cols-[minmax(110px,38%)_1fr]">
       {rows.filter((row): row is [string, ReactNode] => row !== null).map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="app-muted pt-1.5 pr-2.5 text-[12.5px] sm:border-b sm:border-[color:var(--app-border)] sm:py-1.5">{label}</dt>
-          <dd className="min-w-0 border-b border-[color:var(--app-border)] py-1.5 [overflow-wrap:anywhere]">{value}</dd>
+          <dt className={`app-muted pt-1.5 pr-2.5 text-[12.5px] sm:border-b sm:py-1.5 ${KV_LINE}`}>{label}</dt>
+          <dd className={`min-w-0 border-b py-1.5 [overflow-wrap:anywhere] ${KV_LINE}`}>{value}</dd>
         </div>
       ))}
     </dl>

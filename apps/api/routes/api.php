@@ -20,6 +20,7 @@ use App\Modules\Operations\Http\Controllers\ChecklistController;
 use App\Modules\Operations\Http\Controllers\TimeEntryController;
 use App\Modules\Operations\Http\Controllers\ResourceController;
 use App\Modules\Documents\Http\Controllers\DocumentController;
+use App\Modules\Finance\Http\Controllers\ExchangeRateController;
 use App\Modules\Finance\Http\Controllers\InvoiceController;
 use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
@@ -28,6 +29,9 @@ use App\Modules\Crm\Http\Controllers\CrmLeadController;
 use App\Modules\Portal\Http\Controllers\PortalController;
 use App\Modules\Core\Http\Controllers\EmployeeController;
 use App\Modules\Core\Http\Controllers\SearchController;
+use App\Modules\Core\Http\Controllers\RoleController;
+use App\Modules\Core\Http\Controllers\UserController;
+use App\Modules\Core\Http\Controllers\TenantSettingsController;
 
 Route::prefix('v1')->group(function () {
     Route::get('/saas-plans', [SaasPlanController::class, 'index']);
@@ -45,6 +49,25 @@ Route::prefix('v1')->group(function () {
         Route::get('/me/permissions', [AuthController::class, 'permissions']);
         Route::get('/me/access', [AuthController::class, 'access']);
         Route::post('/me/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
+
+        // Roles y permisos de la empresa (Administración). Como en el prototipo, dependen del recurso "usuarios".
+        Route::middleware('permission:users.view')->get('/roles', [RoleController::class, 'index']);
+        Route::middleware('permission:users.manage')->group(function () {
+            Route::post('/roles', [RoleController::class, 'store']);
+            Route::put('/roles/{role}/permissions', [RoleController::class, 'updatePermissions']);
+        });
+
+        // Usuarios de la empresa (Administración)
+        Route::middleware('permission:users.view')->get('/users', [UserController::class, 'index']);
+        Route::middleware('permission:users.manage')->group(function () {
+            Route::post('/users', [UserController::class, 'store']);
+            Route::put('/users/{user}', [UserController::class, 'update']);
+            Route::post('/users/{user}/status', [UserController::class, 'setStatus']);
+        });
+
+        // Ajustes de la empresa (segregación de funciones)
+        Route::get('/tenant/settings', [TenantSettingsController::class, 'show']);
+        Route::middleware('permission:tenant.manage')->put('/tenant/settings', [TenantSettingsController::class, 'update']);
 
         // Buscador global de la cabecera
         Route::middleware('permission:core.view')->get('/search', [SearchController::class, 'index']);
@@ -158,12 +181,16 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:quotations.manage')->group(function () {
             Route::post('/quotations', [QuotationController::class, 'store']);
             Route::post('/quotations/{quotation}/submit', [QuotationController::class, 'submit']);
-            Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
-            Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject']);
             Route::put('/quotations/{quotation}', [QuotationController::class, 'update']);
             Route::post('/quotations/{quotation}/expire', [QuotationController::class, 'expire']);
             Route::post('/quotations/{quotation}/cancel', [QuotationController::class, 'cancel']);
             Route::post('/quotations/{quotation}/versions', [QuotationController::class, 'newVersion']);
+        });
+
+        // Aprobar es un permiso aparte: quien cotiza no necesariamente aprueba.
+        Route::middleware('permission:quotations.approve')->group(function () {
+            Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
+            Route::post('/quotations/{quotation}/reject', [QuotationController::class, 'reject']);
         });
 
         // Contratos
@@ -233,6 +260,14 @@ Route::prefix('v1')->group(function () {
             Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
         });
         Route::middleware('permission:billing.manage')->post('/invoices', [InvoiceController::class, 'store']);
+
+        // Monedas y tipo de cambio. El vigente lo lee también quien cotiza en dólares.
+        Route::get('/exchange-rates/current', [ExchangeRateController::class, 'current']);
+        Route::middleware('permission:billing.view')->group(function () {
+            Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
+            Route::get('/exchange-rates/summary', [ExchangeRateController::class, 'summary']);
+        });
+        Route::middleware('permission:billing.manage')->post('/exchange-rates', [ExchangeRateController::class, 'store']);
 
         // Cuentas por cobrar y pagos
         Route::middleware('permission:billing.view')->get('/receivables', [PaymentController::class, 'receivables']);

@@ -53,7 +53,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Recurrencia", icon: Repeat, superModule: "Finanzas", soon: true },
   { label: "Bancos y caja", icon: Landmark, superModule: "Finanzas", soon: true },
   { label: "Facturación electrónica", icon: ShieldCheck, superModule: "Finanzas", soon: true },
-  { label: "Monedas y tipo de cambio", icon: TrendingUp, superModule: "Finanzas", soon: true },
+  { href: "/exchange-rates", label: "Monedas y tipo de cambio", module: "FINANZAS", requiredPermission: "billing.view", icon: TrendingUp, superModule: "Finanzas" },
 
   { label: "Órdenes de compra", icon: ShoppingCart, superModule: "Compras", soon: true },
   { label: "Comprobantes de proveedor", icon: ReceiptText, superModule: "Compras", soon: true },
@@ -77,8 +77,8 @@ const MENU_ITEMS: MenuItem[] = [
 
   { label: "Configuración", icon: Settings, superModule: "Administración", soon: true },
   { label: "Módulos y plan", icon: ToggleLeft, superModule: "Administración", soon: true },
-  { label: "Usuarios", icon: UserCog, superModule: "Administración", soon: true },
-  { label: "Roles y permisos", icon: Key, superModule: "Administración", soon: true },
+  { href: "/users", label: "Usuarios", requiredPermission: "users.view", icon: UserCog, superModule: "Administración" },
+  { href: "/roles", label: "Roles y permisos", requiredPermission: "users.view", icon: Key, superModule: "Administración" },
   { label: "Seguridad y aislamiento", icon: Lock, superModule: "Administración", soon: true },
   { label: "Usuarios del portal", icon: UserRound, superModule: "Administración", soon: true },
   { label: "Reglas de aprobación", icon: ListChecks, superModule: "Administración", soon: true },
@@ -188,7 +188,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   //  - la empresa no tiene el módulo en su plan → se muestra con candado y aviso de plan;
   //  - lo tiene, pero el rol del usuario no lo incluye → se oculta.
   const menuWithLockState = MENU_ITEMS.map((item) =>
-    item.soon ? item : { ...item, locked: !modules.includes(item.module) },
+    // Sin "module" la pantalla es de administración de la empresa: no depende del plan.
+    item.soon ? item : { ...item, locked: item.module !== undefined && !modules.includes(item.module) },
   ).filter((item) => item.soon || item.locked || permissions.includes(item.requiredPermission));
 
   // El rol real llega con /me/access; mientras tanto se muestra uno genérico.

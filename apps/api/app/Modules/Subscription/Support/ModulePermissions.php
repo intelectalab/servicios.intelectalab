@@ -13,9 +13,10 @@ class ModulePermissions
 
     /**
      * Códigos de permiso para el administrador de un tenant con esos módulos:
-     * los de administración, más view/manage de cada prefijo que el catálogo
-     * (module_catalog.permission_prefixes) asocia a los módulos obligatorios y
-     * a los indicados.
+     * los de administración, más todos los permisos de la tabla `permissions`
+     * cuyo prefijo el catálogo (module_catalog.permission_prefixes) asocia a los
+     * módulos obligatorios y a los indicados: view, manage y los de acción
+     * (p. ej. quotations.approve).
      */
     public static function codesFor(iterable $moduleCodes): array
     {
@@ -29,9 +30,18 @@ class ModulePermissions
 
         $codes = self::BASE;
 
-        foreach ($prefixes->unique() as $prefix) {
-            $codes[] = "{$prefix}.view";
-            $codes[] = "{$prefix}.manage";
+        $prefixes = $prefixes->unique()->values();
+
+        if ($prefixes->isNotEmpty()) {
+            $codes = array_merge($codes, DB::table('permissions')
+                ->where(function ($query) use ($prefixes) {
+                    foreach ($prefixes as $prefix) {
+                        $query->orWhere('code', 'like', "{$prefix}.%");
+                    }
+                })
+                ->orderBy('code')
+                ->pluck('code')
+                ->all());
         }
 
         return array_values(array_unique($codes));

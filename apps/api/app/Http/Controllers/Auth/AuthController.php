@@ -290,7 +290,11 @@ class AuthController extends Controller
             'modules' => $tenantId ? TenantModules::enabledCodes($tenantId) : [],
             'permissions' => $request->user()->permissionCodes(),
             // Para la cabecera: a qué empresa pertenece la sesión y con qué rol.
-            'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->first(['name', 'code']) : null,
+            'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->first(['name', 'code', 'legal_name']) : null,
+            // Razón social y RUC de la empresa, para los documentos que se descargan (cotización en PDF).
+            'company' => $tenantId
+                ? DB::table('companies')->where('tenant_id', $tenantId)->orderBy('created_at')->first(['legal_name', 'tax_identifier'])
+                : null,
             'roles' => $tenantId
                 ? DB::table('user_roles')
                     ->join('roles', 'roles.id', '=', 'user_roles.role_id')

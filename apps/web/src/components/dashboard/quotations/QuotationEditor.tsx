@@ -6,9 +6,9 @@ import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { FREQUENCIES, IGV_RATE, customerDocument, customerName, isoDateFromNow, money, setFlash } from "@/lib/commercial";
-import { Btn, Card, Field, FormGrid, INPUT, Kv, LoadError, PageHead, Screen, TD, TH, useToasts } from "@/components/ui/proto";
+import { Btn, Card, Field, FormGrid, INPUT, Kv, LoadError, PageHead, Screen, SearchSelect, TD, TH, useToasts } from "@/components/ui/proto";
 import type { Customer, PaginatedResponse } from "@/types/customer";
-import type { Frequency, Quotation, Service } from "@/types/commercial";
+import type { ExchangeRate, Frequency, Quotation, Service } from "@/types/commercial";
 
 // Días de validez con los que nace una cotización.
 const DEFAULT_VALIDITY_DAYS = 15;
@@ -26,7 +26,12 @@ type Line = {
   discount_pct: number;
 };
 
+type Currency = "PEN" | "USD";
+
 const round2 = (value: number) => Math.round(value * 100) / 100;
+
+/** Precio del catálogo (siempre en soles) en la moneda de la cotización. */
+const inCurrency = (amount: number, currency: Currency, rate: number) => (currency === "USD" ? round2(amount / rate) : amount);
 
 /** Mismo cálculo que hace la API al guardar: (cantidad × precio − descuento) + IGV. */
 function lineAmounts(line: Line) {
@@ -55,6 +60,9 @@ export default function QuotationEditor() {
   const [validUntil, setValidUntil] = useState(isoDateFromNow(DEFAULT_VALIDITY_DAYS));
   const [terms, setTerms] = useState("Precios en soles incluyen IGV. Pago a 30 días.");
   const [lines, setLines] = useState<Line[]>([]);
+  const [currency, setCurrency] = useState<Currency>("PEN");
+  // Tipo de cambio (venta) con el que se convierten los precios del catálogo.
+  const [rate, setRate] = useState(0);
   const [serviceToAdd, setServiceToAdd] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
@@ -64,12 +72,16 @@ export default function QuotationEditor() {
 
     async function load() {
       try {
-        const [customerPage, servicePage, quotation] = await Promise.all([
+        const [customerPage, servicePage, quotation, currentRate] = await Promise.all([
           apiFetch<PaginatedResponse<Customer>>(`/v1/customers?status=ACTIVE&per_page=${SELECT_LIMIT}`),
           apiFetch<PaginatedResponse<Service>>(`/v1/services?per_page=${SELECT_LIMIT}`),
           id ? apiFetch<Quotation>(`/v1/quotations/${id}`) : Promise.resolve(null),
+          // Sin tipo de cambio registrado solo se cotiza en soles.
+          apiFetch<Partial<ExchangeRate> | null>("/v1/exchange-rates/current").catch(() => null),
         ]);
         if (cancelled) return;
+        // Un borrador en dólares conserva el tipo de cambio con el que se convirtieron sus líneas.
+        setRate(Number((quotation?.currency === "USD" && quotation.exchange_rate) || currentRate?.sell || 0));
 
         if (quotation && quotation.status !== "DRAFT") {
           setLoadError("Solo las cotizaciones en BORRADOR se pueden editar. Crea una nueva versión.");
@@ -83,6 +95,7 @@ export default function QuotationEditor() {
             customerList.push(quotation.customer);
           }
           setCustomerId(quotation.customer_id);
+          setCurrency(quotation.currency === "USD" ? "USD" : "PEN");
           setValidUntil(quotation.valid_until ? quotation.valid_until.slice(0, 10) : "");
           setTerms(quotation.notes ?? "");
           setLines(
@@ -133,12 +146,34 @@ export default function QuotationEditor() {
         unit: service.unit,
         frequency: service.recurrence?.frequency ?? null,
         quantity: 1,
-        // Snapshot: se copia el precio vigente al agregar la línea.
-        unit_price: Number(service.current_price!.amount),
+        // Snapshot: se copia el precio vigente al agregar la línea, en la moneda de la cotización.
+        unit_price: inCurrency(Number(service.current_price!.amount), currency, rate),
         discount_pct: 0,
       },
     ]);
     setServiceToAdd("");
+  }
+
+  /** Cambia la moneda y convierte los precios de las líneas al tipo de cambio, como el prototipo. */
+  function changeCurrency(next: Currency) {
+    if (next === currency) return;
+    if (!(rate > 0)) {
+      toast("Registra el tipo de cambio del dólar en Finanzas → Monedas y tipo de cambio", "warning");
+      return;
+    }
+    setLines((current) =>
+      current.map((line) => {
+        const catalog = services.find((service) => service.id === line.service_id)?.current_price;
+        // Si la línea sigue al precio del catálogo se toma de ahí, para no arrastrar redondeos al ir y volver.
+        const followsCatalog = catalog && inCurrency(Number(catalog.amount), currency, rate) === line.unit_price;
+        const unitPrice = followsCatalog
+          ? inCurrency(Number(catalog.amount), next, rate)
+          : round2(next === "USD" ? line.unit_price / rate : line.unit_price * rate);
+        return { ...line, unit_price: unitPrice };
+      }),
+    );
+    setTerms((current) => (next === "USD" ? current.replace("soles", "dólares americanos") : current.replace("dólares americanos", "soles")));
+    setCurrency(next);
   }
 
   function updateLine(key: number, field: "quantity" | "discount_pct", raw: string) {
@@ -183,7 +218,7 @@ export default function QuotationEditor() {
         method: id ? "PUT" : "POST",
         body: JSON.stringify({
           customer_id: customerId,
-          currency: "PEN",
+          currency,
           valid_until: validUntil || null,
           notes: terms.trim() || null,
           items: lines.map((line) => ({
@@ -259,21 +294,30 @@ export default function QuotationEditor() {
                 error={errors.customer_id}
                 hint={<>Solo clientes activos. <Link href="/customers" className="text-[#1679AB] hover:underline">¿No existe? Créalo en Clientes</Link></>}
               >
-                <select className={INPUT} value={customerId} onChange={(e) => setCustomerId(e.target.value)} disabled={!loaded}>
-                  <option value="">{loaded ? "Seleccionar…" : "Cargando…"}</option>
-                  {customers.map((customer) => (
-                    <option key={customer.id} value={customer.id}>
-                      {customerName(customer)} · {customerDocument(customer)}
-                    </option>
-                  ))}
-                </select>
+                <SearchSelect
+                  value={customerId}
+                  onChange={setCustomerId}
+                  disabled={!loaded}
+                  placeholder={loaded ? "Seleccionar…" : "Cargando…"}
+                  searchPlaceholder="Buscar cliente por nombre o documento"
+                  empty="Ningún cliente activo coincide."
+                  options={customers.map((customer) => ({
+                    value: customer.id,
+                    label: customerName(customer),
+                    hint: customerDocument(customer),
+                  }))}
+                />
               </Field>
               <Field label="Válida hasta" error={errors.valid_until}>
                 <input className={INPUT} type="date" value={validUntil} onChange={(e) => setValidUntil(e.target.value)} />
               </Field>
-              <Field label="Moneda" hint="Moneda funcional">
-                <select className={INPUT} value="PEN" disabled>
+              <Field
+                label="Moneda"
+                hint={currency === "USD" ? `T.C. venta ${rate.toFixed(3)}: los precios del catálogo se convierten` : "Moneda funcional"}
+              >
+                <select className={INPUT} value={currency} onChange={(e) => changeCurrency(e.target.value as Currency)} disabled={!loaded}>
                   <option value="PEN">Soles (PEN)</option>
+                  <option value="USD">Dólares (USD)</option>
                 </select>
               </Field>
               <Field label="Condiciones" span={3}>
@@ -283,7 +327,7 @@ export default function QuotationEditor() {
           </Card>
 
           <Card title="Líneas">
-            <div className="proto-tbl-wrap -mx-5 overflow-x-auto">
+            <div className="proto-tbl-wrap -mx-3 overflow-x-auto sm:-mx-5">
               <table className="proto-tbl w-full border-collapse text-[13px]">
                 <thead>
                   <tr>
@@ -301,15 +345,17 @@ export default function QuotationEditor() {
                     lines.map((line) => {
                       const amounts = lineAmounts(line);
                       const catalog = services.find((service) => service.id === line.service_id)?.current_price;
-                      const priceMoved = catalog && Number(catalog.amount) !== line.unit_price;
+                      const catalogPrice = catalog ? inCurrency(Number(catalog.amount), currency, rate) : 0;
+                      // El precio del catálogo (en soles) se muestra siempre; en ámbar si ya no coincide con la línea.
+                      const priceMoved = catalog && catalogPrice !== line.unit_price;
                       return (
                         <tr key={line.key}>
                           <td className={TD} data-label="Servicio">
                             <strong className="font-semibold">{line.name}</strong>
                             <small className="app-muted block text-xs">
                               {[line.unit, line.frequency && `recurrente ${FREQUENCIES[line.frequency]}`].filter(Boolean).join(" · ")}
-                              {priceMoved && (
-                                <span className="text-[#B26E00]">
+                              {catalog && (
+                                <span className={priceMoved ? "text-[#B26E00]" : ""}>
                                   {line.unit || line.frequency ? " · " : ""}precio vigente hoy {money(catalog.amount)}
                                 </span>
                               )}
@@ -326,7 +372,7 @@ export default function QuotationEditor() {
                               aria-label="Cantidad"
                             />
                           </td>
-                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Precio unit.">{money(line.unit_price)}</td>
+                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Precio unit.">{money(line.unit_price, currency)}</td>
                           <td className={`${TD} text-right`} data-label="Desc. %">
                             <input
                               className={NUM_INPUT}
@@ -339,8 +385,8 @@ export default function QuotationEditor() {
                               aria-label="Descuento"
                             />
                           </td>
-                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="IGV">{money(amounts.tax)}</td>
-                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Total"><strong>{money(amounts.total)}</strong></td>
+                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="IGV">{money(amounts.tax, currency)}</td>
+                          <td className={`${TD} whitespace-nowrap text-right tabular-nums`} data-label="Total"><strong>{money(amounts.total, currency)}</strong></td>
                           <td className={TD} data-label="">
                             <button
                               type="button"
@@ -367,18 +413,24 @@ export default function QuotationEditor() {
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <div className="flex-[1_1_260px]">
                 <Field label="Agregar servicio">
-                  <select className={INPUT} value={serviceToAdd} onChange={(e) => setServiceToAdd(e.target.value)} disabled={!loaded}>
-                    <option value="">{loaded ? "Seleccionar servicio…" : "Cargando…"}</option>
-                    {services.filter((service) => service.status !== "ARCHIVED").map((service) => {
+                  <SearchSelect
+                    value={serviceToAdd}
+                    onChange={setServiceToAdd}
+                    disabled={!loaded}
+                    placeholder={loaded ? "Seleccionar servicio…" : "Cargando…"}
+                    searchPlaceholder="Buscar servicio por nombre o código"
+                    empty="Ningún servicio coincide."
+                    options={services.filter((service) => service.status !== "ARCHIVED").map((service) => {
                       const sellable = service.status === "ACTIVE" && service.current_price !== null;
                       const reason = service.status !== "ACTIVE" ? " (no activo: no vendible)" : !service.current_price ? " (no vendible)" : "";
-                      return (
-                        <option key={service.id} value={service.id} disabled={!sellable}>
-                          {service.name} — {service.current_price ? money(service.current_price.amount) : "sin precio"}{reason}
-                        </option>
-                      );
+                      return {
+                        value: service.id,
+                        label: service.name,
+                        hint: `${service.code} · ${service.current_price ? money(service.current_price.amount) : "sin precio"}${reason}`,
+                        disabled: !sellable,
+                      };
                     })}
-                  </select>
+                  />
                 </Field>
               </div>
               <Btn variant="secondary" onClick={addLine}>
@@ -392,15 +444,15 @@ export default function QuotationEditor() {
         <Card className="lg:sticky lg:top-0">
           <Kv
             rows={[
-              ["Subtotal", money(totals.subtotal)],
-              ["Descuentos", `− ${money(totals.discount)}`],
-              ["Base imponible", money(totals.base)],
-              [`IGV ${IGV_RATE}%`, money(totals.tax)],
+              ["Subtotal", money(totals.subtotal, currency)],
+              ["Descuentos", `− ${money(totals.discount, currency)}`],
+              ["Base imponible", money(totals.base, currency)],
+              [`IGV ${IGV_RATE}%`, money(totals.tax, currency)],
             ]}
           />
           <div className="flex items-baseline justify-between pb-3.5 pt-2.5">
             <span>Total</span>
-            <strong className="text-[26px] font-semibold tabular-nums">{money(totals.total)}</strong>
+            <strong className="text-[26px] font-semibold tabular-nums">{money(totals.total, currency)}</strong>
           </div>
           <div className="grid gap-2">
             <Btn block onClick={() => save(false)} disabled={saving !== null || !loaded}>
