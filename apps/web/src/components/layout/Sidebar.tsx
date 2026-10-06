@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Lock, Sparkles, X, ChevronRight, Layers, Clock3, UserRound, Building2 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useState, type ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType } from "react";
 import { poppins } from "@/lib/fonts";
 
 type MenuIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string; className?: string }>;
@@ -90,6 +90,43 @@ export default function Sidebar({
   const router = useRouter();
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
   const [upgradeModalModule, setUpgradeModalModule] = useState<string | null>(null);
+  // Modo íconos: grupo cuyo panel de pantallas está abierto junto a su ícono.
+  const [flyout, setFlyout] = useState<{ group: string; left: number; top?: number; bottom?: number } | null>(null);
+  const flyoutPanel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!flyout) return;
+    const close = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!flyoutPanel.current?.contains(target) && !target.closest("[data-group-icon]")) setFlyout(null);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setFlyout(null); };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [flyout]);
+
+  // Al desplegar la barra, el panel del modo íconos ya no aplica.
+  const openFlyout = compact ? flyout : null;
+
+  function toggleFlyout(event: { currentTarget: HTMLElement }, group: string) {
+    if (flyout?.group === group) {
+      setFlyout(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    // En la mitad inferior de la pantalla el panel crece hacia arriba para no salirse.
+    const below = rect.top < window.innerHeight / 2;
+    setTooltip(null);
+    setFlyout({
+      group,
+      left: rect.right + 10,
+      ...(below ? { top: Math.max(8, rect.top - 6) } : { bottom: Math.max(8, window.innerHeight - rect.bottom - 6) }),
+    });
+  }
   // Los grupos que todavía no tienen ninguna pantalla construida arrancan plegados.
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
     const builtGroups = new Set(items.filter((item) => !item.soon).map((item) => item.superModule || "CORE"));
@@ -105,7 +142,7 @@ export default function Sidebar({
     setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
   };
 
-  function showTooltip(event: { currentTarget: HTMLAnchorElement }, label: string, locked?: boolean) {
+  function showTooltip(event: { currentTarget: HTMLElement }, label: string, locked?: boolean) {
     const rect = event.currentTarget.getBoundingClientRect();
     const text = locked ? `${label} (Requiere cambio de plan)` : label;
     setTooltip({ label: text, top: rect.top + rect.height / 2, left: rect.right + 12 });
@@ -113,10 +150,7 @@ export default function Sidebar({
 
   const isActive = (href: string) => pathname === href || Boolean(pathname?.startsWith(`${href}/`));
 
-  // Con la barra en modo íconos solo se muestran las pantallas que ya existen.
-  const visibleItems = compact ? items.filter((item) => !item.soon) : items;
-
-  const groupedItems = visibleItems.reduce((acc, item) => {
+  const groupedItems = items.reduce((acc, item) => {
     const group = item.superModule || "CORE";
     if (!acc[group]) acc[group] = [];
     acc[group].push(item);
@@ -169,7 +203,7 @@ export default function Sidebar({
           compact ? "space-y-1 px-2 pt-1" : ""
         }`}
         aria-label="Navegación principal"
-        onScroll={() => setTooltip(null)}
+        onScroll={() => { setTooltip(null); setFlyout(null); }}
       >
         {permissionsLoading ? (
           /* Esqueleto de carga fluido para evitar el parpadeo y los saltos visuales */
@@ -184,42 +218,31 @@ export default function Sidebar({
             const GroupIcon = groupIcons[superModule] ?? Layers;
             const hasActive = groupItems.some((item) => !item.soon && isActive(item.href));
 
-            // Modo íconos: un ícono por pantalla construida, con su tooltip.
+            // Modo íconos: un ícono por grupo, los mismos que con la barra desplegada.
+            // Al pulsarlo se abre al lado el panel con las pantallas de ese grupo.
             if (compact) {
-              return groupItems.map((item) => {
-                if (item.soon) return null;
-                const { href, label, icon: Icon, locked } = item;
-                const active = isActive(href);
-
-                return (
-                  <Link
-                    key={href}
-                    href={locked ? "#" : href}
-                    onClick={(e) => {
-                      if (locked) {
-                        e.preventDefault();
-                        setUpgradeModalModule(label);
-                      } else {
-                        onNavigate();
-                      }
-                    }}
-                    onMouseEnter={(event) => showTooltip(event, label, locked)}
-                    onMouseLeave={() => setTooltip(null)}
-                    onFocus={(event) => showTooltip(event, label, locked)}
-                    onBlur={() => setTooltip(null)}
-                    aria-label={label}
-                    aria-current={active ? "page" : undefined}
-                    className={`relative flex h-10 items-center justify-center rounded-lg transition-colors ${
-                      active ? "bg-[rgb(255_255_255/0.20)] text-white" : "text-white/85 hover:bg-[rgb(255_255_255/0.10)] hover:text-white"
-                    } ${locked ? "opacity-60" : ""}`}
-                  >
-                    <Icon size={18} strokeWidth={2} />
-                    {locked && (
-                      <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-[#fff] ring-2 ring-[#1679AB]" />
-                    )}
-                  </Link>
-                );
-              });
+              const open = openFlyout?.group === superModule;
+              return (
+                <button
+                  key={superModule}
+                  type="button"
+                  data-group-icon
+                  onClick={(event) => toggleFlyout(event, superModule)}
+                  onMouseEnter={(event) => { if (!openFlyout) showTooltip(event, superModule); }}
+                  onMouseLeave={() => setTooltip(null)}
+                  onFocus={(event) => { if (!openFlyout) showTooltip(event, superModule); }}
+                  onBlur={() => setTooltip(null)}
+                  aria-label={superModule}
+                  aria-haspopup="menu"
+                  aria-expanded={open}
+                  className={`relative flex h-10 w-full cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                    hasActive || open ? "bg-[rgb(255_255_255/0.20)] text-white" : "text-white/85 hover:bg-[rgb(255_255_255/0.10)] hover:text-white"
+                  }`}
+                >
+                  {hasActive && <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-[#fff]" />}
+                  <GroupIcon size={18} strokeWidth={2} />
+                </button>
+              );
             }
 
             return (
@@ -304,7 +327,74 @@ export default function Sidebar({
         )}
       </nav>
 
-      {compact && tooltip && typeof document !== "undefined" && createPortal(
+      {openFlyout && typeof document !== "undefined" && createPortal(
+        <div
+          ref={flyoutPanel}
+          role="menu"
+          aria-label={openFlyout.group}
+          className={`${poppins.className} fixed z-50 flex max-h-[80vh] w-[236px] flex-col overflow-hidden rounded-[10px] text-white shadow-[0_14px_34px_rgba(8,25,55,.35)]`}
+          style={{ left: openFlyout.left, top: openFlyout.top, bottom: openFlyout.bottom, background: "linear-gradient(180deg, #1679AB 0%, #0F5A82 100%)" }}
+        >
+          <div className="px-4 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-white/60">{openFlyout.group}</div>
+          <div className="min-h-0 flex-1 overflow-y-auto pb-1.5 [scrollbar-color:rgba(255,255,255,.2)_transparent] [scrollbar-width:thin]">
+            {(groupedItems[openFlyout.group] ?? []).map((item) => {
+              if (item.soon) {
+                return (
+                  <div
+                    key={`soon-${item.label}`}
+                    aria-disabled="true"
+                    title="Próximamente"
+                    className="flex cursor-default items-center gap-2 px-4 py-2 text-[12.8px] text-white/45"
+                  >
+                    <span className="truncate">{item.label}</span>
+                    <Clock3 size={12} aria-label="Próximamente" className="ml-auto shrink-0" />
+                  </div>
+                );
+              }
+
+              const { href, label, locked } = item;
+              const active = isActive(href);
+
+              return (
+                <Link
+                  key={href}
+                  href={locked ? "#" : href}
+                  role="menuitem"
+                  onClick={(e) => {
+                    setFlyout(null);
+                    if (locked) {
+                      e.preventDefault();
+                      setUpgradeModalModule(label);
+                    } else {
+                      onNavigate();
+                    }
+                  }}
+                  aria-current={active ? "page" : undefined}
+                  className={`relative flex items-center gap-2 px-4 py-2 text-[12.8px] transition-colors ${
+                    active
+                      ? "bg-[rgb(255_255_255/0.16)] font-semibold text-white"
+                      : locked
+                      ? "text-white/60 hover:bg-[rgb(255_255_255/0.07)] hover:text-white"
+                      : "text-white/85 hover:bg-[rgb(255_255_255/0.07)] hover:text-white"
+                  }`}
+                >
+                  {active && <span className="absolute inset-y-0 left-0 w-1 bg-[#fff]" />}
+                  <span className="truncate">{label}</span>
+                  {locked && (
+                    <span className="ml-auto flex shrink-0 items-center gap-1 rounded-[5px] bg-[rgb(255_255_255/0.15)] px-1.5 text-[10px] font-semibold leading-[18px] text-white">
+                      <Lock size={10} />
+                      Plan
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {compact && tooltip && !openFlyout && typeof document !== "undefined" && createPortal(
         <span
           className="pointer-events-none fixed z-50 -translate-y-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-lg"
           style={{ top: tooltip.top, left: tooltip.left, backgroundColor: "var(--app-tooltip)", color: "var(--app-tooltip-text)" }}

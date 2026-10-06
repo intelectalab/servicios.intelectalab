@@ -6,7 +6,7 @@ Estado al 2026-10-05.
 
 ### Menú lateral
 - `MENU_ITEMS` (en `apps/web/src/components/layout/AppShell.tsx`) replica los grupos y el orden del prototipo.
-- Las pantallas que aún no existen van con `soon: true`: se ven atenuadas, no navegan y se ocultan en modo íconos. Al construir una se cambia `soon` por `href` + `module` + `requiredPermission`.
+- Las pantallas que aún no existen van con `soon: true`: se ven atenuadas y no navegan. En modo íconos la barra muestra un ícono por módulo (los mismos que desplegada) y al pulsarlo abre un panel con sus pantallas (2026-10-06). Al construir una se cambia `soon` por `href` + `module` + `requiredPermission`.
 - Clientes, Proveedores y Empleados se mantienen como **tres ítems** (el prototipo los junta en "Clientes y actores").
 - "Servicios" pasó a llamarse "Catálogo de servicios", como en el prototipo (2026-10-05).
 - Módulo fuera del plan → candado "Plan". Módulo en el plan pero sin permiso → oculto. Los datos vienen de `GET /v1/me/access`.
