@@ -160,6 +160,42 @@ export interface Contract {
   history?: HistoryEntry[];
 }
 
+export type OrderStatus = "DRAFT" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+
+export interface OrderItem {
+  id: string;
+  service_id: string | null;
+  description: string;
+  quantity: string;
+  unit_price: string;
+  /** Total de la línea con IGV, copiado de la cotización o del contrato. */
+  line_total: string;
+  service_snapshot: QuotationItem["service_snapshot"];
+  service?: { id: string; unit: string | null } | null;
+}
+
+export interface Order {
+  id: string;
+  customer_id: string;
+  contract_id: string | null;
+  quotation_id: string | null;
+  order_number: string;
+  status: OrderStatus;
+  order_date: string;
+  currency: string;
+  total: string;
+  notes: string | null;
+  created_at: string;
+  customer: Customer | null;
+  quotation: { id: string; quotation_number: string } | null;
+  contract: { id: string; contract_number: string } | null;
+  /** Solo en el detalle. */
+  items?: OrderItem[];
+  creator?: { id: string; name: string } | null;
+  customer_contact?: { address: string | null };
+  history?: HistoryEntry[];
+}
+
 export interface ExchangeRate {
   id: string;
   rate_date: string;

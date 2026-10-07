@@ -2,11 +2,12 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Check, FileText, Settings } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { customerName, historyLabel, money, stateOf, takeFlash } from "@/lib/commercial";
+import { customerName, historyLabel, money, setFlash, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES, SLA_LEVELS, billingOf, downloadContractPdf, slaLabel, validity } from "@/lib/contracts";
+import { ORDER_STATES } from "@/lib/orders";
 import {
   Badge, Btn, Card, Chip, DataTable, Field, INPUT, Kv, LoadError, Modal, PageHead, Screen, StateTrack, TD, TH, Timeline, Who,
   useToasts, type Column, type Tone,
@@ -39,11 +40,6 @@ const CONFIRMS: Record<"suspend" | "reactivate" | "terminate" | "expire", Confir
 const SERVICE_STATUS: Record<string, [string, Tone]> = {
   PENDING: ["Pendiente", "neutral"], ACTIVE: ["Activo", "success"], SUSPENDED: ["Suspendido", "warning"],
   COMPLETED: ["Completado", "info"], CANCELLED: ["Cancelado", "muted"],
-};
-
-const ORDER_STATUS: Record<string, [string, Tone]> = {
-  DRAFT: ["Borrador", "neutral"], CONFIRMED: ["Confirmada", "info"], IN_PROGRESS: ["En ejecución", "warning"],
-  COMPLETED: ["Completada", "success"], CANCELLED: ["Cancelada", "muted"],
 };
 
 // Estado en el que cada movimiento deja el contrato, para cuando la auditoría no lo guardó.
@@ -140,6 +136,7 @@ function EditModal({ contract, onClose, onSaved }: { contract: Contract; onClose
 
 export default function ContractDetail() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const { toast, toasts } = useToasts();
 
   const [contract, setContract] = useState<Contract | null>(null);
@@ -174,18 +171,30 @@ export default function ContractDetail() {
   }, [id, reload]);
 
   /** Ejecuta una acción del contrato; la API devuelve la ficha ya actualizada. */
-  async function run(path: string, done: string, body?: Record<string, unknown>, refetch = false) {
+  async function run(path: string, done: string, body?: Record<string, unknown>) {
     setBusy(true);
     try {
       const updated = await apiFetch<Contract>(`/v1/contracts/${id}/${path}`, { method: "POST", body: body ? JSON.stringify(body) : undefined });
-      if (refetch) setReload((n) => n + 1);
-      else setContract(updated);
+      setContract(updated);
       toast(done);
       setConfirming(null);
       setActivating(false);
     } catch (err) {
       toast(firstError(err, "No se pudo completar la acción."), "danger");
     } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Orden desde el contrato vigente; como el prototipo, lleva al listado de órdenes. */
+  async function createOrder() {
+    setBusy(true);
+    try {
+      await apiFetch(`/v1/contracts/${id}/orders`, { method: "POST" });
+      setFlash("Orden creada desde el contrato");
+      router.push("/orders");
+    } catch (err) {
+      toast(firstError(err, "No se pudo crear la orden."), "danger");
       setBusy(false);
     }
   }
@@ -283,7 +292,7 @@ export default function ContractDetail() {
             {status === "ACTIVE" && (
               <Btn
                 variant="secondary"
-                onClick={() => run("orders", "Orden creada desde el contrato", undefined, true)}
+                onClick={createOrder}
                 permission="orders.manage"
                 disabled={busy || orders.length > 0}
                 title={orders.length ? "Ya tiene orden" : undefined}
@@ -433,8 +442,8 @@ export default function ContractDetail() {
                         <span key="orders" className="inline-flex flex-wrap items-center gap-1.5">
                           {orders.map((order) => (
                             <span key={order.id} className="inline-flex items-center gap-1.5">
-                              {order.order_number}
-                              <Badge tone={ORDER_STATUS[order.status]?.[1] ?? "neutral"}>{ORDER_STATUS[order.status]?.[0] ?? order.status}</Badge>
+                              <Link href={`/orders/${order.id}`} className="text-[#1679AB] hover:underline">{order.order_number}</Link>
+                              <Badge tone={stateOf(ORDER_STATES, order.status)[1]}>{stateOf(ORDER_STATES, order.status)[0]}</Badge>
                             </span>
                           ))}
                         </span>

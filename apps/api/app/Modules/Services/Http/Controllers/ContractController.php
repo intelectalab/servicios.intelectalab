@@ -270,6 +270,8 @@ class ContractController extends Controller
                 'order_date' => now()->toDateString(),
                 'currency' => $contract->currency,
                 'total' => $contract->total_value,
+                'notes' => "Orden desde {$contract->contract_number}",
+                'created_by' => $request->user()->id,
             ]);
 
             foreach ($contract->items as $item) {
@@ -291,7 +293,7 @@ class ContractController extends Controller
                 action: 'order.generate',
                 entityType: 'Order',
                 entityId: $order->id,
-                metadata: ['order_number' => $number, 'contract_id' => $contract->id, 'note' => "Orden desde {$contract->contract_number}"],
+                metadata: ['order_number' => $number, 'contract_id' => $contract->id, 'to' => 'DRAFT', 'note' => "Orden desde {$contract->contract_number}"],
             );
 
             return $order;

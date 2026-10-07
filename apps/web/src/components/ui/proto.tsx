@@ -75,7 +75,7 @@ export function Card({
   );
 }
 
-type BtnVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
+export type BtnVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
 
 const BTN_VARIANTS: Record<BtnVariant, string> = {
   primary: "bg-[#1B8FC9] text-[#fff] hover:bg-[#1679AB]",

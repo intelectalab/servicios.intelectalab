@@ -22,6 +22,8 @@ class Order extends Model
         'order_date',
         'currency',
         'total',
+        'notes',
+        'created_by',
     ];
 
     protected $casts = [
@@ -42,6 +44,26 @@ class Order extends Model
 
     public function items()
     {
-        return $this->hasMany(OrderItem::class, 'order_id');
+        return $this->hasMany(OrderItem::class, 'order_id')->orderBy('created_at');
+    }
+
+    public function customer()
+    {
+        return $this->belongsTo(\App\Modules\Core\Models\Customer::class, 'customer_id');
+    }
+
+    public function quotation()
+    {
+        return $this->belongsTo(Quotation::class, 'quotation_id');
+    }
+
+    public function contract()
+    {
+        return $this->belongsTo(Contract::class, 'contract_id');
+    }
+
+    public function creator()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 }

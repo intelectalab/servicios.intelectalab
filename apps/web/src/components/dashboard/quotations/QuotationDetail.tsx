@@ -7,6 +7,7 @@ import { ArrowLeft, Check, FileSignature, FileText, Settings } from "lucide-reac
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
 import { downloadQuotationPdf } from "@/lib/quotation-pdf";
+import { ORDER_STATES } from "@/lib/orders";
 import {
   FREQUENCIES, QUOTATION_STATES, customerName, historyLabel, money, setFlash, shortDate, stateOf, takeFlash,
 } from "@/lib/commercial";
@@ -48,11 +49,6 @@ const CONFIRMS: Record<"approve" | "reject" | "cancel", Confirm> = {
 const CONTRACT_STATUS: Record<string, [string, Tone]> = {
   DRAFT: ["Borrador", "neutral"], ACTIVE: ["Vigente", "success"], SUSPENDED: ["Suspendido", "warning"],
   TERMINATED: ["Terminado", "muted"], EXPIRED: ["Vencido", "warning"],
-};
-
-const ORDER_STATUS: Record<string, [string, Tone]> = {
-  DRAFT: ["Borrador", "neutral"], CONFIRMED: ["Confirmada", "info"], IN_PROGRESS: ["En curso", "warning"],
-  COMPLETED: ["Completada", "success"], CANCELLED: ["Cancelada", "muted"],
 };
 
 // Origen de la cotización; sin dato es una cotización directa.
@@ -138,6 +134,19 @@ export default function QuotationDetail() {
       return;
     }
     run(confirming.path, confirming.done, "No se pudo completar la acción.", confirming.reason && text ? { [confirming.reason.field]: text } : undefined);
+  }
+
+  /** Orden directa desde la cotización aprobada; como el prototipo, lleva al listado de órdenes. */
+  async function createOrder() {
+    setBusy(true);
+    try {
+      await apiFetch(`/v1/quotations/${id}/order`, { method: "POST" });
+      setFlash("Orden creada");
+      router.push("/orders");
+    } catch (err) {
+      toast(firstError(err, "No se pudo crear la orden."), "danger");
+      setBusy(false);
+    }
   }
 
   /** Convierte la cotización aprobada en contrato y abre su ficha. */
@@ -273,7 +282,7 @@ export default function QuotationDetail() {
             {status === "APPROVED" && quotation.direct_order_enabled && (
               <Btn
                 variant="secondary"
-                onClick={() => run("order", "Orden creada", "No se pudo crear la orden.")}
+                onClick={createOrder}
                 permission="orders.manage"
                 disabled={busy || Boolean(quotation.order)}
                 title={quotation.order ? "Ya tiene orden" : undefined}
@@ -473,9 +482,11 @@ export default function QuotationDetail() {
                   ? [
                       "Orden",
                       <span key="order" className="inline-flex flex-wrap items-center gap-1.5">
-                        {quotation.order.order_number}
-                        <Badge tone={ORDER_STATUS[quotation.order.status]?.[1] ?? "neutral"}>
-                          {ORDER_STATUS[quotation.order.status]?.[0] ?? quotation.order.status}
+                        <Link href={`/orders/${quotation.order.id}`} className="text-[#1679AB] hover:underline">
+                          {quotation.order.order_number}
+                        </Link>
+                        <Badge tone={stateOf(ORDER_STATES, quotation.order.status)[1]}>
+                          {stateOf(ORDER_STATES, quotation.order.status)[0]}
                         </Badge>
                       </span>,
                     ]

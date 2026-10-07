@@ -215,6 +215,18 @@ Route::prefix('v1')->group(function () {
         // Orden directa desde una cotización aprobada
         Route::middleware('permission:orders.manage')->post('/quotations/{quotation}/order', [OrderController::class, 'generateFromQuotation']);
 
+        // Órdenes
+        Route::middleware('permission:orders.view')->group(function () {
+            Route::get('/orders', [OrderController::class, 'index']);
+            Route::get('/orders/{order}', [OrderController::class, 'show']);
+        });
+        Route::middleware('permission:orders.manage')->group(function () {
+            Route::post('/orders/{order}/confirm', [OrderController::class, 'confirm']);
+            Route::post('/orders/{order}/start', [OrderController::class, 'start']);
+            Route::post('/orders/{order}/complete', [OrderController::class, 'complete']);
+            Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
+        });
+
         // Checklists (plantillas)
         Route::middleware('permission:operations.view')->group(function () {
             Route::get('/checklists', [ChecklistController::class, 'index']);

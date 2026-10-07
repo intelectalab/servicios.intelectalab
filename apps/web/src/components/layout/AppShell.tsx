@@ -36,7 +36,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/services", label: "Catálogo de servicios", module: "SERVICIOS", requiredPermission: "services.view", icon: BriefcaseBusiness, superModule: "Comercial" },
   { href: "/quotations", label: "Cotizaciones", module: "COTIZACIONES", requiredPermission: "quotations.view", icon: FileText, superModule: "Comercial" },
   { href: "/contracts", label: "Contratos", module: "CONTRATOS", requiredPermission: "contracts.view", icon: FileSignature, superModule: "Comercial" },
-  { label: "Órdenes", icon: Package, superModule: "Comercial", soon: true },
+  { href: "/orders", label: "Órdenes", module: "CONTRATOS", requiredPermission: "orders.view", icon: Package, superModule: "Comercial" },
   { label: "Solicitudes del portal", icon: Globe, superModule: "Comercial", soon: true },
 
   { label: "Servicios contratados", icon: Layers, superModule: "Operaciones", soon: true },

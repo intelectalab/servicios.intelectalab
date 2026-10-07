@@ -712,6 +712,93 @@ class ComercialTest extends TestCase
         $this->getJson("/api/v1/quotations/{$quotation}")->assertOk()->assertJsonPath('order.order_number', $order['order_number']);
     }
 
+    public function test_order_lifecycle_follows_the_linear_sequence(): void
+    {
+        [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'orders.view']);
+        $manager = $this->makeColleague($tenantId, 'Gerente', ['quotations.view', 'quotations.approve', 'orders.view', 'orders.manage']);
+        $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
+        Sanctum::actingAs($seller);
+
+        $newOrder = function () use ($customerId, $seller, $manager) {
+            Sanctum::actingAs($seller);
+            $quotation = $this->postJson('/api/v1/quotations', [
+                'customer_id' => $customerId,
+                'items' => [['description' => 'Auditoría', 'quantity' => 2, 'unit_price' => 100, 'tax_rate' => 18]],
+            ])->json();
+            $this->postJson("/api/v1/quotations/{$quotation['id']}/submit")->assertOk();
+            Sanctum::actingAs($manager);
+            $this->postJson("/api/v1/quotations/{$quotation['id']}/approve")->assertOk();
+
+            return [$this->postJson("/api/v1/quotations/{$quotation['id']}/order")->assertCreated()->json(), $quotation];
+        };
+
+        [$order, $quotation] = $newOrder();
+        $id = $order['id'];
+
+        // Ficha: líneas, cliente, origen, notas, responsable e historial.
+        $this->getJson("/api/v1/orders/{$id}")->assertOk()
+            ->assertJsonPath('status', 'DRAFT')
+            ->assertJsonPath('notes', "Orden directa desde {$quotation['quotation_number']}")
+            ->assertJsonPath('creator.name', 'Gerente')
+            ->assertJsonPath('quotation.quotation_number', $quotation['quotation_number'])
+            ->assertJsonPath('contract', null)
+            ->assertJsonPath('customer.party.organization.legal_name', 'Minera Los Andes SAC')
+            ->assertJsonCount(1, 'items')
+            ->assertJsonPath('history.0.action', 'order.generate')
+            ->assertJsonPath('history.0.metadata.to', 'DRAFT');
+
+        // Listado: por número, por cliente y por estado.
+        $this->getJson('/api/v1/orders?search=los andes')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.quotation.id', $quotation['id']);
+        $this->getJson('/api/v1/orders?search='.$order['order_number'])->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/v1/orders?search=no-existe')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson('/api/v1/orders?status=CONFIRMED')->assertOk()->assertJsonPath('total', 0);
+
+        // Ver no alcanza para cambiar el estado.
+        Sanctum::actingAs($seller);
+        $this->getJson("/api/v1/orders/{$id}")->assertOk();
+        $this->postJson("/api/v1/orders/{$id}/confirm")->assertStatus(403);
+
+        // No se salta pasos: ni iniciar ni completar un borrador.
+        Sanctum::actingAs($manager);
+        $this->postJson("/api/v1/orders/{$id}/start")->assertStatus(422);
+        $this->postJson("/api/v1/orders/{$id}/complete")->assertStatus(422);
+        $this->postJson("/api/v1/orders/{$id}/confirm")->assertOk()->assertJsonPath('status', 'CONFIRMED');
+        $this->getJson('/api/v1/orders?status=CONFIRMED')->assertOk()->assertJsonPath('total', 1);
+        $this->postJson("/api/v1/orders/{$id}/complete")->assertStatus(422);
+        $this->postJson("/api/v1/orders/{$id}/start")->assertOk()->assertJsonPath('status', 'IN_PROGRESS');
+
+        // En ejecución ya no se cancela.
+        $this->postJson("/api/v1/orders/{$id}/cancel", ['reason' => 'Tarde'])->assertStatus(422);
+        $detail = $this->postJson("/api/v1/orders/{$id}/complete")->assertOk()->assertJsonPath('status', 'COMPLETED')->json();
+        $this->assertEqualsCanonicalizing(
+            ['order.complete', 'order.start', 'order.confirm', 'order.generate'],
+            collect($detail['history'])->pluck('action')->all(),
+        );
+        $this->postJson("/api/v1/orders/{$id}/confirm")->assertStatus(422);
+
+        // Cancelar pide motivo y vale desde borrador o confirmada.
+        [$second] = $newOrder();
+        $this->postJson("/api/v1/orders/{$second['id']}/cancel")->assertStatus(422)->assertJsonValidationErrors('reason');
+        $this->postJson("/api/v1/orders/{$second['id']}/confirm")->assertOk();
+        $cancelled = $this->postJson("/api/v1/orders/{$second['id']}/cancel", ['reason' => 'El cliente desistió'])->assertOk()
+            ->assertJsonPath('status', 'CANCELLED')->json();
+        $this->assertEquals(
+            ['from' => 'CONFIRMED', 'to' => 'CANCELLED', 'note' => 'El cliente desistió'],
+            collect($cancelled['history'])->firstWhere('action', 'order.cancel')['metadata'],
+        );
+        $this->postJson("/api/v1/orders/{$second['id']}/confirm")->assertStatus(422);
+
+        // Una orden inexistente o de otra empresa no existe.
+        $this->getJson('/api/v1/orders/'.Str::uuid())->assertStatus(404);
+        $this->getJson('/api/v1/orders/no-es-uuid')->assertStatus(404);
+
+        [$other] = $this->makeTenantUser([...self::PERMISSIONS, 'orders.view']);
+        Sanctum::actingAs($other);
+        $this->getJson("/api/v1/orders/{$id}")->assertStatus(404);
+        $this->getJson('/api/v1/orders')->assertOk()->assertJsonPath('total', 0);
+    }
+
     public function test_roles_matrix_is_edited_through_the_permission_tables(): void
     {
         [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage']);

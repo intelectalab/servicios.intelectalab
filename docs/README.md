@@ -33,6 +33,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-05 | Cotización: botones por estado, revisados contra el prototipo | [cambios/2026-10-05_cotizacion-botones-por-estado.md](cambios/2026-10-05_cotizacion-botones-por-estado.md) |
 | 2026-10-06 | Barra lateral replegada: un ícono por módulo con su panel de pantallas | [cambios/2026-10-06_sidebar-replegado-grupos.md](cambios/2026-10-06_sidebar-replegado-grupos.md) |
 | 2026-10-07 | Comercial: Contratos (listado, ficha, estados, orden, PDF) | [cambios/2026-10-07_contratos.md](cambios/2026-10-07_contratos.md) |
+| 2026-10-07 | Comercial: Órdenes (listado, ficha, transiciones, PDF) | [cambios/2026-10-07_ordenes.md](cambios/2026-10-07_ordenes.md) |
 
 ## Cómo se escribe cada entrada
 
