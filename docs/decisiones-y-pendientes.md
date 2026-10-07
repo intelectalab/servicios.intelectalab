@@ -7,7 +7,7 @@ Estado al 2026-10-07.
 ### Menú lateral
 - `MENU_ITEMS` (en `apps/web/src/components/layout/AppShell.tsx`) replica los grupos y el orden del prototipo.
 - Las pantallas que aún no existen van con `soon: true`: se ven atenuadas y no navegan. En modo íconos la barra muestra un ícono por módulo (los mismos que desplegada) y al pulsarlo abre un panel con sus pantallas (2026-10-06). Al construir una se cambia `soon` por `href` + `module` + `requiredPermission`.
-- Clientes, Proveedores y Empleados se mantienen como **tres ítems** (el prototipo los junta en "Clientes y actores").
+- Clientes, Proveedores y Empleados se mantienen como **tres ítems**. Desde el 2026-10-07 existe además **Clientes y actores** (`/actors`), debajo de Empleados, como módulo de prueba que los junta con las vistas del prototipo y las funciones de sus tablas; lee y escribe los mismos datos. Falta decidir si los reemplaza.
 - "Servicios" pasó a llamarse "Catálogo de servicios", como en el prototipo (2026-10-05).
 - Módulo fuera del plan → candado "Plan". Módulo en el plan pero sin permiso → oculto. Los datos vienen de `GET /v1/me/access`.
 
@@ -24,6 +24,7 @@ Estado al 2026-10-07.
 - Órdenes: secuencia lineal Borrador → Confirmada → En ejecución → Completada; cancelar (con motivo) solo desde Borrador o Confirmada. Todas las transiciones piden `orders.manage` (no hay permiso de aprobar). La orden se abre en una página con tarjetas, no en el panel lateral del prototipo. Crear una orden desde una cotización o un contrato lleva al listado de Órdenes.
 - Solicitudes del portal: bandeja sin ficha. Cotizar toma la solicitud y abre la cotización con cliente y servicio; al guardarla la solicitud queda Cotizada. Ver la bandeja pide `portal.view`, rechazar `portal.manage` y cotizar `quotations.manage`; los permisos `portal.*` vienen con el módulo Cotizaciones. Todas van por "ERP directo" hasta que exista el pipeline de CRM.
 - Un botón, columna o tarjeta del prototipo cuya función aún no existe se muestra igual y avisa que no está disponible (p. ej. Enviar a firma, Adjuntar documento, Ver oportunidad).
+- Clientes y actores: los roles son Cliente, Proveedor y Empleado (no hay rol Contacto). Una identidad se ve inactiva si se dio de baja o si ninguno de sus roles sigue activo; inactivar o reactivar desde ahí cambia la identidad y todos sus roles. Sus columnas personalizadas son propias (tipo `Party`), aparte de las de los tres módulos. Sector y nivel de SLA van en `organizations.metadata`.
 - Los PDF (cotización, contrato, orden) comparten la composición de `lib/document-pdf.ts`; cada documento solo aporta sus datos.
 - Segregación de funciones: quien crea una cotización no la aprueba. Es un ajuste por empresa (`tenants.configuration.segregation`), activo si no se indica; rechazar no tiene esa restricción.
 

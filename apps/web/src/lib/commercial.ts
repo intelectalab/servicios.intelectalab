@@ -39,6 +39,8 @@ const HISTORY_LABELS: Record<string, string> = {
   "quotation.update": "Borrador editado",
   "quotation.version": "Nueva versión creada",
   "contract.update": "Borrador editado",
+  "party.update": "Datos editados",
+  "party.role.add": "Rol agregado",
   // Movimientos anteriores a que la auditoría guardara el estado de origen y destino.
   "service.activate": "Activado",
   "service.deactivate": "Inactivado",

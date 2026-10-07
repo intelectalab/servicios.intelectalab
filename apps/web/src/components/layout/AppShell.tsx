@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Bell, BookOpen, BriefcaseBusiness, Calendar, CalendarClock, CalendarDays, ChartColumn, ChartLine, ChartPie,
-  Clock, Coins, Crosshair, Eye, FileSignature, FileText, Filter, Folder, Globe, HandCoins, Home, IdCard, Key,
+  Clock, Coins, Contact, Crosshair, Eye, FileSignature, FileText, Filter, Folder, Globe, HandCoins, Home, IdCard, Key,
   KeyRound, Landmark, Layers, LifeBuoy, ListChecks, ListTree, Lock, Package, Plug, Receipt, ReceiptText, Repeat,
   Scale, Send, Settings, Shield, ShieldCheck, ShoppingCart, Smartphone, SquareKanban, Target, ToggleLeft,
   TrendingUp, Truck, Upload, UserCog, UserRound, Users, Wallet, Workflow, Wrench, Zap,
@@ -33,6 +33,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/customers", label: "Clientes", module: "CLIENTES", requiredPermission: "core.view", icon: Users, superModule: "Comercial" },
   { href: "/suppliers", label: "Proveedores", module: "PROVEEDORES", requiredPermission: "core.view", icon: Truck, superModule: "Comercial" },
   { href: "/employees", label: "Empleados", module: "EMPLEADOS", requiredPermission: "core.view", icon: IdCard, superModule: "Comercial" },
+  { href: "/actors", label: "Clientes y actores", module: "CLIENTES", requiredPermission: "core.view", icon: Contact, superModule: "Comercial" },
   { href: "/services", label: "Catálogo de servicios", module: "SERVICIOS", requiredPermission: "services.view", icon: BriefcaseBusiness, superModule: "Comercial" },
   { href: "/quotations", label: "Cotizaciones", module: "COTIZACIONES", requiredPermission: "quotations.view", icon: FileText, superModule: "Comercial" },
   { href: "/contracts", label: "Contratos", module: "CONTRATOS", requiredPermission: "contracts.view", icon: FileSignature, superModule: "Comercial" },

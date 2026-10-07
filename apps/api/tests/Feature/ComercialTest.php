@@ -862,6 +862,86 @@ class ComercialTest extends TestCase
         $this->getJson('/api/v1/portal-requests')->assertStatus(403);
     }
 
+    public function test_actors_are_one_identity_with_several_roles(): void
+    {
+        [$user, $tenantId] = $this->makeTenantUser(['core.view', 'core.manage']);
+        Sanctum::actingAs($user);
+
+        // Una organización nace con sus roles, su sector y sus contactos principales.
+        $this->postJson('/api/v1/parties', ['kind' => 'ORGANIZATION', 'legal_name' => 'Minera Los Andes SAC', 'roles' => ['CUSTOMER']])
+            ->assertStatus(422)->assertJsonValidationErrors('tax_identifier');
+        $this->postJson('/api/v1/parties', ['kind' => 'ORGANIZATION', 'legal_name' => 'X SAC', 'tax_identifier' => '20123456789', 'roles' => ['EMPLOYEE']])
+            ->assertStatus(422)->assertJsonValidationErrors('roles');
+        $org = $this->postJson('/api/v1/parties', [
+            'kind' => 'ORGANIZATION', 'legal_name' => 'Minera Los Andes SAC', 'trade_name' => 'Los Andes',
+            'tax_identifier' => '20123456789', 'sector' => 'Minería', 'sla_level' => 'PREMIUM',
+            'email' => 'compras@losandes.pe', 'phone' => '999111222', 'address' => 'Av. Principal 123',
+            'roles' => ['CUSTOMER', 'SUPPLIER'],
+        ])->assertCreated()
+            ->assertJsonPath('name', 'Los Andes')
+            ->assertJsonPath('roles', ['CUSTOMER', 'SUPPLIER'])
+            ->assertJsonPath('sector', 'Minería')
+            ->assertJsonPath('sla_level', 'PREMIUM')
+            ->assertJsonPath('email', 'compras@losandes.pe')
+            ->assertJsonPath('address', 'Av. Principal 123')
+            ->assertJsonPath('history.0.action', 'party.create')
+            ->json();
+        // Son los mismos clientes y proveedores de los módulos de siempre.
+        $this->getJson('/api/v1/customers/'.$org['customer_id'])->assertOk()->assertJsonPath('party.organization.legal_name', 'Minera Los Andes SAC');
+        $this->getJson('/api/v1/suppliers/'.$org['supplier_id'])->assertOk();
+
+        // El mismo RUC no se duplica: se ofrece la identidad existente.
+        $this->postJson('/api/v1/parties', ['kind' => 'ORGANIZATION', 'legal_name' => 'Otra razón SAC', 'tax_identifier' => '20123456789', 'roles' => ['SUPPLIER']])
+            ->assertStatus(409)->assertJsonPath('duplicates.0.id', $org['id'])->assertJsonPath('duplicates.0.roles', ['CUSTOMER', 'SUPPLIER']);
+
+        // Una persona: empleado con su código; luego se le agrega el rol de cliente sin duplicarla.
+        $person = $this->postJson('/api/v1/parties', [
+            'kind' => 'PERSON', 'given_names' => 'Lucía', 'family_name' => 'Paredes', 'document_type' => 'DNI',
+            'document_number' => '44556677', 'position' => 'Técnica', 'roles' => ['EMPLOYEE'],
+        ])->assertCreated()->assertJsonPath('roles', ['EMPLOYEE'])->assertJsonPath('position', 'Técnica')->json();
+        $this->assertStringStartsWith('EMP-', $person['employee_code']);
+        $this->postJson("/api/v1/parties/{$person['id']}/roles", ['role' => 'CUSTOMER'])->assertOk()->assertJsonPath('roles', ['CUSTOMER', 'EMPLOYEE']);
+        $this->postJson("/api/v1/parties/{$person['id']}/roles", ['role' => 'CUSTOMER'])->assertStatus(422);
+        $this->postJson("/api/v1/parties/{$org['id']}/roles", ['role' => 'EMPLOYEE'])->assertStatus(422);
+
+        // Listado: buscar por nombre, RUC, documento o correo, y filtrar por rol, tipo y estado.
+        $this->getJson('/api/v1/parties')->assertOk()->assertJsonPath('total', 2);
+        $this->getJson('/api/v1/parties?search=los andes')->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $org['id']);
+        $this->getJson('/api/v1/parties?search=44556677')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/v1/parties?search=compras@')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/v1/parties?role=SUPPLIER')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/v1/parties?role=CUSTOMER')->assertOk()->assertJsonPath('total', 2);
+        $this->getJson('/api/v1/parties?kind=PERSON')->assertOk()->assertJsonPath('total', 1);
+
+        // Editar solo lo que llega (así guarda la edición en celda); el documento no puede chocar con otro.
+        $this->putJson("/api/v1/parties/{$org['id']}", ['sector' => 'Energía', 'email' => ''])->assertOk()
+            ->assertJsonPath('sector', 'Energía')->assertJsonPath('email', null)->assertJsonPath('organization.legal_name', 'Minera Los Andes SAC');
+        $this->putJson("/api/v1/parties/{$person['id']}", ['family_name' => 'Paredes Ríos'])->assertOk()->assertJsonPath('name', 'Lucía Paredes Ríos');
+        $second = $this->postJson('/api/v1/parties', ['kind' => 'PERSON', 'given_names' => 'Ana', 'family_name' => 'Torres', 'document_number' => '11223344', 'roles' => ['CUSTOMER']])
+            ->assertCreated()->json();
+        $this->putJson("/api/v1/parties/{$second['id']}", ['document_number' => '44556677'])->assertStatus(422)->assertJsonValidationErrors('document_number');
+
+        // Baja y alta lógica: la identidad y todos sus roles cambian juntos.
+        $this->postJson("/api/v1/parties/{$org['id']}/deactivate")->assertOk()->assertJsonPath('status', 'INACTIVE');
+        $this->postJson("/api/v1/parties/{$org['id']}/deactivate")->assertStatus(422);
+        $this->getJson('/api/v1/customers/'.$org['customer_id'])->assertOk()->assertJsonPath('status', 'INACTIVE');
+        $this->getJson('/api/v1/parties?status=INACTIVE')->assertOk()->assertJsonPath('total', 1);
+        $this->postJson('/api/v1/parties/bulk-activate', ['ids' => [$org['id'], $person['id']]])->assertOk()->assertJsonPath('changed', 1);
+        $this->getJson("/api/v1/parties/{$org['id']}")->assertOk()->assertJsonPath('status', 'ACTIVE');
+        $this->postJson('/api/v1/parties/bulk-deactivate', ['ids' => [$org['id'], $person['id']]])->assertOk()->assertJsonPath('changed', 2);
+
+        // Un cliente dado de baja desde el módulo Clientes se ve inactivo aquí.
+        $this->postJson('/api/v1/customers/'.$second['customer_id'].'/deactivate')->assertOk();
+        $this->getJson("/api/v1/parties/{$second['id']}")->assertOk()->assertJsonPath('status', 'INACTIVE')->assertJsonPath('inactive_roles', ['CUSTOMER']);
+
+        // Sin core.manage solo se consulta; otra empresa no ve nada.
+        [$reader] = $this->makeTenantUser(['core.view']);
+        Sanctum::actingAs($reader);
+        $this->getJson('/api/v1/parties')->assertOk()->assertJsonPath('total', 0);
+        $this->getJson("/api/v1/parties/{$org['id']}")->assertStatus(404);
+        $this->postJson('/api/v1/parties', ['kind' => 'PERSON', 'given_names' => 'A', 'family_name' => 'B', 'roles' => ['CUSTOMER']])->assertStatus(403);
+    }
+
     public function test_roles_matrix_is_edited_through_the_permission_tables(): void
     {
         [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage']);

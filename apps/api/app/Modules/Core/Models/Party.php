@@ -49,6 +49,11 @@ class Party extends Model
         return $this->hasOne(Supplier::class, 'party_id');
     }
 
+    public function employee()
+    {
+        return $this->hasOne(Employee::class, 'person_party_id');
+    }
+
     // Nombre "de display", sin importar si es persona u organización.
     public function getDisplayNameAttribute(): string
     {

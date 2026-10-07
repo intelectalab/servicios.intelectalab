@@ -27,6 +27,7 @@ use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmLeadController;
+use App\Modules\Core\Http\Controllers\PartyController;
 use App\Modules\Portal\Http\Controllers\PortalController;
 use App\Modules\Portal\Http\Controllers\PortalRequestController;
 use App\Modules\Core\Http\Controllers\EmployeeController;
@@ -226,6 +227,21 @@ Route::prefix('v1')->group(function () {
             Route::post('/orders/{order}/start', [OrderController::class, 'start']);
             Route::post('/orders/{order}/complete', [OrderController::class, 'complete']);
             Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
+        });
+
+        // Clientes y actores: la identidad con sus roles de cliente, proveedor y empleado
+        Route::middleware('permission:core.view')->group(function () {
+            Route::get('/parties', [PartyController::class, 'index']);
+            Route::get('/parties/{party}', [PartyController::class, 'show']);
+        });
+        Route::middleware('permission:core.manage')->group(function () {
+            Route::post('/parties/bulk-deactivate', [PartyController::class, 'bulkDeactivate']);
+            Route::post('/parties/bulk-activate', [PartyController::class, 'bulkActivate']);
+            Route::post('/parties', [PartyController::class, 'store']);
+            Route::put('/parties/{party}', [PartyController::class, 'update']);
+            Route::post('/parties/{party}/roles', [PartyController::class, 'addRole']);
+            Route::post('/parties/{party}/deactivate', [PartyController::class, 'deactivate']);
+            Route::post('/parties/{party}/activate', [PartyController::class, 'activate']);
         });
 
         // Solicitudes del portal (bandeja de la empresa)
