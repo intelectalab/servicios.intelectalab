@@ -202,8 +202,15 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware('permission:contracts.manage')->group(function () {
             Route::post('/quotations/{quotation}/contract', [ContractController::class, 'generateFromQuotation']);
-            Route::post('/contracts/{contract}/activate', [ContractController::class, 'activate']);
+            Route::put('/contracts/{contract}', [ContractController::class, 'update']);
+            Route::post('/contracts/{contract}/suspend', [ContractController::class, 'suspend']);
+            Route::post('/contracts/{contract}/reactivate', [ContractController::class, 'reactivate']);
+            Route::post('/contracts/{contract}/terminate', [ContractController::class, 'terminate']);
+            Route::post('/contracts/{contract}/expire', [ContractController::class, 'expire']);
         });
+        // Activar es un permiso aparte, como aprobar una cotización.
+        Route::middleware('permission:contracts.approve')->post('/contracts/{contract}/activate', [ContractController::class, 'activate']);
+        Route::middleware('permission:orders.manage')->post('/contracts/{contract}/orders', [ContractController::class, 'createOrder']);
 
         // Orden directa desde una cotización aprobada
         Route::middleware('permission:orders.manage')->post('/quotations/{quotation}/order', [OrderController::class, 'generateFromQuotation']);

@@ -140,6 +140,19 @@ export default function QuotationDetail() {
     run(confirming.path, confirming.done, "No se pudo completar la acción.", confirming.reason && text ? { [confirming.reason.field]: text } : undefined);
   }
 
+  /** Convierte la cotización aprobada en contrato y abre su ficha. */
+  async function convertToContract() {
+    setBusy(true);
+    try {
+      const contract = await apiFetch<{ id: string }>(`/v1/quotations/${id}/contract`, { method: "POST" });
+      setFlash("Contrato creado en borrador");
+      router.push(`/contracts/${contract.id}`);
+    } catch (err) {
+      toast(firstError(err, "No se pudo crear el contrato."), "danger");
+      setBusy(false);
+    }
+  }
+
   async function newVersion() {
     setBusy(true);
     try {
@@ -248,7 +261,7 @@ export default function QuotationDetail() {
             )}
             {status === "APPROVED" && (
               <Btn
-                onClick={() => run("contract", "Contrato creado en borrador", "No se pudo crear el contrato.")}
+                onClick={convertToContract}
                 permission="contracts.manage"
                 disabled={busy || Boolean(quotation.contract)}
                 title={quotation.contract ? "Ya se convirtió en contrato" : undefined}
@@ -447,7 +460,9 @@ export default function QuotationDetail() {
                   ? [
                       "Contrato",
                       <span key="contract" className="inline-flex flex-wrap items-center gap-1.5">
-                        {quotation.contract.contract_number}
+                        <Link href={`/contracts/${quotation.contract.id}`} className="text-[#1679AB] hover:underline">
+                          {quotation.contract.contract_number}
+                        </Link>
                         <Badge tone={CONTRACT_STATUS[quotation.contract.status]?.[1] ?? "neutral"}>
                           {CONTRACT_STATUS[quotation.contract.status]?.[0] ?? quotation.contract.status}
                         </Badge>

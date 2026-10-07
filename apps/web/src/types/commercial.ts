@@ -114,6 +114,52 @@ export interface Quotation {
   own_approval_blocked?: boolean;
 }
 
+export type ContractStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "TERMINATED" | "EXPIRED";
+
+export interface ContractItem {
+  id: string;
+  service_id: string | null;
+  description: string;
+  quantity: string;
+  unit_price: string;
+  /** Total de la línea con IGV, copiado de la cotización. */
+  line_total: string;
+  service_snapshot: QuotationItem["service_snapshot"];
+}
+
+export interface ContractedService {
+  id: string;
+  status: string;
+  quantity: string;
+  recurring: boolean;
+  service_code: string;
+  service_name: string;
+}
+
+export interface Contract {
+  id: string;
+  customer_id: string;
+  quotation_id: string | null;
+  contract_number: string;
+  status: ContractStatus;
+  currency: string;
+  start_date: string | null;
+  end_date: string | null;
+  total_value: string;
+  terms: string | null;
+  sla_level: string;
+  created_at: string;
+  customer: Customer | null;
+  quotation: { id: string; quotation_number: string } | null;
+  /** Solo en el detalle. */
+  items?: ContractItem[];
+  creator?: { id: string; name: string } | null;
+  orders?: { id: string; order_number: string; status: string }[];
+  contracted_services?: ContractedService[];
+  customer_contact?: { address: string | null };
+  history?: HistoryEntry[];
+}
+
 export interface ExchangeRate {
   id: string;
   rate_date: string;

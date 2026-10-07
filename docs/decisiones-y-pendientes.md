@@ -20,6 +20,8 @@ Estado al 2026-10-05.
 - Una acción que el rol no permite no se esconde: el botón aparece deshabilitado, con candado y "Tu rol no tiene permiso …" al pasar el cursor (`Btn permission="…"` y `LinkBtn` en `proto.tsx`). Lo que sí se oculta es la pantalla entera en el menú.
 - Usuarios: un rol por usuario; desactivar es quitar el acceso a la empresa (`tenant_users.status`), no borrar la cuenta. El usuario nuevo no recibe contraseña: la crea con un código por correo. La cuenta se vincula a un empleado existente (`employees.user_id`), no se crea el empleado.
 - Orden directa: una cotización aprobada se convierte en orden sin contrato, una sola vez, si la empresa lo permite (`tenants.configuration.direct_order`, activo si no se indica). Los permisos `orders.*` vienen con el módulo Contratos.
+- Contratos: nacen solo desde una cotización aprobada, vigentes desde mañana por un año. En borrador se editan vigencia, SLA y condiciones (no las líneas). Activar pide `contracts.approve`. El SLA se guarda en el contrato.
+- Los PDF (cotización, contrato) comparten la composición de `lib/document-pdf.ts`; cada documento solo aporta sus datos.
 - Segregación de funciones: quien crea una cotización no la aprueba. Es un ajuste por empresa (`tenants.configuration.segregation`), activo si no se indica; rechazar no tiene esa restricción.
 
 ### Comercial
@@ -57,6 +59,6 @@ Estado al 2026-10-05.
 - `php artisan tenants:sync-permissions` da a los tenants ya registrados los permisos de sus módulos. Falta confirmar si se corrió.
 - Correo real: falta configurar SMTP en `apps/api/.env` (hoy `MAIL_MAILER=log`).
 - El contenido de Clientes, Proveedores, Empleados, Planes SaaS y la landing sigue con el estilo anterior.
-- Comercial: faltan las pantallas de Contratos, Órdenes y Solicitudes del portal. Lo que Servicios y Cotizaciones aún no tienen respecto al prototipo está en [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md).
+- Comercial: faltan las pantallas de Órdenes y Solicitudes del portal. Lo que Servicios y Cotizaciones aún no tienen respecto al prototipo está en [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md).
 - `database/schema_reference.sql` no incluye las migraciones `2026_10_05_000300` (modalidad, garantía, estado archivado, versión anterior) ni `2026_10_05_000400` (tipo de cambio).
 - Dólares: falta llevarlos a contratos, comprobantes y cobros (diferencia de cambio), y una fuente automática del tipo de cambio. Detalle en [cambios/2026-10-05_cotizaciones-dolares-y-buscador.md](cambios/2026-10-05_cotizaciones-dolares-y-buscador.md).

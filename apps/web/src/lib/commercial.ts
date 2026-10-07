@@ -38,6 +38,7 @@ const HISTORY_LABELS: Record<string, string> = {
   "quotation.create": "Cotización creada",
   "quotation.update": "Borrador editado",
   "quotation.version": "Nueva versión creada",
+  "contract.update": "Borrador editado",
   // Movimientos anteriores a que la auditoría guardara el estado de origen y destino.
   "service.activate": "Activado",
   "service.deactivate": "Inactivado",

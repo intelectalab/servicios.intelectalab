@@ -581,6 +581,91 @@ class ComercialTest extends TestCase
         $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(403);
     }
 
+    public function test_contract_lifecycle_from_an_approved_quotation(): void
+    {
+        [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'contracts.view', 'contracts.manage']);
+        $manager = $this->makeColleague($tenantId, 'Gerente', [
+            'quotations.view', 'quotations.approve', 'contracts.view', 'contracts.manage', 'contracts.approve', 'orders.manage',
+        ]);
+        $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
+        Sanctum::actingAs($seller);
+        $serviceId = $this->makeActiveService($this->makeCategory(), 'SRV-100', 100);
+
+        $quotation = $this->postJson('/api/v1/quotations', [
+            'customer_id' => $customerId,
+            'notes' => 'Pago a 30 días.',
+            'items' => [
+                ['service_id' => $serviceId, 'description' => 'Servicio SRV-100', 'quantity' => 2, 'unit_price' => 100, 'tax_rate' => 18],
+                ['description' => 'Línea libre', 'quantity' => 1, 'unit_price' => 50, 'tax_rate' => 18],
+            ],
+        ])->json('id');
+        $this->postJson("/api/v1/quotations/{$quotation}/submit")->assertOk();
+        Sanctum::actingAs($manager);
+        $this->postJson("/api/v1/quotations/{$quotation}/approve")->assertOk();
+
+        // Nace en borrador, vigente desde mañana por un año, con las condiciones de la cotización.
+        Sanctum::actingAs($seller);
+        $contract = $this->postJson("/api/v1/quotations/{$quotation}/contract")->assertCreated()->json();
+        $id = $contract['id'];
+        $this->getJson("/api/v1/contracts/{$id}")->assertOk()
+            ->assertJsonPath('status', 'DRAFT')
+            ->assertJsonPath('sla_level', 'ESTANDAR')
+            ->assertJsonPath('terms', 'Pago a 30 días.')
+            ->assertJsonPath('total_value', '295.0000')
+            ->assertJsonPath('quotation.id', $quotation)
+            ->assertJsonPath('customer.party.organization.legal_name', 'Minera Los Andes SAC')
+            ->assertJsonCount(2, 'items')
+            ->assertJsonPath('history.0.action', 'contract.generate');
+        $this->assertSame(now()->addDay()->toDateString(), substr($this->getJson("/api/v1/contracts/{$id}")->json('start_date'), 0, 10));
+
+        // Listado: por número, por cliente y por estado.
+        $this->getJson('/api/v1/contracts?search=los andes')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.quotation.id', $quotation);
+        $this->getJson('/api/v1/contracts?search='.$contract['contract_number'])->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/v1/contracts?status=ACTIVE')->assertOk()->assertJsonPath('total', 0);
+
+        // En borrador se ajustan vigencia, SLA y condiciones.
+        $this->putJson("/api/v1/contracts/{$id}", ['start_date' => '2027-01-01', 'end_date' => '2026-12-31', 'sla_level' => 'PREMIUM'])
+            ->assertStatus(422)->assertJsonValidationErrors('end_date');
+        $this->putJson("/api/v1/contracts/{$id}", ['start_date' => '2027-01-01', 'end_date' => '2027-12-31', 'sla_level' => 'PREMIUM', 'terms' => 'Nuevas'])
+            ->assertOk()->assertJsonPath('sla_level', 'PREMIUM')->assertJsonPath('terms', 'Nuevas');
+
+        // Activar pide su propio permiso; genera un servicio contratado por cada línea con servicio.
+        $this->postJson("/api/v1/contracts/{$id}/activate")->assertStatus(403);
+        $this->postJson("/api/v1/contracts/{$id}/orders")->assertStatus(403);
+        Sanctum::actingAs($manager);
+        $this->postJson("/api/v1/contracts/{$id}/orders")->assertStatus(422);
+        $this->postJson("/api/v1/contracts/{$id}/activate", ['generate_services' => true])->assertOk()
+            ->assertJsonPath('status', 'ACTIVE')
+            ->assertJsonCount(1, 'contracted_services')
+            ->assertJsonPath('contracted_services.0.status', 'PENDING')
+            ->assertJsonPath('contracted_services.0.service_code', 'SRV-100');
+        $this->putJson("/api/v1/contracts/{$id}", ['start_date' => '2027-01-01', 'end_date' => '2027-12-31', 'sla_level' => 'ESTANDAR'])->assertStatus(422);
+
+        // Orden desde el contrato vigente, una sola.
+        $order = $this->postJson("/api/v1/contracts/{$id}/orders")->assertCreated()
+            ->assertJsonPath('status', 'DRAFT')->assertJsonCount(2, 'items')->json();
+        $this->postJson("/api/v1/contracts/{$id}/orders")->assertStatus(422);
+        $this->getJson("/api/v1/contracts/{$id}")->assertJsonPath('orders.0.order_number', $order['order_number']);
+
+        // Suspender y terminar piden motivo; el historial guarda cada paso.
+        $this->postJson("/api/v1/contracts/{$id}/suspend")->assertStatus(422)->assertJsonValidationErrors('reason');
+        $this->postJson("/api/v1/contracts/{$id}/suspend", ['reason' => 'Falta de pago'])->assertOk()->assertJsonPath('status', 'SUSPENDED');
+        $this->postJson("/api/v1/contracts/{$id}/expire")->assertStatus(422);
+        $this->postJson("/api/v1/contracts/{$id}/reactivate")->assertOk()->assertJsonPath('status', 'ACTIVE');
+        $detail = $this->postJson("/api/v1/contracts/{$id}/terminate", ['reason' => 'Fin anticipado'])->assertOk()
+            ->assertJsonPath('status', 'TERMINATED')->json();
+        $this->assertEqualsCanonicalizing(
+            ['contract.terminate', 'contract.reactivate', 'contract.suspend', 'contract.activate', 'contract.update', 'contract.generate'],
+            collect($detail['history'])->pluck('action')->all(),
+        );
+        $this->postJson("/api/v1/contracts/{$id}/reactivate")->assertStatus(422);
+
+        // Un contrato inexistente o de otra empresa no existe.
+        $this->getJson('/api/v1/contracts/'.Str::uuid())->assertStatus(404);
+        $this->getJson('/api/v1/contracts/no-es-uuid')->assertStatus(404);
+    }
+
     public function test_approved_quotation_becomes_a_direct_order_once(): void
     {
         [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'tenant.manage']);
