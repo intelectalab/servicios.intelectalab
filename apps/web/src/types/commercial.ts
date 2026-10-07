@@ -134,6 +134,17 @@ export interface ContractedService {
   recurring: boolean;
   service_code: string;
   service_name: string;
+  work_orders_count: number;
+  projects_count: number;
+}
+
+export interface RecurringInstance {
+  id: string;
+  status: string;
+  frequency: string;
+  next_cycle_date: string | null;
+  service_name: string;
+  amount: string;
 }
 
 export interface Contract {
@@ -156,6 +167,7 @@ export interface Contract {
   creator?: { id: string; name: string } | null;
   orders?: { id: string; order_number: string; status: string }[];
   contracted_services?: ContractedService[];
+  recurring_instances?: RecurringInstance[];
   customer_contact?: { address: string | null };
   history?: HistoryEntry[];
 }

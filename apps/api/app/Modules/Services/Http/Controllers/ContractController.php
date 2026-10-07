@@ -340,6 +340,25 @@ class ContractController extends Controller
                 ->get([
                     'contracted_services.id', 'contracted_services.status', 'contracted_services.quantity',
                     'contracted_services.recurring', 'services.code as service_code', 'services.name as service_name',
+                    DB::raw('(SELECT count(*) FROM work_orders WHERE work_orders.contracted_service_id = contracted_services.id) AS work_orders_count'),
+                    // Los proyectos aún no se enlazan a un servicio contratado (solo al contrato).
+                    DB::raw('0 AS projects_count'),
+                ]),
+            // Nacen cuando Operaciones activa un servicio contratado recurrente.
+            'recurring_instances' => DB::table('recurring_service_instances as ri')
+                ->join('contracted_services as cs', 'cs.id', '=', 'ri.contracted_service_id')
+                ->join('services', 'services.id', '=', 'cs.service_id')
+                ->where('cs.contract_id', $contract->id)
+                ->orderBy('ri.created_at')
+                ->get([
+                    'ri.id', 'ri.status', 'ri.frequency', 'ri.next_cycle_date', 'services.name as service_name',
+                    DB::raw("COALESCE(
+                        (SELECT p.amount FROM recurring_service_prices p
+                          WHERE p.recurring_instance_id = ri.id AND p.valid_from <= CURRENT_DATE
+                            AND (p.valid_to IS NULL OR p.valid_to >= CURRENT_DATE)
+                          ORDER BY p.valid_from DESC LIMIT 1),
+                        round(cs.price * cs.quantity * 1.18, 2)
+                    ) AS amount"),
                 ]),
             'history' => AuditHistory::for('Contract', $contract->id),
         ];
@@ -358,7 +377,21 @@ class ContractController extends Controller
         }
 
         $previous = $contract->status;
-        $contract->update(['status' => $to]);
+        DB::transaction(function () use ($contract, $to) {
+            $contract->update(['status' => $to]);
+
+            // Las instancias recurrentes siguen al contrato: se suspenden con él,
+            // vuelven al reactivarlo y se cancelan si termina o vence.
+            $instances = DB::table('recurring_service_instances')
+                ->whereIn('contracted_service_id', DB::table('contracted_services')->where('contract_id', $contract->id)->select('id'));
+            if ($to === 'ACTIVE') {
+                $instances->where('status', 'SUSPENDED')->update(['status' => 'ACTIVE', 'suspended_at' => null, 'updated_at' => now()]);
+            } elseif ($to === 'SUSPENDED') {
+                $instances->where('status', 'ACTIVE')->update(['status' => 'SUSPENDED', 'suspended_at' => now(), 'updated_at' => now()]);
+            } else {
+                $instances->where('status', 'ACTIVE')->update(['status' => 'CANCELLED', 'updated_at' => now()]);
+            }
+        });
         $this->audit($request, $contract, $action, array_filter(['from' => $previous, 'to' => $to, 'note' => $reason]));
 
         return response()->json($this->detail($contract));

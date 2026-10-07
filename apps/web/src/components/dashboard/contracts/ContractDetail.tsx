@@ -3,9 +3,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, FileText, Settings } from "lucide-react";
+import { ArrowLeft, Check, FileText, Send, Settings, Upload } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { customerName, historyLabel, money, setFlash, stateOf, takeFlash } from "@/lib/commercial";
+import { customerName, historyLabel, money, setFlash, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES, SLA_LEVELS, billingOf, downloadContractPdf, slaLabel, validity } from "@/lib/contracts";
 import { ORDER_STATES } from "@/lib/orders";
 import {
@@ -13,7 +13,7 @@ import {
   useToasts, type Column, type Tone,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
-import type { Contract, ContractedService } from "@/types/commercial";
+import type { Contract, ContractedService, RecurringInstance } from "@/types/commercial";
 
 // Transiciones que piden confirmación; "reason" indica que el motivo es obligatorio.
 type Confirm = { path: string; title: string; text: string; confirmLabel: string; done: string; danger?: boolean; reason?: boolean };
@@ -59,6 +59,24 @@ const SERVICE_COLUMNS: Column<ContractedService>[] = [
   {
     label: "Estado",
     render: (service) => <Badge tone={SERVICE_STATUS[service.status]?.[1] ?? "neutral"}>{SERVICE_STATUS[service.status]?.[0] ?? service.status}</Badge>,
+  },
+  {
+    label: "OT / proyectos",
+    render: (service) => <span className="whitespace-nowrap">{Number(service.work_orders_count)} OT · {Number(service.projects_count)} proy.</span>,
+  },
+];
+
+const RECURRING_STATUS: Record<string, [string, Tone]> = {
+  ACTIVE: ["Activa", "success"], SUSPENDED: ["Suspendida", "warning"], EXPIRED: ["Vencida", "muted"], CANCELLED: ["Cancelada", "muted"],
+};
+
+const recurringColumns = (currency: string): Column<RecurringInstance>[] => [
+  { label: "Servicio", render: (instance) => instance.service_name },
+  { label: "Próximo ciclo", render: (instance) => <span className="whitespace-nowrap">{shortDate(instance.next_cycle_date)}</span> },
+  { label: "Monto", num: true, render: (instance) => money(instance.amount, currency) },
+  {
+    label: "Estado",
+    render: (instance) => <Badge tone={RECURRING_STATUS[instance.status]?.[1] ?? "neutral"}>{RECURRING_STATUS[instance.status]?.[0] ?? instance.status}</Badge>,
   },
 ];
 
@@ -258,6 +276,7 @@ export default function ContractDetail() {
   const currency = contract.currency;
   const items = contract.items ?? [];
   const services = contract.contracted_services ?? [];
+  const recurring = contract.recurring_instances ?? [];
   const orders = contract.orders ?? [];
   const history = contract.history ?? [];
   const visited = history.flatMap((entry) => (entry.metadata.to ? [entry.metadata.to] : [])).concat("DRAFT");
@@ -278,6 +297,11 @@ export default function ContractDetail() {
                 <Btn variant="secondary" onClick={() => setEditing(true)} permission="contracts.manage" disabled={busy}>
                   <Settings size={16} />
                   <span>Editar</span>
+                </Btn>
+                {/* Aún sin función: la firma electrónica no está construida. */}
+                <Btn variant="secondary" onClick={() => toast("La firma electrónica aún no está disponible.")} permission="contracts.manage">
+                  <Send size={16} />
+                  <span>Enviar a firma</span>
                 </Btn>
                 <Btn onClick={() => setActivating(true)} permission="contracts.approve" disabled={busy || Boolean(notActivable)} title={notActivable}>
                   <Check size={16} />
@@ -300,6 +324,11 @@ export default function ContractDetail() {
                 Crear orden
               </Btn>
             )}
+            {/* Aún sin función: depende de la pantalla Documentos. */}
+            <Btn variant="ghost" onClick={() => toast("Adjuntar documentos aún no está disponible.")}>
+              <Upload size={16} />
+              <span>Adjuntar documento</span>
+            </Btn>
           </>
         }
       />
@@ -308,7 +337,7 @@ export default function ContractDetail() {
         storageKey="erp.cards.contract-detail"
         className="grid grid-cols-1 gap-x-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
         zones={[
-          { className: "min-w-0 lg:min-h-24", cards: ["lines", "services"] },
+          { className: "min-w-0 lg:min-h-24", cards: ["lines", "services", ...(recurring.length ? ["recurring"] : [])] },
           { className: "min-w-0 lg:min-h-24", cards: ["signature", "states", "related", "history"] },
         ]}
         cards={[
@@ -365,6 +394,18 @@ export default function ContractDetail() {
               </Card>
             ),
           },
+          ...(recurring.length
+            ? [{
+                id: "recurring",
+                node: (
+                  <Card title="Instancias recurrentes" flush>
+                    <div className="pt-3 sm:px-1.5 sm:pb-2.5">
+                      <DataTable cols={recurringColumns(currency)} rows={recurring} rowKey={(instance) => instance.id} dense />
+                    </div>
+                  </Card>
+                ),
+              }]
+            : []),
           {
             id: "signature",
             node: (
@@ -449,6 +490,7 @@ export default function ContractDetail() {
                         </span>
                       ) : "—",
                     ],
+                    ["Documentos", "—"],
                     ["Responsable", <Who key="owner" name={contract.creator?.name} />],
                   ]}
                 />
@@ -475,7 +517,9 @@ export default function ContractDetail() {
                         <span className="font-medium">{historyLabel(entry)}</span>
                       ),
                       meta: `${entry.user ?? "Sistema"} · ${dateTime(entry.at)}`,
-                      note: entry.metadata.note,
+                      // Los contratos anteriores no guardaron de qué cotización nacieron.
+                      note: entry.metadata.note
+                        ?? (entry.action === "contract.generate" && contract.quotation ? `Desde ${contract.quotation.quotation_number}` : undefined),
                     };
                   })}
                 />
