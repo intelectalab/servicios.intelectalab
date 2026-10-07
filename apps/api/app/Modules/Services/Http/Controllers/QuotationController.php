@@ -13,6 +13,7 @@ use App\Modules\Services\Models\QuotationItem;
 use App\Modules\Services\Models\Service;
 use App\Modules\Services\Models\ServicePrice;
 use App\Services\AuditHistory;
+use App\Modules\Portal\Models\PortalRequest;
 use App\Services\AuditLogger;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
@@ -103,8 +104,9 @@ class QuotationController extends Controller
         $this->assertSellable($request);
         $currency = $request->currency ?? 'PEN';
         $exchangeRate = $this->exchangeRateFor($currency);
+        $portalRequest = $this->portalRequestToQuote($request);
 
-        $quotation = DB::transaction(function () use ($request, $tenantId, $currency, $exchangeRate) {
+        $quotation = DB::transaction(function () use ($request, $tenantId, $currency, $exchangeRate, $portalRequest) {
             $quotationNumber = SequentialNumberGenerator::next(
                 $tenantId,
                 'quotations',
@@ -124,6 +126,8 @@ class QuotationController extends Controller
                 'valid_until' => $request->valid_until,
                 ...$totals,
                 'notes' => $request->notes,
+                'source_type' => $portalRequest ? 'PORTAL' : null,
+                'source_id' => $portalRequest?->id,
                 'created_by' => $request->user()->id,
             ]);
 
@@ -140,6 +144,20 @@ class QuotationController extends Controller
                 entityId: $quotation->id,
                 metadata: ['quotation_number' => $quotationNumber, 'total' => $quotation->total],
             );
+
+            // La solicitud del portal queda cotizada y enlazada a esta cotización.
+            if ($portalRequest) {
+                $previous = $portalRequest->status;
+                $portalRequest->update(['status' => 'QUOTED', 'quotation_id' => $quotation->id]);
+                AuditLogger::log(
+                    tenantId: $tenantId,
+                    userId: $request->user()->id,
+                    action: 'portal_request.quote',
+                    entityType: 'PortalRequest',
+                    entityId: $portalRequest->id,
+                    metadata: ['from' => $previous, 'to' => 'QUOTED', 'note' => "Cotizada con {$quotationNumber}"],
+                );
+            }
 
             return $quotation;
         });
@@ -378,6 +396,28 @@ class QuotationController extends Controller
     }
 
     /** Tipo de cambio (venta) con el que se emite una cotización; en soles no aplica. */
+    /** La solicitud del portal que se cotiza: del mismo cliente y aún sin cotizar ni rechazar. */
+    private function portalRequestToQuote(StoreQuotationRequest $request): ?PortalRequest
+    {
+        if (! $request->filled('portal_request_id')) {
+            return null;
+        }
+
+        $portalRequest = PortalRequest::find($request->portal_request_id);
+        if (! $portalRequest || $portalRequest->customer_id !== $request->customer_id) {
+            throw ValidationException::withMessages([
+                'portal_request_id' => ['La solicitud del portal no existe o es de otro cliente.'],
+            ]);
+        }
+        if (! in_array($portalRequest->status, ['SUBMITTED', 'IN_REVIEW'], true)) {
+            throw ValidationException::withMessages([
+                'portal_request_id' => ['La solicitud del portal ya fue cotizada o rechazada.'],
+            ]);
+        }
+
+        return $portalRequest;
+    }
+
     private function exchangeRateFor(string $currency): ?float
     {
         if ($currency === 'PEN') {

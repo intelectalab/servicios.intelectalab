@@ -10,6 +10,8 @@ use App\Modules\Services\Models\Contract;
 use App\Modules\Services\Models\Quotation;
 use App\Modules\Support\Models\SupportTicket;
 use App\Services\AuditLogger;
+use App\Services\SequentialNumberGenerator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
 class PortalController extends Controller
@@ -56,20 +58,24 @@ class PortalController extends Controller
             'request_type' => ['required', 'in:NEW_SERVICE,SUPPORT,RENEWAL,OTHER'],
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
+            // Servicio del catálogo que el cliente pide cotizar.
+            'service_id' => ['nullable', 'uuid', 'exists:services,id'],
         ]);
 
         $tenantId = $request->attributes->get('tenant_id');
         $customerId = $request->attributes->get('portal_customer_id');
 
-        $portalRequest = PortalRequest::create([
+        $portalRequest = DB::transaction(fn () => PortalRequest::create([
             'tenant_id' => $tenantId,
             'customer_id' => $customerId,
+            'request_number' => SequentialNumberGenerator::next($tenantId, 'portal_requests', 'request_number', 'SOL'),
             'request_type' => $request->request_type,
             'subject' => $request->subject,
             'description' => $request->description,
-            'status' => 'OPEN',
+            'service_id' => $request->service_id,
+            'status' => 'SUBMITTED',
             'created_by' => $request->user()->id,
-        ]);
+        ]));
 
         AuditLogger::log(
             tenantId: $tenantId,
@@ -77,6 +83,7 @@ class PortalController extends Controller
             action: 'portal_request.create',
             entityType: 'PortalRequest',
             entityId: $portalRequest->id,
+            metadata: ['request_number' => $portalRequest->request_number, 'to' => 'SUBMITTED'],
         );
 
         // Nota: si el CRM está activo, aquí debería generarse una

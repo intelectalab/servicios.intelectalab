@@ -18,6 +18,8 @@ class StoreQuotationRequest extends FormRequest
             'currency' => ['nullable', 'in:PEN,USD'],
             'valid_until' => ['nullable', 'date'],
             'notes' => ['nullable', 'string'],
+            // Solicitud del portal que se está cotizando (solo al crear).
+            'portal_request_id' => ['nullable', 'uuid'],
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.service_id' => ['nullable', 'uuid'],

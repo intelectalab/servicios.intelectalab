@@ -37,7 +37,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/quotations", label: "Cotizaciones", module: "COTIZACIONES", requiredPermission: "quotations.view", icon: FileText, superModule: "Comercial" },
   { href: "/contracts", label: "Contratos", module: "CONTRATOS", requiredPermission: "contracts.view", icon: FileSignature, superModule: "Comercial" },
   { href: "/orders", label: "Órdenes", module: "CONTRATOS", requiredPermission: "orders.view", icon: Package, superModule: "Comercial" },
-  { label: "Solicitudes del portal", icon: Globe, superModule: "Comercial", soon: true },
+  { href: "/portal-requests", label: "Solicitudes del portal", module: "COTIZACIONES", requiredPermission: "portal.view", icon: Globe, superModule: "Comercial" },
 
   { label: "Servicios contratados", icon: Layers, superModule: "Operaciones", soon: true },
   { label: "Órdenes de trabajo", icon: Wrench, superModule: "Operaciones", soon: true },

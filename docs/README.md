@@ -35,6 +35,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-07 | Comercial: Contratos (listado, ficha, estados, orden, PDF) | [cambios/2026-10-07_contratos.md](cambios/2026-10-07_contratos.md) |
 | 2026-10-07 | Comercial: Órdenes (listado, ficha, transiciones, PDF) | [cambios/2026-10-07_ordenes.md](cambios/2026-10-07_ordenes.md) |
 | 2026-10-07 | Contratos: botones de firma y adjuntar, OT / proyectos, instancias recurrentes, historial | [cambios/2026-10-07_contratos-ajustes.md](cambios/2026-10-07_contratos-ajustes.md) |
+| 2026-10-07 | Comercial: Solicitudes del portal (bandeja, cotizar, rechazar) | [cambios/2026-10-07_solicitudes-portal.md](cambios/2026-10-07_solicitudes-portal.md) |
 
 ## Cómo se escribe cada entrada
 

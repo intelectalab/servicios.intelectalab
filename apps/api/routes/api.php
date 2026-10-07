@@ -28,6 +28,7 @@ use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmLeadController;
 use App\Modules\Portal\Http\Controllers\PortalController;
+use App\Modules\Portal\Http\Controllers\PortalRequestController;
 use App\Modules\Core\Http\Controllers\EmployeeController;
 use App\Modules\Core\Http\Controllers\SearchController;
 use App\Modules\Core\Http\Controllers\RoleController;
@@ -226,6 +227,12 @@ Route::prefix('v1')->group(function () {
             Route::post('/orders/{order}/complete', [OrderController::class, 'complete']);
             Route::post('/orders/{order}/cancel', [OrderController::class, 'cancel']);
         });
+
+        // Solicitudes del portal (bandeja de la empresa)
+        Route::middleware('permission:portal.view')->get('/portal-requests', [PortalRequestController::class, 'index']);
+        // Tomar la solicitud es el primer paso de cotizarla.
+        Route::middleware('permission:quotations.manage')->post('/portal-requests/{portalRequest}/take', [PortalRequestController::class, 'take']);
+        Route::middleware('permission:portal.manage')->post('/portal-requests/{portalRequest}/reject', [PortalRequestController::class, 'reject']);
 
         // Checklists (plantillas)
         Route::middleware('permission:operations.view')->group(function () {

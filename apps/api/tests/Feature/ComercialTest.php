@@ -799,6 +799,69 @@ class ComercialTest extends TestCase
         $this->getJson('/api/v1/orders')->assertOk()->assertJsonPath('total', 0);
     }
 
+    public function test_portal_requests_are_taken_quoted_or_rejected(): void
+    {
+        [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'portal.view']);
+        $manager = $this->makeColleague($tenantId, 'Gerente', ['portal.view', 'portal.manage']);
+        $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
+        $otherCustomerId = $this->makeOrganizationCustomer($tenantId, 'Clínica del Sur SAC', '20987654321');
+        Sanctum::actingAs($seller);
+        $serviceId = $this->makeActiveService($this->makeCategory(), 'SRV-100', 100);
+
+        $newRequest = fn (string $number, string $subject) => DB::table('portal_requests')->insertGetId([
+            'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'customer_id' => $customerId,
+            'request_number' => $number, 'request_type' => 'NEW_SERVICE', 'subject' => $subject,
+            'description' => 'Necesitamos mantenimiento para 6 servidores.', 'service_id' => $serviceId,
+            'status' => 'SUBMITTED', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $first = $newRequest('SOL-2026-0001', 'Mantenimiento de servidores');
+        $second = $newRequest('SOL-2026-0002', 'Auditoría anual');
+
+        // Bandeja: con cliente y servicio; se busca por número, cliente o texto y se filtra por estado.
+        $this->getJson('/api/v1/portal-requests')->assertOk()->assertJsonPath('total', 2);
+        $this->getJson('/api/v1/portal-requests?search=SOL-2026-0001')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.service.code', 'SRV-100')
+            ->assertJsonPath('data.0.customer.party.organization.legal_name', 'Minera Los Andes SAC');
+        $this->getJson('/api/v1/portal-requests?search=los andes')->assertOk()->assertJsonPath('total', 2);
+        $this->getJson('/api/v1/portal-requests?search=auditor')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/v1/portal-requests?status=QUOTED')->assertOk()->assertJsonPath('total', 0);
+
+        // Tomarla la deja en revisión; no se toma dos veces.
+        $this->postJson("/api/v1/portal-requests/{$first}/take")->assertOk()->assertJsonPath('status', 'IN_REVIEW');
+        $this->postJson("/api/v1/portal-requests/{$first}/take")->assertStatus(422);
+
+        // Cotizarla: la cotización nace con origen Portal y la solicitud queda cotizada y enlazada.
+        $line = ['service_id' => $serviceId, 'description' => 'Servicio SRV-100', 'quantity' => 1, 'unit_price' => 100, 'tax_rate' => 18];
+        $this->postJson('/api/v1/quotations', ['customer_id' => $otherCustomerId, 'portal_request_id' => $first, 'items' => [$line]])
+            ->assertStatus(422)->assertJsonValidationErrors('portal_request_id');
+        $quotation = $this->postJson('/api/v1/quotations', ['customer_id' => $customerId, 'portal_request_id' => $first, 'items' => [$line]])
+            ->assertCreated()->assertJsonPath('source_type', 'PORTAL')->json();
+        $this->getJson('/api/v1/portal-requests?status=QUOTED')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.quotation.quotation_number', $quotation['quotation_number']);
+        $this->getJson('/api/v1/quotations?source=PORTAL')->assertOk()->assertJsonPath('total', 1);
+        // Una solicitud ya cotizada no se cotiza ni se rechaza otra vez.
+        $this->postJson('/api/v1/quotations', ['customer_id' => $customerId, 'portal_request_id' => $first, 'items' => [$line]])
+            ->assertStatus(422)->assertJsonValidationErrors('portal_request_id');
+
+        // Rechazar pide su permiso y un motivo.
+        $this->postJson("/api/v1/portal-requests/{$second}/reject", ['reason' => 'Fuera de cobertura'])->assertStatus(403);
+        Sanctum::actingAs($manager);
+        $this->postJson("/api/v1/portal-requests/{$second}/take")->assertStatus(403);
+        $this->postJson("/api/v1/portal-requests/{$second}/reject")->assertStatus(422)->assertJsonValidationErrors('reason');
+        $this->postJson("/api/v1/portal-requests/{$second}/reject", ['reason' => 'Fuera de cobertura'])->assertOk()
+            ->assertJsonPath('status', 'REJECTED')->assertJsonPath('resolution_note', 'Fuera de cobertura');
+        $this->postJson("/api/v1/portal-requests/{$first}/reject", ['reason' => 'Tarde'])->assertStatus(422);
+        $this->postJson('/api/v1/portal-requests/no-es-uuid/reject', ['reason' => 'x'])->assertStatus(404);
+
+        // Sin portal.view no se ve la bandeja; otra empresa no ve estas solicitudes.
+        [$outsider] = $this->makeTenantUser([...self::PERMISSIONS, 'portal.view']);
+        Sanctum::actingAs($outsider);
+        $this->getJson('/api/v1/portal-requests')->assertOk()->assertJsonPath('total', 0);
+        [$noAccess] = $this->makeTenantUser();
+        Sanctum::actingAs($noAccess);
+        $this->getJson('/api/v1/portal-requests')->assertStatus(403);
+    }
+
     public function test_roles_matrix_is_edited_through_the_permission_tables(): void
     {
         [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage']);

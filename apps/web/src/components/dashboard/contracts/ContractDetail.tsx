@@ -299,7 +299,7 @@ export default function ContractDetail() {
                   <span>Editar</span>
                 </Btn>
                 {/* Aún sin función: la firma electrónica no está construida. */}
-                <Btn variant="secondary" onClick={() => toast("La firma electrónica aún no está disponible.")} permission="contracts.manage">
+                <Btn variant="secondary" onClick={() => toast("La firma electrónica aún no está disponible.", "warning")} permission="contracts.manage">
                   <Send size={16} />
                   <span>Enviar a firma</span>
                 </Btn>
@@ -325,7 +325,7 @@ export default function ContractDetail() {
               </Btn>
             )}
             {/* Aún sin función: depende de la pantalla Documentos. */}
-            <Btn variant="ghost" onClick={() => toast("Adjuntar documentos aún no está disponible.")}>
+            <Btn variant="ghost" onClick={() => toast("Adjuntar documentos aún no está disponible.", "warning")}>
               <Upload size={16} />
               <span>Adjuntar documento</span>
             </Btn>

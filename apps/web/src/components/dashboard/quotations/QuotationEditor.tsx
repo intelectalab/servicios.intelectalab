@@ -66,6 +66,8 @@ export default function QuotationEditor() {
   const [serviceToAdd, setServiceToAdd] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
+  // Solicitud del portal que se está cotizando, cuando se llega desde su bandeja.
+  const [portalRequestId, setPortalRequestId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,6 +115,27 @@ export default function QuotationEditor() {
               };
             }),
           );
+        }
+
+        // Desde "Solicitudes del portal": cliente (c), solicitud (r) y servicio (s) precargados.
+        if (!id) {
+          const query = new URLSearchParams(window.location.search);
+          const customer = query.get("c");
+          if (customer && customerList.some((item) => item.id === customer)) setCustomerId(customer);
+          setPortalRequestId(query.get("r"));
+          const service = servicePage.data.find((item) => item.id === query.get("s"));
+          if (service?.current_price) {
+            setLines([{
+              key: 1,
+              service_id: service.id,
+              name: service.name,
+              unit: service.unit,
+              frequency: service.recurrence?.frequency ?? null,
+              quantity: 1,
+              unit_price: Number(service.current_price.amount),
+              discount_pct: 0,
+            }]);
+          }
         }
 
         setCustomers(customerList.sort((a, b) => customerName(a).localeCompare(customerName(b))));
@@ -221,6 +244,7 @@ export default function QuotationEditor() {
           currency,
           valid_until: validUntil || null,
           notes: terms.trim() || null,
+          ...(!id && portalRequestId ? { portal_request_id: portalRequestId } : {}),
           items: lines.map((line) => ({
             service_id: line.service_id,
             description: line.name,

@@ -208,6 +208,28 @@ export interface Order {
   history?: HistoryEntry[];
 }
 
+export type PortalRequestStatus = "SUBMITTED" | "IN_REVIEW" | "QUOTED" | "REJECTED";
+
+/** Solicitud que un cliente envía desde el portal para que se le cotice un servicio. */
+export interface PortalRequest {
+  id: string;
+  customer_id: string;
+  request_number: string | null;
+  request_type: string;
+  subject: string;
+  description: string | null;
+  service_id: string | null;
+  status: PortalRequestStatus;
+  /** Motivo del rechazo. */
+  resolution_note: string | null;
+  crm_opportunity_id: string | null;
+  quotation_id: string | null;
+  created_at: string;
+  customer: Customer | null;
+  service: { id: string; code: string; name: string } | null;
+  quotation: { id: string; quotation_number: string; status: QuotationStatus } | null;
+}
+
 export interface ExchangeRate {
   id: string;
   rate_date: string;
