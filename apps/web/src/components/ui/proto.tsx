@@ -1306,7 +1306,7 @@ export function useToasts() {
   const node = (
     <div className={`${poppins.className} pointer-events-none fixed bottom-4 right-[18px] z-[400] grid w-[min(380px,calc(100vw-36px))] gap-2 text-sm`}>
       {toasts.map((item) => (
-        <div key={item.id} role="status" className="pointer-events-auto flex items-start gap-2.5 rounded-[10px] bg-[#1C2533] px-3.5 py-[11px] text-[#fff] shadow-[0_20px_50px_rgba(8,25,55,.28)]">
+        <div key={item.id} role="status" className="pointer-events-auto flex items-start gap-2.5 rounded-[10px] bg-[var(--p-toast-bg)] px-3.5 py-[11px] text-[#fff] shadow-[var(--p-toast-shadow)] outline outline-1 outline-[color:var(--p-toast-line)]">
           {item.tone === "success" ? <Check size={18} className="shrink-0 text-[#6fd6a0]" /> : item.tone === "danger" ? <AlertCircle size={18} className="shrink-0 text-[#ff8b82]" /> : <Info size={18} className="shrink-0 text-[#f2bd6e]" />}
           <div>
             <strong className="font-semibold">{item.text}</strong>

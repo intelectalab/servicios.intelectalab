@@ -48,6 +48,10 @@
   --p-neutral-text: #4B5566;
   --p-muted-soft: #EEF0F4;
   --p-muted-text: #7B8494;
+  /* Aviso emergente: oscuro sobre la página clara. */
+  --p-toast-bg: #1C2533;
+  --p-toast-line: transparent;
+  --p-toast-shadow: 0 20px 50px rgba(8, 25, 55, .28);
 }
 
 [data-theme="dark"] {
@@ -97,6 +101,10 @@
   --p-neutral-text: #C6D5DC;
   --p-muted-soft: #243740;
   --p-muted-text: #9FB4BE;
+  /* En oscuro el aviso emergente se despega del fondo: más claro que las tarjetas, con borde y sombra fuerte. */
+  --p-toast-bg: #2C4C5B;
+  --p-toast-line: #5A8194;
+  --p-toast-shadow: 0 14px 36px rgba(0, 0, 0, .6);
 }
 
 @theme inline {

@@ -57,8 +57,8 @@ La ventana del navegador de pruebas quedó oculta durante esta tanda y **no se p
 
 ### Lo que no se probó
 
-- **Nada se vio con los ojos**: todo es medición. El contraste se puede medir; si un tono "se ve bien" hay que mirarlo. Conviene que lo revises tú en oscuro y me digas qué color no te convence.
-- **La consola del superadmin**: no pude entrar (la contraseña de esa cuenta fue rechazada y no reintenté para no bloquearla). Sus colores se revisaron leyendo el código: todos los que usa están cubiertos por las reglas nuevas.
+- En la primera parte nada se vio con los ojos (solo medición); en la segunda se vieron cuatro pantallas (ver abajo). El resto sigue solo medido: conviene que lo revises tú en oscuro y me digas qué color no te convence.
+- La consola del superadmin no se pudo probar en la primera parte (contraseña rechazada); se probó después, ver "Tercera parte".
 - El aviso "Módulo no disponible en tu plan" (no hay módulos con candado en el menú de la empresa de prueba), el modal Cambiar contraseña, el buscador global, los avisos emergentes y la pantalla de empresa bloqueada.
 - A 375 px.
 - Los módulos desconectados (Clientes, Proveedores, Empleados).
@@ -66,5 +66,16 @@ La ventana del navegador de pruebas quedó oculta durante esta tanda y **no se p
 ## Pendiente
 
 - Para lo nuevo: no escribir colores fijos en las clases; usar las variables `--p-…` (o las `--app-…`) para que los dos temas salgan bien.
-- Los avisos emergentes (fondo `#1C2533`) casi no se distinguen del fondo en oscuro; solo los separa la sombra.
 - La landing no tiene modo oscuro.
+
+## Segunda parte: avisos emergentes y revisión a la vista
+
+- **Avisos emergentes** (los de "Permiso actualizado", "Usuario creado"…): en oscuro tenían casi el mismo color que el fondo y solo los separaba la sombra. Ahora, en oscuro, van en un tono más claro que las tarjetas (`#2C4C5B`), con un borde fino (`#5A8194`) y una sombra más marcada. En claro quedan exactamente igual (`#1C2533`, sin borde). Cambios en `proto.tsx` (el aviso usa variables) y `globals.css` (`--p-toast-…`).
+- Al volver a funcionar las capturas se revisó **a la vista**, en oscuro: el inicio de sesión (panel derecho oscuro, logo blanco, campos y enlace legibles, tarjetas translúcidas en el panel azul), Clientes y actores (etiquetas de rol y estado en tono oscuro, casillas oscuras), Cotizaciones (indicadores, pestañas, etiqueta de alcance) y la ficha de un actor (tarjetas, etiquetas, botones con candado). El aviso emergente se vio sobre el inicio de sesión con sus clases reales; no se disparó uno desde una acción.
+
+## Tercera parte: consola del superadmin
+
+Con la contraseña correcta de la cuenta de plataforma se revisó la consola en oscuro, sin cambiar ningún archivo:
+
+- **Planes SaaS** (listado, indicadores, pestañas, buscador) y su **panel de edición** en las siete pestañas (Información, Precio y suscripción, Módulos, Límites, Consumo, Soporte, Características): vistos con captura (listado, Información y Módulos) y medidos. Sin textos por debajo del mínimo ni superficies claras; los campos toman fondo oscuro y texto claro. Se cerró sin guardar.
+- **Dashboard, Tenants / Empresas, Suscripciones y Mi perfil**: medidos, sin nada por debajo del mínimo. De estas cuatro no hay captura (la ventana volvió a ocultarse): no se vieron con los ojos.
