@@ -38,11 +38,15 @@ Como Ventas, enviando las teclas por código (la ventana de pruebas estaba ocult
 
 `tsc` y `eslint` sin errores.
 
+Después, como Administrador y **con teclas reales**, en Usuarios:
+
+- "/" enfoca el buscador; al escribir "lucia" quedan 1 de 3 filas; el primer Escape borra y vuelven las 3; el segundo suelta el campo.
+- Con el modal Nuevo usuario abierto: "/" con el cursor en el campo Nombre escribe "/" en ese campo, no salta al buscador; "/" sin ningún campo enfocado no hace nada; Escape cierra el modal (no se guardó nada).
+- En la pestaña Sedes, que no tiene buscador, "/" no hace nada.
+
 ### Lo que no se probó
 
-- Con teclas reales del teclado (solo por código).
-- En Usuarios (Ventas no entra a esa pantalla).
-- Que "/" no se active con un modal de formulario abierto sobre un listado (se probó con el buscador global, que usa la misma marca).
+- Con teclas reales en los otros seis listados (ahí se probó por código; usan la misma pieza).
 
 ## Pendiente
 
