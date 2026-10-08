@@ -73,10 +73,10 @@ function CountryCode({ code, onChange }: { code: string; onChange: (code: string
 
   if (custom) {
     return (
-      <div className="flex shrink-0 items-center gap-1 border-r border-[#CFD5DE] bg-[var(--app-surface-muted)] px-2">
+      <div className="flex shrink-0 items-center gap-1 border-r border-[color:var(--p-field-border)] bg-[var(--app-surface-muted)] px-2">
         <span className="app-muted text-xs font-medium">OT</span>
         <input
-          className="w-14 bg-transparent text-[13.5px] font-semibold text-[#1679AB] outline-none"
+          className="w-14 bg-transparent text-[13.5px] font-semibold text-[color:var(--p-brand-text)] outline-none"
           value={code}
           onChange={(event) => onChange(event.target.value.replace(/\s/g, ""))}
           placeholder="+XX"
@@ -108,7 +108,7 @@ function CountryCode({ code, onChange }: { code: string; onChange: (code: string
         onClick={() => setOpen(!open)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex h-full min-w-[96px] cursor-pointer items-center justify-between gap-2 rounded-l-[8px] border-r border-[#CFD5DE] bg-[var(--app-surface-muted)] px-3 text-[13.5px] font-medium"
+        className="flex h-full min-w-[96px] cursor-pointer items-center justify-between gap-2 rounded-l-[8px] border-r border-[color:var(--p-field-border)] bg-[var(--app-surface-muted)] px-3 text-[13.5px] font-medium"
       >
         <span className="flex items-center gap-1.5">
           <span>{iso}</span>
@@ -166,7 +166,7 @@ function CountryCode({ code, onChange }: { code: string; onChange: (code: string
                 onChange("+");
                 setOpen(false);
               }}
-              className="mt-1 flex w-full cursor-pointer items-center gap-1.5 rounded-lg border-t border-[color:var(--app-border)] px-3 py-2 text-left text-xs font-semibold text-[#1679AB] hover:bg-[var(--app-surface-muted)]"
+              className="mt-1 flex w-full cursor-pointer items-center gap-1.5 rounded-lg border-t border-[color:var(--app-border)] px-3 py-2 text-left text-xs font-semibold text-[color:var(--p-brand-text)] hover:bg-[var(--app-surface-muted)]"
             >
               <Globe size={13} /> Otro país (Escribir código libre)
             </button>
@@ -183,7 +183,7 @@ export function PhoneInput({
   code, onCode, value, onValue,
 }: { code: string; onCode: (code: string) => void; value: string; onValue: (value: string) => void }) {
   return (
-    <div className="app-surface flex min-h-10 rounded-[9px] border border-[#CFD5DE] focus-within:border-[#1B8FC9] focus-within:shadow-[0_0_0_3px_rgba(27,143,201,.18)]">
+    <div className="app-surface flex min-h-10 rounded-[9px] border border-[color:var(--p-field-border)] focus-within:border-[#1B8FC9] focus-within:shadow-[0_0_0_3px_rgba(27,143,201,.18)]">
       <CountryCode code={code} onChange={onCode} />
       <input
         className="app-text min-w-0 flex-1 rounded-r-[9px] bg-transparent px-2.5 text-[13.5px] outline-none"
@@ -228,7 +228,7 @@ export function PhoneField({
           if (unformatted && code.length < 2) onCode("+51");
           onUnformatted(!unformatted);
         }}
-        className="mt-1 flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-[#1679AB] hover:underline"
+        className="mt-1 flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-[color:var(--p-brand-text)] hover:underline"
       >
         <Info size={13} />
         {unformatted ? "Aplicar formato de número" : "Eliminar formato de número"}

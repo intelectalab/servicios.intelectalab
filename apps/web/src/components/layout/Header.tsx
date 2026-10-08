@@ -44,7 +44,7 @@ type HeaderProps = {
 
 // Botón de ícono de la barra: azul del logo, igual en tema claro y oscuro.
 const ICON_BUTTON =
-  "relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[#1B8FC9] transition-colors hover:bg-[rgb(27_143_201/0.1)] active:scale-95";
+  "relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[color:var(--p-brand)] transition-colors hover:bg-[rgb(27_143_201/0.1)] active:scale-95";
 
 function initials(name: string) {
   return name
@@ -217,7 +217,7 @@ export default function Header({
                   setMenuOpen(false);
                   onLogout?.();
                 }}
-                className="app-border flex w-full cursor-pointer items-center gap-2.5 border-t px-3.5 py-2.5 text-left text-[13px] text-[#D93A40] transition-colors hover:bg-[var(--app-surface-muted)]"
+                className="app-border flex w-full cursor-pointer items-center gap-2.5 border-t px-3.5 py-2.5 text-left text-[13px] text-[color:var(--p-danger-text)] transition-colors hover:bg-[var(--app-surface-muted)]"
               >
                 <LogOut size={16} className="shrink-0" />
                 Cerrar sesión

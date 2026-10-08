@@ -179,7 +179,7 @@ export default function ActorDetail() {
   }
 
   const back = (
-    <Link href="/actors" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1679AB] hover:underline">
+    <Link href="/actors" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--p-brand-text)] hover:underline">
       <ArrowLeft size={15} /> Clientes y actores
     </Link>
   );
@@ -298,7 +298,7 @@ export default function ActorDetail() {
                       actor.employee_id ? ["Código de empleado", actor.employee_code || "—"] : null,
                       !isOrg && (actor.employee_id || actor.position) ? ["Cargo", actor.position || "—"] : null,
                       actor.contact_of
-                        ? ["Contacto de", <Link key="contact-of" href={`/actors/${actor.contact_of.id}`} className="text-[#1679AB] hover:underline">{actor.contact_of.name}</Link>]
+                        ? ["Contacto de", <Link key="contact-of" href={`/actors/${actor.contact_of.id}`} className="text-[color:var(--p-brand-text)] hover:underline">{actor.contact_of.name}</Link>]
                         : null,
                       actor.user_name ? ["Usuario", actor.user_name] : null,
                       ["Alta", shortDate(actor.created_at)],
@@ -334,7 +334,7 @@ export default function ActorDetail() {
                     <ul>
                       {actor.contact_people.map((person) => (
                         <li key={person.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color:var(--app-border)] py-[7px] last:border-b-0">
-                          <Link href={`/actors/${person.id}`} className="font-semibold hover:text-[#1679AB] hover:underline">{person.name}</Link>
+                          <Link href={`/actors/${person.id}`} className="font-semibold hover:text-[color:var(--p-brand-text)] hover:underline">{person.name}</Link>
                           {person.position && <span>· {person.position}</span>}
                           {person.status !== "ACTIVE" && <Chip tone="neutral">Inactivo</Chip>}
                           <small className="app-muted w-full text-xs">
@@ -412,7 +412,7 @@ export default function ActorDetail() {
                   <Kv
                     rows={[
                       ["Saldo pendiente", money(actor.finance.outstanding)],
-                      ["Vencido", <span key="overdue" className={actor.finance.overdue ? "text-[#D93A40]" : ""}>{money(actor.finance.overdue)}</span>],
+                      ["Vencido", <span key="overdue" className={actor.finance.overdue ? "text-[color:var(--p-danger-text)]" : ""}>{money(actor.finance.overdue)}</span>],
                       ["Documentos abiertos", actor.finance.open_documents],
                     ]}
                   />

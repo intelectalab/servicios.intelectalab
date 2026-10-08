@@ -190,7 +190,7 @@ export default function ServiceFormModal({
         <p className="app-muted mt-3 text-[12.5px]">
           Un servicio nace en BORRADOR. Solo los servicios ACTIVOS se pueden cotizar. El catálogo no factura por sí solo.
         </p>
-        {formError && <p className="mt-2 text-[12.5px] text-[#D93A40]">{formError}</p>}
+        {formError && <p className="mt-2 text-[12.5px] text-[color:var(--p-danger-text)]">{formError}</p>}
 
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>

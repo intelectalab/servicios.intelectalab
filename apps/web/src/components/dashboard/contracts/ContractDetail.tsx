@@ -142,7 +142,7 @@ function EditModal({ contract, onClose, onSaved }: { contract: Contract; onClose
           </Field>
         </div>
         <p className="app-muted mt-3 text-[12.5px]">Las líneas son el snapshot de la cotización y no se editan. Solo se edita en borrador.</p>
-        {(errors.form || errors.status) && <p className="mt-2 text-[12.5px] text-[#D93A40]">{errors.form || errors.status}</p>}
+        {(errors.form || errors.status) && <p className="mt-2 text-[12.5px] text-[color:var(--p-danger-text)]">{errors.form || errors.status}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</Btn>
@@ -247,7 +247,7 @@ export default function ContractDetail() {
   }
 
   const back = (
-    <Link href="/contracts" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1679AB] hover:underline">
+    <Link href="/contracts" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--p-brand-text)] hover:underline">
       <ArrowLeft size={15} /> Contratos
     </Link>
   );
@@ -472,7 +472,7 @@ export default function ContractDetail() {
                     [
                       "Cotización",
                       contract.quotation ? (
-                        <Link key="quotation" href={`/quotations/${contract.quotation.id}`} className="text-[#1679AB] hover:underline">
+                        <Link key="quotation" href={`/quotations/${contract.quotation.id}`} className="text-[color:var(--p-brand-text)] hover:underline">
                           {contract.quotation.quotation_number}
                         </Link>
                       ) : "—",
@@ -483,7 +483,7 @@ export default function ContractDetail() {
                         <span key="orders" className="inline-flex flex-wrap items-center gap-1.5">
                           {orders.map((order) => (
                             <span key={order.id} className="inline-flex items-center gap-1.5">
-                              <Link href={`/orders/${order.id}`} className="text-[#1679AB] hover:underline">{order.order_number}</Link>
+                              <Link href={`/orders/${order.id}`} className="text-[color:var(--p-brand-text)] hover:underline">{order.order_number}</Link>
                               <Badge tone={stateOf(ORDER_STATES, order.status)[1]}>{stateOf(ORDER_STATES, order.status)[0]}</Badge>
                             </span>
                           ))}

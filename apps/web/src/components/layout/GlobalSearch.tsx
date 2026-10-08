@@ -166,7 +166,7 @@ export default function GlobalSearch({ screens, canSearchRecords }: GlobalSearch
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Buscar"
-        className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[#1B8FC9] transition-colors hover:bg-[rgb(27_143_201/0.1)] lg:hidden"
+        className="relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[color:var(--p-brand)] transition-colors hover:bg-[rgb(27_143_201/0.1)] lg:hidden"
       >
         <Search size={20} />
       </button>
@@ -225,7 +225,7 @@ export default function GlobalSearch({ screens, canSearchRecords }: GlobalSearch
                           index === selected ? "bg-[rgb(27_143_201/0.12)]" : ""
                         }`}
                       >
-                        <span className="app-surface-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#1B8FC9]">
+                        <span className="app-surface-muted flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[color:var(--p-brand)]">
                           <Icon size={16} />
                         </span>
                         <span className="min-w-0 flex-1">

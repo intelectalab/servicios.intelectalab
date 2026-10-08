@@ -35,7 +35,7 @@ function firstError(err: unknown, fallback: string) {
 
 const dateTime = (value: string) => new Date(value).toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" });
 
-const LINK = "text-[#1679AB] hover:underline";
+const LINK = "text-[color:var(--p-brand-text)] hover:underline";
 
 export default function OrderDetail() {
   const { id } = useParams<{ id: string }>();
@@ -116,7 +116,7 @@ export default function OrderDetail() {
   }
 
   const back = (
-    <Link href="/orders" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1679AB] hover:underline">
+    <Link href="/orders" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--p-brand-text)] hover:underline">
       <ArrowLeft size={15} /> Órdenes
     </Link>
   );

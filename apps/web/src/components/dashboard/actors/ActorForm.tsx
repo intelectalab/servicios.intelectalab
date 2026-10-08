@@ -367,7 +367,7 @@ export function ActorForm({
         )}
 
         <fieldset className="mt-3.5 rounded-[7px] border border-[color:var(--app-border)] px-3 pb-2.5 pt-2">
-          <legend className="px-1 text-[12.5px] font-medium">Roles en CORE <em className="not-italic text-[#D93A40]">*</em></legend>
+          <legend className="px-1 text-[12.5px] font-medium">Roles en CORE <em className="not-italic text-[color:var(--p-danger-text)]">*</em></legend>
           <div className="flex flex-wrap gap-x-5 gap-y-2">
             {availableRoles.map((role) => {
               // Un rol que la identidad ya tiene no se quita desde aquí.
@@ -386,7 +386,7 @@ export function ActorForm({
               );
             })}
           </div>
-          {errors.roles && <small className="mt-1 block text-xs text-[#D93A40]">{errors.roles}</small>}
+          {errors.roles && <small className="mt-1 block text-xs text-[color:var(--p-danger-text)]">{errors.roles}</small>}
         </fieldset>
 
         {duplicates.length > 0 && (
@@ -409,7 +409,7 @@ export function ActorForm({
           </div>
         )}
 
-        {errors.form && <p className="mt-3 text-[12.5px] text-[#D93A40]">{errors.form}</p>}
+        {errors.form && <p className="mt-3 text-[12.5px] text-[color:var(--p-danger-text)]">{errors.form}</p>}
 
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>

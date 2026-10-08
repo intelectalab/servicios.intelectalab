@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Users, Check } from "lucide-react";
-import AuthShell, { item, authLabel, authInput, authInputIcon, authButton, authGhostButton, BRAND, BRAND_DARK } from "./AuthShell";
+import AuthShell, { item, authLabel, authInput, authInputIcon, authButton, authGhostButton, BRAND } from "./AuthShell";
 import { setAuthToken } from "@/lib/auth";
 
 type LoginResponse = {
@@ -106,7 +106,7 @@ export default function LoginForm() {
       initial={{ opacity: 0, height: 0 }}
       animate={{ opacity: 1, height: "auto" }}
       role="alert"
-      className="rounded-[9px] border border-[#D93A40]/25 bg-[#FDECEC] px-3 py-2.5 text-[13px] text-[#B4262C]"
+      className="rounded-[9px] border border-[#D93A40]/25 bg-[var(--p-danger-soft)] px-3 py-2.5 text-[13px] text-[color:var(--p-danger-strong-text)]"
     >
       {error}
     </motion.div>
@@ -208,7 +208,7 @@ export default function LoginForm() {
               type="button"
               onClick={() => setShowPassword((s) => !s)}
               aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-              className="absolute right-1 top-1/2 flex h-[34px] w-[34px] -translate-y-1/2 items-center justify-center rounded-md text-[#8A93A3] transition-colors hover:text-[#1D1D1B]"
+              className="absolute right-1 top-1/2 flex h-[34px] w-[34px] -translate-y-1/2 items-center justify-center rounded-md text-[#8A93A3] transition-colors hover:text-[color:var(--app-text)]"
             >
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
@@ -226,7 +226,7 @@ export default function LoginForm() {
             <span
               className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
               style={{
-                borderColor: remember ? BRAND : "#CFD5DE",
+                borderColor: remember ? BRAND : "var(--p-field-border)",
                 backgroundColor: remember ? BRAND : "transparent",
               }}
             >
@@ -234,7 +234,7 @@ export default function LoginForm() {
             </span>
             <span className="app-muted">Recordarme</span>
           </button>
-          <a href="/forgot-password" className="font-medium hover:underline" style={{ color: BRAND_DARK }}>
+          <a href="/forgot-password" className="font-medium text-[color:var(--p-brand-text)] hover:underline">
             ¿Olvidó su contraseña?
           </a>
         </motion.div>

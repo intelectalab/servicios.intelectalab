@@ -84,7 +84,7 @@ const BTN_VARIANTS: Record<BtnVariant, string> = {
   secondary: "app-surface app-text border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]",
   ghost: "app-muted bg-transparent hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]",
   danger: "bg-[#E5484D] text-[#fff] hover:bg-[#D93A40]",
-  "danger-ghost": "border-[#F3C2C4] bg-transparent text-[#D93A40] hover:bg-[#FDECEC]",
+  "danger-ghost": "border-[color:var(--p-danger-line)] bg-transparent text-[color:var(--p-danger-text)] hover:bg-[var(--p-danger-soft)]",
 };
 
 export function btnClass(variant: BtnVariant = "primary", size: "md" | "sm" = "md", block = false) {
@@ -149,13 +149,13 @@ export function Btn({
 export type Tone = "neutral" | "info" | "success" | "warning" | "danger" | "muted" | "accent";
 
 const TONES: Record<Tone, string> = {
-  neutral: "bg-[#E6EAF0] text-[#4B5566]",
-  info: "bg-[#E3F2FA] text-[#1679AB]",
-  success: "bg-[#E4F6EB] text-[#1B8E4B]",
-  warning: "bg-[#FFF4DB] text-[#B26E00]",
-  danger: "bg-[#FDECEC] text-[#D93A40]",
-  muted: "bg-[#EEF0F4] text-[#7B8494]",
-  accent: "bg-[#E3F2FA] text-[#1679AB]",
+  neutral: "bg-[var(--p-neutral-soft)] text-[color:var(--p-neutral-text)]",
+  info: "bg-[var(--p-brand-soft)] text-[color:var(--p-brand-text)]",
+  success: "bg-[var(--p-success-soft)] text-[color:var(--p-success-text)]",
+  warning: "bg-[var(--p-warning-soft)] text-[color:var(--p-warning-text)]",
+  danger: "bg-[var(--p-danger-soft)] text-[color:var(--p-danger-text)]",
+  muted: "bg-[var(--p-muted-soft)] text-[color:var(--p-muted-text)]",
+  accent: "bg-[var(--p-brand-soft)] text-[color:var(--p-brand-text)]",
 };
 
 /** Estado de un registro: píldora con punto. */
@@ -183,7 +183,7 @@ export function Who({ name }: { name?: string | null }) {
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-      <span aria-hidden="true" className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-[#E3F2FA] text-[9.5px] font-semibold text-[#0F5A82]">
+      <span aria-hidden="true" className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-[var(--p-brand-soft)] text-[9.5px] font-semibold text-[color:var(--p-brand-soft-text)]">
         {initials}
       </span>
       <span>{name}</span>
@@ -253,7 +253,7 @@ export function Tabs({
             aria-selected={on}
             onClick={() => onChange(key)}
             className={`-mb-px cursor-pointer whitespace-nowrap border-b-2 px-3 py-[9px] font-medium ${
-              on ? "border-[#1B8FC9] text-[#1679AB]" : "app-muted border-transparent hover:text-[var(--app-text)]"
+              on ? "border-[#1B8FC9] text-[color:var(--p-brand-text)]" : "app-muted border-transparent hover:text-[var(--app-text)]"
             }`}
           >
             {label}
@@ -272,10 +272,10 @@ export function Tabs({
 type KpiTone = "brand" | "warning" | "success" | "danger";
 
 const KPI_TONES: Record<KpiTone, [string, string]> = {
-  brand: ["border-l-[#1B8FC9]", "bg-[#E3F2FA] text-[#1B8FC9]"],
-  warning: ["border-l-[#B26E00]", "bg-[#FFF4DB] text-[#B26E00]"],
-  success: ["border-l-[#22A55A]", "bg-[#E4F6EB] text-[#22A55A]"],
-  danger: ["border-l-[#E5484D]", "bg-[#FDECEC] text-[#E5484D]"],
+  brand: ["border-l-[#1B8FC9]", "bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]"],
+  warning: ["border-l-[#B26E00]", "bg-[var(--p-warning-soft)] text-[color:var(--p-warning-text)]"],
+  success: ["border-l-[#22A55A]", "bg-[var(--p-success-soft)] text-[color:var(--p-success)]"],
+  danger: ["border-l-[#E5484D]", "bg-[var(--p-danger-soft)] text-[#E5484D]"],
 };
 
 export function Kpis({ children }: { children: ReactNode }) {
@@ -334,7 +334,7 @@ export type Selection<T> = {
   onToggleAll: (rows: T[], checked: boolean) => void;
 };
 
-const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[#CFD5DE] accent-[#1B8FC9]";
+const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[color:var(--p-field-border)] accent-[#1B8FC9]";
 
 export function DataTable<T>({
   cols, rows, rowKey, onRowClick, selection, loading = false, empty = "No hay registros con estos filtros.", dense = false, tableId,
@@ -677,7 +677,7 @@ function ColumnTable<T>({
                         </span>
                       )}
                       <span>{col.label}</span>
-                      {sorted && <span className="font-bold text-[#1B8FC9]">{sorted === "asc" ? "↑" : "↓"}</span>}
+                      {sorted && <span className="font-bold text-[color:var(--p-brand)]">{sorted === "asc" ? "↑" : "↓"}</span>}
                     </div>
                     <button
                       type="button"
@@ -813,7 +813,7 @@ export function SelectionBar({
   if (!count) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-[#BFE6F8] bg-[#E3F2FA] px-3.5 py-2 text-[13px] text-[#0F5A82]">
+    <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--p-brand-line)] bg-[var(--p-brand-soft)] px-3.5 py-2 text-[13px] text-[color:var(--p-brand-soft-text)]">
       <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#1B8FC9] px-1.5 text-xs font-semibold text-[#fff]">{count}</span>
       <span className="mr-auto font-medium">{count === 1 ? "fila seleccionada" : "filas seleccionadas"}</span>
       <Btn size="sm" disabled={busy} onClick={() => onExport("xlsx")}>
@@ -860,7 +860,7 @@ function pageNumbers(page: number, lastPage: number) {
 
 const PAGE_BTN = "grid h-8 min-w-8 cursor-pointer place-items-center rounded-lg border px-1.5 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
 // Sin "app-surface": esa clase gana a las de hover y el botón no cambiaba al pasar el cursor.
-const PAGE_BTN_IDLE = "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] enabled:hover:border-[#1B8FC9] enabled:hover:bg-[rgb(27_143_201/0.14)] enabled:hover:text-[#1B8FC9] enabled:active:scale-90";
+const PAGE_BTN_IDLE = "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] enabled:hover:border-[#1B8FC9] enabled:hover:bg-[rgb(27_143_201/0.14)] enabled:hover:text-[color:var(--p-brand)] enabled:active:scale-90";
 const PAGE_BTN_ON = "border-[#1B8FC9] bg-[#1B8FC9] text-[#fff]";
 
 /** Pie de un listado: exportar, "Mostrando X a Y de N", filas por página y páginas numeradas. */
@@ -902,7 +902,7 @@ export function Pager({
       <span className={left ? "" : "mr-auto"}>
         Mostrando <strong className="app-text font-semibold">{from}</strong> a <strong className="app-text font-semibold">{to}</strong> de{" "}
         <strong className="app-text font-semibold">{total}</strong>
-        {loading && <Loader2 size={13} className="ml-2 inline animate-spin text-[#1B8FC9]" aria-label="Cargando" />}
+        {loading && <Loader2 size={13} className="ml-2 inline animate-spin text-[color:var(--p-brand)]" aria-label="Cargando" />}
       </span>
       <label className="flex items-center gap-1.5">
         Filas por página:
@@ -981,7 +981,7 @@ export function Modal({
   );
 }
 
-export const INPUT = "app-surface app-text min-h-10 w-full rounded-[9px] border border-[#CFD5DE] px-2.5 py-2 text-[13.5px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)] disabled:bg-[var(--app-surface-muted)]";
+export const INPUT = "app-surface app-text min-h-10 w-full rounded-[9px] border border-[color:var(--p-field-border)] px-2.5 py-2 text-[13.5px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)] disabled:bg-[var(--app-surface-muted)]";
 
 export type SelectOption = { value: string; label: string; hint?: string; disabled?: boolean };
 
@@ -1151,7 +1151,7 @@ export function SearchSelect({
                   title={option.label}
                   className={`grid gap-px border-b border-[color:color-mix(in_srgb,var(--app-border)_55%,transparent)] px-3 py-2 last:border-b-0 ${
                     option.disabled ? "app-muted cursor-not-allowed opacity-60" : "cursor-pointer"
-                  } ${index === active ? "bg-[var(--app-surface-muted)]" : ""} ${option.value === value ? "font-semibold text-[#1679AB]" : ""}`}
+                  } ${index === active ? "bg-[var(--app-surface-muted)]" : ""} ${option.value === value ? "font-semibold text-[color:var(--p-brand-text)]" : ""}`}
                 >
                   <span className="line-clamp-2 min-w-0 leading-snug">{option.label}</span>
                   {option.hint && <span className="app-muted truncate text-xs font-normal">{option.hint}</span>}
@@ -1174,10 +1174,10 @@ export function Field({
   return (
     <label className={`flex min-w-0 flex-col gap-[5px] ${span === 2 ? "md:col-span-2" : span === 3 ? "md:col-span-3" : ""}`}>
       <span className="text-[12.5px] font-medium">
-        {label} {required && <em className="not-italic text-[#D93A40]">*</em>}
+        {label} {required && <em className="not-italic text-[color:var(--p-danger-text)]">*</em>}
       </span>
       {children}
-      {error ? <small className="text-xs text-[#D93A40]">{error}</small> : hint ? <small className="app-muted text-xs">{hint}</small> : null}
+      {error ? <small className="text-xs text-[color:var(--p-danger-text)]">{error}</small> : hint ? <small className="app-muted text-xs">{hint}</small> : null}
     </label>
   );
 }
@@ -1271,7 +1271,7 @@ export function ExportButtons({
 }
 
 export function Notice({ tone = "info", children }: { tone?: "info" | "warn"; children: ReactNode }) {
-  const style = tone === "warn" ? "border-[#F6DE9C] bg-[#FFF6DE] text-[#6B4300]" : "border-[#BFE6F8] bg-[#E3F2FA] text-[#0F5A82]";
+  const style = tone === "warn" ? "border-[color:var(--p-notice-line)] bg-[var(--p-notice-bg)] text-[color:var(--p-notice-text)]" : "border-[color:var(--p-brand-line)] bg-[var(--p-brand-soft)] text-[color:var(--p-brand-soft-text)]";
   return (
     <div className={`mb-3.5 flex items-start gap-2.5 rounded-xl border px-3.5 py-[11px] ${style}`}>
       {tone === "warn" ? <AlertCircle size={18} className="mt-px shrink-0" /> : <Info size={18} className="mt-px shrink-0" />}
@@ -1283,7 +1283,7 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "warn"; ch
 export function LoadError({ text, onRetry }: { text: string; onRetry: () => void }) {
   return (
     <div className="flex flex-col items-center px-4 py-10 text-center">
-      <AlertCircle size={28} className="mb-2 text-[#D93A40]" />
+      <AlertCircle size={28} className="mb-2 text-[color:var(--p-danger-text)]" />
       <p className="app-muted">{text}</p>
       <Btn variant="secondary" size="sm" className="mt-3" onClick={onRetry}>Reintentar</Btn>
     </div>

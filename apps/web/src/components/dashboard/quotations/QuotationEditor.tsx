@@ -42,7 +42,7 @@ function lineAmounts(line: Line) {
   return { gross, discount, base, tax, total: base + tax };
 }
 
-const NUM_INPUT = "app-surface app-text h-8 w-[76px] rounded-md border border-[#CFD5DE] px-2 text-right outline-none focus:border-[#1B8FC9]";
+const NUM_INPUT = "app-surface app-text h-8 w-[76px] rounded-md border border-[color:var(--p-field-border)] px-2 text-right outline-none focus:border-[#1B8FC9]";
 
 /** Nueva cotización, o edición de una en borrador cuando la ruta trae su id. */
 export default function QuotationEditor() {
@@ -287,7 +287,7 @@ export default function QuotationEditor() {
   const back = (
     <Link
       href={id ? `/quotations/${id}` : "/quotations"}
-      className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1679AB] hover:underline"
+      className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--p-brand-text)] hover:underline"
     >
       <ArrowLeft size={15} /> {id ? "Volver a la cotización" : "Cotizaciones"}
     </Link>
@@ -316,7 +316,7 @@ export default function QuotationEditor() {
                 required
                 span={2}
                 error={errors.customer_id}
-                hint={<>Solo clientes activos. <Link href="/actors" className="text-[#1679AB] hover:underline">¿No existe? Créalo en Clientes y actores</Link></>}
+                hint={<>Solo clientes activos. <Link href="/actors" className="text-[color:var(--p-brand-text)] hover:underline">¿No existe? Créalo en Clientes y actores</Link></>}
               >
                 <SearchSelect
                   value={customerId}
@@ -379,7 +379,7 @@ export default function QuotationEditor() {
                             <small className="app-muted block text-xs">
                               {[line.unit, line.frequency && `recurrente ${FREQUENCIES[line.frequency]}`].filter(Boolean).join(" · ")}
                               {catalog && (
-                                <span className={priceMoved ? "text-[#B26E00]" : ""}>
+                                <span className={priceMoved ? "text-[color:var(--p-warning-text)]" : ""}>
                                   {line.unit || line.frequency ? " · " : ""}precio vigente hoy {money(catalog.amount)}
                                 </span>
                               )}
@@ -432,7 +432,7 @@ export default function QuotationEditor() {
                 </tbody>
               </table>
             </div>
-            {errors.items && <p className="mt-2 text-[12.5px] text-[#D93A40]">{errors.items}</p>}
+            {errors.items && <p className="mt-2 text-[12.5px] text-[color:var(--p-danger-text)]">{errors.items}</p>}
 
             <div className="mt-3 flex flex-wrap items-end gap-2">
               <div className="flex-[1_1_260px]">

@@ -21,6 +21,33 @@
   --status-inactive-text: #526778;
   --status-suspended-bg: #fceae8;
   --status-suspended-text: #c4453b;
+
+  /* Paleta de las pantallas (colores del logo y de estado). En claro son los de siempre;
+     el tema oscuro los redefine abajo para que se lean sobre fondo oscuro. */
+  color-scheme: light;
+  --p-brand: #1B8FC9;
+  --p-brand-text: #1679AB;
+  --p-brand-soft: #E3F2FA;
+  --p-brand-soft-text: #0F5A82;
+  --p-brand-line: #BFE6F8;
+  --p-field-border: #CFD5DE;
+  --p-danger-text: #D93A40;
+  --p-danger-strong-text: #B4262C;
+  --p-danger-soft: #FDECEC;
+  --p-danger-line: #F3C2C4;
+  --p-success: #22A55A;
+  --p-success-text: #1B8E4B;
+  --p-success-soft: #E4F6EB;
+  --p-success-line: #BFE3CD;
+  --p-warning-text: #B26E00;
+  --p-warning-soft: #FFF4DB;
+  --p-notice-bg: #FFF6DE;
+  --p-notice-line: #F6DE9C;
+  --p-notice-text: #6B4300;
+  --p-neutral-soft: #E6EAF0;
+  --p-neutral-text: #4B5566;
+  --p-muted-soft: #EEF0F4;
+  --p-muted-text: #7B8494;
 }
 
 [data-theme="dark"] {
@@ -44,6 +71,32 @@
   --status-inactive-text: #b8cbd4;
   --status-suspended-bg: #593b3b;
   --status-suspended-text: #ffb0a8;
+
+  /* Controles nativos (casillas, fechas, barras de desplazamiento) también en oscuro. */
+  color-scheme: dark;
+  --p-brand: #4DB4E8;
+  --p-brand-text: #7CCBF2;
+  --p-brand-soft: #1A4158;
+  --p-brand-soft-text: #B5E1F7;
+  --p-brand-line: #2E6584;
+  --p-field-border: #47626F;
+  --p-danger-text: #FF8F88;
+  --p-danger-strong-text: #FFB0AA;
+  --p-danger-soft: #4A2529;
+  --p-danger-line: #7A3A3E;
+  --p-success: #4CCB85;
+  --p-success-text: #7FDCA6;
+  --p-success-soft: #1D4534;
+  --p-success-line: #2F6B50;
+  --p-warning-text: #F2BD6E;
+  --p-warning-soft: #47380F;
+  --p-notice-bg: #47380F;
+  --p-notice-line: #6E5718;
+  --p-notice-text: #F5D48F;
+  --p-neutral-soft: #2B414C;
+  --p-neutral-text: #C6D5DC;
+  --p-muted-soft: #243740;
+  --p-muted-text: #9FB4BE;
 }
 
 @theme inline {
@@ -51,13 +104,6 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
@@ -100,6 +146,28 @@ body {
 [data-theme="dark"] [class*="border-[#F0F2F5]"] { border-color: var(--app-border) !important; }
 [data-theme="dark"] [class*="border-[#F0F4F7]"] { border-color: var(--app-border) !important; }
 [data-theme="dark"] [class*="divide-[#F0F2F5]"] > :not(:last-child) { border-color: var(--app-border) !important; }
+
+/* Pantallas con el estilo anterior (consola de plataforma, aviso de plan): usan los grises y
+   pasteles de Tailwind, pensados para fondo claro. En oscuro se llevan a la paleta del tema. */
+[data-theme="dark"] :is([class*="text-slate-9"], [class*="text-slate-8"], [class*="text-slate-7"]) { color: var(--app-text) !important; }
+[data-theme="dark"] :is([class*="text-slate-6"], [class*="text-slate-5"], [class*="text-slate-4"]) { color: var(--app-muted) !important; }
+[data-theme="dark"] [class*="text-[var(--app-brand-deep)]"] { color: var(--app-brand) !important; }
+[data-theme="dark"] [class*="border-slate-"] { border-color: var(--app-border) !important; }
+[data-theme="dark"] [class*="divide-slate-"] > :not(:last-child) { border-color: var(--app-border) !important; }
+[data-theme="dark"] :is([class*="bg-slate-50"], [class*="bg-slate-100"], [class*="bg-slate-200"]):not([class*="hover:bg-slate-"]) { background-color: var(--app-surface-muted) !important; }
+[data-theme="dark"] [class*="hover:bg-slate-"]:hover { background-color: var(--app-surface-muted) !important; }
+[data-theme="dark"] [class*="bg-blue-50"]:not([class*="hover:bg-blue-50"]) { background-color: var(--p-brand-soft) !important; }
+[data-theme="dark"] [class*="hover:bg-blue-"]:hover { background-color: var(--p-brand-line) !important; }
+[data-theme="dark"] [class*="bg-emerald-50"] { background-color: var(--p-success-soft) !important; }
+[data-theme="dark"] :is([class*="bg-red-50"], [class*="bg-rose-50"]) { background-color: var(--p-danger-soft) !important; }
+[data-theme="dark"] :is([class*="bg-amber-50"], [class*="bg-yellow-50"]) { background-color: var(--p-warning-soft) !important; }
+[data-theme="dark"] [class*="border-blue-1"] { border-color: var(--p-brand-line) !important; }
+[data-theme="dark"] [class*="border-emerald-1"] { border-color: var(--p-success-line) !important; }
+[data-theme="dark"] :is([class*="border-red-1"], [class*="border-rose-1"]) { border-color: var(--p-danger-line) !important; }
+[data-theme="dark"] :is([class*="text-blue-5"], [class*="text-blue-6"], [class*="text-blue-7"]) { color: var(--p-brand-text) !important; }
+[data-theme="dark"] [class*="text-emerald-"] { color: var(--p-success-text) !important; }
+[data-theme="dark"] :is([class*="text-red-"], [class*="text-rose-"]) { color: var(--p-danger-text) !important; }
+[data-theme="dark"] :is([class*="text-amber-"], [class*="text-yellow-"]) { color: var(--p-warning-text) !important; }
 
 /* Entrada suave de los modales del prototipo (fondo y cuadro). */
 @keyframes proto-fade-in { from { opacity: 0; } }

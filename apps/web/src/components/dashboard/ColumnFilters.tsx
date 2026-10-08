@@ -123,7 +123,7 @@ export function ColumnFilterBar({
         type="button"
         onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
         className={`flex h-10 cursor-pointer items-center gap-2 rounded-[9px] border px-3 text-[13px] font-medium ${
-          activeFilters.length ? "border-[#1B8FC9] bg-[#E3F2FA] text-[#1679AB]" : "border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"
+          activeFilters.length ? "border-[#1B8FC9] bg-[var(--p-brand-soft)] text-[color:var(--p-brand-text)]" : "border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"
         }`}
       >
         <Filter size={14} />
@@ -139,7 +139,7 @@ export function ColumnFilterBar({
             filters.clear();
             onClearAll();
           }}
-          className="h-10 cursor-pointer px-1.5 text-[13px] font-medium text-[#D93A40] hover:underline"
+          className="h-10 cursor-pointer px-1.5 text-[13px] font-medium text-[color:var(--p-danger-text)] hover:underline"
         >
           Limpiar filtros
         </button>
@@ -149,7 +149,7 @@ export function ColumnFilterBar({
       {!showAdvancedFilters && activeFilters.length > 0 && (
         <div className="flex w-full flex-wrap items-center gap-2">
           {activeFilters.map((filter) => (
-            <span key={filter.id} className="inline-flex h-7 items-center rounded-lg border border-[#BFE6F8] bg-[#E3F2FA] text-xs font-medium text-[#0F5A82]">
+            <span key={filter.id} className="inline-flex h-7 items-center rounded-lg border border-[color:var(--p-brand-line)] bg-[var(--p-brand-soft)] text-xs font-medium text-[color:var(--p-brand-soft-text)]">
               <button type="button" onClick={() => setShowAdvancedFilters(true)} title="Cambiar este filtro" className="h-full cursor-pointer pl-2.5 pr-1 hover:underline">
                 {filterText(filter)}
               </button>
@@ -157,7 +157,7 @@ export function ColumnFilterBar({
                 type="button"
                 onClick={() => handleRemoveFilter(filter.id)}
                 aria-label={`Quitar filtro ${filter.label}`}
-                className="grid h-full w-6 cursor-pointer place-items-center rounded-r-lg hover:bg-[#BFE6F8]"
+                className="grid h-full w-6 cursor-pointer place-items-center rounded-r-lg hover:bg-[var(--p-brand-line)]"
               >
                 <X size={12} />
               </button>
@@ -244,7 +244,7 @@ export function ColumnFilterBar({
                 />
               )}
 
-              <button type="button" onClick={() => handleRemoveFilter(filter.id)} className="app-muted cursor-pointer hover:text-[#D93A40]" aria-label={`Quitar filtro ${filter.label}`}>
+              <button type="button" onClick={() => handleRemoveFilter(filter.id)} className="app-muted cursor-pointer hover:text-[color:var(--p-danger-text)]" aria-label={`Quitar filtro ${filter.label}`}>
                 <X size={13} />
               </button>
             </div>

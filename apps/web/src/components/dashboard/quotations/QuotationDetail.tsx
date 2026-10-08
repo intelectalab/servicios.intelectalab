@@ -188,7 +188,7 @@ export default function QuotationDetail() {
   }
 
   const back = (
-    <Link href="/quotations" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1679AB] hover:underline">
+    <Link href="/quotations" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--p-brand-text)] hover:underline">
       <ArrowLeft size={15} /> Cotizaciones
     </Link>
   );
@@ -241,7 +241,7 @@ export default function QuotationDetail() {
             {customerName(quotation.customer)} ·{" "}
             {currency === "USD" && `en dólares${quotation.exchange_rate ? ` (T.C. ${Number(quotation.exchange_rate).toFixed(3)})` : ""} · `}
             emitida {shortDate(quotation.created_at)} · válida hasta {shortDate(quotation.valid_until)}
-            {expired && status === "SUBMITTED" && <span className="text-[#D93A40]"> · vencida</span>}
+            {expired && status === "SUBMITTED" && <span className="text-[color:var(--p-danger-text)]"> · vencida</span>}
           </>
         }
         actions={
@@ -460,7 +460,7 @@ export default function QuotationDetail() {
                 quotation.previous
                   ? [
                       "Versión anterior",
-                      <Link key="previous" href={`/quotations/${quotation.previous.id}`} className="text-[#1679AB] hover:underline">
+                      <Link key="previous" href={`/quotations/${quotation.previous.id}`} className="text-[color:var(--p-brand-text)] hover:underline">
                         {quotation.previous.quotation_number}
                       </Link>,
                     ]
@@ -469,7 +469,7 @@ export default function QuotationDetail() {
                   ? [
                       "Contrato",
                       <span key="contract" className="inline-flex flex-wrap items-center gap-1.5">
-                        <Link href={`/contracts/${quotation.contract.id}`} className="text-[#1679AB] hover:underline">
+                        <Link href={`/contracts/${quotation.contract.id}`} className="text-[color:var(--p-brand-text)] hover:underline">
                           {quotation.contract.contract_number}
                         </Link>
                         <Badge tone={CONTRACT_STATUS[quotation.contract.status]?.[1] ?? "neutral"}>
@@ -482,7 +482,7 @@ export default function QuotationDetail() {
                   ? [
                       "Orden",
                       <span key="order" className="inline-flex flex-wrap items-center gap-1.5">
-                        <Link href={`/orders/${quotation.order.id}`} className="text-[#1679AB] hover:underline">
+                        <Link href={`/orders/${quotation.order.id}`} className="text-[color:var(--p-brand-text)] hover:underline">
                           {quotation.order.order_number}
                         </Link>
                         <Badge tone={stateOf(ORDER_STATES, quotation.order.status)[1]}>

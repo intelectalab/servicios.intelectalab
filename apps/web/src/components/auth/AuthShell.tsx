@@ -17,16 +17,16 @@ import { poppins } from "@/lib/fonts";
 export const BRAND = "#1B8FC9";
 export const BRAND_DARK = "#1679AB";
 export const BRAND_DEEP = "#0F5A82";
-export const BRAND_SOFT = "#E3F2FA";
+export const BRAND_SOFT = "var(--p-brand-soft)";
 export const INK = "#1D1D1B";
 
 /** Estilos de formulario compartidos por las pantallas de auth. */
 export const authLabel = "mb-1.5 block text-[12.5px] font-medium text-[color:var(--app-muted)]";
 export const authInput =
-  "min-h-[42px] w-full rounded-[9px] border border-[#CFD5DE] bg-white px-3 py-2 pr-[42px] text-[14px] text-[#1D1D1B] transition-[border-color,box-shadow] placeholder:text-[#8A93A3] focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_#E3F2FA] focus:outline-none";
+  "min-h-[42px] w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-white px-3 py-2 pr-[42px] text-[14px] text-[color:var(--app-text)] transition-[border-color,box-shadow] placeholder:text-[#8A93A3] focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_var(--p-brand-soft)] focus:outline-none";
 export const authInputIcon = "pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#8A93A3]";
 export const authGhostButton =
-  "flex h-9 w-full items-center justify-center rounded-[9px] text-[13.5px] font-medium text-[color:var(--app-muted)] transition-colors hover:bg-[#F3F5F8] hover:text-[#1D1D1B]";
+  "flex h-9 w-full items-center justify-center rounded-[9px] text-[13.5px] font-medium text-[color:var(--app-muted)] transition-colors hover:bg-[var(--app-surface-muted)] hover:text-[color:var(--app-text)]";
 export const authButton =
   "flex h-[46px] w-full items-center justify-center gap-2 rounded-[9px] bg-[#1B8FC9] text-[14px] font-semibold text-white transition-colors hover:bg-[#1679AB] disabled:cursor-not-allowed disabled:opacity-60";
 
@@ -104,7 +104,7 @@ export default function AuthShell({
             {FEATURES.map(({ icon: Icon, title, text }) => (
               <div
                 key={title}
-                className="rounded-xl border border-white/20 bg-white/[0.07] p-3 text-[12px] leading-[1.35]"
+                className="rounded-xl border border-white/20 bg-[rgba(255,255,255,.07)] p-3 text-[12px] leading-[1.35]"
               >
                 <Icon size={20} className="mb-1.5 text-[#BFE6F8]" />
                 <strong className="block text-[12.5px]">{title}</strong>

@@ -60,6 +60,7 @@ Estado al 2026-10-08.
 ### Comercial
 - Las pantallas nuevas se arman con las piezas de `apps/web/src/components/ui/proto.tsx` (medidas del prototipo, colores del logo, tema oscuro incluido).
 - Verde, rojo y ámbar se usan solo como colores de estado; todo lo demás es el azul del logo.
+- Los colores de las pantallas son variables con valor para claro y para oscuro (`--p-…` y `--app-…` en `globals.css`). En lo nuevo no se escriben colores fijos en las clases (salvo el azul de los botones y el blanco sobre él, iguales en los dos temas). El tema se aplica antes de pintar, también en el inicio de sesión; la landing no tiene oscuro (2026-10-08, [cambios/2026-10-08_modo-oscuro.md](cambios/2026-10-08_modo-oscuro.md)).
 - Las cotizaciones se emiten en soles o en dólares. En dólares usan el tipo de cambio de venta vigente (el más reciente registrado hasta hoy) y lo guardan; sin tipo de cambio registrado no se puede cotizar en dólares.
 - El tipo de cambio se registra a mano en Finanzas → Monedas y tipo de cambio (permiso `billing.manage`); no hay sincronización con SUNAT. Uno por día: registrar otro el mismo día lo corrige.
 - Los desplegables con muchas opciones usan `SearchSelect` (`proto.tsx`), con buscador.

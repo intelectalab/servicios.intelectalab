@@ -76,7 +76,7 @@ function PriceModal({ serviceId, onClose, onSaved }: { serviceId: string; onClos
         <p className="app-muted mt-3 text-[12.5px]">
           La versión vigente se cierra con fecha de fin. Las cotizaciones y contratos ya emitidos conservan su snapshot.
         </p>
-        {error && <p className="mt-2 text-[12.5px] text-[#D93A40]">{error}</p>}
+        {error && <p className="mt-2 text-[12.5px] text-[color:var(--p-danger-text)]">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={saving}>{saving ? "Creando…" : "Crear versión"}</Btn>
@@ -140,7 +140,7 @@ export default function ServiceDetail() {
   }
 
   const back = (
-    <Link href="/services" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[#1679AB] hover:underline">
+    <Link href="/services" className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-medium text-[color:var(--p-brand-text)] hover:underline">
       <ArrowLeft size={15} /> Catálogo de servicios
     </Link>
   );

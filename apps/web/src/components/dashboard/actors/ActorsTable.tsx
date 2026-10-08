@@ -68,7 +68,7 @@ function menuPlace(button: HTMLElement, width: number, height: number): CSSPrope
 const MENU_ITEM = "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-[var(--app-surface-muted)] disabled:cursor-default disabled:opacity-60";
 const ROW_BG = "bg-[var(--app-surface)] group-hover:bg-[var(--app-surface-muted)]";
 const ROW_BG_SELECTED = "bg-[color-mix(in_srgb,#1B8FC9_13%,var(--app-surface))]";
-const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[#CFD5DE] accent-[#1B8FC9]";
+const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[color:var(--p-field-border)] accent-[#1B8FC9]";
 
 function readList(key: string): string[] {
   try {
@@ -450,7 +450,7 @@ export function ActorsTable({
                 event.stopPropagation();
                 startEdit();
               }}
-              className="shrink-0 cursor-pointer rounded p-1 text-[#1679AB] opacity-0 hover:bg-[rgb(27_143_201/0.16)] focus:opacity-100 group-hover/cell:opacity-100 max-sm:opacity-100"
+              className="shrink-0 cursor-pointer rounded p-1 text-[color:var(--p-brand-text)] opacity-0 hover:bg-[rgb(27_143_201/0.16)] focus:opacity-100 group-hover/cell:opacity-100 max-sm:opacity-100"
             >
               <Pencil size={13} />
             </button>
@@ -461,7 +461,7 @@ export function ActorsTable({
     const editor = (content: ReactNode, extra = "") => (
       <div className={`flex min-w-44 items-center gap-1.5 ${extra}`} onClick={(event) => event.stopPropagation()} onBlur={(event) => onEditorBlur(event, actor, key)}>
         {content}
-        {saving && <Loader2 size={13} className="shrink-0 animate-spin text-[#1B8FC9]" />}
+        {saving && <Loader2 size={13} className="shrink-0 animate-spin text-[color:var(--p-brand)]" />}
       </div>
     );
 
@@ -473,7 +473,7 @@ export function ActorsTable({
         </div>, "min-w-56",
       ) : (
         <div className="flex min-w-[200px] items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#E3F2FA] text-[#1679AB]">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[var(--p-brand-soft)] text-[color:var(--p-brand-text)]">
             {isOrg ? <Building2 size={17} /> : <User size={17} />}
           </span>
           <div className="min-w-0">
@@ -484,7 +484,7 @@ export function ActorsTable({
                 setEdit(null);
                 onOpen(actor.id);
               }}
-              className="cursor-pointer text-left font-semibold hover:text-[#1679AB] hover:underline"
+              className="cursor-pointer text-left font-semibold hover:text-[color:var(--p-brand-text)] hover:underline"
             >
               {actor.name}
             </button>
@@ -598,7 +598,7 @@ export function ActorsTable({
               </span>
             )}
             <span>{title}</span>
-            {sorted && <span className="font-bold text-[#1B8FC9]">{sortDirection === "asc" ? "↑" : "↓"}</span>}
+            {sorted && <span className="font-bold text-[color:var(--p-brand)]">{sortDirection === "asc" ? "↑" : "↓"}</span>}
           </div>
           <button
             type="button"
@@ -648,7 +648,7 @@ export function ActorsTable({
                     onRequestDeleteCustomField(definition);
                     setOpenMenu(null);
                   }}
-                  className={`${MENU_ITEM} text-[#D93A40]`}
+                  className={`${MENU_ITEM} text-[color:var(--p-danger-text)]`}
                 >
                   <Trash2 size={14} /> Eliminar columna
                 </button>
@@ -776,8 +776,8 @@ export function ActorsTable({
       </table>
 
       {notice && (
-        <div className="app-surface app-text fixed bottom-5 left-1/2 z-[90] flex -translate-x-1/2 items-center gap-3 rounded-xl border border-[#BFE3CD] px-4 py-3 text-sm shadow-[0_20px_50px_rgba(8,25,55,.28)]">
-          <span className="grid h-5 w-5 place-items-center rounded-full bg-[#E4F6EB] text-xs font-bold text-[#1B8E4B]">✓</span>
+        <div className="app-surface app-text fixed bottom-5 left-1/2 z-[90] flex -translate-x-1/2 items-center gap-3 rounded-xl border border-[color:var(--p-success-line)] px-4 py-3 text-sm shadow-[0_20px_50px_rgba(8,25,55,.28)]">
+          <span className="grid h-5 w-5 place-items-center rounded-full bg-[var(--p-success-soft)] text-xs font-bold text-[color:var(--p-success-text)]">✓</span>
           <span className="font-medium">{notice.label}</span>
           <button
             type="button"
@@ -785,7 +785,7 @@ export function ActorsTable({
               notice.undo();
               setNotice(null);
             }}
-            className="cursor-pointer font-semibold text-[#1679AB] hover:underline"
+            className="cursor-pointer font-semibold text-[color:var(--p-brand-text)] hover:underline"
           >
             Deshacer
           </button>

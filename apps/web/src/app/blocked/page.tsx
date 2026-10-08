@@ -95,7 +95,7 @@ function BlockedContent() {
       </div>
 
       <div className="app-surface app-border w-full max-w-[460px] rounded-xl border p-8 text-center shadow-sm">
-        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[#FFF4DB] text-[#B26E00]">
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-[var(--p-warning-soft)] text-[color:var(--p-warning-text)]">
           <Icon size={22} />
         </span>
         <h1 className="app-text mt-4 text-[20px] font-bold tracking-[-0.01em]">{title}</h1>
@@ -104,7 +104,7 @@ function BlockedContent() {
         </p>
 
         {retried && !checking && (
-          <p role="status" className="mt-3 rounded-[9px] bg-[#FFF4DB] px-3 py-2.5 text-[13px] text-[#8A5500]">
+          <p role="status" className="mt-3 rounded-[9px] bg-[var(--p-warning-soft)] px-3 py-2.5 text-[13px] text-[color:var(--p-notice-text)]">
             El acceso sigue sin estar disponible.
           </p>
         )}

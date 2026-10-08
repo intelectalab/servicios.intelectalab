@@ -69,7 +69,7 @@ export default function ForgotPasswordForm() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             role="alert"
-            className="rounded-[9px] border border-[#D93A40]/25 bg-[#FDECEC] px-3 py-2.5 text-[13px] text-[#B4262C]"
+            className="rounded-[9px] border border-[#D93A40]/25 bg-[var(--p-danger-soft)] px-3 py-2.5 text-[13px] text-[color:var(--p-danger-strong-text)]"
           >
             {error}
           </motion.div>

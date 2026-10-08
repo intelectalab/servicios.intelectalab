@@ -124,7 +124,7 @@ export function ImportModal({
       {result ? (
         <div>
           <div className="flex flex-col items-center py-4 text-center">
-            <CheckCircle2 size={44} className="mb-2 text-[#22A55A]" />
+            <CheckCircle2 size={44} className="mb-2 text-[color:var(--p-success)]" />
             <p className="text-base font-semibold">Importación terminada</p>
             <p className="app-muted mt-1">{result.message}</p>
           </div>
@@ -165,17 +165,17 @@ export function ImportModal({
             onDragLeave={() => setDragging(false)}
             onDrop={onDrop}
             className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-7 text-center transition-colors ${
-              dragging ? "border-[#1B8FC9] bg-[#E3F2FA]" : "border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"
+              dragging ? "border-[#1B8FC9] bg-[var(--p-brand-soft)]" : "border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"
             }`}
           >
-            {file ? <FileSpreadsheet size={28} className="mb-2 text-[#1B8FC9]" /> : <Upload size={28} className="app-muted mb-2" />}
-            <span className="font-semibold text-[#1679AB]">{file ? file.name : "Haz clic para buscar tu archivo o arrástralo aquí"}</span>
+            {file ? <FileSpreadsheet size={28} className="mb-2 text-[color:var(--p-brand)]" /> : <Upload size={28} className="app-muted mb-2" />}
+            <span className="font-semibold text-[color:var(--p-brand-text)]">{file ? file.name : "Haz clic para buscar tu archivo o arrástralo aquí"}</span>
             <span className="app-muted mt-1 text-xs">{file ? "Haz clic para cambiarlo" : "Formatos admitidos: .xlsx y .csv (máximo 5 MB)"}</span>
             <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv" className="sr-only" onChange={(event) => pick(event.target.files?.[0])} />
           </label>
 
           {error && (
-            <div className="mt-3 text-[12.5px] text-[#D93A40]">
+            <div className="mt-3 text-[12.5px] text-[color:var(--p-danger-text)]">
               <p className="font-medium">{error}</p>
               {rowErrors.length > 0 && (
                 <ul className="mt-1 max-h-32 list-disc overflow-y-auto pl-4">

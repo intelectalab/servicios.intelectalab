@@ -74,7 +74,7 @@ export default function ResetPasswordForm() {
       <form onSubmit={handleSubmit} noValidate className="grid gap-3.5">
         <motion.div
           variants={item}
-          className="flex items-start gap-2.5 rounded-[9px] px-3 py-2.5 text-[13px] text-[#0F5A82]"
+          className="flex items-start gap-2.5 rounded-[9px] px-3 py-2.5 text-[13px] text-[color:var(--p-brand-soft-text)]"
           style={{ backgroundColor: BRAND_SOFT }}
         >
           <Info size={16} className="mt-0.5 shrink-0" />
@@ -132,7 +132,7 @@ export default function ResetPasswordForm() {
               type="button"
               onClick={() => setShowPassword((s) => !s)}
               aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
-              className="absolute right-1 top-1/2 flex h-[34px] w-[34px] -translate-y-1/2 items-center justify-center rounded-md text-[#8A93A3] transition-colors hover:text-[#1D1D1B]"
+              className="absolute right-1 top-1/2 flex h-[34px] w-[34px] -translate-y-1/2 items-center justify-center rounded-md text-[#8A93A3] transition-colors hover:text-[color:var(--app-text)]"
             >
               {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
             </button>
@@ -147,7 +147,7 @@ export default function ResetPasswordForm() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             role="alert"
-            className="rounded-[9px] border border-[#D93A40]/25 bg-[#FDECEC] px-3 py-2.5 text-[13px] text-[#B4262C]"
+            className="rounded-[9px] border border-[#D93A40]/25 bg-[var(--p-danger-soft)] px-3 py-2.5 text-[13px] text-[color:var(--p-danger-strong-text)]"
           >
             {error}
           </motion.div>

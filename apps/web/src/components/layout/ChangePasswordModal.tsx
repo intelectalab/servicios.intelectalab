@@ -71,7 +71,7 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
 
         {done ? (
           <div className="px-5 py-8 text-center">
-            <CheckCircle2 size={32} className="mx-auto text-[#1B8E4B]" />
+            <CheckCircle2 size={32} className="mx-auto text-[color:var(--p-success-text)]" />
             <p className="app-text mt-3 text-[14px] font-medium">Contraseña actualizada</p>
             <p className="app-muted mt-1 text-[12.5px]">Úsala la próxima vez que inicies sesión.</p>
             <button
@@ -121,7 +121,7 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
             </label>
 
             {error && (
-              <p role="alert" className="rounded-[9px] border border-[#D93A40]/25 bg-[#FDECEC] px-3 py-2.5 text-[13px] text-[#B4262C]">
+              <p role="alert" className="rounded-[9px] border border-[#D93A40]/25 bg-[var(--p-danger-soft)] px-3 py-2.5 text-[13px] text-[color:var(--p-danger-strong-text)]">
                 {error}
               </p>
             )}

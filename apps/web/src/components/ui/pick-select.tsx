@@ -182,7 +182,7 @@ export function PickSelect({
                   onMouseEnter={() => setActive(index)}
                   onClick={() => choose(key)}
                   className={`flex cursor-pointer items-center justify-between gap-2 rounded-[7px] px-2.5 py-[7px] ${
-                    index === active ? "bg-[#1B8FC9] text-[#fff]" : selected ? "font-semibold text-[#1679AB]" : ""
+                    index === active ? "bg-[#1B8FC9] text-[#fff]" : selected ? "font-semibold text-[color:var(--p-brand-text)]" : ""
                   }`}
                 >
                   <span className="min-w-0 truncate">{label}</span>

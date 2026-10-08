@@ -79,7 +79,7 @@ function RateModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
             <input className={INPUT} type="number" min="0" step="0.001" value={sell} onChange={(e) => setSell(e.target.value)} required />
           </Field>
         </div>
-        {error && <p className="mt-2 text-[12.5px] text-[#D93A40]">{error}</p>}
+        {error && <p className="mt-2 text-[12.5px] text-[color:var(--p-danger-text)]">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</Btn>

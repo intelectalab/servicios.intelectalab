@@ -172,7 +172,7 @@ function UserModal({
             «¿Olvidó su contraseña?» en el inicio de sesión.
           </p>
         )}
-        {errors.form && <p className="mt-2 text-[12.5px] text-[#D93A40]">{errors.form}</p>}
+        {errors.form && <p className="mt-2 text-[12.5px] text-[color:var(--p-danger-text)]">{errors.form}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</Btn>
@@ -254,7 +254,7 @@ export default function UsersList() {
       label: "Usuario", sortKey: "name",
       render: (user) => (
         <div className="flex min-w-[200px] items-center gap-2.5">
-          <span aria-hidden="true" className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-[#E3F2FA] text-[11.5px] font-semibold text-[#0F5A82]">
+          <span aria-hidden="true" className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-[var(--p-brand-soft)] text-[11.5px] font-semibold text-[color:var(--p-brand-soft-text)]">
             {initials(user.name)}
           </span>
           <div className="min-w-0">

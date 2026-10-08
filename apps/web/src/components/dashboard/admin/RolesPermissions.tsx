@@ -73,7 +73,7 @@ const ACTIONS: Record<string, string> = {
 const SCOPE_OPTIONS = (["OWN", "TEAM", "BRANCH", "TENANT"] as Scope[]).map((scope): [string, string] => [scope, SCOPE_LABELS[scope]]);
 
 const SCOPE_SELECT =
-  "h-8 w-full min-w-[150px] rounded-lg border border-[#CFD5DE] bg-[var(--app-surface)] px-2.5 text-[12.5px] outline-none focus:border-[#1B8FC9] disabled:bg-[var(--app-surface-muted)] disabled:opacity-70";
+  "h-8 w-full min-w-[150px] rounded-lg border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 text-[12.5px] outline-none focus:border-[#1B8FC9] disabled:bg-[var(--app-surface-muted)] disabled:opacity-70";
 
 function firstError(err: unknown, fallback: string) {
   if (err instanceof ApiError) return (err.errors && Object.values(err.errors)[0]?.[0]) || err.message;
@@ -119,7 +119,7 @@ function RoleModal({ onClose, onSaved }: { onClose: () => void; onSaved: (id: st
           </Field>
         </div>
         <p className="app-muted mt-3 text-[12.5px]">El rol nace sin permisos y alcanzando solo lo propio: ajústalo después en la matriz.</p>
-        {error && <p className="mt-2 text-[12.5px] text-[#D93A40]">{error}</p>}
+        {error && <p className="mt-2 text-[12.5px] text-[color:var(--p-danger-text)]">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={saving}>{saving ? "Creando…" : "Crear rol"}</Btn>
@@ -279,7 +279,7 @@ export default function RolesPermissions() {
                   onClick={() => setSelected(item.id)}
                   className={`grid cursor-pointer rounded-[7px] border px-3 py-[7px] text-left transition-colors duration-200 ${
                     on
-                      ? "border-[#1B8FC9] bg-[#E3F2FA] text-[#0F5A82]"
+                      ? "border-[#1B8FC9] bg-[var(--p-brand-soft)] text-[color:var(--p-brand-soft-text)]"
                       : "app-surface border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"
                   }`}
                 >

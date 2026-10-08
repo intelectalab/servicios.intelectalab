@@ -46,6 +46,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | Filtrar por columna en Cotizaciones, Contratos, Órdenes, Servicios y Solicitudes | [cambios/2026-10-08_filtrar-por-columna-en-los-listados.md](cambios/2026-10-08_filtrar-por-columna-en-los-listados.md) |
 | 2026-10-08 | Protecciones del sistema: aislamiento, auditoría inalterable, módulos del plan en la API, acceso y conversiones únicas | [cambios/2026-10-08_protecciones-del-sistema.md](cambios/2026-10-08_protecciones-del-sistema.md) |
 | 2026-10-08 | Alcance en los permisos: lo propio, equipo, sede o toda la empresa; sedes y equipos en Usuarios | [cambios/2026-10-08_alcance-en-permisos.md](cambios/2026-10-08_alcance-en-permisos.md) |
+| 2026-10-08 | Modo oscuro con colores propios: tema desde el inicio de sesión y paleta para fondo oscuro | [cambios/2026-10-08_modo-oscuro.md](cambios/2026-10-08_modo-oscuro.md) |
 
 ## Cómo se escribe cada entrada
 
