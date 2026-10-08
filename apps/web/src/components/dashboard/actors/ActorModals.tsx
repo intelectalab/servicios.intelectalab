@@ -7,6 +7,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { COUNTRIES } from "@/lib/countries";
 import { poppins } from "@/lib/fonts";
 import { Btn, Field, INPUT, Modal } from "@/components/ui/proto";
+import { PickSelect } from "@/components/ui/pick-select";
 import type { ActorContact, ActorDetail } from "@/types/actor";
 
 const CONTACT_TYPES: [string, string][] = [
@@ -233,9 +234,7 @@ export function ContactForm({
             <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. María López (Gerente de Operaciones)" autoFocus />
           </Field>
           <Field label="Tipo" required>
-            <select className={INPUT} value={type} onChange={(e) => setType(e.target.value)}>
-              {CONTACT_TYPES.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-            </select>
+            <PickSelect className={INPUT} value={type} onChange={setType} options={CONTACT_TYPES} />
           </Field>
           <Field label={type === "EMAIL" ? "Correo" : type === "ADDRESS" ? "Dirección" : isPhone ? "Número" : "Dato"} required error={error}>
             {isPhone && !unformatted ? (
@@ -330,19 +329,18 @@ export function TermsForm({
       <form onSubmit={submit} noValidate>
         <div className="grid gap-3">
           <Field label="Días de crédito">
-            <select className={INPUT} value={days} onChange={(e) => setDays(e.target.value)} autoFocus>
-              <option value="">---</option>
-              {dayOptions.map((option) => <option key={option} value={option}>{option} días</option>)}
-            </select>
+            <PickSelect
+              className={INPUT}
+              value={days}
+              onChange={setDays}
+              options={[["", "---"], ...dayOptions.map((option): [string, string] => [option, `${option} días`])]}
+            />
           </Field>
           <Field label="Límite de crédito" error={error}>
             <input className={INPUT} type="number" min="0" step="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="Sin límite" />
           </Field>
           <Field label="Moneda">
-            <select className={INPUT} value={currency} onChange={(e) => setCurrency(e.target.value)}>
-              <option value="PEN">PEN (S/)</option>
-              <option value="USD">USD ($)</option>
-            </select>
+            <PickSelect className={INPUT} value={currency} onChange={setCurrency} options={[["PEN", "PEN (S/)"], ["USD", "USD ($)"]]} />
           </Field>
         </div>
         <p className="app-muted mt-3 text-[12.5px]">Son las mismas condiciones que se ven en Clientes.</p>

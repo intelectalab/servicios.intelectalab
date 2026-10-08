@@ -105,6 +105,18 @@ Probado en el navegador con admin: el desplegable abre con Perú +51, buscar "es
 
 **Corrección (2026-10-08):** el menú de los tres puntos de la última columna (Estado) se cortaba contra el borde de la tabla. Los menús de cabecera y el del "+" ahora se dibujan por encima de la tabla y nunca se salen de la ventana; se cierran al desplazar o cambiar el tamaño. Probado con Ventas a 1000 px de ancho: el menú de Estado y el del "+" se ven completos, "Orden descendente" ordena y un clic fuera los cierra.
 
+### Desplegables que no se cortan y columnas personalizadas en el formulario (2026-10-08)
+
+- **Los desplegables de los modales se cortaban** (el de "Tipo de dato" al agregar una columna). Se revisaron todos los del módulo y se cambiaron por un desplegable propio (`components/ui/pick-select.tsx`, nuevo) cuya lista se dibuja por encima del modal o de la tabla, hacia abajo o hacia arriba según el espacio. Cambiados: Tipo de dato (agregar columna), Nivel de SLA y Tipo doc. (organización / persona), Tipo (contacto), Días de crédito y Moneda (condiciones), y en la tabla el Estado y el tipo de documento de la edición en celda. Se maneja también con el teclado; Escape cierra la lista sin cerrar el modal.
+- **Las columnas personalizadas ahora aparecen en el formulario** de Nueva organización, Nueva persona y Editar, en una sección "Columnas personalizadas" (texto, número, fecha o casilla Sí / No). También se ven en la tarjeta Identidad canónica de la vista 360.
+- Las columnas personalizadas son de cada empresa: la base las separa por empresa, así que una no ve las de otra.
+
+Archivos: `components/ui/pick-select.tsx` (nuevo), `ActorForm.tsx`, `ActorModals.tsx`, `ActorsList.tsx`, `ActorsTable.tsx`, `ActorDetail.tsx`.
+
+No se cambiaron: los selectores del panel "Más filtros" y los filtros de arriba (no están dentro de un modal ni de la tabla), ni los calendarios de los campos de fecha, que son del navegador.
+
+Probado en el navegador con admin, con una ventana de 640 px de alto: la lista de "Tipo de dato" sobresale del modal y se ve completa; Nivel de SLA, Tipo de contacto, Días de crédito y Moneda abren completos y eligen bien; Escape cierra la lista y deja el modal abierto; Estado se cambia desde la celda (Inactivo y de vuelta a Activo). "Nueva organización" muestra la sección con la columna "Año"; al editar "Actor de Prueba S.A.C." el campo llega con su valor, se cambió, se guardó y se vio en la vista 360 (luego se devolvió a 2026-10-05).
+
 ## Pendiente
 
 - Decidir si este módulo reemplaza a los tres. Si es así, falta traer lo de la lista "Lo que tus tablas tienen y aquí todavía no".

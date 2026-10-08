@@ -13,6 +13,7 @@ import {
   Btn, Card, Empty, ExportButtons, Field, FilterSelect, Filters, INPUT, LoadError, Modal, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, useToasts,
 } from "@/components/ui/proto";
+import { PickSelect } from "@/components/ui/pick-select";
 import { ActorsTable } from "./ActorsTable";
 import { ActorForm } from "./ActorForm";
 import type { PaginatedResponse } from "@/types/customer";
@@ -492,6 +493,7 @@ export default function ActorsList() {
       {creating && (
         <ActorForm
           kind={creating}
+          customFields={definitions}
           onClose={() => setCreating(null)}
           onSaved={(actor, message) => {
             setFlash(message);
@@ -534,12 +536,15 @@ export default function ActorsList() {
                 <input className={INPUT} value={fieldForm.label} onChange={(e) => setFieldForm({ ...fieldForm, label: e.target.value })} placeholder="Ej. Instagram" autoFocus />
               </Field>
               <Field label="Tipo de dato">
-                <select className={INPUT} value={fieldForm.field_type} onChange={(e) => setFieldForm({ ...fieldForm, field_type: e.target.value as FieldType })}>
-                  {FIELD_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                <PickSelect
+                  className={INPUT}
+                  value={fieldForm.field_type}
+                  onChange={(value) => setFieldForm({ ...fieldForm, field_type: value as FieldType })}
+                  options={FIELD_TYPES}
+                />
               </Field>
             </div>
-            <p className="app-muted mt-3 text-[12.5px]">La columna aparece para todos los registros de esta tabla y se edita desde la celda.</p>
+            <p className="app-muted mt-3 text-[12.5px]">La columna aparece para todos los registros de esta tabla. Se llena al crear o editar una organización o persona, o desde la celda.</p>
             <div className="mt-4 flex justify-end gap-2">
               <Btn variant="ghost" onClick={() => setFieldModal(false)}>Cancelar</Btn>
               <Btn type="submit" disabled={busy}>{busy ? "Guardando…" : "Agregar columna"}</Btn>

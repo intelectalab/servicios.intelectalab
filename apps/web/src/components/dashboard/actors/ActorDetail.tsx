@@ -7,7 +7,7 @@ import { ArrowLeft, FileText, Pencil, Plus, Settings, Trash2 } from "lucide-reac
 import { ApiError, apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES } from "@/lib/contracts";
-import { ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, rolesText } from "@/lib/actors";
+import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, rolesText } from "@/lib/actors";
 import {
   Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useToasts,
   type Column,
@@ -16,6 +16,7 @@ import { SortableBoard } from "@/components/ui/sortable-cards";
 import { ActorForm } from "./ActorForm";
 import { ContactForm, TermsForm } from "./ActorModals";
 import type { ActorContact, ActorDetail as Actor } from "@/types/actor";
+import type { CustomFieldDefinition } from "@/types/custom-field";
 
 type Row<K extends keyof Actor> = Actor[K] extends (infer T)[] ? T : never;
 
@@ -97,6 +98,9 @@ export default function ActorDetail() {
   const { toast, toasts } = useToasts();
 
   const [actor, setActor] = useState<Actor | null>(null);
+  // Columnas personalizadas de la tabla y lo que este registro tiene en cada una.
+  const [customFields, setCustomFields] = useState<CustomFieldDefinition[]>([]);
+  const [customValues, setCustomValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [tab, setTab] = useState("resumen");
@@ -114,10 +118,16 @@ export default function ActorDetail() {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<Actor>(`/v1/parties/${id}`)
-      .then((data) => {
+    Promise.all([
+      apiFetch<Actor>(`/v1/parties/${id}`),
+      apiFetch<CustomFieldDefinition[]>(`/v1/custom-fields/definitions?entity_type=${ACTOR_ENTITY}`).catch(() => []),
+      apiFetch<{ field_id: string; value: string | null }[]>(`/v1/custom-fields/values?entity_type=${ACTOR_ENTITY}&entity_id=${id}`).catch(() => []),
+    ])
+      .then(([data, fields, values]) => {
         if (cancelled) return;
         setActor(data);
+        setCustomFields(fields);
+        setCustomValues(Object.fromEntries(values.map((item) => [item.field_id, item.value ?? ""])));
         setError("");
       })
       .catch((err) => {
@@ -274,6 +284,10 @@ export default function ActorDetail() {
                       actor.employee_id ? ["Cargo", actor.position || "—"] : null,
                       actor.user_name ? ["Usuario", actor.user_name] : null,
                       ["Alta", shortDate(actor.created_at)],
+                      ...customFields.map((field): [string, string] => {
+                        const value = customValues[field.id] ?? "";
+                        return [field.label, value === "true" ? "Sí" : value === "false" ? "No" : value || "—"];
+                      }),
                     ]}
                   />
                   <div className="mt-3 grid gap-3">
@@ -459,11 +473,14 @@ export default function ActorDetail() {
         <ActorForm
           kind={actor.kind}
           actor={actor}
+          customFields={customFields}
+          customValues={customValues}
           onClose={() => setEditing(false)}
           onSaved={(saved, message) => {
             setActor(saved);
             setEditing(false);
             toast(message);
+            setReload((n) => n + 1);
           }}
           onOpenExisting={(otherId) => router.push(`/actors/${otherId}`)}
         />

@@ -2,9 +2,11 @@
 
 import { useState, type FormEvent } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { DOCUMENT_TYPES, ROLE_LABELS } from "@/lib/actors";
+import { ACTOR_ENTITY, DOCUMENT_TYPES, ROLE_LABELS } from "@/lib/actors";
+import { PickSelect } from "@/components/ui/pick-select";
 import { Btn, Field, FormGrid, INPUT, Modal, Notice } from "@/components/ui/proto";
 import type { ActorDetail, ActorDuplicate, ActorKind, ActorRole } from "@/types/actor";
+import type { CustomFieldDefinition } from "@/types/custom-field";
 
 const ROLES: ActorRole[] = ["CUSTOMER", "SUPPLIER", "EMPLOYEE"];
 const CHECK = "h-[17px] w-[17px] accent-[#1B8FC9]";
@@ -37,11 +39,15 @@ function initialValues(kind: ActorKind, actor?: ActorDetail): Values {
 
 /** Alta o edición de una organización o persona, con sus roles. No deja duplicar identidades. */
 export function ActorForm({
-  kind, actor, onClose, onSaved, onOpenExisting,
+  kind, actor, customFields = [], customValues = {}, onClose, onSaved, onOpenExisting,
 }: {
   kind: ActorKind;
   /** Al editar. */
   actor?: ActorDetail;
+  /** Columnas personalizadas de la tabla: también se llenan aquí. */
+  customFields?: CustomFieldDefinition[];
+  /** Sus valores actuales, al editar. */
+  customValues?: Record<string, string>;
   onClose: () => void;
   onSaved: (actor: ActorDetail, message: string) => void;
   /** Abrir la identidad que ya existía en lugar de crear otra. */
@@ -52,6 +58,7 @@ export function ActorForm({
   const [roles, setRoles] = useState<ActorRole[]>(actor?.roles ?? ["CUSTOMER"]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [duplicates, setDuplicates] = useState<ActorDuplicate[]>([]);
+  const [custom, setCustom] = useState<Record<string, string>>(() => ({ ...customValues }));
   const [saving, setSaving] = useState(false);
 
   const set = (key: string) => (event: { target: { value: string } }) => setValues((current) => ({ ...current, [key]: event.target.value }));
@@ -68,6 +75,15 @@ export function ActorForm({
     }
     if (!roles.length) found.roles = "Selecciona al menos un rol.";
     return found;
+  }
+
+  /** Guarda las columnas personalizadas que cambiaron. */
+  async function saveCustom(partyId: string) {
+    const changed = customFields.filter((field) => (custom[field.id] ?? "") !== (customValues[field.id] ?? ""));
+    await Promise.all(changed.map((field) => apiFetch("/v1/custom-fields/values", {
+      method: "POST",
+      body: JSON.stringify({ field_id: field.id, entity_type: ACTOR_ENTITY, entity_id: partyId, value: custom[field.id] ?? "" }),
+    })));
   }
 
   async function submit(event: FormEvent) {
@@ -88,9 +104,12 @@ export function ActorForm({
         for (const role of roles.filter((item) => !actor.roles.includes(item))) {
           saved = await apiFetch<ActorDetail>(`/v1/parties/${actor.id}/roles`, { method: "POST", body: JSON.stringify({ role }) });
         }
+        await saveCustom(actor.id);
         onSaved(saved, "Party actualizada");
       } else {
         const saved = await apiFetch<ActorDetail>("/v1/parties", { method: "POST", body: JSON.stringify({ ...fields, kind, roles }) });
+        // La identidad ya existe: si un campo personalizado falla, se completa luego desde la tabla.
+        await saveCustom(saved.id).catch(() => undefined);
         onSaved(saved, "Party creada en CORE");
       }
     } catch (err) {
@@ -137,10 +156,12 @@ export function ActorForm({
                 <input className={INPUT} value={values.sector} onChange={set("sector")} />
               </Field>
               <Field label="Nivel de SLA" error={errors.sla_level}>
-                <select className={INPUT} value={values.sla_level} onChange={set("sla_level")}>
-                  <option value="ESTANDAR">Estándar</option>
-                  <option value="PREMIUM">Premium</option>
-                </select>
+                <PickSelect
+                  className={INPUT}
+                  value={values.sla_level}
+                  onChange={(value) => setValues((current) => ({ ...current, sla_level: value }))}
+                  options={[["ESTANDAR", "Estándar"], ["PREMIUM", "Premium"]]}
+                />
               </Field>
               <Field label="Correo" error={errors.email}>
                 <input className={INPUT} type="email" value={values.email} onChange={set("email")} />
@@ -161,9 +182,12 @@ export function ActorForm({
                 <input className={INPUT} value={values.family_name} onChange={set("family_name")} />
               </Field>
               <Field label="Tipo doc." error={errors.document_type}>
-                <select className={INPUT} value={values.document_type} onChange={set("document_type")}>
-                  {DOCUMENT_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
+                <PickSelect
+                  className={INPUT}
+                  value={values.document_type}
+                  onChange={(value) => setValues((current) => ({ ...current, document_type: value }))}
+                  options={DOCUMENT_TYPES}
+                />
               </Field>
               <Field label="Número de documento" error={errors.document_number}>
                 <input className={INPUT} value={values.document_number} onChange={set("document_number")} />
@@ -180,6 +204,36 @@ export function ActorForm({
             </>
           )}
         </FormGrid>
+
+        {customFields.length > 0 && (
+          <div className="mt-3.5">
+            <p className="app-muted mb-2 text-[11px] font-semibold uppercase tracking-[.06em]">Columnas personalizadas</p>
+            <FormGrid>
+              {customFields.map((field) => (
+                field.field_type === "boolean" ? (
+                  <label key={field.id} className="flex cursor-pointer items-center gap-2 self-end pb-2.5">
+                    <input
+                      type="checkbox"
+                      className={CHECK}
+                      checked={custom[field.id] === "true"}
+                      onChange={(event) => setCustom((current) => ({ ...current, [field.id]: String(event.target.checked) }))}
+                    />
+                    <span className="text-[12.5px] font-medium">{field.label}</span>
+                  </label>
+                ) : (
+                  <Field key={field.id} label={field.label}>
+                    <input
+                      className={INPUT}
+                      type={field.field_type}
+                      value={custom[field.id] ?? ""}
+                      onChange={(event) => setCustom((current) => ({ ...current, [field.id]: event.target.value }))}
+                    />
+                  </Field>
+                )
+              ))}
+            </FormGrid>
+          </div>
+        )}
 
         <fieldset className="mt-3.5 rounded-[7px] border border-[color:var(--app-border)] px-3 pb-2.5 pt-2">
           <legend className="px-1 text-[12.5px] font-medium">Roles en CORE <em className="not-italic text-[#D93A40]">*</em></legend>

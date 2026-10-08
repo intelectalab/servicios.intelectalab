@@ -8,6 +8,7 @@ import { stateOf } from "@/lib/commercial";
 import { poppins } from "@/lib/fonts";
 import { ACTOR_ENTITY, ACTOR_STATES, DOCUMENT_TYPES, ROLE_LABELS, ROLE_TONES, actorDocument, actorRelation, actorSubtitle, rolesText } from "@/lib/actors";
 import { Badge, Chip, TD, TH } from "@/components/ui/proto";
+import { PickSelect } from "@/components/ui/pick-select";
 import type { Actor } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
 
@@ -455,9 +456,13 @@ export function ActorsTable({
       return cell(isEditing ? editor(
         <>
           {!isOrg && (
-            <select className={`${CELL_INPUT} !w-auto`} value={tempB} onChange={(e) => setTempB(e.target.value)}>
-              {DOCUMENT_TYPES.map(([value]) => <option key={value} value={value}>{value === "PASSPORT" ? "Pasaporte" : value}</option>)}
-            </select>
+            <PickSelect
+              className={`${CELL_INPUT} !w-auto shrink-0`}
+              value={tempB}
+              onChange={setTempB}
+              options={DOCUMENT_TYPES.map(([value]): [string, string] => [value, value === "PASSPORT" ? "Pasaporte" : value])}
+              ariaLabel="Tipo de documento"
+            />
           )}
           <input ref={inputRef} className={`${CELL_INPUT} min-w-24`} value={tempA} onChange={(e) => setTempA(e.target.value)} {...keyHandlers(actor, key)} />
         </>,
@@ -488,9 +493,15 @@ export function ActorsTable({
     if (key === "status") {
       const [label, tone] = stateOf(ACTOR_STATES, actor.status);
       return cell(isEditing ? editor(
-        <select autoFocus className={`${CELL_INPUT} !w-auto`} value={tempA} onChange={(e) => void saveCell(actor, key, e.target.value)} {...keyHandlers(actor, key)}>
-          {ACTOR_STATES.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
-        </select>, "min-w-0",
+        <PickSelect
+          autoOpen
+          className={`${CELL_INPUT} !w-auto min-w-28`}
+          value={tempA}
+          onChange={(value) => void saveCell(actor, key, value)}
+          onClose={() => setEdit(null)}
+          options={ACTOR_STATES.map(([value, text]): [string, string] => [value, text])}
+          ariaLabel="Estado"
+        />, "min-w-0",
       ) : <Badge tone={tone}>{label}</Badge>);
     }
 
