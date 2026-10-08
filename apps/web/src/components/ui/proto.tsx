@@ -199,9 +199,32 @@ export function Filters({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Buscador de un listado. "/" lleva el cursor aquí desde cualquier parte de la pantalla (salvo
+ * al escribir en otro campo o con un modal abierto). Escape borra lo escrito y, ya vacío, suelta
+ * el campo.
+ */
 export function SearchInput({
   value, onChange, placeholder,
 }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== "/" || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='combobox'], [role='listbox']")) return;
+      const input = inputRef.current;
+      // Oculto (otra pestaña de la pantalla) o tapado por un modal: no le toca.
+      if (!input || !input.offsetParent || document.querySelector('[aria-modal="true"]')) return;
+      event.preventDefault();
+      input.focus();
+      input.select();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
     <label className="app-muted flex h-10 flex-[1_1_260px] items-center sm:max-w-[360px] gap-2 rounded-[9px] border border-transparent bg-[var(--app-surface-muted)] px-2.5 focus-within:border-[#1B8FC9] focus-within:bg-[var(--app-surface)]">
       <Search size={18} className="shrink-0" />
@@ -211,6 +234,15 @@ export function SearchInput({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
+        title="Pulsa / para buscar; Esc para salir"
+        ref={inputRef}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          // Sin esto el navegador decide: unos borran el texto y otros no hacen nada.
+          event.preventDefault();
+          if (value) onChange("");
+          else event.currentTarget.blur();
+        }}
         className="app-text h-[34px] min-w-0 flex-1 border-0 bg-transparent text-[13px] outline-none"
       />
     </label>

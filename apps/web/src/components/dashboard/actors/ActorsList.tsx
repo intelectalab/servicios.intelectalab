@@ -82,18 +82,6 @@ export default function ActorsList() {
     if (flash) toast(flash);
   }, [toast]);
 
-  // "/" lleva al buscador, como en Clientes.
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      if (event.key !== "/" || target?.matches("input, textarea, select, button, [contenteditable='true']")) return;
-      event.preventDefault();
-      filtersRef.current?.querySelector<HTMLInputElement>("input[type='search']")?.focus();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setSearch(searchInput.trim());
