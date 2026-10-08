@@ -237,7 +237,11 @@ export function PhoneField({
   );
 }
 
-/** Agregar o editar un contacto de la identidad (los mismos contactos de Clientes, Proveedores y Empleados). */
+/**
+ * Agregar o editar un dato de contacto de la identidad: un teléfono, correo o
+ * dirección (los mismos contactos de Clientes, Proveedores y Empleados). Una
+ * persona con nombre y cargo no va aquí: es una persona de contacto.
+ */
 export function ContactForm({
   partyId, contact, onClose, onSaved,
 }: { partyId: string; contact?: ActorContact; onClose: () => void; onSaved: (message: string) => void }) {
@@ -278,7 +282,7 @@ export function ContactForm({
           is_primary: primary,
         }),
       });
-      onSaved(contact ? "Contacto actualizado" : "Contacto agregado");
+      onSaved(contact ? "Dato de contacto actualizado" : "Dato de contacto agregado");
     } catch (err) {
       setError(firstError(err, "No se pudo guardar el contacto."));
       setSaving(false);
@@ -286,12 +290,9 @@ export function ContactForm({
   }
 
   return (
-    <Modal title={contact ? "Editar contacto" : "Agregar contacto"} size="sm" onClose={onClose}>
+    <Modal title={contact ? "Editar dato de contacto" : "Agregar teléfono, correo o dirección"} size="sm" onClose={onClose}>
       <form onSubmit={submit} noValidate>
         <div className="grid gap-3">
-          <Field label="Nombre del contacto" hint="Opcional: la persona o el área">
-            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. María López (Gerente de Operaciones)" autoFocus />
-          </Field>
           <Field label="Tipo" required>
             <PickSelect className={INPUT} value={type} onChange={setType} options={CONTACT_TYPES} />
           </Field>
@@ -308,10 +309,13 @@ export function ContactForm({
               />
             )}
           </Field>
+          <Field label="Etiqueta" hint="Opcional: para distinguirlo de otros. Si es una persona, créala como persona de contacto.">
+            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Central, Facturación, Almacén" />
+          </Field>
           <label className="flex cursor-pointer items-start gap-2.5">
             <input type="checkbox" className={CHECK} checked={primary} onChange={(e) => setPrimary(e.target.checked)} />
             <span>
-              Contacto principal
+              Principal
               <small className="app-muted block text-[12.5px]">Reemplaza al principal de este mismo tipo.</small>
             </span>
           </label>

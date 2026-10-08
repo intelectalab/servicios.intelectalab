@@ -154,7 +154,7 @@ export default function ActorDetail() {
     try {
       await apiFetch(`/v1/contacts/${contactToDelete.id}`, { method: "DELETE" });
       setContactToDelete(null);
-      toast("Contacto eliminado");
+      toast("Dato de contacto eliminado");
       setReload((n) => n + 1);
     } catch (err) {
       toast(firstError(err, "No se pudo eliminar el contacto."), "danger");
@@ -245,7 +245,7 @@ export default function ActorDetail() {
           className="grid grid-cols-1 gap-x-4 lg:grid-cols-2"
           zones={[
             { className: "min-w-0 lg:min-h-24", cards: ["identity", "history"] },
-            { className: "min-w-0 lg:min-h-24", cards: ["contacts", "terms", "finance"] },
+            { className: "min-w-0 lg:min-h-24", cards: [...(isOrg ? ["people"] : []), "contacts", "terms", "finance"] },
           ]}
           cards={[
             {
@@ -310,50 +310,53 @@ export default function ActorDetail() {
                 </Card>
               ),
             },
+            // Personas de contacto: quién atiende en la organización (rol Contacto).
+            ...(isOrg ? [{
+              id: "people",
+              node: (
+                <Card title="Personas de contacto">
+                  {actor.contact_people.length ? (
+                    <ul>
+                      {actor.contact_people.map((person) => (
+                        <li key={person.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color:var(--app-border)] py-[7px] last:border-b-0">
+                          <Link href={`/actors/${person.id}`} className="font-semibold hover:text-[#1679AB] hover:underline">{person.name}</Link>
+                          {person.position && <span>· {person.position}</span>}
+                          {person.status !== "ACTIVE" && <Chip tone="neutral">Inactivo</Chip>}
+                          <small className="app-muted w-full text-xs">
+                            {[person.email, phoneText(person.phone, person.phone_country_code)].filter(Boolean).join(" · ") || "Sin correo ni teléfono"}
+                          </small>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="app-muted">Sin personas de contacto.</p>
+                  )}
+                  <div className="mt-3">
+                    <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setAddingPerson(true)}>
+                      <Plus size={14} />
+                      <span>Nueva persona de contacto</span>
+                    </Btn>
+                  </div>
+                </Card>
+              ),
+            }] : []),
+            // Datos de contacto: teléfonos, correos y direcciones de la propia identidad.
             {
               id: "contacts",
               node: (
-                <Card title="Contactos">
-                  {isOrg && (
-                    <div className="mb-4">
-                      <p className="app-muted mb-1 text-[11px] font-semibold uppercase tracking-[.06em]">Personas de contacto</p>
-                      {actor.contact_people.length ? (
-                        <ul>
-                          {actor.contact_people.map((person) => (
-                            <li key={person.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color:var(--app-border)] py-[7px] last:border-b-0">
-                              <Link href={`/actors/${person.id}`} className="font-semibold hover:text-[#1679AB] hover:underline">{person.name}</Link>
-                              {person.position && <span>· {person.position}</span>}
-                              {person.status !== "ACTIVE" && <Chip tone="neutral">Inactivo</Chip>}
-                              <small className="app-muted w-full text-xs">
-                                {[person.email, phoneText(person.phone, person.phone_country_code)].filter(Boolean).join(" · ") || "Sin correo ni teléfono"}
-                              </small>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="app-muted">Sin contactos registrados.</p>
-                      )}
-                      <div className="mt-3">
-                        <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setAddingPerson(true)}>
-                          <Plus size={14} />
-                          <span>Nueva persona de contacto</span>
-                        </Btn>
-                      </div>
-                      <p className="app-muted mb-1 mt-4 text-[11px] font-semibold uppercase tracking-[.06em]">Teléfonos, correos y direcciones</p>
-                    </div>
-                  )}
+                <Card title="Datos de contacto">
                   {actor.contacts.length ? (
                     <ul>
                       {actor.contacts.map((contact) => (
                         <li key={contact.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color:var(--app-border)] py-[7px] last:border-b-0">
-                          <strong className="font-semibold">{contact.contact_name || CONTACT_TYPES[contact.contact_type] || contact.contact_type}</strong>
-                          {contact.contact_name && <span>· {CONTACT_TYPES[contact.contact_type] ?? contact.contact_type}</span>}
+                          <strong className="font-semibold">{CONTACT_TYPES[contact.contact_type] ?? contact.contact_type}</strong>
+                          {contact.contact_name && <span>· {contact.contact_name}</span>}
                           {contact.is_primary && <Chip tone="neutral">Principal</Chip>}
                           <span className="ml-auto flex gap-0.5">
-                            <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactForm(contact)} aria-label="Editar contacto" title="Editar contacto">
+                            <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactForm(contact)} aria-label="Editar dato de contacto" title="Editar">
                               <Pencil size={14} />
                             </Btn>
-                            <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactToDelete(contact)} aria-label="Eliminar contacto" title="Eliminar contacto">
+                            <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactToDelete(contact)} aria-label="Eliminar dato de contacto" title="Eliminar">
                               <Trash2 size={14} />
                             </Btn>
                           </span>
@@ -362,12 +365,12 @@ export default function ActorDetail() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="app-muted">{isOrg ? "Sin datos de contacto." : "Sin contactos registrados."}</p>
+                    <p className="app-muted">Sin teléfonos, correos ni direcciones.</p>
                   )}
                   <div className="mt-3">
                     <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setContactForm("new")}>
                       <Plus size={14} />
-                      <span>{isOrg ? "Agregar teléfono, correo o dirección" : "Agregar contacto"}</span>
+                      <span>Agregar teléfono, correo o dirección</span>
                     </Btn>
                   </div>
                 </Card>
@@ -466,7 +469,7 @@ export default function ActorDetail() {
 
       {contactToDelete && (
         <Modal
-          title="Eliminar contacto"
+          title="Eliminar dato de contacto"
           size="sm"
           onClose={() => setContactToDelete(null)}
           footer={
@@ -477,7 +480,7 @@ export default function ActorDetail() {
           }
         >
           <p className="text-[15px]">
-            Se eliminará «{contactToDelete.contact_name || contactToDelete.value}» de los contactos de {actor.name}. No se puede deshacer.
+            Se eliminará «{contactToDelete.value}» de los datos de contacto de {actor.name}. No se puede deshacer.
           </p>
         </Modal>
       )}

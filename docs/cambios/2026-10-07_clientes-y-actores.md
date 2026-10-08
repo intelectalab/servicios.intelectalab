@@ -153,6 +153,15 @@ Probado en el navegador con admin en "Nueva persona": con Contacto marcado los d
 
 Probado con admin: al editar "Actor de Prueba S.A.C." la sección llega con 45 días, 5000.00 y USD; se cambió a 60 días y 7500 y la tarjeta mostró "60 días · US$ 7,500.00" (quedó así). En "Nueva organización", al desmarcar Cliente los tres campos se deshabilitan con la nota "Se guarda con el rol Cliente". No se probó crear una organización nueva con condiciones distintas de las de por defecto.
 
+**Personas y datos de contacto, separados (2026-10-08):** tener las dos listas en una sola tarjeta "Contactos" confundía (un dato como "Maria · Teléfono" debajo de "Personas de contacto"). Ahora son dos tarjetas en la vista 360:
+
+- **Personas de contacto** (solo en organizaciones): quién atiende, con cargo, correo y teléfono, y el botón "Nueva persona de contacto".
+- **Datos de contacto** (en organizaciones y personas): teléfonos, correos y direcciones de la propia identidad. Cada fila muestra primero el tipo y, si tiene, su etiqueta.
+
+En el formulario del dato, el campo "Nombre del contacto" pasó a llamarse **Etiqueta** (ej. "Central, Facturación, Almacén"), va al final y avisa: "Si es una persona, créala como persona de contacto". Los datos que ya tenían nombre de persona (como "Maria") se quedan como están. Archivos: `ActorDetail.tsx`, `ActorModals.tsx`.
+
+Probado con admin: "Actor de Prueba S.A.C." muestra las dos tarjetas; el formulario del dato abre con Tipo, Número y Etiqueta; la ficha de la persona de contacto muestra solo "Datos de contacto".
+
 ## Pendiente
 
 - Decidir si este módulo reemplaza a los tres. Si es así, falta traer lo de la lista "Lo que tus tablas tienen y aquí todavía no".
