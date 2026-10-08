@@ -5,6 +5,7 @@ namespace App\Modules\Portal\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Services\AuditLogger;
+use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -43,6 +44,12 @@ class PortalRequestController extends Controller
                             ->whereRaw("concat_ws(' ', given_names, family_name) ILIKE ?", [$like]));
                 });
             });
+
+        ColumnFilters::apply($query, $request, [
+            'number' => ColumnFilters::text("concat_ws(' ', portal_requests.request_number, portal_requests.subject)"),
+            'customer' => ColumnFilters::text(ListSort::customerName('portal_requests')),
+            'service' => ColumnFilters::text('(SELECT s.name FROM services s WHERE s.id = portal_requests.service_id)'),
+        ]);
 
         ListSort::apply($query, $request, [
             'number' => 'portal_requests.request_number',

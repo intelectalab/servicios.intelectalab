@@ -10,6 +10,7 @@ import {
   PageHead, Pager, Screen, SearchInput, SelectionBar, useRowSelection, useToasts, type Column, type Tone,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { PortalRequest, PortalRequestStatus } from "@/types/commercial";
 
@@ -64,6 +65,7 @@ export default function PortalRequestsList() {
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
   const [sort, setSort] = useState<SortState>(null);
+  const columnFilters = useServerColumnFilters(() => setPage(1));
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(requestKey);
 
   const [data, setData] = useState<PaginatedResponse<PortalRequest> | null>(null);
@@ -91,7 +93,7 @@ export default function PortalRequestsList() {
       const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      applySort(params, sort);
+      applySort(applyFilters(params, columnFilters.param), sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<PortalRequest>>(`/v1/portal-requests?${params}`);
@@ -107,7 +109,7 @@ export default function PortalRequestsList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, status, sort, reload]);
+  }, [page, perPage, search, status, columnFilters.param, sort, reload]);
 
   /** Toma la solicitud (si aún está recibida) y abre una cotización con su cliente y su servicio. */
   async function quote(request: PortalRequest) {
@@ -148,7 +150,7 @@ export default function PortalRequestsList() {
 
   const columns = useMemo<Column<PortalRequest>[]>(() => [
     {
-      label: "Solicitud", sortKey: "number",
+      label: "Solicitud", sortKey: "number", filter: "text",
       render: (request) => (
         <div className="min-w-[180px] max-w-[340px]">
           <strong className="font-semibold">{request.request_number ?? "—"}</strong>
@@ -156,8 +158,8 @@ export default function PortalRequestsList() {
         </div>
       ),
     },
-    { label: "Cliente", sortKey: "customer", render: (request) => customerName(request.customer) },
-    { label: "Servicio", sortKey: "service", render: (request) => request.service?.name ?? "—" },
+    { label: "Cliente", sortKey: "customer", filter: "text", render: (request) => customerName(request.customer) },
+    { label: "Servicio", sortKey: "service", filter: "text", render: (request) => request.service?.name ?? "—" },
     {
       label: "Ruta",
       render: (request) => {
@@ -166,7 +168,7 @@ export default function PortalRequestsList() {
       },
     },
     {
-      label: "Estado", sortKey: "status",
+      label: "Estado", sortKey: "status", filter: { top: "Estado" },
       render: (request) => {
         const [label, tone] = stateOf(REQUEST_STATES, request.status);
         return (
@@ -223,7 +225,7 @@ export default function PortalRequestsList() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      const rows = picked ?? (await fetchAllPages<PortalRequest>("/v1/portal-requests", applySort(params, sort)));
+      const rows = picked ?? (await fetchAllPages<PortalRequest>("/v1/portal-requests", applySort(columnFilters.apply(params), sort)));
       if (format === "xlsx") await exportXlsx("solicitudes-portal", "Solicitudes del portal", EXPORT_COLUMNS, rows);
       else exportCsv("solicitudes-portal", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -249,6 +251,16 @@ export default function PortalRequestsList() {
           }}
           options={REQUEST_STATES.map(([key, label]) => [key, label])}
         />
+        <ColumnFilterBar
+          filters={columnFilters}
+          hasOtherFilters={Boolean(searchInput || status)}
+          onClearAll={() => {
+            setSearchInput("");
+            setSearch("");
+            setStatus("");
+            setPage(1);
+          }}
+        />
       </Filters>
 
       <Card flush>
@@ -264,6 +276,7 @@ export default function PortalRequestsList() {
             />
             <DataTable
               tableId="portal-requests" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              onFilter={(column) => addColumnFilter(columnFilters, column)}
               cols={columns}
               rows={data?.data ?? []}
               rowKey={requestKey}

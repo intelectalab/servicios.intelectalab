@@ -2,13 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle, Filter, Plus, Trash2, Upload, X } from "lucide-react";
+import { CheckCircle, Plus, Trash2, Upload } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
 import { excelTone, stateOf, takeFlash, setFlash } from "@/lib/commercial";
 import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, actorDocument, actorRelation, kindLabel, rolesText } from "@/lib/actors";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
-import { useColumnFilters, type ActiveFilter } from "@/hooks/useColumnFilters";
+import { ColumnFilterBar, openTopFilter, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import {
   Btn, Card, Empty, ExportButtons, Field, FilterSelect, Filters, INPUT, LoadError, Modal, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, useToasts,
@@ -26,29 +26,6 @@ type Values = Record<string, Record<string, string>>;
 type FieldType = CustomFieldDefinition["field_type"];
 
 const FIELD_TYPES: [FieldType, string][] = [["text", "Texto"], ["number", "Número"], ["date", "Fecha"], ["boolean", "Sí / No"]];
-/** El filtrado por columna ya no se hace aquí, sobre la página visible: lo hace la API. */
-const NO_LOCAL_VALUE = () => "";
-
-const DATE_OPERATORS: Record<string, string> = {
-  all: "todos", today: "hoy", yesterday: "ayer", this_week: "esta semana", last_week: "la semana pasada",
-  last_month: "el mes pasado", year_start: "este año",
-};
-const TEXT_OPERATORS: Record<string, string> = { contains: "contiene", equals: "es igual a", greater: "mayor que", less: "menor que" };
-
-/** Un filtro por columna en una frase: «Documento contiene "2099"», «Año: esta semana». */
-function filterText(filter: ActiveFilter) {
-  if (filter.type === "date") {
-    if (filter.operator !== "range") return `${filter.label}: ${DATE_OPERATORS[filter.operator] ?? filter.operator}`;
-    const [from, to] = filter.value.split("|");
-    return `${filter.label}: ${from ? `desde ${from}` : ""}${from && to ? " " : ""}${to ? `hasta ${to}` : ""}${!from && !to ? "periodo sin fechas" : ""}`;
-  }
-  if (filter.type === "select") return `${filter.label}: ${filter.value === "true" ? "Sí" : "No"}`;
-  const operator = TEXT_OPERATORS[filter.operator] ?? filter.operator;
-  return filter.value.trim() ? `${filter.label} ${operator} "${filter.value.trim()}"` : `${filter.label}: sin valor`;
-}
-
-const FILTER_SELECT = "app-surface app-text rounded border border-[color:var(--app-border)] px-2 py-0.5 text-xs outline-none";
-
 /** Valores de las columnas personalizadas de cada actor; llegan con el listado, sin pedirlos fila por fila. */
 function customValuesOf(actors: Actor[]): Values {
   return Object.fromEntries(actors.map((actor) => [
@@ -96,29 +73,9 @@ export default function ActorsList() {
 
   const actors = useMemo(() => data?.data ?? [], [data]);
 
-  // Filtros por columna (los que se agregan desde los tres puntos de cada cabecera).
-  const {
-    showAdvancedFilters, setShowAdvancedFilters, activeFilters, setActiveFilters,
-    handleAddFilter, handleRemoveFilter, handleUpdateFilter,
-  } = useColumnFilters(actors, NO_LOCAL_VALUE);
-
-  // Los filtros por columna los aplica la API, sobre todo el listado. Solo viajan los que ya tienen
-  // algo que filtrar, y con una pequeña espera para no pedir en cada tecla.
-  const wantedFilters = JSON.stringify(
-    activeFilters
-      .filter((filter) => (filter.type === "date" ? filter.operator !== "all" : filter.type === "select" || filter.value.trim() !== ""))
-      .map(({ id, type, operator, value }) => ({ id, type, operator, value })),
-  );
-  const [columnFilters, setColumnFilters] = useState("[]");
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setColumnFilters((current) => {
-        if (current !== wantedFilters) setPage(1);
-        return wantedFilters;
-      });
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [wantedFilters]);
+  // Filtros por columna (los que se agregan desde los tres puntos de cada cabecera): los aplica la API.
+  const columnFilters = useServerColumnFilters(() => setPage(1));
+  const { activeFilters, handleAddFilter } = columnFilters;
 
   useEffect(() => {
     const flash = takeFlash();
@@ -151,8 +108,7 @@ export default function ActorsList() {
     if (role) params.set("role", role);
     if (kind) params.set("kind", kind);
     if (status) params.set("status", status);
-    if (columnFilters !== "[]") params.set("filters", columnFilters);
-    return applySort(params, sort);
+    return applySort(columnFilters.apply(params), sort);
   };
 
   // Las columnas personalizadas no cambian al paginar, ordenar o filtrar: se piden solo al entrar o al recargar.
@@ -189,7 +145,7 @@ export default function ActorsList() {
     load();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- queryParams solo lee los filtros de la lista
-  }, [page, perPage, search, role, kind, status, columnFilters, sort, reload]);
+  }, [page, perPage, search, role, kind, status, columnFilters.param, sort, reload]);
 
   // Rol y Estado ya se filtran arriba: desde su columna se abre ese desplegable en vez de crear
   // un segundo filtro del mismo dato, que podría contradecirlo.
@@ -199,13 +155,7 @@ export default function ActorsList() {
       handleAddFilter(columnId, label, type);
       return;
     }
-    const select = filtersRef.current?.querySelector<HTMLSelectElement>(`select[aria-label="${top}"]`);
-    if (!select) return;
-    select.scrollIntoView({ block: "center" });
-    select.focus();
-    try {
-      select.showPicker();
-    } catch { /* si el navegador no deja abrirlo solo, queda enfocado */ }
+    openTopFilter(top);
   }
 
   /** Quita todo lo que filtra el listado: buscador, Rol, Tipo, Estado y los filtros por columna. */
@@ -215,7 +165,6 @@ export default function ActorsList() {
     setRole("");
     setKind("");
     setStatus("");
-    setActiveFilters([]);
     setPage(1);
   }
 
@@ -367,136 +316,7 @@ export default function ActorsList() {
           <FilterSelect label="Rol" value={role} onChange={changeFilter(setRole)} options={Object.entries(ROLE_LABELS)} />
           <FilterSelect label="Tipo" value={kind} onChange={changeFilter(setKind)} options={[["ORGANIZATION", "Organización"], ["PERSON", "Persona"]]} />
           <FilterSelect label="Estado" value={status} onChange={changeFilter(setStatus)} options={ACTOR_STATES.map(([key, label]) => [key, label])} />
-          <button
-            type="button"
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`flex h-10 cursor-pointer items-center gap-2 rounded-[9px] border px-3 text-[13px] font-medium ${
-              activeFilters.length ? "border-[#1B8FC9] bg-[#E3F2FA] text-[#1679AB]" : "border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"
-            }`}
-          >
-            <Filter size={14} />
-            Filtros por columna
-            {activeFilters.length > 0 && (
-              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#1B8FC9] px-1 text-[10px] font-bold text-[#fff]">{activeFilters.length}</span>
-            )}
-          </button>
-          {(hasServerFilters || searchInput || activeFilters.length > 0) && (
-            <button type="button" onClick={clearAllFilters} className="h-10 cursor-pointer px-1.5 text-[13px] font-medium text-[#D93A40] hover:underline">
-              Limpiar filtros
-            </button>
-          )}
-
-          {/* Con el panel cerrado, cada filtro por columna queda a la vista como etiqueta. */}
-          {!showAdvancedFilters && activeFilters.length > 0 && (
-            <div className="flex w-full flex-wrap items-center gap-2">
-              {activeFilters.map((filter) => (
-                <span key={filter.id} className="inline-flex h-7 items-center rounded-lg border border-[#BFE6F8] bg-[#E3F2FA] text-xs font-medium text-[#0F5A82]">
-                  <button type="button" onClick={() => setShowAdvancedFilters(true)} title="Cambiar este filtro" className="h-full cursor-pointer pl-2.5 pr-1 hover:underline">
-                    {filterText(filter)}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveFilter(filter.id)}
-                    aria-label={`Quitar filtro ${filter.label}`}
-                    className="grid h-full w-6 cursor-pointer place-items-center rounded-r-lg hover:bg-[#BFE6F8]"
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {showAdvancedFilters && (
-            <div className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3 text-xs">
-              <span className="app-muted mr-1 font-semibold">Filtros activos:</span>
-              {activeFilters.length === 0 ? (
-                <span className="app-muted italic">No hay filtros activos. Haz clic en los tres puntos de cualquier columna de la tabla para filtrar.</span>
-              ) : activeFilters.map((filter) => (
-                <div key={filter.id} className="app-surface flex flex-wrap items-center gap-2 rounded-lg border border-[color:var(--app-border)] px-3 py-1.5">
-                  <span className="font-semibold">{filter.label}:</span>
-                  <select
-                    value={filter.operator}
-                    onChange={(event) => {
-                      const operator = event.target.value;
-                      handleUpdateFilter(filter.id, { operator, value: operator === "range" ? "|" : ["today", "all"].includes(operator) ? "" : filter.value });
-                    }}
-                    className={FILTER_SELECT}
-                    aria-label={`Operador de ${filter.label}`}
-                  >
-                    {filter.id === "status" || filter.type === "select" ? (
-                      <option value="equals">es igual a</option>
-                    ) : filter.type === "date" ? (
-                      <>
-                        <option value="all">Todos</option>
-                        <option value="today">Hoy</option>
-                        <option value="yesterday">Ayer</option>
-                        <option value="this_week">Al principio de esta semana</option>
-                        <option value="last_week">La semana pasada</option>
-                        <option value="last_month">El mes pasado</option>
-                        <option value="year_start">Al principio de este año</option>
-                        <option value="range">Periodo personalizado</option>
-                      </>
-                    ) : (
-                      <>
-                        <option value="contains">contiene</option>
-                        <option value="equals">es igual a</option>
-                        {filter.type === "number" && (
-                          <>
-                            <option value="greater">mayor que</option>
-                            <option value="less">menor que</option>
-                          </>
-                        )}
-                      </>
-                    )}
-                  </select>
-
-                  {filter.id === "status" ? (
-                    <select value={filter.value} onChange={(event) => handleUpdateFilter(filter.id, { value: event.target.value })} className={`${FILTER_SELECT} w-28`} aria-label="Valor">
-                      <option value="ACTIVE">Activo</option>
-                      <option value="INACTIVE">Inactivo</option>
-                    </select>
-                  ) : filter.type === "select" ? (
-                    <select value={filter.value} onChange={(event) => handleUpdateFilter(filter.id, { value: event.target.value })} className={`${FILTER_SELECT} w-28`} aria-label="Valor">
-                      <option value="true">Sí</option>
-                      <option value="false">No</option>
-                    </select>
-                  ) : filter.type === "date" && filter.operator === "range" ? (
-                    <span className="flex flex-wrap items-center gap-1">
-                      <span className="app-muted">Desde:</span>
-                      <input
-                        type="date"
-                        value={filter.value.split("|")[0] || ""}
-                        onChange={(event) => handleUpdateFilter(filter.id, { value: `${event.target.value}|${filter.value.split("|")[1] ?? ""}` })}
-                        className={FILTER_SELECT}
-                      />
-                      <span className="app-muted">Hasta:</span>
-                      <input
-                        type="date"
-                        value={filter.value.split("|")[1] || ""}
-                        onChange={(event) => handleUpdateFilter(filter.id, { value: `${filter.value.split("|")[0] ?? ""}|${event.target.value}` })}
-                        className={FILTER_SELECT}
-                      />
-                    </span>
-                  ) : filter.type === "date" ? (
-                    <span className="app-muted px-1 text-[11px] italic">Se aplica al período</span>
-                  ) : (
-                    <input
-                      type={filter.type === "number" ? "number" : "text"}
-                      value={filter.value}
-                      onChange={(event) => handleUpdateFilter(filter.id, { value: event.target.value })}
-                      placeholder="Valor..."
-                      className={`${FILTER_SELECT} w-28`}
-                    />
-                  )}
-
-                  <button type="button" onClick={() => handleRemoveFilter(filter.id)} className="app-muted cursor-pointer hover:text-[#D93A40]" aria-label={`Quitar filtro ${filter.label}`}>
-                    <X size={13} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          <ColumnFilterBar filters={columnFilters} hasOtherFilters={Boolean(hasServerFilters || searchInput)} onClearAll={clearAllFilters} />
         </Filters>
       </div>
 

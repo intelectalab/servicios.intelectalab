@@ -11,6 +11,7 @@ use App\Modules\Services\Models\Quotation;
 use App\Modules\Services\Models\QuotationItem;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
@@ -41,6 +42,13 @@ class ContractController extends Controller
                             ->whereRaw("concat_ws(' ', given_names, family_name) ILIKE ?", [$like]));
                 });
             });
+
+        ColumnFilters::apply($query, $request, [
+            'number' => ColumnFilters::text('contracts.contract_number'),
+            'customer' => ColumnFilters::text(ListSort::customerName('contracts')),
+            'start_date' => ColumnFilters::date('contracts.start_date'),
+            'total' => ColumnFilters::number('contracts.total_value'),
+        ]);
 
         ListSort::apply($query, $request, [
             'number' => 'contracts.contract_number',

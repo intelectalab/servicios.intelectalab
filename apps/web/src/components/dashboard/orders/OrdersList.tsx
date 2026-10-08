@@ -11,12 +11,13 @@ import {
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Order } from "@/types/commercial";
 
 const COLUMNS: Column<Order>[] = [
   {
-    label: "Orden", sortKey: "number",
+    label: "Orden", sortKey: "number", filter: "text",
     render: (order) => (
       <div className="min-w-[150px]">
         <strong className="font-semibold">{order.order_number}</strong>
@@ -24,11 +25,11 @@ const COLUMNS: Column<Order>[] = [
       </div>
     ),
   },
-  { label: "Cliente", sortKey: "customer", render: (order) => customerName(order.customer) },
+  { label: "Cliente", sortKey: "customer", filter: "text", render: (order) => customerName(order.customer) },
   { label: "Origen", render: (order) => <span className="whitespace-nowrap">{orderOrigin(order)}</span> },
-  { label: "Fecha", sortKey: "date", render: (order) => <span className="whitespace-nowrap">{shortDate(order.order_date)}</span> },
+  { label: "Fecha", sortKey: "date", filter: "date", render: (order) => <span className="whitespace-nowrap">{shortDate(order.order_date)}</span> },
   {
-    label: "Estado", sortKey: "status",
+    label: "Estado", sortKey: "status", filter: { top: "Estado" },
     render: (order) => {
       const [label, tone] = stateOf(ORDER_STATES, order.status);
       return <Badge tone={tone}>{label}</Badge>;
@@ -69,6 +70,7 @@ export default function OrdersList() {
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
   const [sort, setSort] = useState<SortState>(null);
+  const columnFilters = useServerColumnFilters(() => setPage(1));
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(orderKey);
 
   const [data, setData] = useState<PaginatedResponse<Order> | null>(null);
@@ -97,7 +99,7 @@ export default function OrdersList() {
       const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      applySort(params, sort);
+      applySort(applyFilters(params, columnFilters.param), sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<Order>>(`/v1/orders?${params}`);
@@ -113,7 +115,7 @@ export default function OrdersList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, status, sort, reload]);
+  }, [page, perPage, search, status, columnFilters.param, sort, reload]);
 
   /** Exporta las filas marcadas o, sin `picked`, todas las del filtro y búsqueda actuales. */
   async function runExport(format: "xlsx" | "csv", picked?: Order[]) {
@@ -122,7 +124,7 @@ export default function OrdersList() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      const rows = picked ?? (await fetchAllPages<Order>("/v1/orders", applySort(params, sort)));
+      const rows = picked ?? (await fetchAllPages<Order>("/v1/orders", applySort(columnFilters.apply(params), sort)));
       if (format === "xlsx") await exportXlsx("ordenes", "Órdenes", EXPORT_COLUMNS, rows);
       else exportCsv("ordenes", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -148,6 +150,16 @@ export default function OrdersList() {
           }}
           options={ORDER_STATES.map(([key, label]) => [key, label])}
         />
+        <ColumnFilterBar
+          filters={columnFilters}
+          hasOtherFilters={Boolean(searchInput || status)}
+          onClearAll={() => {
+            setSearchInput("");
+            setSearch("");
+            setStatus("");
+            setPage(1);
+          }}
+        />
       </Filters>
 
       <Card flush>
@@ -163,6 +175,7 @@ export default function OrdersList() {
             />
             <DataTable
               tableId="orders" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              onFilter={(column) => addColumnFilter(columnFilters, column)}
               cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={orderKey}

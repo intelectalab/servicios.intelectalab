@@ -11,6 +11,7 @@ import {
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import ServiceFormModal from "./ServiceFormModal";
 import { ImportModal } from "@/components/dashboard/ImportModal";
 import type { PaginatedResponse } from "@/types/customer";
@@ -20,7 +21,7 @@ const warranty = (service: Service) => (service.warranty_months ? `${service.war
 
 const COLUMNS: Column<Service>[] = [
   {
-    label: "Servicio", sortKey: "name",
+    label: "Servicio", sortKey: "name", filter: "text",
     render: (service) => (
       <div className="min-w-[180px]">
         <strong className="font-semibold">{service.name}</strong>
@@ -28,13 +29,13 @@ const COLUMNS: Column<Service>[] = [
       </div>
     ),
   },
-  { label: "Categoría", sortKey: "category", render: (service) => service.category?.name ?? "—" },
+  { label: "Categoría", sortKey: "category", filter: { top: "Categoría" }, render: (service) => service.category?.name ?? "—" },
   {
-    label: "Modalidad", sortKey: "billing_mode",
+    label: "Modalidad", sortKey: "billing_mode", filter: { top: "Modalidad" },
     render: (service) => <Chip tone={service.billing_mode === "RECURRING" ? "accent" : "neutral"}>{billingLabel(service)}</Chip>,
   },
   {
-    label: "Precio vigente", sortKey: "price",
+    label: "Precio vigente", sortKey: "price", filter: "number",
     num: true,
     render: (service) =>
       service.current_price ? (
@@ -46,9 +47,9 @@ const COLUMNS: Column<Service>[] = [
         <span className="app-muted">Sin precio</span>
       ),
   },
-  { label: "Garantía", sortKey: "warranty", render: warranty },
+  { label: "Garantía", sortKey: "warranty", filter: "number", render: warranty },
   {
-    label: "Estado", sortKey: "status",
+    label: "Estado", sortKey: "status", filter: { top: "Estado" },
     render: (service) => {
       const [label, tone] = stateOf(SERVICE_STATES, service.status);
       return <Badge tone={tone}>{label}</Badge>;
@@ -93,6 +94,7 @@ export default function ServicesList() {
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
   const [sort, setSort] = useState<SortState>(null);
+  const columnFilters = useServerColumnFilters(() => setPage(1));
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(serviceKey);
 
   const [data, setData] = useState<PaginatedResponse<Service> | null>(null);
@@ -138,7 +140,7 @@ export default function ServicesList() {
       const params = filterParams();
       params.set("per_page", String(perPage));
       params.set("page", String(page));
-      applySort(params, sort);
+      applySort(applyFilters(params, columnFilters.param), sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<Service>>(`/v1/services?${params}`);
@@ -156,7 +158,7 @@ export default function ServicesList() {
     return () => { cancelled = true; };
     // filterParams solo lee los filtros que ya están en las dependencias.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, perPage, search, category, mode, status, sort, reload]);
+  }, [page, perPage, search, category, mode, status, columnFilters.param, sort, reload]);
 
   const pick = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -167,7 +169,7 @@ export default function ServicesList() {
   async function runExport(format: "xlsx" | "csv", picked?: Service[]) {
     setExporting(true);
     try {
-      const rows = picked ?? (await fetchAllPages<Service>("/v1/services", applySort(filterParams(), sort)));
+      const rows = picked ?? (await fetchAllPages<Service>("/v1/services", applySort(columnFilters.apply(filterParams()), sort)));
       if (format === "xlsx") await exportXlsx("catalogo_servicios", "Catálogo de servicios", EXPORT_COLUMNS, rows);
       else exportCsv("catalogo_servicios", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -209,6 +211,18 @@ export default function ServicesList() {
           onChange={pick(setStatus)}
           options={SERVICE_STATES.map(([key, label]) => [key, label])}
         />
+        <ColumnFilterBar
+          filters={columnFilters}
+          hasOtherFilters={Boolean(searchInput || category || mode || status)}
+          onClearAll={() => {
+            setSearchInput("");
+            setSearch("");
+            setCategory("");
+            setMode("");
+            setStatus("");
+            setPage(1);
+          }}
+        />
       </Filters>
 
       <Card flush>
@@ -224,6 +238,7 @@ export default function ServicesList() {
             />
             <DataTable
               tableId="services" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              onFilter={(column) => addColumnFilter(columnFilters, column)}
               cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={serviceKey}

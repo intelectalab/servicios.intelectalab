@@ -11,6 +11,7 @@ use App\Modules\Services\Models\ServicePrice;
 use App\Modules\Services\Models\ServiceRecurringConfig;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
 use Illuminate\Http\Request;
@@ -35,6 +36,12 @@ class ServiceController extends Controller
                 $like = '%'.addcslashes($search, '%_\\').'%';
                 $q->where(fn ($w) => $w->where('code', 'ILIKE', $like)->orWhere('name', 'ILIKE', $like));
             });
+
+        ColumnFilters::apply($query, $request, [
+            'name' => ColumnFilters::text("services.name || ' ' || services.code"),
+            'price' => ColumnFilters::number('(SELECT sp.amount FROM service_prices sp WHERE sp.service_id = services.id AND sp.active ORDER BY sp.valid_from DESC LIMIT 1)'),
+            'warranty' => ColumnFilters::number('services.warranty_months'),
+        ]);
 
         ListSort::apply($query, $request, [
             'name' => 'services.name',

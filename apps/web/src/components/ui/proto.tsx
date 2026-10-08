@@ -7,7 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Loader2, Lock, MoreVertical, Pin, PinOff,
+  AlertCircle, ArrowDown, ArrowUp, Check, Filter as FilterIcon, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Loader2, Lock, MoreVertical, Pin, PinOff,
   Search, Upload, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -303,6 +303,11 @@ export type Column<T> = {
   num?: boolean;
   /** Clave con la que el listado pide el orden a la API; sin ella la columna no se ordena. */
   sortKey?: string;
+  /**
+   * "Filtrar por esta columna": el tipo de filtro que agrega (lo aplica la API, con `sortKey` como
+   * nombre de la columna), o `{ top }` si la columna ya tiene su filtro en la barra de arriba.
+   */
+  filter?: "text" | "number" | "date" | "select" | { top: string };
   render: (row: T) => ReactNode;
 };
 
@@ -333,8 +338,10 @@ const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[#CFD5DE] accent-[#1B8FC
 
 export function DataTable<T>({
   cols, rows, rowKey, onRowClick, selection, loading = false, empty = "No hay registros con estos filtros.", dense = false, tableId,
-  sort = null, onSort, refreshing = false,
+  sort = null, onSort, onFilter, refreshing = false,
 }: {
+  /** Se eligió "Filtrar por esta columna" en una columna que declara `filter`. */
+  onFilter?: (column: Column<T>) => void;
   /** Orden actual y cómo cambiarlo (lo aplica la API, sobre todo el listado). */
   sort?: SortState;
   onSort?: (sort: SortState) => void;
@@ -367,7 +374,7 @@ export function DataTable<T>({
     return (
       <ColumnTable
         tableId={tableId} cols={cols} rows={rows} rowKey={rowKey} onRowClick={onRowClick} selection={selection} dense={dense}
-        sort={sort} onSort={onSort} refreshing={refreshing}
+        sort={sort} onSort={onSort} onFilter={onFilter} refreshing={refreshing}
       />
     );
   }
@@ -456,8 +463,9 @@ function readStoredList(key: string): string[] {
  * inmoviliza también la primera, y queda a su lado. Se recuerda en el navegador.
  */
 function ColumnTable<T>({
-  tableId, cols, rows, rowKey, onRowClick, selection, dense, sort, onSort, refreshing,
+  tableId, cols, rows, rowKey, onRowClick, selection, dense, sort, onSort, onFilter, refreshing,
 }: {
+  onFilter?: (column: Column<T>) => void;
   sort: SortState;
   onSort?: (sort: SortState) => void;
   refreshing: boolean;
@@ -702,6 +710,18 @@ function ColumnTable<T>({
                         {isFrozen ? <PinOff size={14} className="app-muted" /> : <Pin size={14} className="app-muted" />}
                         {isFrozen ? "Desinmovilizar columna" : "Inmovilizar columna"}
                       </button>
+                      {col.filter && onFilter && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onFilter(col);
+                            setOpenMenu(null);
+                          }}
+                          className={COL_MENU_ITEM}
+                        >
+                          <FilterIcon size={14} className="app-muted" /> Filtrar por esta columna
+                        </button>
+                      )}
                     </div>,
                     document.body,
                   )}

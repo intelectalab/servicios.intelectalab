@@ -15,6 +15,7 @@ use App\Modules\Services\Models\ServicePrice;
 use App\Services\AuditHistory;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Services\AuditLogger;
+use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
@@ -64,6 +65,14 @@ class QuotationController extends Controller
                             ->whereRaw("concat_ws(' ', given_names, family_name) ILIKE ?", [$like]));
                 });
             });
+
+        ColumnFilters::apply($query, $request, [
+            'number' => ColumnFilters::text('quotations.quotation_number'),
+            'customer' => ColumnFilters::text(ListSort::customerName('quotations')),
+            'valid_until' => ColumnFilters::date('quotations.valid_until'),
+            'total' => ColumnFilters::number('quotations.total'),
+            'creator' => ColumnFilters::text('(SELECT u.name FROM users u WHERE u.id = quotations.created_by)'),
+        ]);
 
         ListSort::apply($query, $request, [
             'number' => 'quotations.quotation_number',

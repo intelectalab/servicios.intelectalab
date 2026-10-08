@@ -10,6 +10,7 @@ use App\Modules\Services\Models\Quotation;
 use App\Modules\Services\Models\QuotationItem;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
@@ -43,6 +44,12 @@ class OrderController extends Controller
                             ->whereRaw("concat_ws(' ', given_names, family_name) ILIKE ?", [$like]));
                 });
             });
+
+        ColumnFilters::apply($query, $request, [
+            'number' => ColumnFilters::text('orders.order_number'),
+            'customer' => ColumnFilters::text(ListSort::customerName('orders')),
+            'date' => ColumnFilters::date('orders.order_date'),
+        ]);
 
         ListSort::apply($query, $request, [
             'number' => 'orders.order_number',

@@ -11,12 +11,13 @@ import {
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Contract } from "@/types/commercial";
 
 const COLUMNS: Column<Contract>[] = [
   {
-    label: "Contrato", sortKey: "number",
+    label: "Contrato", sortKey: "number", filter: "text",
     render: (contract) => (
       <div className="min-w-[150px]">
         <strong className="font-semibold">{contract.contract_number}</strong>
@@ -24,12 +25,12 @@ const COLUMNS: Column<Contract>[] = [
       </div>
     ),
   },
-  { label: "Cliente", sortKey: "customer", render: (contract) => customerName(contract.customer) },
-  { label: "Vigencia", sortKey: "start_date", render: (contract) => <span className="whitespace-nowrap">{validity(contract)}</span> },
+  { label: "Cliente", sortKey: "customer", filter: "text", render: (contract) => customerName(contract.customer) },
+  { label: "Vigencia", sortKey: "start_date", filter: "date", render: (contract) => <span className="whitespace-nowrap">{validity(contract)}</span> },
   { label: "SLA", sortKey: "sla", render: (contract) => <Chip tone={contract.sla_level === "PREMIUM" ? "accent" : "neutral"}>{slaLabel(contract.sla_level)}</Chip> },
-  { label: "Valor", sortKey: "total", num: true, render: (contract) => money(contract.total_value, contract.currency) },
+  { label: "Valor", sortKey: "total", filter: "number", num: true, render: (contract) => money(contract.total_value, contract.currency) },
   {
-    label: "Estado", sortKey: "status",
+    label: "Estado", sortKey: "status", filter: { top: "Estado" },
     render: (contract) => {
       const [label, tone] = stateOf(CONTRACT_STATES, contract.status);
       return <Badge tone={tone}>{label}</Badge>;
@@ -70,6 +71,7 @@ export default function ContractsList() {
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
   const [sort, setSort] = useState<SortState>(null);
+  const columnFilters = useServerColumnFilters(() => setPage(1));
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(contractKey);
 
   const [data, setData] = useState<PaginatedResponse<Contract> | null>(null);
@@ -92,7 +94,7 @@ export default function ContractsList() {
       const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      applySort(params, sort);
+      applySort(applyFilters(params, columnFilters.param), sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<Contract>>(`/v1/contracts?${params}`);
@@ -108,7 +110,7 @@ export default function ContractsList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, status, sort, reload]);
+  }, [page, perPage, search, status, columnFilters.param, sort, reload]);
 
   /** Exporta las filas marcadas o, sin `picked`, todas las del filtro y búsqueda actuales. */
   async function runExport(format: "xlsx" | "csv", picked?: Contract[]) {
@@ -117,7 +119,7 @@ export default function ContractsList() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      const rows = picked ?? (await fetchAllPages<Contract>("/v1/contracts", applySort(params, sort)));
+      const rows = picked ?? (await fetchAllPages<Contract>("/v1/contracts", applySort(columnFilters.apply(params), sort)));
       if (format === "xlsx") await exportXlsx("contratos", "Contratos", EXPORT_COLUMNS, rows);
       else exportCsv("contratos", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -143,6 +145,16 @@ export default function ContractsList() {
           }}
           options={CONTRACT_STATES.map(([key, label]) => [key, label])}
         />
+        <ColumnFilterBar
+          filters={columnFilters}
+          hasOtherFilters={Boolean(searchInput || status)}
+          onClearAll={() => {
+            setSearchInput("");
+            setSearch("");
+            setStatus("");
+            setPage(1);
+          }}
+        />
       </Filters>
 
       <Card flush>
@@ -158,6 +170,7 @@ export default function ContractsList() {
             />
             <DataTable
               tableId="contracts" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              onFilter={(column) => addColumnFilter(columnFilters, column)}
               cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={contractKey}

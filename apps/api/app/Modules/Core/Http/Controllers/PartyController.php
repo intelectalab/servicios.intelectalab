@@ -14,6 +14,7 @@ use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
 use Illuminate\Http\JsonResponse;
@@ -339,79 +340,34 @@ class PartyController extends Controller
      */
     private function applyColumnFilters($query, Request $request): void
     {
-        $filters = json_decode((string) $request->query('filters', ''), true);
-        if (! is_array($filters)) {
-            return;
-        }
-
         $fixed = $this->sortColumns($request);
         $columns = [
-            'name' => $fixed['name'],
-            'document' => "lower(COALESCE((SELECT 'RUC ' || o.tax_identifier FROM organizations o WHERE o.party_id = parties.id),"
-                ." (SELECT COALESCE(p.document_type, 'DNI') || ' ' || p.document_number FROM persons p WHERE p.party_id = parties.id)))",
-            'roles' => 'lower('.$fixed['roles'].')',
-            'relation' => $fixed['relation'],
-            'status' => 'lower('.$fixed['status'].')',
+            'name' => ['text' => $fixed['name']],
+            'document' => ['text' => "lower(COALESCE((SELECT 'RUC ' || o.tax_identifier FROM organizations o WHERE o.party_id = parties.id),"
+                ." (SELECT COALESCE(p.document_type, 'DNI') || ' ' || p.document_number FROM persons p WHERE p.party_id = parties.id)))"],
+            'roles' => ['text' => 'lower('.$fixed['roles'].')'],
+            'relation' => ['text' => $fixed['relation']],
+            'status' => ['text' => 'lower('.$fixed['status'].')'],
         ];
 
-        foreach (array_slice($filters, 0, 20) as $filter) {
-            $id = (string) ($filter['id'] ?? '');
-            $operator = (string) ($filter['operator'] ?? '');
-            $value = trim((string) ($filter['value'] ?? ''));
-            $boolean = false;
-
-            // Columna fija o personalizada (por su id); `$raw` es el valor tal cual, sin pasar a minúsculas.
+        ColumnFilters::apply($query, $request, function (string $id) use ($columns) {
             if (isset($columns[$id])) {
-                $text = $raw = $columns[$id];
-            } elseif (Str::isUuid($id) && ($field = CustomFieldDefinition::where('entity_type', 'Party')->find($id))) {
-                $raw = "(SELECT NULLIF(v.value, '') FROM custom_field_values v WHERE v.field_id = '{$field->id}' AND v.entity_id = parties.id)";
-                $text = "lower({$raw})";
-                $boolean = $field->field_type === 'boolean';
-            } else {
-                continue;
+                return $columns[$id];
             }
-
-            if (($filter['type'] ?? '') === 'date') {
-                $day = "left({$raw}, 10)";
-                $today = now();
-                $weekStart = $today->copy()->subDays($today->dayOfWeek);
-                [$from, $to] = match ($operator) {
-                    'today' => [$today, $today],
-                    'yesterday' => [$today->copy()->subDay(), $today->copy()->subDay()],
-                    'this_week' => [$weekStart, $today],
-                    'last_week' => [$weekStart->copy()->subDays(7), $weekStart->copy()->subDay()],
-                    'last_month' => [$today->copy()->subMonthNoOverflow()->startOfMonth(), $today->copy()->subMonthNoOverflow()->endOfMonth()],
-                    'year_start' => [$today->copy()->startOfYear(), $today],
-                    'range' => array_pad(explode('|', $value, 2), 2, ''),
-                    default => [null, null],
-                };
-                $from = $from instanceof \DateTimeInterface ? $from->format('Y-m-d') : $from;
-                $to = $to instanceof \DateTimeInterface ? $to->format('Y-m-d') : $to;
-                if ($from) {
-                    $query->whereRaw("{$day} >= ?", [$from]);
-                }
-                if ($to) {
-                    $query->whereRaw("{$day} <= ?", [$to]);
-                }
-
-                continue;
+            // Columna personalizada, por su id. Su valor es texto: como número solo cuenta si lo parece.
+            if (! Str::isUuid($id) || ! ($field = CustomFieldDefinition::where('entity_type', 'Party')->find($id))) {
+                return null;
             }
+            $raw = "(SELECT NULLIF(v.value, '') FROM custom_field_values v WHERE v.field_id = '{$field->id}' AND v.entity_id = parties.id)";
 
-            if ($value === '') {
-                continue;
-            }
-
-            $needle = mb_strtolower($value);
-            match ($operator) {
-                'contains' => $query->whereRaw("{$text} LIKE ?", ['%'.addcslashes($needle, '%_\\').'%']),
+            return [
+                'text' => "lower({$raw})",
+                'number' => "(CASE WHEN {$raw} ~ '^-?[0-9]+([.][0-9]+)?$' THEN ({$raw})::numeric END)",
+                'date' => "left({$raw}, 10)",
                 // Una casilla Sí / No sin marcar cuenta como "No".
-                'equals' => $query->whereRaw('COALESCE('.$text.", '".($boolean ? 'false' : '')."') = ?", [$needle]),
-                'greater', 'less' => is_numeric($value)
-                    ? $query->whereRaw("CASE WHEN {$raw} ~ '^-?[0-9]+([.][0-9]+)?$' THEN ({$raw})::numeric END ".($operator === 'greater' ? '>' : '<').' ?', [(float) $value])
-                    : null,
-                default => null,
-            };
-        }
+                'empty' => $field->field_type === 'boolean' ? 'false' : '',
+            ];
+        });
     }
 
     private function baseQuery(Request $request)

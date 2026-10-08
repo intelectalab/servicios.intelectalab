@@ -11,6 +11,7 @@ import {
   SearchInput, SelectionBar, Tabs, Who, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Quotation, QuotationStatus, QuotationSummary } from "@/types/commercial";
 
@@ -30,7 +31,7 @@ function sourceOf(quotation: Quotation): [string, "accent" | "neutral"] {
 
 const COLUMNS: Column<Quotation>[] = [
   {
-    label: "Número", sortKey: "number",
+    label: "Número", sortKey: "number", filter: "text",
     render: (quotation) => (
       <div className="min-w-[150px]">
         <strong className="font-semibold">{quotation.quotation_number}</strong>
@@ -40,16 +41,16 @@ const COLUMNS: Column<Quotation>[] = [
       </div>
     ),
   },
-  { label: "Cliente", sortKey: "customer", render: (quotation) => customerName(quotation.customer) },
+  { label: "Cliente", sortKey: "customer", filter: "text", render: (quotation) => customerName(quotation.customer) },
   {
-    label: "Origen", sortKey: "source",
+    label: "Origen", sortKey: "source", filter: { top: "Origen" },
     render: (quotation) => {
       const [label, tone] = sourceOf(quotation);
       return <Chip tone={tone}>{label}</Chip>;
     },
   },
   {
-    label: "Válida hasta", sortKey: "valid_until",
+    label: "Válida hasta", sortKey: "valid_until", filter: "date",
     render: (quotation) => (
       <span className="inline-flex flex-wrap items-center gap-1.5">
         {shortDate(quotation.valid_until)}
@@ -57,8 +58,8 @@ const COLUMNS: Column<Quotation>[] = [
       </span>
     ),
   },
-  { label: "Total", sortKey: "total", num: true, render: (quotation) => money(quotation.total, quotation.currency) },
-  { label: "Responsable", sortKey: "creator", render: (quotation) => <Who name={quotation.creator?.name} /> },
+  { label: "Total", sortKey: "total", filter: "number", num: true, render: (quotation) => money(quotation.total, quotation.currency) },
+  { label: "Responsable", sortKey: "creator", filter: "text", render: (quotation) => <Who name={quotation.creator?.name} /> },
   {
     label: "Estado", sortKey: "status",
     render: (quotation) => {
@@ -112,6 +113,7 @@ export default function QuotationsList() {
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
   const [sort, setSort] = useState<SortState>(null);
+  const columnFilters = useServerColumnFilters(() => setPage(1));
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(quotationKey);
 
   const [data, setData] = useState<PaginatedResponse<Quotation> | null>(null);
@@ -144,7 +146,7 @@ export default function QuotationsList() {
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
       if (source) params.set("source", source);
-      applySort(params, sort);
+      applySort(applyFilters(params, columnFilters.param), sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<Quotation>>(`/v1/quotations?${params}`);
@@ -160,7 +162,7 @@ export default function QuotationsList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, tab, source, sort, reload]);
+  }, [page, perPage, search, tab, source, columnFilters.param, sort, reload]);
 
   /** Exporta las filas marcadas o, sin `picked`, todas las de la pestaña y búsqueda actuales. */
   async function runExport(format: "xlsx" | "csv", picked?: Quotation[]) {
@@ -170,7 +172,7 @@ export default function QuotationsList() {
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
       if (source) params.set("source", source);
-      const rows = picked ?? (await fetchAllPages<Quotation>("/v1/quotations", applySort(params, sort)));
+      const rows = picked ?? (await fetchAllPages<Quotation>("/v1/quotations", applySort(columnFilters.apply(params), sort)));
       if (format === "xlsx") await exportXlsx("cotizaciones", "Cotizaciones", EXPORT_COLUMNS, rows);
       else exportCsv("cotizaciones", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -230,6 +232,16 @@ export default function QuotationsList() {
           }}
           options={[["DIRECT", "Directa ERP"], ["OPPORTUNITY", "Desde oportunidad CRM"], ["PORTAL", "Solicitud del portal"]]}
         />
+        <ColumnFilterBar
+          filters={columnFilters}
+          hasOtherFilters={Boolean(searchInput || source)}
+          onClearAll={() => {
+            setSearchInput("");
+            setSearch("");
+            setSource("");
+            setPage(1);
+          }}
+        />
       </Filters>
 
       <Card flush>
@@ -245,6 +257,7 @@ export default function QuotationsList() {
             />
             <DataTable
               tableId="quotations" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              onFilter={(column) => addColumnFilter(columnFilters, column)}
               cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={quotationKey}
