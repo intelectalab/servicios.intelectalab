@@ -45,7 +45,6 @@ Columnas sin orden: Origen en Órdenes y Ruta en Solicitudes (se calculan a part
 
 ## Qué NO se tocó
 
-- Los filtros por columna de Clientes y actores ("Filtrar por esta columna"): siguen filtrando solo la página que se ve.
 - Las pantallas desconectadas de Clientes, Proveedores y Empleados.
 
 ## A tener en cuenta
@@ -65,9 +64,41 @@ En el navegador con `ventas@erp-saas.test`:
 3. **Cotizaciones:** Total ascendente y descendente, Cliente ascendente y Quitar orden.
 4. **Paginador:** al pasar el cursor por "Página siguiente" el botón queda con fondo y borde azules.
 
-No se probó en pantalla: el orden en Servicios, Solicitudes, Contratos, Órdenes, Tipo de cambio y Usuarios (sí su consulta, salvo Usuarios), ordenar por una columna personalizada desde la tabla (sí contra la API), exportar con orden, ni el tema claro.
+## Segunda tanda (2026-10-08): filtrar por columna sobre toda la tabla, y lo que faltaba probar
+
+Pediste que "Filtrar por esta columna" abarque **la tabla completa** y que probara lo pendiente, exportar incluido.
+
+### Filtrar por columna
+
+- **Antes:** el filtro se aplicaba en el navegador, solo a las 10 filas de la página.
+- **Ahora:** lo aplica la API sobre todo el listado. El contador ("Mostrando 1 a 8 de 8"), la paginación, el orden y **Exportar** respetan los filtros.
+- Mismos operadores de siempre: contiene, igual, mayor, menor; en fechas: hoy, ayer, esta semana, semana pasada, mes pasado, desde inicio de año y rango. Una casilla Sí / No sin marcar cuenta como "No".
+- Al escribir espera un momento antes de pedir, y vuelve a la página 1.
+
+Archivos: `PartyController.php` (`applyColumnFilters`, parámetro `filters`) y `actors/ActorsList.tsx`. `hooks/useColumnFilters.ts` no se tocó (lo usan las pantallas desconectadas).
+
+Diferencia: en Sector / relación el filtro mira el sector o el cargo; el texto "Contacto de …" no entra.
+
+### Lo que se probó ahora
+
+`php artisan test`: 58 pruebas pasan. Contra la API: 14 filtros distintos (cada columna, dos a la vez, fechas, valores no válidos).
+
+En el navegador con `admin@erp-saas.test`:
+
+1. **Filtrar por columna (Clientes y actores):** Roles contiene "proveedor" → "Mostrando 1 a 8 de 8" (los 8 de todo el listado, no solo los de la página); sumando Estado = Activo → 4. "Limpiar todos" vuelve a 45.
+2. **Orden por columna personalizada:** clic en "Año" trae primero el registro que tiene valor.
+3. **Exportar con orden y filtros (CSV):** con Nombre descendente salen las 45 filas, de "Yadira…" a "ABC Store SAC"; con el filtro de proveedores, 8 filas en ese mismo orden.
+4. **Orden en los demás listados**, columna por columna, ascendente y descendente: Servicios (6 columnas), Solicitudes del portal (4), Contratos (6), Órdenes (4), Tipo de cambio (4, con un solo registro no hay nada que reordenar) y Usuarios (4).
+5. **Tema claro:** la tabla, la cabecera fija y el paginador se ven bien.
+6. La columna inmovilizada **se conserva al recargar** la página.
+
+Sigue sin probar: el Excel (se revisó el CSV, que sale de las mismas filas) y arrastrar columnas con el ratón.
+
+### Detalle encontrado
+
+**Estado y Modalidad ordenan por su código interno, no por el texto que se ve:** en Contratos el orden ascendente sale Vigente, Borrador, Suspendido (por ACTIVE, DRAFT, SUSPENDED). Agrupa bien, pero no es alfabético en español. No se cambió.
 
 ## Pendiente
 
 - El servidor local (`php artisan serve`) atiende una petición a la vez; publicado, con un servidor normal, las llamadas van en paralelo.
-- Filtrar por columna sobre todo el listado (hoy solo la página visible).
+- Ordenar Estado y Modalidad por el texto visible, si se quiere alfabético.

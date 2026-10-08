@@ -26,6 +26,9 @@ type Values = Record<string, Record<string, string>>;
 type FieldType = CustomFieldDefinition["field_type"];
 
 const FIELD_TYPES: [FieldType, string][] = [["text", "Texto"], ["number", "Número"], ["date", "Fecha"], ["boolean", "Sí / No"]];
+/** El filtrado por columna ya no se hace aquí, sobre la página visible: lo hace la API. */
+const NO_LOCAL_VALUE = () => "";
+
 const FILTER_SELECT = "app-surface app-text rounded border border-[color:var(--app-border)] px-2 py-0.5 text-xs outline-none";
 
 /** Valores de las columnas personalizadas de cada actor; llegan con el listado, sin pedirlos fila por fila. */
@@ -78,16 +81,26 @@ export default function ActorsList() {
   // Filtros por columna (los que se agregan desde los tres puntos de cada cabecera).
   const {
     showAdvancedFilters, setShowAdvancedFilters, activeFilters, setActiveFilters,
-    handleAddFilter, handleRemoveFilter, handleUpdateFilter, filteredItems,
-  } = useColumnFilters(actors, (actor, columnId) => {
-    if (columnId === "name") return actor.name;
-    if (columnId === "document") return actorDocument(actor);
-    if (columnId === "roles") return rolesText(actor);
-    if (columnId === "relation") return actorRelation(actor);
-    if (columnId === "status") return actor.status;
-    const value = customValues[actor.id]?.[columnId];
-    return value ? String(value) : definitions.find((item) => item.id === columnId)?.field_type === "boolean" ? "false" : "";
-  });
+    handleAddFilter, handleRemoveFilter, handleUpdateFilter,
+  } = useColumnFilters(actors, NO_LOCAL_VALUE);
+
+  // Los filtros por columna los aplica la API, sobre todo el listado. Solo viajan los que ya tienen
+  // algo que filtrar, y con una pequeña espera para no pedir en cada tecla.
+  const wantedFilters = JSON.stringify(
+    activeFilters
+      .filter((filter) => (filter.type === "date" ? filter.operator !== "all" : filter.type === "select" || filter.value.trim() !== ""))
+      .map(({ id, type, operator, value }) => ({ id, type, operator, value })),
+  );
+  const [columnFilters, setColumnFilters] = useState("[]");
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setColumnFilters((current) => {
+        if (current !== wantedFilters) setPage(1);
+        return wantedFilters;
+      });
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [wantedFilters]);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -120,6 +133,7 @@ export default function ActorsList() {
     if (role) params.set("role", role);
     if (kind) params.set("kind", kind);
     if (status) params.set("status", status);
+    if (columnFilters !== "[]") params.set("filters", columnFilters);
     return applySort(params, sort);
   };
 
@@ -157,7 +171,7 @@ export default function ActorsList() {
     load();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- queryParams solo lee los filtros de la lista
-  }, [page, perPage, search, role, kind, status, sort, reload]);
+  }, [page, perPage, search, role, kind, status, columnFilters, sort, reload]);
 
   const refresh = () => setReload((n) => n + 1);
   const changeFilter = (setter: (value: string) => void) => (value: string) => {
@@ -455,7 +469,7 @@ export default function ActorsList() {
               <div className="grid gap-3 p-5" aria-busy="true">
                 {Array.from({ length: 5 }).map((_, index) => <div key={index} className="h-9 animate-pulse rounded bg-[var(--app-surface-muted)]" />)}
               </div>
-            ) : filteredItems.length === 0 ? (
+            ) : actors.length === 0 ? (
               <Empty text={hasServerFilters || activeFilters.length ? "No hay registros con estos filtros." : "Sin registros."} />
             ) : (
               <div
@@ -469,7 +483,7 @@ export default function ActorsList() {
                     setSort(next);
                     setPage(1);
                   }}
-                  actors={filteredItems}
+                  actors={actors}
                   customFieldDefinitions={definitions}
                   customValues={customValues}
                   onCustomValue={(actorId, fieldId, value) =>
