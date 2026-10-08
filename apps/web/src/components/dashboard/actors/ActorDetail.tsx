@@ -7,14 +7,14 @@ import { ArrowLeft, FileText, Pencil, Plus, Settings, Trash2 } from "lucide-reac
 import { ApiError, apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES } from "@/lib/contracts";
-import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, rolesText } from "@/lib/actors";
+import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, phoneText, rolesText } from "@/lib/actors";
 import {
   Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useToasts,
   type Column,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import { ActorForm } from "./ActorForm";
-import { ContactForm, TermsForm } from "./ActorModals";
+import { ContactForm } from "./ActorModals";
 import type { ActorContact, ActorDetail as Actor } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
 
@@ -109,7 +109,7 @@ export default function ActorDetail() {
   // Contacto que se agrega ("new"), se edita o se va a quitar; y edición de las condiciones de cliente.
   const [contactForm, setContactForm] = useState<ActorContact | "new" | null>(null);
   const [contactToDelete, setContactToDelete] = useState<ActorContact | null>(null);
-  const [editingTerms, setEditingTerms] = useState(false);
+  const [addingPerson, setAddingPerson] = useState(false);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -274,14 +274,17 @@ export default function ActorDetail() {
                         </span>,
                       ],
                       ["Correo", actor.email || "—"],
-                      ["Teléfono", actor.phone || "—"],
+                      ["Teléfono", phoneText(actor.phone, actor.phone_country_code) || "—"],
                       ["Dirección", actor.address || "—"],
                       isOrg && actor.sector ? ["Sector", actor.sector] : null,
                       actor.sla_level
                         ? ["Nivel de SLA", <Chip key="sla" tone={actor.sla_level === "PREMIUM" ? "accent" : "neutral"}>{actor.sla_level === "PREMIUM" ? "Premium" : "Estándar"}</Chip>]
                         : null,
                       actor.employee_id ? ["Código de empleado", actor.employee_code || "—"] : null,
-                      actor.employee_id ? ["Cargo", actor.position || "—"] : null,
+                      !isOrg && (actor.employee_id || actor.position) ? ["Cargo", actor.position || "—"] : null,
+                      actor.contact_of
+                        ? ["Contacto de", <Link key="contact-of" href={`/actors/${actor.contact_of.id}`} className="text-[#1679AB] hover:underline">{actor.contact_of.name}</Link>]
+                        : null,
                       actor.user_name ? ["Usuario", actor.user_name] : null,
                       ["Alta", shortDate(actor.created_at)],
                       ...customFields.map((field): [string, string] => {
@@ -311,6 +314,34 @@ export default function ActorDetail() {
               id: "contacts",
               node: (
                 <Card title="Contactos">
+                  {isOrg && (
+                    <div className="mb-4">
+                      <p className="app-muted mb-1 text-[11px] font-semibold uppercase tracking-[.06em]">Personas de contacto</p>
+                      {actor.contact_people.length ? (
+                        <ul>
+                          {actor.contact_people.map((person) => (
+                            <li key={person.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[color:var(--app-border)] py-[7px] last:border-b-0">
+                              <Link href={`/actors/${person.id}`} className="font-semibold hover:text-[#1679AB] hover:underline">{person.name}</Link>
+                              {person.position && <span>· {person.position}</span>}
+                              {person.status !== "ACTIVE" && <Chip tone="neutral">Inactivo</Chip>}
+                              <small className="app-muted w-full text-xs">
+                                {[person.email, phoneText(person.phone, person.phone_country_code)].filter(Boolean).join(" · ") || "Sin correo ni teléfono"}
+                              </small>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="app-muted">Sin contactos registrados.</p>
+                      )}
+                      <div className="mt-3">
+                        <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setAddingPerson(true)}>
+                          <Plus size={14} />
+                          <span>Nueva persona de contacto</span>
+                        </Btn>
+                      </div>
+                      <p className="app-muted mb-1 mt-4 text-[11px] font-semibold uppercase tracking-[.06em]">Teléfonos, correos y direcciones</p>
+                    </div>
+                  )}
                   {actor.contacts.length ? (
                     <ul>
                       {actor.contacts.map((contact) => (
@@ -331,12 +362,12 @@ export default function ActorDetail() {
                       ))}
                     </ul>
                   ) : (
-                    <p className="app-muted">Sin contactos registrados.</p>
+                    <p className="app-muted">{isOrg ? "Sin datos de contacto." : "Sin contactos registrados."}</p>
                   )}
                   <div className="mt-3">
                     <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setContactForm("new")}>
                       <Plus size={14} />
-                      <span>Agregar contacto</span>
+                      <span>{isOrg ? "Agregar teléfono, correo o dirección" : "Agregar contacto"}</span>
                     </Btn>
                   </div>
                 </Card>
@@ -353,12 +384,6 @@ export default function ActorDetail() {
                       ["Moneda", actor.customer.preferred_currency === "USD" ? "USD ($)" : "PEN (S/)"],
                     ]}
                   />
-                  <div className="mt-3">
-                    <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setEditingTerms(true)}>
-                      <Pencil size={14} />
-                      <span>Editar condiciones</span>
-                    </Btn>
-                  </div>
                 </Card>
               ),
             }] : []),
@@ -457,15 +482,18 @@ export default function ActorDetail() {
         </Modal>
       )}
 
-      {editingTerms && actor.customer && (
-        <TermsForm
-          customer={actor.customer}
-          onClose={() => setEditingTerms(false)}
+      {addingPerson && (
+        <ActorForm
+          kind="PERSON"
+          contactOf={{ id: actor.id, name: actor.name }}
+          customFields={customFields}
+          onClose={() => setAddingPerson(false)}
           onSaved={() => {
-            setEditingTerms(false);
-            toast("Condiciones comerciales guardadas");
+            setAddingPerson(false);
+            toast("Persona de contacto creada");
             setReload((n) => n + 1);
           }}
+          onOpenExisting={(otherId) => router.push(`/actors/${otherId}`)}
         />
       )}
 

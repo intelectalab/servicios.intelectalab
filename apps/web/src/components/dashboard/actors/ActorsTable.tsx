@@ -260,8 +260,8 @@ export function ActorsTable({
 
   function beginEdit(actor: Actor, key: string) {
     if (!editable || (editing?.id === actor.id && editing.key === key)) return;
-    // El cargo es del empleado: una persona sin ese rol no tiene qué editar aquí.
-    if (key === "relation" && actor.kind === "PERSON" && !actor.roles.includes("EMPLOYEE")) return;
+    // "Contacto de …" se cambia en el formulario, no en la celda.
+    if (key === "relation" && actor.contact_of) return;
     const [a, b] = currentValues(actor, key);
     setTempA(a);
     setTempB(b);
@@ -409,7 +409,7 @@ export function ActorsTable({
   function renderCell(actor: Actor, key: string, selected: boolean) {
     const isOrg = actor.kind === "ORGANIZATION";
     const isEditing = editing?.id === actor.id && editing.key === key;
-    const canEdit = editable && key !== "roles" && !(key === "relation" && !isOrg && !actor.roles.includes("EMPLOYEE"));
+    const canEdit = editable && key !== "roles" && !(key === "relation" && actor.contact_of);
     const className = `${TD} ${selected ? ROW_BG_SELECTED : ROW_BG} ${divider(key)} ${canEdit ? "cursor-pointer" : ""}`;
     const cell = (content: ReactNode) => (
       <td key={key} data-label={labelOf(key)} className={className} style={frozenStyle(key)} onClick={() => beginEdit(actor, key)}>

@@ -1,6 +1,6 @@
 import type { HistoryEntry } from "./commercial";
 
-export type ActorRole = "CUSTOMER" | "SUPPLIER" | "EMPLOYEE";
+export type ActorRole = "CUSTOMER" | "SUPPLIER" | "CONTACT" | "EMPLOYEE";
 export type ActorKind = "PERSON" | "ORGANIZATION";
 
 /** Una identidad (persona u organización) con sus roles de cliente, proveedor y empleado. */
@@ -20,9 +20,13 @@ export interface Actor {
   employee_id: string | null;
   email: string | null;
   phone: string | null;
+  /** Prefijo del país del teléfono principal ("+51"). */
+  phone_country_code: string | null;
   sector: string | null;
   sla_level: string | null;
   position: string | null;
+  /** Organización de la que esta persona es contacto (rol Contacto). */
+  contact_of: { id: string; name: string } | null;
   employee_code: string | null;
   user_name: string | null;
   created_at: string | null;
@@ -42,6 +46,8 @@ export interface ActorDetail extends Actor {
   address: string | null;
   customer: { id: string; status: string; credit_limit: string | null; payment_terms_days: number | null; preferred_currency: string } | null;
   contacts: ActorContact[];
+  /** Personas con rol Contacto enlazadas a esta organización. */
+  contact_people: { id: string; name: string; position: string | null; email: string | null; phone: string | null; phone_country_code: string | null; status: string }[];
   finance: { outstanding: number; overdue: number; open_documents: number } | null;
   quotations: { id: string; quotation_number: string; created_at: string; total: string; currency: string; status: string }[];
   contracts: { id: string; contract_number: string; start_date: string | null; end_date: string | null; total_value: string; currency: string; status: string }[];

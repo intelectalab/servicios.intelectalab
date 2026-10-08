@@ -43,7 +43,7 @@ Juntar Clientes, Proveedores y Empleados en una sola pantalla, **Clientes y acto
 
 ## Diferencias con el prototipo
 
-- **Rol Contacto y "Contacto de (organización)":** no existen. Aquí los contactos son los datos de contacto de cada identidad (correo, teléfono, dirección), como en tus módulos, no personas enlazadas a una organización. Los roles son Cliente, Proveedor y Empleado.
+- **Rol Contacto y "Contacto de (organización)":** al principio no se hicieron; se añadieron el 2026-10-08 (ver más abajo).
 - **Estado:** en tus módulos se da de baja el rol (el cliente, el proveedor), no la identidad. Aquí una identidad se ve **Inactiva** si se dio de baja o si ninguno de sus roles sigue activo; un rol dado de baja por separado sale atenuado. Inactivar o reactivar desde aquí cambia la identidad **y todos sus roles a la vez**.
 - **Columnas personalizadas propias:** las de esta tabla son nuevas e independientes de las que ya tienes en Clientes, Proveedores y Empleados (aquellas siguen en sus pantallas).
 - **Tarjeta "Condiciones comerciales (cliente)"** en la vista 360: añadida, para ver días de crédito, límite y moneda. Se editan en Clientes.
@@ -116,6 +116,42 @@ Archivos: `components/ui/pick-select.tsx` (nuevo), `ActorForm.tsx`, `ActorModals
 No se cambiaron: los selectores del panel "Más filtros" y los filtros de arriba (no están dentro de un modal ni de la tabla), ni los calendarios de los campos de fecha, que son del navegador.
 
 Probado en el navegador con admin, con una ventana de 640 px de alto: la lista de "Tipo de dato" sobresale del modal y se ve completa; Nivel de SLA, Tipo de contacto, Días de crédito y Moneda abren completos y eligen bien; Escape cierra la lista y deja el modal abierto; Estado se cambia desde la celda (Inactivo y de vuelta a Activo). "Nueva organización" muestra la sección con la columna "Año"; al editar "Actor de Prueba S.A.C." el campo llega con su valor, se cambió, se guardó y se vio en la vista 360 (luego se devolvió a 2026-10-05).
+
+### Rol Contacto y teléfono con prefijo en el formulario (2026-10-08)
+
+Preguntaste por el rol Contacto del prototipo, que no se había considerado. Hay dos cosas que se llaman "contacto":
+
+- **Persona de contacto (rol Contacto, como el prototipo):** una persona enlazada a una organización ("Contacto de").
+- **Dato de contacto (como en tus módulos):** un teléfono, correo o dirección de una identidad.
+
+Ahora existen las dos:
+
+- **Formulario de persona:** rol **Contacto** (viene marcado en una persona nueva, como en el prototipo), campo **Contacto de (organización)** con buscador, y **Cargo** para cualquier persona (antes solo para empleados). Elegir una organización marca el rol Contacto.
+- **Teléfono con prefijo de país** en el formulario de organización y de persona: el mismo desplegable de los contactos (lista con buscador, "Otro país").
+- **Vista 360 de una organización:** la tarjeta Contactos tiene arriba **Personas de contacto** (nombre, cargo, correo y teléfono; el nombre abre su ficha) con el botón **Nueva persona de contacto**, que abre el formulario de persona ya enlazado a esa organización. Debajo siguen los **teléfonos, correos y direcciones**.
+- **Vista 360 de una persona:** fila "Contacto de" con enlace a la organización.
+- **Listado:** rol Contacto en las etiquetas y en el filtro Rol; la columna Sector / relación dice "Contacto de …".
+
+API (`PartyController.php`): rol `CONTACT` solo para personas; `contact_of` debe ser una organización de la empresa; `phone_country_code`; la ficha de la organización devuelve `contact_people`. **Sin migración:** el rol, la organización y el cargo de la persona se guardan en el campo `metadata` que ya tenía la persona. Una persona que solo es contacto no es cliente, proveedor ni empleado, así que no aparece en esos tres módulos.
+
+Web: `ActorForm.tsx`, `ActorModals.tsx` (el teléfono con prefijo pasa a ser una pieza común), `ActorDetail.tsx`, `ActorsTable.tsx`, `lib/actors.ts`, `types/actor.ts` y `components/ui/pick-select.tsx` (buscador opcional).
+
+Diferencia con el prototipo: allí los "Contactos" de la organización son solo personas; aquí la tarjeta muestra las personas y también los datos de contacto que ya manejabas.
+
+Probado: la prueba automática cubre crear la persona de contacto, validar la organización, el filtro por rol, agregar el rol a una persona existente y enlazarla o desenlazarla (57 pruebas pasan). En el navegador con admin: desde "Actor de Prueba S.A.C." → Nueva persona de contacto abre con Contacto marcado y la organización puesta; el buscador de organizaciones filtra ("prueba" → 2); el prefijo se cambió a Colombia +57; al guardar aparece "Contacto De Prueba · Jefa de compras · correo · +57 3001234567". Su ficha muestra "Contacto de Actor de Prueba S.A.C." con enlace; el listado, la etiqueta Contacto y "Contacto de …"; "Nueva persona" desde el listado abre con Contacto marcado. No se comprobó en pantalla que al editar esa persona el prefijo llegue en +57, ni quitar el enlace desde el formulario (sí en la prueba automática).
+
+Dato de prueba que queda: la persona **Contacto De Prueba** (contacto de Actor de Prueba S.A.C.).
+
+**Ajustes (2026-10-08):**
+
+- El teléfono del formulario de organización y de persona ahora también tiene **"Eliminar formato de número" / "Aplicar formato de número"**, igual que el de los contactos (los tres usan la misma pieza, `PhoneField`).
+- **Campos que dependen del rol**, como antes con el cargo: **Contacto de (organización)** solo se puede llenar con el rol Contacto marcado, y **Cargo** con Empleado o Contacto. Sin el rol, el campo sale deshabilitado con la nota "Se guarda con el rol …" y no se guarda. (El cargo se dejó también para Contacto porque es lo que se muestra junto a la persona de contacto en la organización.)
+
+Probado en el navegador con admin en "Nueva persona": con Contacto marcado los dos campos están activos; sin roles, los dos deshabilitados con su nota; solo con Empleado, Cargo activo y Contacto de deshabilitado. En el teléfono, "Eliminar formato" quita el prefijo y deja escribir el número completo, y "Aplicar formato" lo devuelve con Perú +51. No se guardó ningún registro en esta prueba.
+
+**Condiciones comerciales en el formulario (2026-10-08):** días de crédito, límite y moneda ahora se llenan en el mismo formulario de organización o persona, al crear y al editar, en una sección "Condiciones comerciales". Como los otros campos con rol, solo se pueden llenar con el rol **Cliente** marcado. Se guardan en el mismo cliente que se ve en Clientes. El botón aparte "Editar condiciones" de la vista 360 se quitó (la tarjeta sigue mostrando los datos). Archivos: `ActorForm.tsx`, `ActorDetail.tsx`, `ActorModals.tsx`.
+
+Probado con admin: al editar "Actor de Prueba S.A.C." la sección llega con 45 días, 5000.00 y USD; se cambió a 60 días y 7500 y la tarjeta mostró "60 días · US$ 7,500.00" (quedó así). En "Nueva organización", al desmarcar Cliente los tres campos se deshabilitan con la nota "Se guarda con el rol Cliente". No se probó crear una organización nueva con condiciones distintas de las de por defecto.
 
 ## Pendiente
 

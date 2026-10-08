@@ -25,9 +25,14 @@ use Illuminate\Validation\ValidationException;
  */
 class PartyController extends Controller
 {
-    private const ROLES = ['CUSTOMER', 'SUPPLIER', 'EMPLOYEE'];
+    // CONTACT: una persona que es el contacto de una organización. No tiene tabla
+    // propia: vive en persons.metadata (contact, contact_of, position).
+    private const ROLES = ['CUSTOMER', 'SUPPLIER', 'CONTACT', 'EMPLOYEE'];
 
-    private const ROLE_LABELS = ['CUSTOMER' => 'Cliente', 'SUPPLIER' => 'Proveedor', 'EMPLOYEE' => 'Empleado'];
+    private const ROLE_LABELS = ['CUSTOMER' => 'Cliente', 'SUPPLIER' => 'Proveedor', 'CONTACT' => 'Contacto', 'EMPLOYEE' => 'Empleado'];
+
+    /** Nombres de las organizaciones ya consultadas en esta petición ("Contacto de …"). */
+    private array $organizationNames = [];
 
     // Una identidad está inactiva si se dio de baja o si ninguno de sus roles sigue activo.
     private const STATUS_SQL = "CASE WHEN parties.status <> 'ACTIVE' OR (
@@ -50,6 +55,7 @@ class PartyController extends Controller
             ->when($role === 'CUSTOMER', fn ($q) => $q->whereHas('customer'))
             ->when($role === 'SUPPLIER', fn ($q) => $q->whereHas('supplier'))
             ->when($role === 'EMPLOYEE', fn ($q) => $q->whereHas('employee'))
+            ->when($role === 'CONTACT', fn ($q) => $q->whereHas('person', fn ($p) => $p->where('metadata->contact', true)))
             ->when($search !== '', function ($q) use ($search) {
                 // Por nombre, RUC, documento o correo.
                 $like = '%'.addcslashes($search, '%_\\').'%';
@@ -108,7 +114,11 @@ class PartyController extends Controller
                     'family_name' => $data['family_name'],
                     'document_type' => $data['document_type'] ?? 'DNI',
                     'document_number' => $data['document_number'] ?? null,
-                    'metadata' => [],
+                    'metadata' => array_filter([
+                        'contact' => in_array('CONTACT', $data['roles'], true),
+                        'contact_of' => $data['contact_of'] ?? null,
+                        'position' => $data['position'] ?? null,
+                    ]),
                 ]);
             } else {
                 Organization::create([
@@ -149,7 +159,16 @@ class PartyController extends Controller
 
         DB::transaction(function () use ($party, $data, $tenantId, $request) {
             if ($party->party_type === 'PERSON' && $party->person) {
-                $party->person->update(array_intersect_key($data, array_flip(['given_names', 'family_name', 'document_type', 'document_number'])));
+                $metadata = $party->person->metadata ?? [];
+                foreach (['contact_of', 'position'] as $key) {
+                    if (array_key_exists($key, $data)) {
+                        $metadata[$key] = $data[$key];
+                    }
+                }
+                $party->person->update([
+                    ...array_intersect_key($data, array_flip(['given_names', 'family_name', 'document_type', 'document_number'])),
+                    'metadata' => array_filter($metadata),
+                ]);
             }
             if ($party->party_type === 'ORGANIZATION' && $party->organization) {
                 $organization = $party->organization;
@@ -181,8 +200,8 @@ class PartyController extends Controller
         $party = $this->find($party, $request);
         $role = $request->validate(['role' => ['required', 'in:'.implode(',', self::ROLES)]])['role'];
 
-        if ($role === 'EMPLOYEE' && $party->party_type !== 'PERSON') {
-            throw ValidationException::withMessages(['role' => ['Solo una persona puede ser empleado.']]);
+        if (in_array($role, ['EMPLOYEE', 'CONTACT'], true) && $party->party_type !== 'PERSON') {
+            throw ValidationException::withMessages(['role' => ['Solo una persona puede ser empleado o contacto.']]);
         }
         if (in_array($role, $this->rolesOf($party), true)) {
             throw ValidationException::withMessages(['role' => ['La identidad ya tiene ese rol.']]);
@@ -271,13 +290,14 @@ class PartyController extends Controller
             ->select('parties.*')
             ->selectRaw('('.self::STATUS_SQL.') AS effective_status')
             ->selectSub($this->primaryContact('EMAIL'), 'email')
-            ->selectSub($this->primaryContact('PHONE'), 'phone');
+            ->selectSub($this->primaryContact('PHONE'), 'phone')
+            ->selectSub($this->primaryContact('PHONE', 'country_code'), 'phone_country_code');
     }
 
-    private function primaryContact(string $type)
+    private function primaryContact(string $type, string $column = 'value')
     {
         return DB::table('contacts')
-            ->select('value')
+            ->select($column)
             ->whereColumn('contacts.party_id', 'parties.id')
             ->where('contact_type', $type)
             ->orderByDesc('is_primary')
@@ -297,8 +317,24 @@ class PartyController extends Controller
         return array_values(array_filter([
             $party->customer ? 'CUSTOMER' : null,
             $party->supplier ? 'SUPPLIER' : null,
+            ($party->person?->metadata['contact'] ?? false) ? 'CONTACT' : null,
             $party->employee ? 'EMPLOYEE' : null,
         ]));
+    }
+
+    /** La organización de la que una persona es contacto. */
+    private function contactOf(Party $party): ?array
+    {
+        $id = $party->person?->metadata['contact_of'] ?? null;
+        if (! $id || ! Str::isUuid($id)) {
+            return null;
+        }
+        if (! array_key_exists($id, $this->organizationNames)) {
+            $organization = Organization::where('party_id', $id)->first(['legal_name', 'trade_name']);
+            $this->organizationNames[$id] = $organization ? ($organization->trade_name ?: $organization->legal_name) : null;
+        }
+
+        return $this->organizationNames[$id] ? ['id' => $id, 'name' => $this->organizationNames[$id]] : null;
     }
 
     /** Fila del listado: la identidad con sus roles y lo que la tabla muestra. */
@@ -327,7 +363,9 @@ class PartyController extends Controller
             'phone' => $party->phone,
             'sector' => $metadata['sector'] ?? null,
             'sla_level' => $party->party_type === 'ORGANIZATION' ? ($metadata['sla_level'] ?? 'ESTANDAR') : null,
-            'position' => $party->employee?->position,
+            'phone_country_code' => $party->phone_country_code,
+            'position' => $party->employee?->position ?: ($party->person?->metadata['position'] ?? null),
+            'contact_of' => $this->contactOf($party),
             'employee_code' => $party->employee?->employee_code,
             'user_name' => $party->employee?->user?->name,
             'created_at' => $party->created_at?->toIso8601String(),
@@ -343,6 +381,7 @@ class PartyController extends Controller
             ->selectRaw('('.self::STATUS_SQL.') AS effective_status')
             ->selectSub($this->primaryContact('EMAIL'), 'email')
             ->selectSub($this->primaryContact('PHONE'), 'phone')
+            ->selectSub($this->primaryContact('PHONE', 'country_code'), 'phone_country_code')
             ->firstOrFail();
 
         $customerId = $party->customer?->id;
@@ -357,6 +396,29 @@ class PartyController extends Controller
             'customer' => $party->customer?->only(['id', 'status', 'credit_limit', 'payment_terms_days', 'preferred_currency']),
             'contacts' => Contact::where('party_id', $party->id)->orderByDesc('is_primary')->orderBy('created_at')
                 ->get(['id', 'contact_name', 'contact_type', 'value', 'country_code', 'is_primary']),
+            // Personas con rol Contacto enlazadas a esta organización.
+            'contact_people' => $party->party_type === 'ORGANIZATION'
+                ? Party::query()
+                    ->where('parties.tenant_id', $party->tenant_id)
+                    ->whereHas('person', fn ($p) => $p->where('metadata->contact_of', $party->id))
+                    ->with('person', 'employee:id,person_party_id,position')
+                    ->select('parties.*')
+                    ->selectSub($this->primaryContact('EMAIL'), 'email')
+                    ->selectSub($this->primaryContact('PHONE'), 'phone')
+                    ->selectSub($this->primaryContact('PHONE', 'country_code'), 'phone_country_code')
+                    ->orderBy('parties.created_at')
+                    ->get()
+                    ->map(fn (Party $person) => [
+                        'id' => $person->id,
+                        'name' => $person->display_name,
+                        'position' => $person->employee?->position ?: ($person->person?->metadata['position'] ?? null),
+                        'email' => $person->email,
+                        'phone' => $person->phone,
+                        'phone_country_code' => $person->phone_country_code,
+                        'status' => $person->status,
+                    ])
+                    ->all()
+                : [],
             'finance' => $customerId ? [
                 'outstanding' => (float) (clone $receivables)->sum('balance_amount'),
                 'overdue' => (float) (clone $receivables)->where('due_date', '<', now()->toDateString())->sum('balance_amount'),
@@ -392,6 +454,7 @@ class PartyController extends Controller
         $rules = [
             'email' => ['sometimes', 'nullable', 'email', 'max:255'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'phone_country_code' => ['sometimes', 'nullable', 'string', 'max:5'],
             'address' => ['sometimes', 'nullable', 'string', 'max:255'],
         ];
         if ($creating) {
@@ -415,6 +478,7 @@ class PartyController extends Controller
                 'document_type' => ['sometimes', 'nullable', 'in:DNI,CE,PASSPORT'],
                 'document_number' => ['sometimes', 'nullable', 'string', 'max:20'],
                 'position' => ['sometimes', 'nullable', 'string', 'max:255'],
+                'contact_of' => ['sometimes', 'nullable', 'uuid'],
             ];
         }
 
@@ -428,8 +492,16 @@ class PartyController extends Controller
             'email.email' => 'Correo inválido.',
         ]);
 
-        if ($creating && $kind === 'ORGANIZATION' && in_array('EMPLOYEE', $data['roles'], true)) {
-            throw ValidationException::withMessages(['roles' => ['Solo una persona puede ser empleado.']]);
+        if ($creating && $kind === 'ORGANIZATION' && array_intersect(['EMPLOYEE', 'CONTACT'], $data['roles'])) {
+            throw ValidationException::withMessages(['roles' => ['Solo una persona puede ser empleado o contacto.']]);
+        }
+        // "Contacto de": tiene que ser una organización de esta empresa.
+        if (! empty($data['contact_of'])) {
+            $isOrganization = Party::where('tenant_id', $request->attributes->get('tenant_id'))
+                ->where('id', $data['contact_of'])->where('party_type', 'ORGANIZATION')->exists();
+            if (! $isOrganization) {
+                throw ValidationException::withMessages(['contact_of' => ['La organización indicada no existe.']]);
+            }
         }
 
         return $data;
@@ -471,7 +543,10 @@ class PartyController extends Controller
 
     private function grantRole(Party $party, string $role, string $tenantId, ?string $position = null): void
     {
-        if ($role === 'CUSTOMER') {
+        if ($role === 'CONTACT') {
+            $person = Person::where('party_id', $party->id)->first();
+            $person?->update(['metadata' => [...($person->metadata ?? []), 'contact' => true]]);
+        } elseif ($role === 'CUSTOMER') {
             Customer::firstOrCreate(
                 ['tenant_id' => $tenantId, 'party_id' => $party->id],
                 ['status' => 'ACTIVE', 'payment_terms_days' => 30, 'preferred_currency' => 'PEN'],
@@ -507,15 +582,19 @@ class PartyController extends Controller
             $current = Contact::where('party_id', $party->id)->where('contact_type', $type)
                 ->orderByDesc('is_primary')->orderBy('created_at')->first();
             $value = trim((string) $data[$field]);
+            // El teléfono lleva aparte el prefijo del país, si se indicó.
+            $extra = $field === 'phone' && array_key_exists('phone_country_code', $data)
+                ? ['country_code' => $data['phone_country_code'] ?: null]
+                : [];
 
             if ($value === '') {
                 $current?->delete();
             } elseif ($current) {
-                $current->update(['value' => $value]);
+                $current->update(['value' => $value, ...$extra]);
             } else {
                 Contact::create([
                     'tenant_id' => $tenantId, 'party_id' => $party->id,
-                    'contact_type' => $type, 'value' => $value, 'is_primary' => true,
+                    'contact_type' => $type, 'value' => $value, 'is_primary' => true, ...$extra,
                 ]);
             }
         }

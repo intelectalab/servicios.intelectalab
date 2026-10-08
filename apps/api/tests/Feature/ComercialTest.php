@@ -904,14 +904,43 @@ class ComercialTest extends TestCase
         $this->postJson("/api/v1/parties/{$person['id']}/roles", ['role' => 'CUSTOMER'])->assertStatus(422);
         $this->postJson("/api/v1/parties/{$org['id']}/roles", ['role' => 'EMPLOYEE'])->assertStatus(422);
 
+        // Rol Contacto: una persona enlazada a la organización, con su teléfono y el prefijo del país.
+        $this->postJson('/api/v1/parties', ['kind' => 'ORGANIZATION', 'legal_name' => 'Y SAC', 'tax_identifier' => '20111111111', 'roles' => ['CONTACT']])
+            ->assertStatus(422)->assertJsonValidationErrors('roles');
+        $this->postJson('/api/v1/parties', ['kind' => 'PERSON', 'given_names' => 'Raúl', 'family_name' => 'Cárdenas', 'roles' => ['CONTACT'], 'contact_of' => $person['id']])
+            ->assertStatus(422)->assertJsonValidationErrors('contact_of');
+        $contactPerson = $this->postJson('/api/v1/parties', [
+            'kind' => 'PERSON', 'given_names' => 'Raúl', 'family_name' => 'Cárdenas', 'position' => 'Jefe de compras',
+            'phone' => '501234567', 'phone_country_code' => '+971', 'roles' => ['CONTACT'], 'contact_of' => $org['id'],
+        ])->assertCreated()
+            ->assertJsonPath('roles', ['CONTACT'])
+            ->assertJsonPath('position', 'Jefe de compras')
+            ->assertJsonPath('contact_of.name', 'Los Andes')
+            ->assertJsonPath('phone', '501234567')
+            ->assertJsonPath('phone_country_code', '+971')
+            ->assertJsonPath('employee_id', null)
+            ->json();
+        $this->getJson("/api/v1/parties/{$org['id']}")->assertOk()
+            ->assertJsonCount(1, 'contact_people')
+            ->assertJsonPath('contact_people.0.name', 'Raúl Cárdenas')
+            ->assertJsonPath('contact_people.0.position', 'Jefe de compras')
+            ->assertJsonPath('contact_people.0.phone_country_code', '+971');
+        $this->getJson('/api/v1/parties?role=CONTACT')->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $contactPerson['id']);
+        // A una persona que ya existe se le agrega el rol y se enlaza después.
+        $this->postJson("/api/v1/parties/{$person['id']}/roles", ['role' => 'CONTACT'])->assertOk()->assertJsonPath('roles', ['CUSTOMER', 'CONTACT', 'EMPLOYEE']);
+        $this->putJson("/api/v1/parties/{$person['id']}", ['contact_of' => $org['id']])->assertOk()->assertJsonPath('contact_of.id', $org['id']);
+        $this->getJson("/api/v1/parties/{$org['id']}")->assertOk()->assertJsonCount(2, 'contact_people');
+        $this->putJson("/api/v1/parties/{$person['id']}", ['contact_of' => null])->assertOk()->assertJsonPath('contact_of', null);
+        $this->postJson("/api/v1/parties/{$org['id']}/roles", ['role' => 'CONTACT'])->assertStatus(422);
+
         // Listado: buscar por nombre, RUC, documento o correo, y filtrar por rol, tipo y estado.
-        $this->getJson('/api/v1/parties')->assertOk()->assertJsonPath('total', 2);
+        $this->getJson('/api/v1/parties')->assertOk()->assertJsonPath('total', 3);
         $this->getJson('/api/v1/parties?search=los andes')->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.id', $org['id']);
         $this->getJson('/api/v1/parties?search=44556677')->assertOk()->assertJsonPath('total', 1);
         $this->getJson('/api/v1/parties?search=compras@')->assertOk()->assertJsonPath('total', 1);
         $this->getJson('/api/v1/parties?role=SUPPLIER')->assertOk()->assertJsonPath('total', 1);
         $this->getJson('/api/v1/parties?role=CUSTOMER')->assertOk()->assertJsonPath('total', 2);
-        $this->getJson('/api/v1/parties?kind=PERSON')->assertOk()->assertJsonPath('total', 1);
+        $this->getJson('/api/v1/parties?kind=PERSON')->assertOk()->assertJsonPath('total', 2);
 
         // Editar solo lo que llega (así guarda la edición en celda); el documento no puede chocar con otro.
         $this->putJson("/api/v1/parties/{$org['id']}", ['sector' => 'Energía', 'email' => ''])->assertOk()
@@ -946,6 +975,9 @@ class ComercialTest extends TestCase
         $this->postJson('/api/v1/parties/bulk-activate', ['ids' => [$org['id'], $person['id']]])->assertOk()->assertJsonPath('changed', 1);
         $this->getJson("/api/v1/parties/{$org['id']}")->assertOk()->assertJsonPath('status', 'ACTIVE');
         $this->postJson('/api/v1/parties/bulk-deactivate', ['ids' => [$org['id'], $person['id']]])->assertOk()->assertJsonPath('changed', 2);
+        // Una persona que solo es contacto no tiene roles con tabla: su estado es el de la identidad.
+        $this->postJson("/api/v1/parties/{$contactPerson['id']}/deactivate")->assertOk()->assertJsonPath('status', 'INACTIVE');
+        $this->postJson("/api/v1/parties/{$contactPerson['id']}/activate")->assertOk()->assertJsonPath('status', 'ACTIVE');
 
         // Un cliente dado de baja desde el módulo Clientes se ve inactivo aquí.
         $this->postJson('/api/v1/customers/'.$second['customer_id'].'/deactivate')->assertOk();

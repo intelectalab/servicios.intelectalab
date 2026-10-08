@@ -8,7 +8,7 @@ import { COUNTRIES } from "@/lib/countries";
 import { poppins } from "@/lib/fonts";
 import { Btn, Field, INPUT, Modal } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
-import type { ActorContact, ActorDetail } from "@/types/actor";
+import type { ActorContact } from "@/types/actor";
 
 const CONTACT_TYPES: [string, string][] = [
   ["PHONE", "Teléfono"], ["WHATSAPP", "WhatsApp"], ["EMAIL", "Correo electrónico"], ["ADDRESS", "Dirección"], ["OTHER", "Otro"],
@@ -178,6 +178,65 @@ function CountryCode({ code, onChange }: { code: string; onChange: (code: string
   );
 }
 
+/** Teléfono con el prefijo del país en su desplegable. */
+export function PhoneInput({
+  code, onCode, value, onValue,
+}: { code: string; onCode: (code: string) => void; value: string; onValue: (value: string) => void }) {
+  return (
+    <div className="app-surface flex min-h-10 rounded-[9px] border border-[#CFD5DE] focus-within:border-[#1B8FC9] focus-within:shadow-[0_0_0_3px_rgba(27,143,201,.18)]">
+      <CountryCode code={code} onChange={onCode} />
+      <input
+        className="app-text min-w-0 flex-1 rounded-r-[9px] bg-transparent px-2.5 text-[13.5px] outline-none"
+        value={value}
+        onChange={(event) => onValue(event.target.value)}
+        placeholder="999888777"
+        inputMode="tel"
+      />
+    </div>
+  );
+}
+
+/**
+ * Campo de teléfono completo: prefijo del país + número, o el número escrito
+ * entero con "Eliminar formato de número". Igual que en los otros módulos.
+ */
+export function PhoneField({
+  code, onCode, value, onValue, unformatted, onUnformatted,
+}: {
+  code: string;
+  onCode: (code: string) => void;
+  value: string;
+  onValue: (value: string) => void;
+  /** El número va completo, sin prefijo aparte. */
+  unformatted: boolean;
+  onUnformatted: (unformatted: boolean) => void;
+}) {
+  return (
+    <div>
+      {unformatted ? (
+        <input className={INPUT} value={value} onChange={(event) => onValue(event.target.value)} placeholder="Escribe el número completo..." inputMode="tel" />
+      ) : (
+        <>
+          <PhoneInput code={code} onCode={onCode} value={value} onValue={onValue} />
+          <p className="app-muted mt-1 text-[11.5px]">Selecciona un código de país o usa &quot;Otro país&quot; para introducir uno manual.</p>
+        </>
+      )}
+      <button
+        type="button"
+        onClick={() => {
+          // Al volver al formato, un prefijo vacío arranca en Perú.
+          if (unformatted && code.length < 2) onCode("+51");
+          onUnformatted(!unformatted);
+        }}
+        className="mt-1 flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-[#1679AB] hover:underline"
+      >
+        <Info size={13} />
+        {unformatted ? "Aplicar formato de número" : "Eliminar formato de número"}
+      </button>
+    </div>
+  );
+}
+
 /** Agregar o editar un contacto de la identidad (los mismos contactos de Clientes, Proveedores y Empleados). */
 export function ContactForm({
   partyId, contact, onClose, onSaved,
@@ -237,40 +296,18 @@ export function ContactForm({
             <PickSelect className={INPUT} value={type} onChange={setType} options={CONTACT_TYPES} />
           </Field>
           <Field label={type === "EMAIL" ? "Correo" : type === "ADDRESS" ? "Dirección" : isPhone ? "Número" : "Dato"} required error={error}>
-            {isPhone && !unformatted ? (
-              <div className="app-surface flex min-h-10 rounded-[9px] border border-[#CFD5DE] focus-within:border-[#1B8FC9] focus-within:shadow-[0_0_0_3px_rgba(27,143,201,.18)]">
-                <CountryCode code={code} onChange={setCode} />
-                <input
-                  className="app-text min-w-0 flex-1 rounded-r-[9px] bg-transparent px-2.5 text-[13.5px] outline-none"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  placeholder="999888777"
-                  inputMode="tel"
-                />
-              </div>
+            {isPhone ? (
+              <PhoneField code={code} onCode={setCode} value={value} onValue={setValue} unformatted={unformatted} onUnformatted={setUnformatted} />
             ) : (
               <input
                 className={INPUT}
                 type={type === "EMAIL" ? "email" : "text"}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                placeholder={type === "EMAIL" ? "correo@empresa.com" : type === "ADDRESS" ? "Dirección completa..." : isPhone ? "Escribe el número completo..." : ""}
+                placeholder={type === "EMAIL" ? "correo@empresa.com" : type === "ADDRESS" ? "Dirección completa..." : ""}
               />
             )}
           </Field>
-          {isPhone && (
-            <div className="-mt-1.5">
-              {!unformatted && <p className="app-muted text-[11.5px]">Selecciona un código de país o usa &quot;Otro país&quot; para introducir uno manual.</p>}
-              <button
-                type="button"
-                onClick={() => setUnformatted(!unformatted)}
-                className="mt-1 flex cursor-pointer items-center gap-1.5 text-xs font-semibold text-[#1679AB] hover:underline"
-              >
-                <Info size={13} />
-                {unformatted ? "Aplicar formato de número" : "Eliminar formato de número"}
-              </button>
-            </div>
-          )}
           <label className="flex cursor-pointer items-start gap-2.5">
             <input type="checkbox" className={CHECK} checked={primary} onChange={(e) => setPrimary(e.target.checked)} />
             <span>
@@ -279,71 +316,6 @@ export function ContactForm({
             </span>
           </label>
         </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</Btn>
-        </div>
-      </form>
-    </Modal>
-  );
-}
-
-/** Condiciones comerciales del rol Cliente: días de crédito, límite y moneda. */
-export function TermsForm({
-  customer, onClose, onSaved,
-}: { customer: NonNullable<ActorDetail["customer"]>; onClose: () => void; onSaved: () => void }) {
-  const [days, setDays] = useState(customer.payment_terms_days == null ? "" : String(customer.payment_terms_days));
-  const [limit, setLimit] = useState(customer.credit_limit == null ? "" : Number(customer.credit_limit).toFixed(2));
-  const [currency, setCurrency] = useState(customer.preferred_currency === "USD" ? "USD" : "PEN");
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
-
-  // Los plazos habituales, más el que ya tuviera el cliente si es otro.
-  const dayOptions = [...new Set(["15", "30", "45", "60", ...(days ? [days] : [])])].sort((a, b) => Number(a) - Number(b));
-
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    if (limit !== "" && !(Number(limit) >= 0)) {
-      setError("El límite no puede ser negativo.");
-      return;
-    }
-    setSaving(true);
-    try {
-      await apiFetch(`/v1/customers/${customer.id}`, {
-        method: "PUT",
-        body: JSON.stringify({
-          payment_terms_days: days === "" ? null : Number(days),
-          credit_limit: limit === "" ? null : Number(limit),
-          preferred_currency: currency,
-        }),
-      });
-      onSaved();
-    } catch (err) {
-      setError(firstError(err, "No se pudieron guardar las condiciones."));
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal title="Editar condiciones comerciales" size="sm" onClose={onClose}>
-      <form onSubmit={submit} noValidate>
-        <div className="grid gap-3">
-          <Field label="Días de crédito">
-            <PickSelect
-              className={INPUT}
-              value={days}
-              onChange={setDays}
-              options={[["", "---"], ...dayOptions.map((option): [string, string] => [option, `${option} días`])]}
-            />
-          </Field>
-          <Field label="Límite de crédito" error={error}>
-            <input className={INPUT} type="number" min="0" step="0.01" value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="Sin límite" />
-          </Field>
-          <Field label="Moneda">
-            <PickSelect className={INPUT} value={currency} onChange={setCurrency} options={[["PEN", "PEN (S/)"], ["USD", "USD ($)"]]} />
-          </Field>
-        </div>
-        <p className="app-muted mt-3 text-[12.5px]">Son las mismas condiciones que se ven en Clientes.</p>
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
           <Btn type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar"}</Btn>
