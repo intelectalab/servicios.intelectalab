@@ -65,7 +65,8 @@ export default function GlobalSearch({ screens, canSearchRecords }: GlobalSearch
     function onKeyDown(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setOpen((value) => !value);
+        // Con el buscador abierto, lo cierra. Con otro modal abierto no se abre encima.
+        setOpen((value) => (value ? false : !document.querySelector('[aria-modal="true"]')));
       }
     }
     window.addEventListener("keydown", onKeyDown);

@@ -211,7 +211,7 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
   };
 
   return (
-        <div className="fixed inset-0 z-[200] overflow-hidden">
+        <div role="dialog" aria-modal="true" aria-label="Plan SaaS" className="fixed inset-0 z-[200] overflow-hidden">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

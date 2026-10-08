@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Eye, EyeOff, Loader2, X } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -17,6 +17,13 @@ export default function ChangePasswordModal({ onClose }: { onClose: () => void }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+
+  // Escape cierra el modal, como los demás.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();

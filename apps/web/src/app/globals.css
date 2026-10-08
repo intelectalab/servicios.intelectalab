@@ -164,17 +164,24 @@ body {
 [data-theme="dark"] [class*="divide-slate-"] > :not(:last-child) { border-color: var(--app-border) !important; }
 [data-theme="dark"] :is([class*="bg-slate-50"], [class*="bg-slate-100"], [class*="bg-slate-200"]):not([class*="hover:bg-slate-"]) { background-color: var(--app-surface-muted) !important; }
 [data-theme="dark"] [class*="hover:bg-slate-"]:hover { background-color: var(--app-surface-muted) !important; }
-[data-theme="dark"] [class*="bg-blue-50"]:not([class*="hover:bg-blue-50"]) { background-color: var(--p-brand-soft) !important; }
+[data-theme="dark"] :is([class*="bg-blue-50"], [class*="bg-sky-50"]):not([class*="hover:bg-blue-50"]):not([class*="hover:bg-sky-50"]) { background-color: var(--p-brand-soft) !important; }
+[data-theme="dark"] [class*="bg-blue-100"]:not([class*="hover:bg-blue-100"]) { background-color: var(--p-brand-line) !important; }
+[data-theme="dark"] [class*="hover:bg-sky-"]:hover { background-color: var(--p-brand-soft) !important; }
+[data-theme="dark"] [class*="bg-slate-300"] { background-color: var(--app-border) !important; }
 [data-theme="dark"] [class*="hover:bg-blue-"]:hover { background-color: var(--p-brand-line) !important; }
-[data-theme="dark"] [class*="bg-emerald-50"] { background-color: var(--p-success-soft) !important; }
-[data-theme="dark"] :is([class*="bg-red-50"], [class*="bg-rose-50"]) { background-color: var(--p-danger-soft) !important; }
+[data-theme="dark"] :is([class*="bg-emerald-50"], [class*="bg-emerald-100"]):not([class*="hover:bg-emerald-"]) { background-color: var(--p-success-soft) !important; }
+[data-theme="dark"] :is([class*="bg-red-50"], [class*="bg-rose-50"]):not([class*="hover:bg-red-50"]):not([class*="hover:bg-rose-50"]) { background-color: var(--p-danger-soft) !important; }
+[data-theme="dark"] :is([class*="hover:bg-red-50"], [class*="hover:bg-rose-50"]):hover { background-color: var(--p-danger-soft) !important; }
 [data-theme="dark"] :is([class*="bg-amber-50"], [class*="bg-yellow-50"]) { background-color: var(--p-warning-soft) !important; }
 [data-theme="dark"] [class*="border-blue-1"] { border-color: var(--p-brand-line) !important; }
 [data-theme="dark"] [class*="border-emerald-1"] { border-color: var(--p-success-line) !important; }
 [data-theme="dark"] :is([class*="border-red-1"], [class*="border-rose-1"]) { border-color: var(--p-danger-line) !important; }
-[data-theme="dark"] :is([class*="text-blue-5"], [class*="text-blue-6"], [class*="text-blue-7"]) { color: var(--p-brand-text) !important; }
+[data-theme="dark"] :is([class*="text-blue-5"], [class*="text-blue-6"], [class*="text-blue-7"]):not([class*="hover:text-blue-"]) { color: var(--p-brand-text) !important; }
+[data-theme="dark"] [class*="hover:text-blue-"]:hover { color: var(--p-brand-text) !important; }
+[data-theme="dark"] [class*="text-sky-9"] { color: var(--p-brand-soft-text) !important; }
 [data-theme="dark"] [class*="text-emerald-"] { color: var(--p-success-text) !important; }
-[data-theme="dark"] :is([class*="text-red-"], [class*="text-rose-"]) { color: var(--p-danger-text) !important; }
+[data-theme="dark"] :is([class*="text-red-"], [class*="text-rose-"]):not([class*="hover:text-red-"]):not([class*="hover:text-rose-"]) { color: var(--p-danger-text) !important; }
+[data-theme="dark"] :is([class*="hover:text-red-"], [class*="hover:text-rose-"]):hover { color: var(--p-danger-text) !important; }
 [data-theme="dark"] :is([class*="text-amber-"], [class*="text-yellow-"]) { color: var(--p-warning-text) !important; }
 
 /* Entrada suave de los modales del prototipo (fondo y cuadro). */

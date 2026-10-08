@@ -79,3 +79,50 @@ Con la contraseña correcta de la cuenta de plataforma se revisó la consola en 
 
 - **Planes SaaS** (listado, indicadores, pestañas, buscador) y su **panel de edición** en las siete pestañas (Información, Precio y suscripción, Módulos, Límites, Consumo, Soporte, Características): vistos con captura (listado, Información y Módulos) y medidos. Sin textos por debajo del mínimo ni superficies claras; los campos toman fondo oscuro y texto claro. Se cerró sin guardar.
 - **Dashboard, Tenants / Empresas, Suscripciones y Mi perfil**: medidos, sin nada por debajo del mínimo. De estas cuatro no hay captura (la ventana volvió a ocultarse): no se vieron con los ojos.
+
+## Cuarta parte: lo que faltaba probar
+
+Todo en oscuro, con la cuenta de Ventas.
+
+| Qué | Cómo se probó | Resultado |
+| --- | --- | --- |
+| Pantalla de empresa bloqueada | Simulando en el navegador la respuesta "empresa suspendida" (no se tocó la empresa). Captura y medición | Bien: tarjeta oscura, logo blanco, texto legible. El aviso "El acceso sigue sin estar disponible" sale en ámbar oscuro con texto claro |
+| Aviso "Módulo no disponible en tu plan" | Simulando en el navegador que Contratos no está en el plan (no se tocaron los módulos). Captura y medición | Bien: cuadro oscuro, título y texto legibles, botones Cancelar y Cambiar de plan |
+| Menú de la cuenta y modal Cambiar contraseña | Abiertos sin enviar nada. Captura y medición | Bien: campos con fondo oscuro y texto claro |
+| Buscador global | Ctrl+K y una búsqueda. Captura y medición | Bien: resultados legibles, el seleccionado resaltado |
+| A 375 px | Clientes y actores, ficha de actor y Cotizaciones con captura; nueva cotización, Servicios, Solicitudes y Mi perfil solo medidos; inicio de sesión solo desborde | Bien: sin desborde horizontal ni textos por debajo del mínimo |
+| Módulos desconectados (Clientes, Proveedores, Empleados) | **Solo leyendo su código**: no tienen ruta, no se pueden abrir | Usaban colores que las reglas no cubrían (`bg-sky-50`, `bg-blue-100`, `bg-emerald-100`, `bg-slate-300`, `text-sky-900`) y colores "al pasar el cursor" (`hover:bg-red-50`, `hover:text-red-…`, `hover:text-blue-…`) que en oscuro habrían quedado fijos. Se añadieron y afinaron las reglas en `globals.css` |
+
+### Lo que no se probó
+
+- Los módulos desconectados **no se vieron**: lo suyo es revisión de código. Cuando se reconecten o se borren, se sabrá.
+- Tras afinar esas reglas no se volvió a entrar a la consola del superadmin (comparte reglas). Por código, ninguna de las clases que usa cambia de comportamiento.
+- A 375 px: Roles y permisos, Usuarios, fichas de cotización / contrato / orden, y la consola del superadmin.
+- El aviso emergente disparado por una acción real.
+
+### Visto de paso (no es del tema oscuro)
+
+- Con el modal Cambiar contraseña abierto, Escape no lo cerró, y Ctrl+K abrió el buscador encima del modal.
+
+## Quinta parte: Escape, buscador y lo último que faltaba probar
+
+### Arreglo (no es del tema oscuro)
+
+| Archivo | Cambio |
+| --- | --- |
+| `components/layout/ChangePasswordModal.tsx` | **Escape cierra el modal** Cambiar contraseña, como los demás modales. |
+| `components/layout/GlobalSearch.tsx` | **Ctrl+K no abre el buscador encima de un modal abierto.** Con el buscador abierto, Ctrl+K lo sigue cerrando. |
+
+Probado como Administrador: Ctrl+K abre el buscador y otra vez lo cierra; con Cambiar contraseña abierto, Ctrl+K no abre nada; Escape cierra el modal. (Las teclas se enviaron por código; la ventana de pruebas estaba oculta.)
+
+Limitación: el buscador reconoce un modal por su marca de accesibilidad (`aria-modal`). El aviso "Módulo no disponible en tu plan" y el panel de planes del superadmin, que son del estilo anterior, no la llevan: sobre ellos Ctrl+K todavía abre el buscador.
+
+### Pruebas en oscuro
+
+| Qué | Cómo | Resultado |
+| --- | --- | --- |
+| Aviso emergente disparado por una acción real | En Roles y permisos se cambió el alcance de Cotizaciones de Ventas a Equipo (y se devolvió a Propios). Captura y medición | Bien: el aviso "Alcance actualizado" se distingue del fondo (`#2C4C5B` con borde, sobre tarjetas `#182B35`) |
+| Consola del superadmin tras afinar las reglas | Planes SaaS (listado y panel de edición), medición | Sin textos por debajo del mínimo ni superficies claras |
+| A 375 px | Roles y permisos, Usuarios, fichas de cotización, contrato y orden; Planes, Dashboard y Empresas del superadmin; inicio de sesión. Medición | Sin desborde horizontal ni textos por debajo del mínimo |
+
+De esta parte solo hay captura del aviso emergente: las demás fallaron porque la ventana de pruebas volvió a ocultarse, así que esas pantallas están medidas, no vistas.

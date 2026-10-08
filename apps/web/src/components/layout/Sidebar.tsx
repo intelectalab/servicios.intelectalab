@@ -406,7 +406,7 @@ export default function Sidebar({
       )}
 
       {upgradeModalModule && typeof document !== "undefined" && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+        <div role="dialog" aria-modal="true" aria-label="Módulo no disponible en tu plan" className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
           <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 space-y-5 text-slate-900 relative animate-in fade-in zoom-in-95 duration-200">
             <button
               onClick={() => setUpgradeModalModule(null)}
