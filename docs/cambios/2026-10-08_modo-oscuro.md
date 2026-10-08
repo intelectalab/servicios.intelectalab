@@ -115,7 +115,7 @@ Todo en oscuro, con la cuenta de Ventas.
 
 Probado como Administrador: Ctrl+K abre el buscador y otra vez lo cierra; con Cambiar contraseña abierto, Ctrl+K no abre nada; Escape cierra el modal. (Las teclas se enviaron por código; la ventana de pruebas estaba oculta.)
 
-Limitación: el buscador reconoce un modal por su marca de accesibilidad (`aria-modal`). El aviso "Módulo no disponible en tu plan" y el panel de planes del superadmin, que son del estilo anterior, no la llevan: sobre ellos Ctrl+K todavía abre el buscador.
+El buscador reconoce un modal por su marca de accesibilidad (`aria-modal`). El aviso "Módulo no disponible en tu plan" (`Sidebar.tsx`) y el panel de planes del superadmin (`SaasPlanDrawer.tsx`), del estilo anterior, no la llevaban; se les añadió (solo ese atributo, nada más de esos archivos). Probado: con el aviso de plan abierto y con el panel de planes abierto, Ctrl+K no abre el buscador; al cerrar el aviso vuelve a abrirlo. Tras cerrar el panel de planes no se pudo comprobar que Ctrl+K vuelva a abrir: con la ventana de pruebas oculta la animación de salida del panel no termina y el panel seguía en la página.
 
 ### Pruebas en oscuro
 
