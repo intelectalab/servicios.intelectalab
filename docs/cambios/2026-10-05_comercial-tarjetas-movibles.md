@@ -63,3 +63,13 @@ No se probó: el arrastre con el dedo en un teléfono real (solo con ratón y te
 
 - Si se quiere que el orden siga a la persona entre equipos, hay que guardarlo en el servidor (preferencias de usuario).
 - Los indicadores del listado de cotizaciones no son movibles.
+
+## Ficha del servicio: espacio vacío en pantallas anchas (2026-10-08)
+
+En una pantalla ancha (1900 px), "Ciclo de vida" y "Configuración" ocupaban solo la mitad izquierda y quedaba un hueco grande a su derecha. La rejilla abría tantas columnas como cupieran (3 o 4) y solo hay dos tarjetas arriba.
+
+Ahora la ficha tiene **dos columnas como máximo** (una en pantallas angostas): las dos tarjetas de arriba se reparten todo el ancho, y "Versiones de precio" y "Usado en…" siguen a todo el ancho debajo.
+
+Archivo: `components/dashboard/services/ServiceDetail.tsx` (una línea). Las demás fichas (cotización, contrato, orden, vista 360) usan otra distribución y no tenían el problema.
+
+Probado en el navegador con Ventas a 1900 px, en "Cambio de frenos": las dos tarjetas miden 767 px cada una y juntas llenan el ancho; las de abajo, 1549 px. No se volvió a ver a 375 px (ahí sigue siendo una columna).

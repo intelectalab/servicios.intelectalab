@@ -216,7 +216,7 @@ export default function ServiceDetail() {
 
       <SortableBoard
         storageKey="erp.cards.service-detail"
-        zones={[{ className: "grid grid-cols-[repeat(auto-fit,minmax(min(100%,420px),1fr))] gap-x-4", cards: ["lifecycle", "config", "prices", "usage"] }]}
+        zones={[{ className: "grid grid-cols-1 items-start gap-x-4 lg:grid-cols-2", cards: ["lifecycle", "config", "prices", "usage"] }]}
         cards={[
           {
             id: "lifecycle",
