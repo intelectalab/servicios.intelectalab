@@ -14,16 +14,38 @@ const TENANT_HOME = "/actors";
 const RETIRED_PREFIXES = ["/customers", "/suppliers", "/employees"];
 const PLATFORM_HOME = "/superadmin/plans";
 
+// Dos dominios, como "midominio.com" (página pública) y "app.midominio.com" (el sistema).
+// Se activa al definir SITE_URL y APP_URL; sin ellas todo vive en un solo dominio.
+const SITE_URL = process.env.SITE_URL?.replace(/\/+$/, "");
+const APP_URL = process.env.APP_URL?.replace(/\/+$/, "");
+const hostOf = (url?: string) => (url ? new URL(url).host.toLowerCase() : null);
+const SITE_HOST = hostOf(SITE_URL);
+const APP_HOST = hostOf(APP_URL);
+const SPLIT_DOMAINS = Boolean(SITE_HOST && APP_HOST && SITE_HOST !== APP_HOST);
+
 const matches = (pathname: string, routes: string[]) =>
   routes.some((route) => pathname === route || pathname.startsWith(`${route}/`));
 
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
+  const host = SPLIT_DOMAINS ? request.headers.get("host")?.toLowerCase() : null;
+
+  // En el dominio público solo vive la landing: lo demás se abre en el del sistema.
+  if (host === SITE_HOST && pathname !== "/") {
+    return NextResponse.redirect(new URL(`${pathname}${search}`, APP_URL));
+  }
+
   const hasToken = Boolean(request.cookies.get(TOKEN_COOKIE)?.value);
   // Solo decide a dónde redirigir; los permisos reales los valida la API.
   const scope = request.cookies.get(SCOPE_COOKIE)?.value;
   const inTenantArea = matches(pathname, TENANT_PREFIXES);
   const inPlatformArea = matches(pathname, PLATFORM_PREFIXES);
+
+  // En el dominio del sistema no hay landing: la raíz lleva al login o a la consola.
+  if (host === APP_HOST && pathname === "/") {
+    const target = !hasToken ? "/login" : scope === "platform" ? PLATFORM_HOME : TENANT_HOME;
+    return NextResponse.redirect(new URL(target, APP_URL));
+  }
 
   if (!hasToken) {
     return inTenantArea || inPlatformArea
@@ -52,6 +74,8 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/",
+    "/blocked/:path*",
     "/login/:path*",
     "/forgot-password/:path*",
     "/reset-password/:path*",

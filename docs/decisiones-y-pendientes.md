@@ -48,6 +48,7 @@ Estado al 2026-10-08.
 - Las tarjetas de las fichas se pueden reordenar (`SortableBoard` en `components/ui/sortable-cards.tsx`); el orden se guarda en el navegador de cada persona, no en el servidor. Las fichas nuevas deben armarse con él.
 
 ### Acceso
+- La página pública y el sistema van en dominios distintos (como `midominio.com` y `app.midominio.com`), con un solo proyecto web: `proxy.ts` decide según `SITE_URL` y `APP_URL`. Sin esas variables todo vive en un dominio. En local: `localhost:3000` y `app.localhost:3000`. Falta elegir el dominio real.
 - Verificación en dos pasos por **código enviado al correo** (no aplicación autenticadora). Obligatoria para superadmin, rol ADMIN del tenant y usuarios de portal.
 - Sesiones de 8 h, o 30 días con "Recordarme". Se permiten varias sesiones a la vez.
 - 5 contraseñas incorrectas bloquean la cuenta 15 minutos.
