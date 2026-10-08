@@ -57,8 +57,7 @@ Juntar Clientes, Proveedores y Empleados en una sola pantalla, **Clientes y acto
 
 - **Importar** desde Excel (cada módulo tiene su plantilla; no hay una plantilla unificada).
 - **Asignar** (el botón de la barra de selección).
-- Agregar o quitar contactos desde la ficha (aquí se ven; el correo, teléfono y dirección principales se editan con "Editar").
-- Editar en la celda las condiciones de cliente (días de crédito, límite, moneda): no son columnas de esta tabla.
+- Editar en la celda las condiciones de cliente (días de crédito, límite, moneda): no son columnas de esta tabla; se editan en la vista 360.
 - En teléfono las filas se ven como tarjetas, sin cabeceras: ordenar, mover, inmovilizar y el menú de columnas solo están en pantallas anchas.
 
 ## Base de datos
@@ -80,6 +79,31 @@ Juntar Clientes, Proveedores y Empleados en una sola pantalla, **Clientes y acto
 8. **375 px:** listado y vista 360 sin desplazamiento horizontal, filas como tarjetas.
 
 No se probó en el navegador: crear una persona y el rol Empleado (sí en las pruebas automáticas), editar con el formulario, "Agregar rol" desde el aviso de duplicado, mover columnas arrastrando, editar nombre y documento en la celda, Inactivar desde la vista 360, el Excel (solo el CSV) y el tema claro.
+
+## Ajustes tras la primera revisión (2026-10-08)
+
+Lo que pediste al verlo:
+
+- **Contactos en la vista 360:** botón **Agregar contacto** y, en cada contacto, **editar** y **eliminar** (con confirmación). El formulario tiene nombre, tipo, prefijo y número (o correo, dirección) y "Contacto principal". Son los mismos contactos de Clientes, Proveedores y Empleados. Para editar hizo falta una ruta nueva, `PUT /contacts/{id}` (`ContactController::update`, solo añade).
+- **Condiciones comerciales:** botón **Editar condiciones** en su tarjeta (días de crédito, límite y moneda). Guarda en el mismo cliente que ves en Clientes.
+- **La cabecera de la tabla se montaba sobre el panel del menú replegado:** la tabla ahora queda en su propia capa y el panel sale por encima.
+- **Las casillas se pegaban a la línea al achicar la ventana:** la columna de casillas tiene ancho fijo y la casilla va centrada.
+
+Archivos: `components/dashboard/actors/ActorModals.tsx` (nuevo), `ActorDetail.tsx`, `ActorsTable.tsx`, `ActorsList.tsx`; API `ContactController.php`, `routes/api.php` y la prueba.
+
+Probado en el navegador con admin sobre "Actor de Prueba S.A.C.": agregar un contacto (valida el dato obligatorio), editarlo, eliminarlo; cambiar las condiciones a 45 días, US$ 5,000.00 y USD (quedaron así); el panel "Comercial" del menú replegado por encima de la cabecera; y las casillas con 16 px a cada lado a 760 px de ancho. Con las condiciones y los contactos nuevos, los candados no se revisaron con Ventas. Las 57 pruebas pasan.
+
+### Prefijo del país en los contactos (2026-10-08)
+
+Pediste el desplegable de prefijos que tienen los otros módulos. El formulario de contacto de la vista 360 ahora lo tiene para Teléfono y WhatsApp: **lista de países con buscador** (los mismos 27), **"Otro país (Escribir código libre)"** para un código que no esté en la lista, y **"Eliminar formato de número" / "Aplicar formato de número"** para escribir el número completo sin prefijo aparte.
+
+Archivos: `components/dashboard/actors/ActorModals.tsx` y `lib/countries.ts` (nuevo, con la lista de países; el formulario de Clientes, Proveedores y Empleados conserva la suya y no se tocó).
+
+Probado en el navegador con admin: el desplegable abre con Perú +51, buscar "esp" deja España +34 y elegirlo lo aplica; con "Otro país" se escribió +971 (quita los espacios), se guardó "+971 501234567", al editar volvió a abrir con ese código, se alternó el formato y la X regresó a la lista. El contacto de prueba se eliminó.
+
+**Corrección (2026-10-08):** la lista de países se cortaba dentro del modal. Ahora se dibuja por encima del modal: sale bajo el botón, o hacia arriba si abajo no cabe. Probado con una ventana de 720 px de alto: la lista se ve completa, elegir un país la cierra sin cerrar el modal y un clic fuera también la cierra.
+
+**Corrección (2026-10-08):** el menú de los tres puntos de la última columna (Estado) se cortaba contra el borde de la tabla. Los menús de cabecera y el del "+" ahora se dibujan por encima de la tabla y nunca se salen de la ventana; se cierran al desplazar o cambiar el tamaño. Probado con Ventas a 1000 px de ancho: el menú de Estado y el del "+" se ven completos, "Orden descendente" ordena y un clic fuera los cierra.
 
 ## Pendiente
 

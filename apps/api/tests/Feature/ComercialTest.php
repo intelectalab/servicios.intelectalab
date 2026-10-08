@@ -921,6 +921,23 @@ class ComercialTest extends TestCase
             ->assertCreated()->json();
         $this->putJson("/api/v1/parties/{$second['id']}", ['document_number' => '44556677'])->assertStatus(422)->assertJsonValidationErrors('document_number');
 
+        // Contactos de la identidad: agregar, editar (uno solo es el principal de su tipo) y quitar.
+        $contact = $this->postJson('/api/v1/contacts', [
+            'party_id' => $org['id'], 'contact_name' => 'María López', 'contact_type' => 'PHONE', 'value' => '987654321', 'country_code' => '+51', 'is_primary' => true,
+        ])->assertCreated()->json();
+        $this->putJson("/api/v1/contacts/{$contact['id']}", ['contact_type' => 'PHONE'])->assertStatus(422)->assertJsonValidationErrors('value');
+        $this->putJson("/api/v1/contacts/{$contact['id']}", ['contact_name' => 'María López (Compras)', 'contact_type' => 'PHONE', 'value' => '911222333', 'is_primary' => true])
+            ->assertOk()->assertJsonPath('value', '911222333');
+        $contacts = collect($this->getJson("/api/v1/parties/{$org['id']}")->json('contacts'))->where('contact_type', 'PHONE');
+        $this->assertCount(2, $contacts);
+        $this->assertSame(['María López (Compras)'], $contacts->where('is_primary', true)->pluck('contact_name')->all());
+        $this->deleteJson("/api/v1/contacts/{$contact['id']}")->assertOk();
+        // Las condiciones comerciales se editan en el cliente de esa identidad.
+        $this->putJson('/api/v1/customers/'.$org['customer_id'], ['payment_terms_days' => 45, 'credit_limit' => 5000, 'preferred_currency' => 'USD'])->assertOk();
+        $this->getJson("/api/v1/parties/{$org['id']}")->assertOk()
+            ->assertJsonPath('customer.payment_terms_days', 45)->assertJsonPath('customer.preferred_currency', 'USD')
+            ->assertJsonPath('organization.legal_name', 'Minera Los Andes SAC');
+
         // Baja y alta lógica: la identidad y todos sus roles cambian juntos.
         $this->postJson("/api/v1/parties/{$org['id']}/deactivate")->assertOk()->assertJsonPath('status', 'INACTIVE');
         $this->postJson("/api/v1/parties/{$org['id']}/deactivate")->assertStatus(422);

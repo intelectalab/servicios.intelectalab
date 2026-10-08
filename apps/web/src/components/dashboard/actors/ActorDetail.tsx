@@ -3,18 +3,19 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, FileText, Plus, Settings } from "lucide-react";
+import { ArrowLeft, FileText, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES } from "@/lib/contracts";
 import { ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, rolesText } from "@/lib/actors";
 import {
-  Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useToasts,
+  Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useToasts,
   type Column,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import { ActorForm } from "./ActorForm";
-import type { ActorDetail as Actor } from "@/types/actor";
+import { ContactForm, TermsForm } from "./ActorModals";
+import type { ActorContact, ActorDetail as Actor } from "@/types/actor";
 
 type Row<K extends keyof Actor> = Actor[K] extends (infer T)[] ? T : never;
 
@@ -101,6 +102,10 @@ export default function ActorDetail() {
   const [tab, setTab] = useState("resumen");
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Contacto que se agrega ("new"), se edita o se va a quitar; y edición de las condiciones de cliente.
+  const [contactForm, setContactForm] = useState<ActorContact | "new" | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<ActorContact | null>(null);
+  const [editingTerms, setEditingTerms] = useState(false);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -128,6 +133,21 @@ export default function ActorDetail() {
       toast(`${label}: listo`);
     } catch (err) {
       toast(firstError(err, "No se pudo completar la acción."), "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteContact() {
+    if (!contactToDelete) return;
+    setBusy(true);
+    try {
+      await apiFetch(`/v1/contacts/${contactToDelete.id}`, { method: "DELETE" });
+      setContactToDelete(null);
+      toast("Contacto eliminado");
+      setReload((n) => n + 1);
+    } catch (err) {
+      toast(firstError(err, "No se pudo eliminar el contacto."), "danger");
     } finally {
       setBusy(false);
     }
@@ -284,6 +304,14 @@ export default function ActorDetail() {
                           <strong className="font-semibold">{contact.contact_name || CONTACT_TYPES[contact.contact_type] || contact.contact_type}</strong>
                           {contact.contact_name && <span>· {CONTACT_TYPES[contact.contact_type] ?? contact.contact_type}</span>}
                           {contact.is_primary && <Chip tone="neutral">Principal</Chip>}
+                          <span className="ml-auto flex gap-0.5">
+                            <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactForm(contact)} aria-label="Editar contacto" title="Editar contacto">
+                              <Pencil size={14} />
+                            </Btn>
+                            <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactToDelete(contact)} aria-label="Eliminar contacto" title="Eliminar contacto">
+                              <Trash2 size={14} />
+                            </Btn>
+                          </span>
                           <small className="app-muted w-full text-xs">{contact.country_code ? `${contact.country_code} ` : ""}{contact.value}</small>
                         </li>
                       ))}
@@ -291,6 +319,12 @@ export default function ActorDetail() {
                   ) : (
                     <p className="app-muted">Sin contactos registrados.</p>
                   )}
+                  <div className="mt-3">
+                    <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setContactForm("new")}>
+                      <Plus size={14} />
+                      <span>Agregar contacto</span>
+                    </Btn>
+                  </div>
                 </Card>
               ),
             },
@@ -305,6 +339,12 @@ export default function ActorDetail() {
                       ["Moneda", actor.customer.preferred_currency === "USD" ? "USD ($)" : "PEN (S/)"],
                     ]}
                   />
+                  <div className="mt-3">
+                    <Btn variant="secondary" size="sm" permission="core.manage" onClick={() => setEditingTerms(true)}>
+                      <Pencil size={14} />
+                      <span>Editar condiciones</span>
+                    </Btn>
+                  </div>
                 </Card>
               ),
             }] : []),
@@ -371,6 +411,49 @@ export default function ActorDetail() {
       {tab === "soporte" && <Listing title="Tickets" cols={TICKET_COLUMNS} rows={actor.tickets} />}
       {tab === "documentos" && <Listing title="Documentos vinculados" cols={DOCUMENT_COLUMNS} rows={actor.documents} />}
       {tab === "crm" && <Listing title="Leads y oportunidades vinculados" cols={CRM_COLUMNS} rows={crmRows} />}
+
+      {contactForm && (
+        <ContactForm
+          partyId={actor.id}
+          contact={contactForm === "new" ? undefined : contactForm}
+          onClose={() => setContactForm(null)}
+          onSaved={(message) => {
+            setContactForm(null);
+            toast(message);
+            setReload((n) => n + 1);
+          }}
+        />
+      )}
+
+      {contactToDelete && (
+        <Modal
+          title="Eliminar contacto"
+          size="sm"
+          onClose={() => setContactToDelete(null)}
+          footer={
+            <>
+              <Btn variant="ghost" onClick={() => setContactToDelete(null)}>Volver</Btn>
+              <Btn variant="danger" disabled={busy} onClick={deleteContact}>Eliminar</Btn>
+            </>
+          }
+        >
+          <p className="text-[15px]">
+            Se eliminará «{contactToDelete.contact_name || contactToDelete.value}» de los contactos de {actor.name}. No se puede deshacer.
+          </p>
+        </Modal>
+      )}
+
+      {editingTerms && actor.customer && (
+        <TermsForm
+          customer={actor.customer}
+          onClose={() => setEditingTerms(false)}
+          onSaved={() => {
+            setEditingTerms(false);
+            toast("Condiciones comerciales guardadas");
+            setReload((n) => n + 1);
+          }}
+        />
+      )}
 
       {editing && (
         <ActorForm

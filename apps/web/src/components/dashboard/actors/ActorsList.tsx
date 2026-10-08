@@ -447,7 +447,7 @@ export default function ActorsList() {
             ) : filteredItems.length === 0 ? (
               <Empty text={hasServerFilters || activeFilters.length ? "No hay registros con estos filtros." : "Sin registros."} />
             ) : (
-              <div data-table-scroll className="proto-tbl-wrap max-h-[calc(100vh-290px)] min-h-[220px] overflow-auto max-sm:max-h-none">
+              <div data-table-scroll className="proto-tbl-wrap isolate max-h-[calc(100vh-290px)] min-h-[220px] overflow-auto max-sm:max-h-none">
                 <ActorsTable
                   actors={filteredItems}
                   customFieldDefinitions={definitions}

@@ -55,6 +55,39 @@ class ContactController extends Controller
         return response()->json($contact, 201);
     }
 
+    /** Edita un contacto; si pasa a ser el principal, deja de serlo el otro de su tipo. */
+    public function update(string $contact, Request $request)
+    {
+        $contact = Contact::findOrFail($contact);
+        $data = $request->validate([
+            'contact_name' => ['nullable', 'string', 'max:150'],
+            'contact_type' => ['required', 'in:EMAIL,PHONE,WHATSAPP,ADDRESS,OTHER'],
+            'value' => ['required', 'string', 'max:255'],
+            'country_code' => ['nullable', 'string', 'max:5'],
+            'is_primary' => ['boolean'],
+        ]);
+
+        DB::transaction(function () use ($contact, $data, $request) {
+            if ($data['is_primary'] ?? false) {
+                Contact::where('party_id', $contact->party_id)
+                    ->where('contact_type', $data['contact_type'])
+                    ->where('id', '<>', $contact->id)
+                    ->update(['is_primary' => false]);
+            }
+            $contact->update($data);
+
+            AuditLogger::log(
+                tenantId: $request->attributes->get('tenant_id'),
+                userId: $request->user()->id,
+                action: 'contact.update',
+                entityType: 'Contact',
+                entityId: $contact->id,
+            );
+        });
+
+        return response()->json($contact);
+    }
+
     public function destroy(string $contact, Request $request)
     {
         $contact = Contact::findOrFail($contact);

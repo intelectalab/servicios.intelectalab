@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FocusEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { ArrowDown, ArrowUp, Building2, Eye, EyeOff, Filter, GripVertical, Loader2, MoreVertical, Pin, PinOff, Plus, Trash2, User } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
+import { poppins } from "@/lib/fonts";
 import { ACTOR_ENTITY, ACTOR_STATES, DOCUMENT_TYPES, ROLE_LABELS, ROLE_TONES, actorDocument, actorRelation, actorSubtitle, rolesText } from "@/lib/actors";
 import { Badge, Chip, TD, TH } from "@/components/ui/proto";
 import type { Actor } from "@/types/actor";
@@ -47,7 +49,18 @@ const STATIC_COLUMNS = [
 ];
 
 const CELL_INPUT = "app-surface app-text w-full rounded-md border border-[#1B8FC9] px-2 py-1.5 text-[13px] outline-none";
-const MENU = "app-surface app-text absolute z-[200] rounded-xl border border-[color:var(--app-border)] p-1.5 text-left text-xs font-normal normal-case tracking-normal shadow-[0_20px_50px_rgba(8,25,55,.28)]";
+const MENU = "app-surface app-text fixed z-[250] rounded-xl border border-[color:var(--app-border)] p-1.5 text-left text-xs font-normal normal-case tracking-normal shadow-[0_20px_50px_rgba(8,25,55,.28)]";
+/**
+ * Dónde dibujar un menú que cuelga de un botón: debajo y alineado a su izquierda,
+ * sin salirse de la ventana; hacia arriba si abajo no cabe.
+ */
+function menuPlace(button: HTMLElement, width: number, height: number): CSSProperties {
+  const rect = button.getBoundingClientRect();
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
+  const below = window.innerHeight - rect.bottom;
+  return below < height && rect.top > below ? { left, bottom: window.innerHeight - rect.top + 6 } : { left, top: rect.bottom + 6 };
+}
+
 const MENU_ITEM = "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-[var(--app-surface-muted)] disabled:cursor-default disabled:opacity-60";
 const ROW_BG = "bg-[var(--app-surface)] group-hover:bg-[var(--app-surface-muted)]";
 const ROW_BG_SELECTED = "bg-[color-mix(in_srgb,#1B8FC9_13%,var(--app-surface))]";
@@ -99,6 +112,8 @@ export function ActorsTable({
   const preferencesLoaded = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
+  const addListRef = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState<CSSProperties>({});
   const headerRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
   const selectionRef = useRef<HTMLTableCellElement>(null);
 
@@ -136,10 +151,23 @@ export function ActorsTable({
     function onClickOutside(event: MouseEvent) {
       const target = event.target as Node;
       if (menuRef.current && !menuRef.current.contains(target)) setOpenMenu(null);
-      if (addMenuRef.current && !addMenuRef.current.contains(target)) setAddMenuOpen(false);
+      if (!addMenuRef.current?.contains(target) && !addListRef.current?.contains(target)) setAddMenuOpen(false);
+    }
+    // Los menús están en posición fija: al desplazar o cambiar el tamaño se cierran.
+    function closeMenus(event: Event) {
+      const target = event.target as Node | null;
+      if (target && (menuRef.current?.contains(target) || addListRef.current?.contains(target))) return;
+      setOpenMenu(null);
+      setAddMenuOpen(false);
     }
     document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
+    window.addEventListener("scroll", closeMenus, true);
+    window.addEventListener("resize", closeMenus);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      window.removeEventListener("scroll", closeMenus, true);
+      window.removeEventListener("resize", closeMenus);
+    };
   }, []);
 
   const showNotice = (label: string, undo: () => void) => {
@@ -524,6 +552,7 @@ export function ActorsTable({
             aria-label={`Opciones de la columna ${title}`}
             onClick={(event) => {
               event.stopPropagation();
+              setPlace(menuPlace(event.currentTarget, 224, definition ? 270 : 180));
               setOpenMenu(openMenu === key ? null : key);
             }}
             className={`cursor-pointer rounded p-1 hover:bg-[var(--app-surface-muted)] ${sorted || openMenu === key ? "opacity-100" : "opacity-0 group-hover/th:opacity-100 focus:opacity-100"}`}
@@ -535,8 +564,8 @@ export function ActorsTable({
           <span aria-hidden="true" className={`pointer-events-none absolute top-0 z-[210] h-full w-1 rounded-full bg-[#1B8FC9] ${dropIndicator.side === "left" ? "left-0" : "right-0"}`} />
         )}
 
-        {openMenu === key && (
-          <div ref={menuRef} className={`${MENU} left-3 top-11 w-56`}>
+        {openMenu === key && createPortal(
+          <div ref={menuRef} style={place} className={`${poppins.className} ${MENU} w-56`}>
             <button type="button" onClick={() => handleSort(key, "asc")} className={MENU_ITEM}><ArrowUp size={14} className="app-muted" /> Orden ascendente</button>
             <button type="button" onClick={() => handleSort(key, "desc")} className={MENU_ITEM}><ArrowDown size={14} className="app-muted" /> Orden descendente</button>
             <div className="my-1 border-t border-[color:var(--app-border)]" />
@@ -571,7 +600,8 @@ export function ActorsTable({
                 </button>
               </>
             )}
-          </div>
+          </div>,
+          document.body,
         )}
       </th>
     );
@@ -586,7 +616,7 @@ export function ActorsTable({
       <table className="proto-tbl w-full border-separate border-spacing-0 text-left text-[13px]">
         <thead>
           <tr>
-            <th ref={selectionRef} style={{ left: 0, position: "sticky", zIndex: 70 }} className={`${TH} top-0 w-10 bg-[var(--app-surface)] !pr-0 ${edge}`}>
+            <th ref={selectionRef} style={{ left: 0, position: "sticky", zIndex: 70 }} className={`${TH} top-0 w-12 min-w-12 bg-[var(--app-surface)] !px-0 !text-center ${edge}`}>
               <input
                 type="checkbox"
                 className={CHECKBOX}
@@ -614,15 +644,18 @@ export function ActorsTable({
               <div ref={addMenuRef} className="relative">
                 <button
                   type="button"
-                  onClick={() => setAddMenuOpen((open) => !open)}
+                  onClick={(event) => {
+                    setPlace(menuPlace(event.currentTarget, 240, 130 + hidden.length * 34));
+                    setAddMenuOpen((open) => !open);
+                  }}
                   className="mx-auto grid h-7 w-7 cursor-pointer place-items-center rounded-full border border-[color:var(--app-border)] hover:bg-[#1B8FC9] hover:text-[#fff]"
                   title="Gestionar columnas"
                   aria-label="Gestionar columnas"
                 >
                   <Plus size={16} />
                 </button>
-                {addMenuOpen && (
-                  <div className={`${MENU} right-0 top-9 w-60`}>
+                {addMenuOpen && createPortal(
+                  <div ref={addListRef} style={place} className={`${poppins.className} ${MENU} w-60`}>
                     <button
                       type="button"
                       disabled={!editable}
@@ -643,7 +676,8 @@ export function ActorsTable({
                         <Eye size={14} className="app-muted" /> {definition.label}
                       </button>
                     ))}
-                  </div>
+                  </div>,
+                  document.body,
                 )}
               </div>
             </th>
@@ -655,7 +689,7 @@ export function ActorsTable({
             const selected = selectedIds.includes(actor.id);
             return (
               <tr key={actor.id} className="group">
-                <td data-label="" style={{ left: 0, position: "sticky", zIndex: 20 }} className={`${TD} w-10 !pr-0 ${selected ? ROW_BG_SELECTED : ROW_BG} ${edge}`}>
+                <td data-label="" style={{ left: 0, position: "sticky", zIndex: 20 }} className={`${TD} w-12 min-w-12 !px-0 sm:text-center ${selected ? ROW_BG_SELECTED : ROW_BG} ${edge}`}>
                   <input type="checkbox" className={CHECKBOX} checked={selected} onChange={() => onToggleSelection(actor.id)} aria-label="Seleccionar fila" />
                 </td>
                 {orderedColumns.map((column) => renderCell(actor, column.key, selected))}
