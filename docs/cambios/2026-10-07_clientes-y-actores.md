@@ -192,3 +192,24 @@ Los filtros de arriba (Rol, Estado) y "Filtrar por esta columna" podían filtrar
 Archivo: `components/dashboard/actors/ActorsList.tsx`.
 
 Probado en el navegador con Ventas: desde Estado y desde Roles el foco pasa al desplegable de arriba y no se agrega ningún filtro al panel; desde Documento se agrega uno y el botón muestra "Filtros por columna 1". No se comprobó con el ratón que el desplegable se abra solo (en la prueba automática queda enfocado).
+
+### "Limpiar filtros" limpia todo (2026-10-08)
+
+"Limpiar todos" estaba dentro del panel y solo quitaba los filtros por columna. Ahora hay un solo botón, **Limpiar filtros**, junto a "Filtros por columna": aparece cuando hay cualquier filtro puesto y quita el buscador, Rol, Tipo, Estado y los filtros por columna a la vez.
+
+Archivo: `components/dashboard/actors/ActorsList.tsx`.
+
+Probado en el navegador con Ventas: sin filtros el botón no aparece; con buscador, Rol, Estado y un filtro por columna (3 de 45) aparece, y al pulsarlo todo queda vacío y vuelven los 45.
+
+### Los filtros por columna, siempre a la vista (2026-10-08)
+
+Con el panel "Filtros por columna" cerrado, lo único que avisaba de un filtro activo era el número junto al botón. Ahora cada filtro aparece como una **etiqueta** bajo la barra ("Documento contiene "2099"", "Año: esta semana"):
+
+- la **✕** de la etiqueta quita ese filtro;
+- un clic en el texto abre el panel para cambiarlo;
+- un filtro al que aún no se le puso valor sale como "Nombre: sin valor" (no filtra nada todavía);
+- con el panel abierto las etiquetas no se repiten: ahí ya se ven los filtros.
+
+Archivo: `components/dashboard/actors/ActorsList.tsx`.
+
+Probado en el navegador con Ventas: con tres filtros (Documento contiene 2099, Año esta semana, Nombre sin valor) y el panel cerrado salen las tres etiquetas; la ✕ de Año lo quita y el listado pasa de 1 a 2 filas; el clic en una etiqueta abre el panel. Visto en tema oscuro; no en tema claro ni a 375 px.

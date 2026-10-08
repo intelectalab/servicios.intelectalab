@@ -8,7 +8,7 @@ import { useAccess } from "@/lib/access-context";
 import { excelTone, stateOf, takeFlash, setFlash } from "@/lib/commercial";
 import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, actorDocument, actorRelation, kindLabel, rolesText } from "@/lib/actors";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
-import { useColumnFilters } from "@/hooks/useColumnFilters";
+import { useColumnFilters, type ActiveFilter } from "@/hooks/useColumnFilters";
 import {
   Btn, Card, Empty, ExportButtons, Field, FilterSelect, Filters, INPUT, LoadError, Modal, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, useToasts,
@@ -28,6 +28,24 @@ type FieldType = CustomFieldDefinition["field_type"];
 const FIELD_TYPES: [FieldType, string][] = [["text", "Texto"], ["number", "Número"], ["date", "Fecha"], ["boolean", "Sí / No"]];
 /** El filtrado por columna ya no se hace aquí, sobre la página visible: lo hace la API. */
 const NO_LOCAL_VALUE = () => "";
+
+const DATE_OPERATORS: Record<string, string> = {
+  all: "todos", today: "hoy", yesterday: "ayer", this_week: "esta semana", last_week: "la semana pasada",
+  last_month: "el mes pasado", year_start: "este año",
+};
+const TEXT_OPERATORS: Record<string, string> = { contains: "contiene", equals: "es igual a", greater: "mayor que", less: "menor que" };
+
+/** Un filtro por columna en una frase: «Documento contiene "2099"», «Año: esta semana». */
+function filterText(filter: ActiveFilter) {
+  if (filter.type === "date") {
+    if (filter.operator !== "range") return `${filter.label}: ${DATE_OPERATORS[filter.operator] ?? filter.operator}`;
+    const [from, to] = filter.value.split("|");
+    return `${filter.label}: ${from ? `desde ${from}` : ""}${from && to ? " " : ""}${to ? `hasta ${to}` : ""}${!from && !to ? "periodo sin fechas" : ""}`;
+  }
+  if (filter.type === "select") return `${filter.label}: ${filter.value === "true" ? "Sí" : "No"}`;
+  const operator = TEXT_OPERATORS[filter.operator] ?? filter.operator;
+  return filter.value.trim() ? `${filter.label} ${operator} "${filter.value.trim()}"` : `${filter.label}: sin valor`;
+}
 
 const FILTER_SELECT = "app-surface app-text rounded border border-[color:var(--app-border)] px-2 py-0.5 text-xs outline-none";
 
@@ -188,6 +206,17 @@ export default function ActorsList() {
     try {
       select.showPicker();
     } catch { /* si el navegador no deja abrirlo solo, queda enfocado */ }
+  }
+
+  /** Quita todo lo que filtra el listado: buscador, Rol, Tipo, Estado y los filtros por columna. */
+  function clearAllFilters() {
+    setSearchInput("");
+    setSearch("");
+    setRole("");
+    setKind("");
+    setStatus("");
+    setActiveFilters([]);
+    setPage(1);
   }
 
   const refresh = () => setReload((n) => n + 1);
@@ -351,6 +380,32 @@ export default function ActorsList() {
               <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#1B8FC9] px-1 text-[10px] font-bold text-[#fff]">{activeFilters.length}</span>
             )}
           </button>
+          {(hasServerFilters || searchInput || activeFilters.length > 0) && (
+            <button type="button" onClick={clearAllFilters} className="h-10 cursor-pointer px-1.5 text-[13px] font-medium text-[#D93A40] hover:underline">
+              Limpiar filtros
+            </button>
+          )}
+
+          {/* Con el panel cerrado, cada filtro por columna queda a la vista como etiqueta. */}
+          {!showAdvancedFilters && activeFilters.length > 0 && (
+            <div className="flex w-full flex-wrap items-center gap-2">
+              {activeFilters.map((filter) => (
+                <span key={filter.id} className="inline-flex h-7 items-center rounded-lg border border-[#BFE6F8] bg-[#E3F2FA] text-xs font-medium text-[#0F5A82]">
+                  <button type="button" onClick={() => setShowAdvancedFilters(true)} title="Cambiar este filtro" className="h-full cursor-pointer pl-2.5 pr-1 hover:underline">
+                    {filterText(filter)}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFilter(filter.id)}
+                    aria-label={`Quitar filtro ${filter.label}`}
+                    className="grid h-full w-6 cursor-pointer place-items-center rounded-r-lg hover:bg-[#BFE6F8]"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {showAdvancedFilters && (
             <div className="flex w-full flex-wrap items-center gap-2 rounded-xl border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3 text-xs">
@@ -440,11 +495,6 @@ export default function ActorsList() {
                   </button>
                 </div>
               ))}
-              {activeFilters.length > 0 && (
-                <button type="button" onClick={() => setActiveFilters([])} className="ml-auto cursor-pointer font-medium text-[#D93A40] hover:underline">
-                  Limpiar todos
-                </button>
-              )}
             </div>
           )}
         </Filters>
