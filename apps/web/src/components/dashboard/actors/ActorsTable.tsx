@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FocusEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, Building2, Eye, EyeOff, Filter, GripVertical, Loader2, MoreVertical, Pin, PinOff, Plus, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, Eye, EyeOff, Filter, GripVertical, Loader2, MoreVertical, Pencil, Pin, PinOff, Plus, Trash2, User, X } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
 import { poppins } from "@/lib/fonts";
@@ -100,6 +100,7 @@ export function ActorsTable({
   };
   const [notice, setNotice] = useState<{ label: string; undo: () => void } | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Orden, columnas inmovilizadas, ocultas y su posición (se recuerdan en el navegador)
@@ -140,6 +141,7 @@ export function ActorsTable({
 
   useEffect(() => () => {
     if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    if (openTimer.current) clearTimeout(openTimer.current);
   }, []);
 
   useEffect(() => {
@@ -258,6 +260,20 @@ export function ActorsTable({
       setSaving(false);
     }
   }
+
+  // Abrir la ficha con una pequeña espera, que un doble clic (editar) cancela.
+  const cancelOpen = () => {
+    if (openTimer.current) clearTimeout(openTimer.current);
+    openTimer.current = null;
+  };
+  const openSoon = (id: string) => {
+    cancelOpen();
+    openTimer.current = setTimeout(() => {
+      openTimer.current = null;
+      setEdit(null);
+      onOpen(id);
+    }, 230);
+  };
 
   function beginEdit(actor: Actor, key: string) {
     if (!editable || (editing?.id === actor.id && editing.key === key)) return;
@@ -404,10 +420,42 @@ export function ActorsTable({
     const isOrg = actor.kind === "ORGANIZATION";
     const isEditing = editing?.id === actor.id && editing.key === key;
     const canEdit = editable && key !== "roles" && !(key === "relation" && actor.contact_of);
-    const className = `${TD} ${selected ? ROW_BG_SELECTED : ROW_BG} ${divider(key)} ${canEdit ? "cursor-pointer" : ""}`;
+    const className = `${TD} group/cell ${selected ? ROW_BG_SELECTED : ROW_BG} ${divider(key)}`;
+    const startEdit = () => {
+      cancelOpen();
+      beginEdit(actor, key);
+    };
+    // Un clic abre la ficha (como en los demás listados); se edita con el lápiz o con doble clic.
+    // En una celda editable el clic espera un instante, por si es el primero de un doble clic.
     const cell = (content: ReactNode) => (
-      <td key={key} data-label={labelOf(key)} className={className} style={frozenStyle(key)} onClick={() => beginEdit(actor, key)}>
-        {content}
+      <td
+        key={key}
+        data-label={labelOf(key)}
+        className={className}
+        style={frozenStyle(key)}
+        onClick={isEditing ? (event) => event.stopPropagation() : canEdit ? (event) => {
+          event.stopPropagation();
+          openSoon(actor.id);
+        } : undefined}
+        onDoubleClick={canEdit && !isEditing ? startEdit : undefined}
+      >
+        {canEdit && !isEditing ? (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">{content}</div>
+            <button
+              type="button"
+              title="Editar (o doble clic en la celda)"
+              aria-label={`Editar ${labelOf(key)}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                startEdit();
+              }}
+              className="shrink-0 cursor-pointer rounded p-1 text-[#1679AB] opacity-0 hover:bg-[rgb(27_143_201/0.16)] focus:opacity-100 group-hover/cell:opacity-100 max-sm:opacity-100"
+            >
+              <Pencil size={13} />
+            </button>
+          </div>
+        ) : content}
       </td>
     );
     const editor = (content: ReactNode, extra = "") => (
@@ -694,15 +742,32 @@ export function ActorsTable({
           {sortedActors.map((actor) => {
             const selected = selectedIds.includes(actor.id);
             return (
-              <tr key={actor.id} className="group">
-                <td data-label="" style={{ left: 0, position: "sticky", zIndex: 20 }} className={`${TD} w-12 min-w-12 !px-0 sm:text-center ${selected ? ROW_BG_SELECTED : ROW_BG} ${edge}`}>
+              <tr
+                key={actor.id}
+                tabIndex={0}
+                onClick={() => {
+                  // Mientras se edita una celda de esta fila, un clic fuera del editor solo la guarda.
+                  if (editingRef.current?.id !== actor.id) onOpen(actor.id);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && event.target === event.currentTarget) onOpen(actor.id);
+                }}
+                className="group cursor-pointer"
+              >
+                <td
+                  data-label=""
+                  style={{ left: 0, position: "sticky", zIndex: 20 }}
+                  className={`${TD} w-12 min-w-12 cursor-default !px-0 sm:text-center ${selected ? ROW_BG_SELECTED : ROW_BG} ${edge}`}
+                  onClick={(event) => event.stopPropagation()}
+                >
                   <input type="checkbox" className={CHECKBOX} checked={selected} onChange={() => onToggleSelection(actor.id)} aria-label="Seleccionar fila" />
                 </td>
                 {orderedColumns.map((column) => renderCell(actor, column.key, selected))}
                 <td
                   data-label=""
                   style={{ right: 0, position: "sticky", zIndex: 20 }}
-                  className={`${TD} w-12 border-l border-l-[color:var(--app-border)] max-sm:!hidden ${selected ? ROW_BG_SELECTED : ROW_BG}`}
+                  className={`${TD} w-12 cursor-default border-l border-l-[color:var(--app-border)] max-sm:!hidden ${selected ? ROW_BG_SELECTED : ROW_BG}`}
+                  onClick={(event) => event.stopPropagation()}
                 />
               </tr>
             );

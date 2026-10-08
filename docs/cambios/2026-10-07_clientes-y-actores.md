@@ -213,3 +213,19 @@ Con el panel "Filtros por columna" cerrado, lo único que avisaba de un filtro a
 Archivo: `components/dashboard/actors/ActorsList.tsx`.
 
 Probado en el navegador con Ventas: con tres filtros (Documento contiene 2099, Año esta semana, Nombre sin valor) y el panel cerrado salen las tres etiquetas; la ✕ de Año lo quita y el listado pasa de 1 a 2 filas; el clic en una etiqueta abre el panel. Visto en tema oscuro; no en tema claro ni a 375 px.
+
+## La fila abre la ficha; se edita con el lápiz o con doble clic (2026-10-08)
+
+En los demás listados un clic en cualquier parte de la fila abre el registro; aquí un clic ponía la celda en edición y solo el nombre abría la ficha. Se unificó hacia lo de los demás:
+
+- **Un clic en la fila abre la vista 360**, también para quien no tiene permiso de editar (antes, a esa persona el clic no le hacía nada).
+- **Para editar una celda:** el **lápiz** que aparece al pasar el cursor por ella, o **doble clic** en la celda. Lo demás no cambia: se guarda con Enter o al salir, con el aviso "cambios guardados" y Deshacer.
+- Las celdas que no se editan (Roles; "Contacto de …") no muestran lápiz.
+- La casilla de selección no abre la ficha.
+- En teléfono, donde no hay cursor, el lápiz se ve siempre.
+
+En una celda editable el clic espera un cuarto de segundo antes de abrir la ficha, para distinguirlo del primer clic de un doble clic. En las demás celdas abre al instante.
+
+Archivo: `components/dashboard/actors/ActorsTable.tsx`.
+
+Probado en el navegador con admin, sobre "Actor de Prueba S.A.C.": 4 lápices en la fila y ninguno en Roles; el lápiz de Sector abre el editor sin salir del listado; se cambió el sector, salió el aviso y Deshacer lo devolvió a "Tecnología"; el doble clic abre el editor y no la ficha; la casilla marca sin abrir; un clic en la celda de Sector abre la ficha tras la espera, y un clic en Roles también. La prueba fue con clics simulados: falta que lo pruebes con el ratón. No se vio a 375 px.
