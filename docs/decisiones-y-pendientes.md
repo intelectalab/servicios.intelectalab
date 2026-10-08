@@ -44,6 +44,7 @@ Estado al 2026-10-08.
 - Una nueva versión de cotización recibe un correlativo nuevo, no el sufijo `-v2` del prototipo, para no tocar el generador de correlativos.
 - El historial de servicios y cotizaciones se lee de `audit_logs`; no hay tabla de historial aparte.
 - Los listados nuevos llevan casillas de selección, barra de exportar, Excel con el formato del de Clientes (en azul del logo) y la paginación completa; todo sale de `proto.tsx` y `lib/export-table.ts`, para que las pantallas siguientes lo reutilicen.
+- Las tablas de los listados llevan `tableId` en `DataTable`: cabecera y casillas fijas, columnas que se mueven (la primera no) y se inmovilizan (inmovilizar cualquiera inmoviliza también la primera; liberar la primera libera todas). Se recuerda en el navegador. Las columnas personalizadas son solo de Clientes y actores. Todo listado nuevo debe llevar su `tableId`.
 - En teléfono (hasta 639 px) las tablas se muestran como tarjetas con la regla `.proto-tbl` de `globals.css`: toda tabla nueva debe llevar la clase y `data-label` en cada celda (`DataTable` ya lo hace).
 - Las tarjetas de las fichas se pueden reordenar (`SortableBoard` en `components/ui/sortable-cards.tsx`); el orden se guarda en el navegador de cada persona, no en el servidor. Las fichas nuevas deben armarse con él.
 

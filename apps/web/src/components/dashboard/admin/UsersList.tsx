@@ -324,7 +324,7 @@ export default function UsersList() {
               onExport={(format) => runExport(format, selectedRows)}
               onClear={clearSelection}
             />
-            <DataTable cols={columns} rows={rows} rowKey={userKey} selection={selection} loading={!data} empty="No hay usuarios con estos filtros." />
+            <DataTable tableId="users" cols={columns} rows={rows} rowKey={userKey} selection={selection} loading={!data} empty="No hay usuarios con estos filtros." />
             {data && (
               <Pager
                 page={current}

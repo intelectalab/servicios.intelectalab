@@ -220,7 +220,7 @@ export default function ServicesList() {
               onClear={clearSelection}
             />
             <DataTable
-              cols={COLUMNS}
+              tableId="services" cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={serviceKey}
               selection={selection}

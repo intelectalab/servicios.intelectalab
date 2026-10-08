@@ -260,7 +260,7 @@ export default function PortalRequestsList() {
               onClear={clearSelection}
             />
             <DataTable
-              cols={columns}
+              tableId="portal-requests" cols={columns}
               rows={data?.data ?? []}
               rowKey={requestKey}
               selection={selection}

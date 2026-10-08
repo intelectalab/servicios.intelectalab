@@ -154,7 +154,7 @@ export default function ContractsList() {
               onClear={clearSelection}
             />
             <DataTable
-              cols={COLUMNS}
+              tableId="contracts" cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={contractKey}
               selection={selection}

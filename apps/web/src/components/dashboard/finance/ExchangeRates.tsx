@@ -190,7 +190,7 @@ export default function ExchangeRates() {
               onClear={clearSelection}
             />
             <DataTable
-              cols={COLUMNS}
+              tableId="exchange-rates" cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={rateKey}
               selection={selection}

@@ -241,7 +241,7 @@ export default function QuotationsList() {
               onClear={clearSelection}
             />
             <DataTable
-              cols={COLUMNS}
+              tableId="quotations" cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={quotationKey}
               selection={selection}

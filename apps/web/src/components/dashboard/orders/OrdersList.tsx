@@ -159,7 +159,7 @@ export default function OrdersList() {
               onClear={clearSelection}
             />
             <DataTable
-              cols={COLUMNS}
+              tableId="orders" cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={orderKey}
               selection={selection}

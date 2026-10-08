@@ -1,12 +1,14 @@
 "use client";
 
 import {
-  useCallback, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent,
+  useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Lock, Search, Upload, X,
+  AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Lock, MoreVertical, Pin, PinOff,
+  Search, Upload, X,
 } from "lucide-react";
 import Link from "next/link";
 import { useAccess } from "@/lib/access-context";
@@ -316,8 +318,10 @@ export type Selection<T> = {
 const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[#CFD5DE] accent-[#1B8FC9]";
 
 export function DataTable<T>({
-  cols, rows, rowKey, onRowClick, selection, loading = false, empty = "No hay registros con estos filtros.", dense = false,
+  cols, rows, rowKey, onRowClick, selection, loading = false, empty = "No hay registros con estos filtros.", dense = false, tableId,
 }: {
+  /** Con un nombre propio, la tabla es la de los listados: cabecera fija y columnas que se mueven e inmovilizan. */
+  tableId?: string;
   cols: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
@@ -338,6 +342,10 @@ export function DataTable<T>({
   }
 
   if (!rows.length) return <Empty text={empty} />;
+
+  if (tableId) {
+    return <ColumnTable tableId={tableId} cols={cols} rows={rows} rowKey={rowKey} onRowClick={onRowClick} selection={selection} dense={dense} />;
+  }
 
   const allSelected = selection ? rows.every((row) => selection.ids.has(rowKey(row))) : false;
 
@@ -388,6 +396,308 @@ export function DataTable<T>({
                 )}
                 {cols.map((col) => (
                   <td key={col.label} data-label={col.label} className={`${TD} ${dense ? "!py-[7px]" : ""} ${col.num ? NUM : ""}`}>{col.render(row)}</td>
+                ))}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// --- Tabla de listado con columnas que se mueven e inmovilizan ----------------------
+
+const COL_MENU = "app-surface app-text fixed z-[250] w-56 rounded-xl border border-[color:var(--app-border)] p-1.5 text-left text-xs font-normal normal-case tracking-normal shadow-[0_20px_50px_rgba(8,25,55,.28)]";
+const COL_MENU_ITEM = "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-[var(--app-surface-muted)]";
+const CELL_BG = "bg-[var(--app-surface)]";
+const CELL_BG_HOVER = "bg-[var(--app-surface)] group-hover:bg-[var(--app-surface-muted)]";
+const CELL_BG_SELECTED = "bg-[color-mix(in_srgb,#1B8FC9_13%,var(--app-surface))]";
+const COL_SEP = "\u0000";
+
+function readStoredList(key: string): string[] {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * La tabla de los listados, con el mismo manejo que la de Clientes y actores:
+ * cabecera y casillas siempre a la vista, columnas que se mueven arrastrando
+ * (la primera no) y que se inmovilizan desde su menú. Inmovilizar cualquiera
+ * inmoviliza también la primera, y queda a su lado. Se recuerda en el navegador.
+ */
+function ColumnTable<T>({
+  tableId, cols, rows, rowKey, onRowClick, selection, dense,
+}: {
+  tableId: string;
+  cols: Column<T>[];
+  rows: T[];
+  rowKey: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  selection?: Selection<T>;
+  dense: boolean;
+}) {
+  const orderKey = `table-${tableId}-column-order`;
+  const frozenKey = `table-${tableId}-frozen-columns`;
+  const first = cols[0]?.label ?? "";
+
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [frozenColumns, setFrozenColumns] = useState<string[]>([]);
+  const [frozenOffsets, setFrozenOffsets] = useState<Record<string, number>>({});
+  const [dragged, setDragged] = useState<string | null>(null);
+  const [dropIndicator, setDropIndicator] = useState<{ key: string; side: "left" | "right" } | null>(null);
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const [place, setPlace] = useState<CSSProperties>({});
+  const preferencesLoaded = useRef(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const headerRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
+  const selectionRef = useRef<HTMLTableCellElement>(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setColumnOrder(readStoredList(orderKey));
+      setFrozenColumns(readStoredList(frozenKey));
+      preferencesLoaded.current = true;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [orderKey, frozenKey]);
+
+  useEffect(() => {
+    if (!preferencesLoaded.current) return;
+    try {
+      window.localStorage.setItem(orderKey, JSON.stringify(columnOrder));
+      window.localStorage.setItem(frozenKey, JSON.stringify(frozenColumns));
+    } catch { /* sin almacenamiento, no se recuerda */ }
+  }, [orderKey, frozenKey, columnOrder, frozenColumns]);
+
+  useEffect(() => {
+    function onClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpenMenu(null);
+    }
+    // El menú está en posición fija: al desplazar o cambiar el tamaño se cierra.
+    const close = () => setOpenMenu(null);
+    document.addEventListener("mousedown", onClickOutside);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, []);
+
+  const labels = cols.map((col) => col.label).join(COL_SEP);
+
+  // La primera columna no se mueve. Se inmoviliza si se pide, o junto con cualquier otra.
+  const frozen = useMemo(
+    () => (frozenColumns.length ? [first, ...frozenColumns.filter((key) => key !== first)] : []),
+    [frozenColumns, first],
+  );
+
+  // Orden en que se dibujan: la primera, las inmovilizadas y el resto como lo dejó el usuario.
+  const orderedLabels = useMemo(() => {
+    const all = labels.split(COL_SEP);
+    // Una columna sin título es la de botones de la fila: se queda al final y no se mueve.
+    const rest = all.filter((key) => key !== first && key !== "");
+    const saved = columnOrder.filter((key) => rest.includes(key));
+    const order = [...saved, ...rest.filter((key) => !saved.includes(key))];
+    const pinned = frozen.filter((key) => rest.includes(key));
+    return [first, ...pinned, ...order.filter((key) => !pinned.includes(key)), ...(all.includes("") ? [""] : [])];
+  }, [labels, columnOrder, frozen, first]);
+
+  const byLabel = new Map(cols.map((col) => [col.label, col]));
+  const orderedCols = orderedLabels.map((key) => byLabel.get(key)).filter((col): col is Column<T> => Boolean(col));
+
+  const lastFrozen = frozen.findLast((key) => orderedLabels.includes(key));
+  const divider = (key: string) => (key === lastFrozen ? "sm:border-r-2 sm:border-r-[color:var(--app-border)]" : "");
+
+  useLayoutEffect(() => {
+    const update = () => {
+      const offsets: Record<string, number> = {};
+      let offset = selectionRef.current?.getBoundingClientRect().width ?? 0;
+      for (const key of orderedLabels) {
+        if (!frozen.includes(key)) continue;
+        offsets[key] = offset;
+        offset += headerRefs.current[key]?.getBoundingClientRect().width ?? 0;
+      }
+      setFrozenOffsets(offsets);
+    };
+    const frame = window.requestAnimationFrame(update);
+    const observer = new ResizeObserver(update);
+    if (selectionRef.current) observer.observe(selectionRef.current);
+    Object.values(headerRefs.current).forEach((element) => element && observer.observe(element));
+    return () => {
+      window.cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [orderedLabels, frozen]);
+
+  const frozenStyle = (key: string, header = false): CSSProperties | undefined =>
+    frozen.includes(key) ? { left: frozenOffsets[key] ?? 0, position: "sticky", zIndex: header ? 70 : 20 } : undefined;
+
+  function toggleFrozen(key: string) {
+    // Liberar la primera libera también las que estaban inmovilizadas a su lado.
+    if (key === first) setFrozenColumns((current) => (current.length ? [] : [first]));
+    else setFrozenColumns((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
+    setOpenMenu(null);
+  }
+
+  function onColumnDrop(target: string) {
+    if (dragged && dragged !== target && dragged !== first && target !== first) {
+      const next = orderedLabels.filter((key) => key !== first && key !== dragged && key !== "");
+      const index = next.indexOf(target);
+      next.splice(index < 0 ? next.length : index + (dropIndicator?.side === "right" ? 1 : 0), 0, dragged);
+      setColumnOrder(next);
+    }
+    setDragged(null);
+    setDropIndicator(null);
+  }
+
+  function onColumnDragOver(event: DragEvent<HTMLTableCellElement>, key: string) {
+    if (!dragged || dragged === key || key === first || key === "") return;
+    event.preventDefault();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setDropIndicator({ key, side: event.clientX < rect.left + rect.width / 2 ? "left" : "right" });
+
+    // Al acercarse a un borde la tabla se desplaza sola.
+    const scroller = event.currentTarget.closest("[data-table-scroll]") as HTMLElement | null;
+    if (!scroller) return;
+    const bounds = scroller.getBoundingClientRect();
+    const edge = 72;
+    if (event.clientX - bounds.left < edge) scroller.scrollLeft -= Math.max(8, (edge - (event.clientX - bounds.left)) / 2);
+    else if (bounds.right - event.clientX < edge) scroller.scrollLeft += Math.max(8, (edge - (bounds.right - event.clientX)) / 2);
+  }
+
+  const allSelected = selection ? rows.every((row) => selection.ids.has(rowKey(row))) : false;
+  const edge = frozen.length === 0 ? "sm:border-r sm:border-r-[color:var(--app-border)]" : "";
+
+  return (
+    <div data-table-scroll className="proto-tbl-wrap isolate max-h-[calc(100vh-290px)] overflow-auto max-sm:max-h-none">
+      <table className="proto-tbl w-full border-separate border-spacing-0 text-left text-[13px]">
+        <thead>
+          <tr>
+            {selection && (
+              <th ref={selectionRef} style={{ left: 0, position: "sticky", zIndex: 70 }} className={`${TH} top-0 w-12 min-w-12 bg-[var(--app-surface)] !px-0 !text-center ${edge}`}>
+                <input
+                  type="checkbox"
+                  className={CHECKBOX}
+                  checked={allSelected}
+                  onChange={(event) => selection.onToggleAll(rows, event.target.checked)}
+                  aria-label="Seleccionar todas las filas de esta página"
+                />
+              </th>
+            )}
+            {orderedCols.map((col) => {
+              const key = col.label;
+              const isFrozen = frozen.includes(key);
+              if (key === "") return <th key={key} className={`${TH} sticky top-0 z-40 bg-[var(--app-surface)]`} />;
+              return (
+                <th
+                  key={key}
+                  ref={(element) => { headerRefs.current[key] = element; }}
+                  onDragOver={(event) => onColumnDragOver(event, key)}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    onColumnDrop(key);
+                  }}
+                  style={frozenStyle(key, true)}
+                  className={`${TH} group/th sticky top-0 bg-[var(--app-surface)] ${divider(key)} ${openMenu === key ? "z-[100]" : "z-40"} ${dragged === key ? "opacity-50" : ""}`}
+                >
+                  <div className={`flex items-center gap-2 ${col.num ? "justify-end" : "justify-between"}`}>
+                    <div className="flex select-none items-center gap-1.5">
+                      {key !== first && (
+                        <span
+                          draggable
+                          onDragStart={(event) => {
+                            event.stopPropagation();
+                            setDragged(key);
+                          }}
+                          onDragEnd={() => {
+                            setDragged(null);
+                            setDropIndicator(null);
+                          }}
+                          className="flex shrink-0 cursor-grab touch-none active:cursor-grabbing"
+                          title="Mover columna"
+                        >
+                          <GripVertical size={13} className="opacity-50 group-hover/th:opacity-100" aria-hidden="true" />
+                        </span>
+                      )}
+                      <span>{col.label}</span>
+                    </div>
+                    <button
+                      type="button"
+                      aria-label={`Opciones de la columna ${col.label}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setPlace({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 232)), top: rect.bottom + 6 });
+                        setOpenMenu(openMenu === key ? null : key);
+                      }}
+                      className={`cursor-pointer rounded p-1 hover:bg-[var(--app-surface-muted)] ${openMenu === key ? "opacity-100" : "opacity-0 group-hover/th:opacity-100 focus:opacity-100"}`}
+                    >
+                      <MoreVertical size={14} />
+                    </button>
+                  </div>
+                  {dropIndicator?.key === key && (
+                    <span aria-hidden="true" className={`pointer-events-none absolute top-0 z-[210] h-full w-1 rounded-full bg-[#1B8FC9] ${dropIndicator.side === "left" ? "left-0" : "right-0"}`} />
+                  )}
+                  {openMenu === key && createPortal(
+                    <div ref={menuRef} style={place} className={`${poppins.className} ${COL_MENU}`}>
+                      <button type="button" onClick={() => toggleFrozen(key)} className={COL_MENU_ITEM}>
+                        {isFrozen ? <PinOff size={14} className="app-muted" /> : <Pin size={14} className="app-muted" />}
+                        {isFrozen ? "Desinmovilizar columna" : "Inmovilizar columna"}
+                      </button>
+                    </div>,
+                    document.body,
+                  )}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const key = rowKey(row);
+            const selected = selection?.ids.has(key) ?? false;
+            const background = selected ? CELL_BG_SELECTED : onRowClick ? CELL_BG_HOVER : CELL_BG;
+            return (
+              <tr
+                key={key}
+                tabIndex={onRowClick ? 0 : undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                onKeyDown={onRowClick ? (event) => { if (event.key === "Enter" && event.target === event.currentTarget) onRowClick(row); } : undefined}
+                className={`group [&:last-child>td]:border-b-0 ${onRowClick ? "cursor-pointer" : ""}`}
+              >
+                {selection && (
+                  // El clic en la casilla no abre la ficha.
+                  <td
+                    data-label=""
+                    style={{ left: 0, position: "sticky", zIndex: 20 }}
+                    className={`${TD} w-12 min-w-12 !px-0 sm:text-center ${background} ${edge}`}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <input
+                      type="checkbox"
+                      className={CHECKBOX}
+                      checked={selected}
+                      onChange={() => selection.onToggle(row)}
+                      aria-label="Seleccionar fila"
+                    />
+                  </td>
+                )}
+                {orderedCols.map((col) => (
+                  <td
+                    key={col.label}
+                    data-label={col.label}
+                    style={frozenStyle(col.label)}
+                    className={`${TD} ${background} ${divider(col.label)} ${dense ? "!py-[7px]" : ""} ${col.num ? NUM : ""}`}
+                  >
+                    {col.render(row)}
+                  </td>
                 ))}
               </tr>
             );
