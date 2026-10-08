@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Mail\MfaCodeMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -15,13 +16,27 @@ class MfaLoginTest extends TestCase
 
     private function makeUser(bool $mfa): User
     {
-        return User::create([
+        $user = User::create([
             'email' => 'mfa-'.Str::random(8).'@erp-saas.test',
             'password_hash' => bcrypt('password123'),
             'name' => 'Test MFA',
             'status' => 'ACTIVE',
             'mfa_enabled' => $mfa,
         ]);
+
+        // Sin acceso vigente a una empresa no se entrega sesión.
+        $tenantId = (string) Str::uuid();
+        DB::table('tenants')->insert([
+            'id' => $tenantId, 'code' => 'test-'.Str::random(8), 'name' => 'Test Tenant', 'status' => 'ACTIVE',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::statement("SET app.tenant_id = '{$tenantId}'");
+        DB::table('tenant_users')->insert([
+            'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'user_id' => $user->id, 'status' => 'ACTIVE',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        return $user;
     }
 
     public function test_user_without_mfa_gets_token_directly(): void

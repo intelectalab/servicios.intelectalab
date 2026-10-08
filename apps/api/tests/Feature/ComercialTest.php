@@ -19,6 +19,9 @@ class ComercialTest extends TestCase
         'core.view', 'services.view', 'services.manage', 'quotations.view', 'quotations.manage',
     ];
 
+    /** Módulos del plan de la empresa de prueba: sin ellos la API rechaza sus permisos (MODULE_DISABLED). */
+    private const MODULES = ['SERVICIOS', 'COTIZACIONES', 'CONTRATOS', 'FINANZAS'];
+
     /** Otro usuario del mismo tenant, con su propio rol y permisos (p. ej. Gerencia, que aprueba). */
     private function makeColleague(string $tenantId, string $name, array $permissions): User
     {
@@ -50,7 +53,7 @@ class ComercialTest extends TestCase
     }
 
     /** Usuario con rol "Ventas" (y esos permisos) en un tenant nuevo. Devuelve [usuario, tenantId]. */
-    private function makeTenantUser(array $permissions = self::PERMISSIONS): array
+    private function makeTenantUser(array $permissions = self::PERMISSIONS, array $modules = self::MODULES): array
     {
         $user = User::create([
             'email' => 'com-'.Str::random(8).'@erp-saas.test',
@@ -86,6 +89,11 @@ class ComercialTest extends TestCase
         ]);
         foreach (DB::table('permissions')->whereIn('code', $permissions)->pluck('id') as $permissionId) {
             DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
+        }
+        foreach ($modules as $module) {
+            DB::table('tenant_modules')->insert([
+                'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => $module, 'enabled' => true,
+            ]);
         }
 
         return [$user, $tenantId];
@@ -1085,7 +1093,7 @@ class ComercialTest extends TestCase
 
     public function test_roles_matrix_is_edited_through_the_permission_tables(): void
     {
-        [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage']);
+        [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage'], ['SERVICIOS']);
         DB::table('tenant_modules')->insert([
             ['id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => 'COTIZACIONES', 'enabled' => true],
         ]);

@@ -23,3 +23,6 @@ infrastructure/terraform/*.tfstate.backup
 # Sistema
 .DS_Store
 *.log
+
+# Kit de desarrollo recibido como guia (no forma parte del sistema)
+/kit/

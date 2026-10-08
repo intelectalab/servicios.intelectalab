@@ -38,20 +38,23 @@ use App\Modules\Core\Http\Controllers\TenantSettingsController;
 
 Route::prefix('v1')->group(function () {
     Route::get('/saas-plans', [SaasPlanController::class, 'index']);
-    Route::post('/tenants/register', [TenantRegisterController::class, 'register']);
+    // Registro público: pocas altas por dirección, para que no se pueda automatizar.
+    Route::post('/tenants/register', [TenantRegisterController::class, 'register'])->middleware('throttle:5,10,register');
 
-    Route::post('/login', [AuthController::class, 'login']);
-    Route::post('/login/mfa', [AuthController::class, 'verifyMfa'])->middleware('throttle:10,1');
-    Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])->middleware('throttle:5,1');
-    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:10,1');
+    // Además del bloqueo por cuenta (LoginThrottle), un tope por dirección frena probar muchos correos.
+    Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:20,1,login');
+    Route::post('/login/mfa', [AuthController::class, 'verifyMfa'])->middleware('throttle:10,1,mfa');
+    Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])->middleware('throttle:5,1,forgot');
+    Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:10,1,reset');
 
     Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 
-    Route::middleware(['auth:sanctum', 'tenant.context'])->group(function () {
+    // idempotency: un alta enviada dos veces se registra una vez. record.version: nadie pisa la edición de otro.
+    Route::middleware(['auth:sanctum', 'tenant.context', 'idempotency', 'record.version'])->group(function () {
         Route::get('/me', [AuthController::class, 'me']);
         Route::get('/me/permissions', [AuthController::class, 'permissions']);
         Route::get('/me/access', [AuthController::class, 'access']);
-        Route::post('/me/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1');
+        Route::post('/me/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1,password');
 
         // Roles y permisos de la empresa (Administración). Como en el prototipo, dependen del recurso "usuarios".
         Route::middleware('permission:users.view')->get('/roles', [RoleController::class, 'index']);
@@ -88,10 +91,12 @@ Route::prefix('v1')->group(function () {
             // Acciones masivas primero
             Route::post('/customers/bulk-deactivate', [CustomerController::class, 'bulkDeactivate']);
             Route::post('/customers/bulk-activate', [CustomerController::class, 'bulkActivate']);
-            Route::post('/customers/import', [CustomerController::class, 'import']);
+            // Desconectado (2026-10-08): el alta y la importación van por /parties (Clientes y actores),
+            // que no duplica identidades. Para reconectar este módulo, quitar el comentario.
+            // Route::post('/customers/import', [CustomerController::class, 'import']);
             
             // Acciones individuales
-            Route::post('/customers', [CustomerController::class, 'store']);
+            // Route::post('/customers', [CustomerController::class, 'store']);
             Route::put('/customers/{customer}', [CustomerController::class, 'update']);
             Route::post('/customers/{customer}/deactivate', [CustomerController::class, 'deactivate']);
             Route::post('/customers/{customer}/activate', [CustomerController::class, 'activate']);
@@ -121,10 +126,12 @@ Route::prefix('v1')->group(function () {
             // Acciones masivas primero
             Route::post('/suppliers/bulk-deactivate', [SupplierController::class, 'bulkDeactivate']);
             Route::post('/suppliers/bulk-activate', [SupplierController::class, 'bulkActivate']);
-            Route::post('/suppliers/import', [SupplierController::class, 'import']);
+            // Desconectado (2026-10-08): el alta y la importación van por /parties (Clientes y actores),
+            // que no duplica identidades. Para reconectar este módulo, quitar el comentario.
+            // Route::post('/suppliers/import', [SupplierController::class, 'import']);
 
             // Acciones individuales
-            Route::post('/suppliers', [SupplierController::class, 'store']);
+            // Route::post('/suppliers', [SupplierController::class, 'store']);
             Route::put('/suppliers/{supplier}', [SupplierController::class, 'update']);
             Route::post('/suppliers/{supplier}/deactivate', [SupplierController::class, 'deactivate']);
             Route::post('/suppliers/{supplier}/activate', [SupplierController::class, 'activate']);
@@ -151,10 +158,12 @@ Route::prefix('v1')->group(function () {
             // Acciones masivas primero
             Route::post('/employees/bulk-deactivate', [EmployeeController::class, 'bulkDeactivate']);
             Route::post('/employees/bulk-activate', [EmployeeController::class, 'bulkActivate']);
-            Route::post('/employees/import', [EmployeeController::class, 'import']);
+            // Desconectado (2026-10-08): el alta y la importación van por /parties (Clientes y actores),
+            // que no duplica identidades. Para reconectar este módulo, quitar el comentario.
+            // Route::post('/employees/import', [EmployeeController::class, 'import']);
 
             // Acciones individuales
-            Route::post('/employees', [EmployeeController::class, 'store']);
+            // Route::post('/employees', [EmployeeController::class, 'store']);
             Route::put('/employees/{employee}', [EmployeeController::class, 'update']);
             Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
             Route::post('/employees/{employee}/activate', [EmployeeController::class, 'activate']);
@@ -363,14 +372,17 @@ Route::prefix('v1')->group(function () {
             Route::post('/crm/leads/{lead}/convert', [CrmLeadController::class, 'convert']);
         });
 
-        Route::middleware('permission:users.view')->get('/test/users-permission', function () {
-            return response()->json(['message' => 'Tienes permiso para ver usuarios.']);
-        });
+        // Rutas de prueba de permisos: solo en desarrollo y en las pruebas automáticas.
+        if (app()->environment('local', 'testing')) {
+            Route::middleware('permission:users.view')->get('/test/users-permission', function () {
+                return response()->json(['message' => 'Tienes permiso para ver usuarios.']);
+            });
 
-        // Ruta de prueba: requiere un permiso que tu usuario NO tiene
-        Route::middleware('permission:system.admin')->get('/test/no-permission', function () {
-            return response()->json(['message' => 'No deberías poder ver esto.']);
-        });
+            // Requiere un permiso que tu usuario NO tiene
+            Route::middleware('permission:system.admin')->get('/test/no-permission', function () {
+                return response()->json(['message' => 'No deberías poder ver esto.']);
+            });
+        }
     });
 
     Route::middleware(['auth:sanctum', 'super.admin'])->prefix('superadmin')->group(function () {

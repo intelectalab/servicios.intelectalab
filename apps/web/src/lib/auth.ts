@@ -22,8 +22,10 @@ export function setAuthToken(token: string, scope: AuthScope, remember: boolean)
   if (typeof document === "undefined") return;
 
   const lifetime = remember ? `; Max-Age=${REMEMBER_MAX_AGE}` : "";
-  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/${lifetime}; SameSite=Lax`;
-  document.cookie = `${SCOPE_COOKIE}=${scope}; Path=/${lifetime}; SameSite=Lax`;
+  // En un sitio con https la cookie solo viaja cifrada.
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(token)}; Path=/${lifetime}; SameSite=Lax${secure}`;
+  document.cookie = `${SCOPE_COOKIE}=${scope}; Path=/${lifetime}; SameSite=Lax${secure}`;
 }
 
 export function clearAuthToken() {

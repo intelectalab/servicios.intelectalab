@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -98,7 +99,7 @@ class UserController extends Controller
             $user = User::create([
                 'email' => $data['email'],
                 'name' => $data['name'],
-                'password_hash' => bcrypt(Str::random(40)),
+                'password_hash' => Hash::make(Str::random(40)),
                 'status' => 'ACTIVE',
                 'mfa_enabled' => (bool) ($data['mfa'] ?? false),
             ]);

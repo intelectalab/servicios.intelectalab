@@ -9,6 +9,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | --- | --- |
 | [criterios.md](criterios.md) | Las reglas con las que se adapta cada pantalla y la paleta del logo. |
 | [decisiones-y-pendientes.md](decisiones-y-pendientes.md) | Decisiones que no se deducen del código y lo que quedó pendiente. |
+| [comparacion-con-el-kit.md](comparacion-con-el-kit.md) | Comparación del sistema con el kit de desarrollo recibido (que se usa como guía): qué cumple, qué no y qué choca con decisiones ya tomadas. |
 | [cambios/](cambios/) | Un archivo por tanda de trabajo: qué se tocó, por qué y cómo se probó. |
 
 ## Registro de cambios
@@ -43,6 +44,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | Tablas de los listados como la de Clientes y actores: cabecera y casillas fijas, mover e inmovilizar columnas | [cambios/2026-10-08_tablas-de-listado-como-actores.md](cambios/2026-10-08_tablas-de-listado-como-actores.md) |
 | 2026-10-08 | Orden real desde la cabecera, paginación que responde y carga rápida de Clientes y actores | [cambios/2026-10-08_orden-real-paginacion-y-carga.md](cambios/2026-10-08_orden-real-paginacion-y-carga.md) |
 | 2026-10-08 | Filtrar por columna en Cotizaciones, Contratos, Órdenes, Servicios y Solicitudes | [cambios/2026-10-08_filtrar-por-columna-en-los-listados.md](cambios/2026-10-08_filtrar-por-columna-en-los-listados.md) |
+| 2026-10-08 | Protecciones del sistema: aislamiento, auditoría inalterable, módulos del plan en la API, acceso y conversiones únicas | [cambios/2026-10-08_protecciones-del-sistema.md](cambios/2026-10-08_protecciones-del-sistema.md) |
 
 ## Cómo se escribe cada entrada
 

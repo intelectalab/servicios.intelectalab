@@ -12,7 +12,9 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => ['*'],
+    // En producción, definir CORS_ALLOWED_ORIGINS con los dominios de la web separados por comas
+    // (p. ej. "https://midominio.com,https://app.midominio.com"). Sin definir, acepta cualquiera.
+    'allowed_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('CORS_ALLOWED_ORIGINS', '*'))))),
 
     'allowed_origins_patterns' => [],
 

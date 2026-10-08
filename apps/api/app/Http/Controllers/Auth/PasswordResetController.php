@@ -104,6 +104,9 @@ class PasswordResetController extends Controller
             'password_hash' => Hash::make($data['password']),
         ])->save();
 
+        // Quien restablece la contraseña puede haberla perdido: se cierran todas sus sesiones.
+        $user->tokens()->delete();
+
         // Restablecer la contraseña desbloquea la cuenta.
         LoginThrottle::clear($user->email);
 

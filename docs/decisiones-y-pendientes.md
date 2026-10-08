@@ -4,6 +4,22 @@ Estado al 2026-10-08.
 
 ## Decisiones tomadas
 
+### Kit de desarrollo (2026-10-08)
+- El kit (`kit/`, fuera del repositorio) es una **guía**: no se cumple tal cual. Se mantiene lo construido y se toma lo que suma. Comparación en [comparacion-con-el-kit.md](comparacion-con-el-kit.md).
+- Lo que choca con decisiones ya tomadas **se queda como está**: colores del logo, rutas en inglés, código al correo, módulo fuera de plan con candado, tarjetas movibles, orden en página, precio de catálogo en soles, registro público de empresas, landing en `/`, planes con suscripciones, una orden por contrato.
+- Orden de trabajo: 1) riesgos de hoy, 2) alcance en permisos y protecciones (envíos repetidos, ediciones simultáneas), 3) pantallas que faltan de fundaciones.
+- Todo cambio debe buscar la protección del sistema.
+
+### Protecciones (2026-10-08)
+- Toda tabla con datos de una empresa lleva su regla de aislamiento en la base, también las que cuelgan de otra (`persons`, `organizations`).
+- La auditoría es de solo alta y lectura para la aplicación; el catálogo de permisos, de solo lectura.
+- Un permiso solo vale si la empresa tiene su módulo: lo comprueba la API (`CheckPermission`), no solo el menú.
+- El alta de identidades es solo por `/parties`. Las altas de `/customers`, `/suppliers` y `/employees` están desactivadas.
+- Contraseñas con Argon2id; cambiar o restablecer la contraseña cierra las otras sesiones; sin acceso vigente a una empresa no hay sesión.
+- Lo que la base puede garantizar (una cotización, un contrato) se garantiza en la base, además de en el código.
+- Ediciones simultáneas: los registros editables llevan `lock_version`; la web envía `If-Match` y la API responde 409 si otra persona lo cambió (`CheckRecordVersion`). Toda tabla nueva que se edite desde una ficha debe llevar `lock_version` y su entrada en ese control.
+- Envíos repetidos: las altas y conversiones llevan `Idempotency-Key` (`Idempotency`); lo pone solo el cliente `lib/api.ts`.
+
 ### Menú lateral
 - `MENU_ITEMS` (en `apps/web/src/components/layout/AppShell.tsx`) replica los grupos y el orden del prototipo.
 - Las pantallas que aún no existen van con `soon: true`: se ven atenuadas y no navegan. En modo íconos la barra muestra un ícono por módulo (los mismos que desplegada) y al pulsarlo abre un panel con sus pantallas (2026-10-06). Al construir una se cambia `soon` por `href` + `module` + `requiredPermission`.
@@ -62,7 +78,8 @@ Estado al 2026-10-08.
 ## Pendientes
 
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
-- El candado de módulo es solo visual: en la API solo CRM usa el middleware `module:`.
+- CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
+- Separar la consola de plataforma en su propio usuario de base; cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
 - El drawer de planes (`SaasPlanDrawer.tsx`) tiene su lista de módulos escrita a mano y no coincide con `module_catalog`.
 - No hay página para la auditoría de plataforma (`GET /v1/superadmin/audit`), ni comando para crear superadmins, ni contador de notificaciones.
 - "Mi perfil" es de solo lectura; el prototipo además lista y cierra sesiones y guarda preferencias de notificación.

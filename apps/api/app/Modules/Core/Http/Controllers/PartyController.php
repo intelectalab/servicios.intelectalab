@@ -464,6 +464,7 @@ class PartyController extends Controller
             'employee_code' => $party->employee?->employee_code,
             'user_name' => $party->employee?->user?->name,
             'created_at' => $party->created_at?->toIso8601String(),
+            'lock_version' => (int) $party->lock_version,
         ];
     }
 

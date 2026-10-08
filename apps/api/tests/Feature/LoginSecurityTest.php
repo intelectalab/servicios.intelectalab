@@ -85,6 +85,7 @@ class LoginSecurityTest extends TestCase
     {
         Mail::fake();
         $user = $this->makeUser();
+        $this->makeTenantFor($user);
 
         for ($i = 0; $i < 4; $i++) {
             $this->login($user, 'incorrecta')->assertStatus(422)
@@ -125,6 +126,7 @@ class LoginSecurityTest extends TestCase
     public function test_successful_login_resets_the_failed_attempts(): void
     {
         $user = $this->makeUser();
+        $this->makeTenantFor($user);
 
         for ($i = 0; $i < 4; $i++) {
             $this->login($user, 'incorrecta')->assertStatus(422);
@@ -173,6 +175,7 @@ class LoginSecurityTest extends TestCase
     public function test_session_lasts_a_workday_unless_remember_is_checked(): void
     {
         $user = $this->makeUser();
+        $this->makeTenantFor($user);
 
         $this->login($user)->assertOk();
         $normal = $user->tokens()->latest('id')->first();
@@ -188,6 +191,7 @@ class LoginSecurityTest extends TestCase
     {
         Mail::fake();
         $user = $this->makeUser(['mfa_enabled' => true]);
+        $this->makeTenantFor($user);
 
         $mfaToken = $this->postJson('/api/v1/login', ['email' => $user->email, 'password' => 'password123', 'remember' => true])
             ->json('mfa_token');

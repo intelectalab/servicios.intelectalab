@@ -64,7 +64,19 @@ class AuthController extends Controller
 
         LoginThrottle::clear($email);
 
+        // Las contraseñas guardadas con el algoritmo anterior se actualizan al entrar.
+        if (Hash::needsRehash($user->password_hash)) {
+            $user->forceFill(['password_hash' => Hash::make($credentials['password'])])->save();
+        }
+
         $tenantId = $this->resolveActiveTenant($user);
+
+        // Sin acceso vigente a ninguna empresa (se le desactivó) no se entrega sesión.
+        if (! $user->is_super_admin && ! $tenantId) {
+            throw ValidationException::withMessages([
+                'email' => ['Este usuario no está activo.'],
+            ]);
+        }
 
         // Con verificación en dos pasos no se entrega sesión todavía:
         // se envía un código por correo y el login termina en verifyMfa().
@@ -329,6 +341,11 @@ class AuthController extends Controller
         }
 
         $user->forceFill(['password_hash' => Hash::make($data['password'])])->save();
+
+        // Cambiar la contraseña cierra las demás sesiones abiertas; la actual sigue.
+        $currentId = $user->currentAccessToken()->id ?? null;
+        $user->tokens()->when($currentId, fn ($tokens) => $tokens->where('id', '!=', $currentId))->delete();
+
         $this->audit($user, 'auth.password_changed');
 
         return response()->json(['message' => 'Tu contraseña se actualizó correctamente.']);
