@@ -38,6 +38,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-07 | Comercial: Solicitudes del portal (bandeja, cotizar, rechazar) | [cambios/2026-10-07_solicitudes-portal.md](cambios/2026-10-07_solicitudes-portal.md) |
 | 2026-10-07 | Comercial: Clientes y actores (módulo nuevo de prueba, junto a Clientes, Proveedores y Empleados) | [cambios/2026-10-07_clientes-y-actores.md](cambios/2026-10-07_clientes-y-actores.md) |
 | 2026-10-08 | Importar desde Excel/CSV en Clientes y actores y en Catálogo de servicios | [cambios/2026-10-08_importar-actores-y-servicios.md](cambios/2026-10-08_importar-actores-y-servicios.md) |
+| 2026-10-08 | Clientes, Proveedores y Empleados desconectados; queda Clientes y actores | [cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md](cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md) |
 
 ## Cómo se escribe cada entrada
 

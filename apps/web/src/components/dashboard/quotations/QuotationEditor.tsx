@@ -316,7 +316,7 @@ export default function QuotationEditor() {
                 required
                 span={2}
                 error={errors.customer_id}
-                hint={<>Solo clientes activos. <Link href="/customers" className="text-[#1679AB] hover:underline">¿No existe? Créalo en Clientes</Link></>}
+                hint={<>Solo clientes activos. <Link href="/actors" className="text-[#1679AB] hover:underline">¿No existe? Créalo en Clientes y actores</Link></>}
               >
                 <SearchSelect
                   value={customerId}

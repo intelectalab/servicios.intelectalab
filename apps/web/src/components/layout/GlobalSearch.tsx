@@ -3,14 +3,16 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { CornerDownLeft, IdCard, LayoutGrid, Loader2, Search, Truck, Users } from "lucide-react";
+import { Building2, CornerDownLeft, LayoutGrid, Loader2, Search, UserRound } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { requestOpenRecord, type RecordType } from "@/lib/open-record";
+import { actorDocument, rolesText } from "@/lib/actors";
+import type { Actor } from "@/types/actor";
+import type { PaginatedResponse } from "@/types/customer";
 import { poppins } from "@/lib/fonts";
 
 export type SearchScreen = { label: string; href: string; group?: string };
 
-type RecordResult = { type: RecordType; id: string; title: string; subtitle: string | null };
+const RECORD_LIMIT = 8;
 
 type Entry = {
   key: string;
@@ -21,16 +23,10 @@ type Entry = {
   run: () => void;
 };
 
-const RECORD_TYPES: Record<RecordType, { section: string; href: string; icon: Entry["icon"] }> = {
-  customer: { section: "Clientes", href: "/customers", icon: Users },
-  supplier: { section: "Proveedores", href: "/suppliers", icon: Truck },
-  employee: { section: "Empleados", href: "/employees", icon: IdCard },
-};
-
 type GlobalSearchProps = {
   /** Pantallas a las que el usuario puede entrar. */
   screens: SearchScreen[];
-  /** Si el usuario puede buscar clientes, proveedores y empleados (permiso core.view). */
+  /** Si el usuario puede buscar en Clientes y actores (permiso core.view). */
   canSearchRecords: boolean;
 };
 
@@ -39,7 +35,7 @@ export default function GlobalSearch({ screens, canSearchRecords }: GlobalSearch
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [records, setRecords] = useState<RecordResult[]>([]);
+  const [records, setRecords] = useState<Actor[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -87,8 +83,10 @@ export default function GlobalSearch({ screens, canSearchRecords }: GlobalSearch
     let cancelled = false;
     const timer = window.setTimeout(async () => {
       try {
-        const data = await apiFetch<{ results: RecordResult[] }>(`/v1/search?q=${encodeURIComponent(term)}`);
-        if (!cancelled) setRecords(data.results);
+        const data = await apiFetch<PaginatedResponse<Actor>>(
+          `/v1/parties?search=${encodeURIComponent(term)}&per_page=${RECORD_LIMIT}`,
+        );
+        if (!cancelled) setRecords(data.data);
       } catch {
         if (!cancelled) setRecords([]);
       } finally {
@@ -116,20 +114,15 @@ export default function GlobalSearch({ screens, canSearchRecords }: GlobalSearch
         run: () => router.push(screen.href),
       }));
 
-    const recordEntries: Entry[] = records.map((record) => {
-      const config = RECORD_TYPES[record.type];
-      return {
-        key: `${record.type}-${record.id}`,
-        title: record.title,
-        subtitle: record.subtitle,
-        section: config.section,
-        icon: config.icon,
-        run: () => {
-          requestOpenRecord(record.type, record.id);
-          router.push(config.href);
-        },
-      };
-    });
+    // Cada identidad sale una sola vez, con sus roles, y abre su vista 360.
+    const recordEntries: Entry[] = records.map((actor) => ({
+      key: `actor-${actor.id}`,
+      title: actor.name,
+      subtitle: [actorDocument(actor), rolesText(actor)].filter(Boolean).join(" · ") || null,
+      section: "Clientes y actores",
+      icon: actor.kind === "ORGANIZATION" ? Building2 : UserRound,
+      run: () => router.push(`/actors/${actor.id}`),
+    }));
 
     return [...recordEntries, ...screenEntries];
   }, [screens, records, term, router]);
@@ -198,7 +191,7 @@ export default function GlobalSearch({ screens, canSearchRecords }: GlobalSearch
                 value={query}
                 onChange={(event) => changeQuery(event.target.value)}
                 onKeyDown={onInputKeyDown}
-                placeholder={canSearchRecords ? "Busca un cliente, proveedor, empleado o pantalla…" : "Busca una pantalla…"}
+                placeholder={canSearchRecords ? "Busca un cliente, proveedor, contacto, empleado o pantalla…" : "Busca una pantalla…"}
                 aria-label="Texto a buscar"
                 className="app-text h-12 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-[color:var(--app-muted)]"
               />

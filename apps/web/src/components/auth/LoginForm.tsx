@@ -54,7 +54,7 @@ export default function LoginForm() {
     if (data.user?.is_super_admin) {
       router.push("/superadmin/plans");
     } else {
-      router.push("/customers");
+      router.push("/actors");
     }
   }
 

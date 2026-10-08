@@ -8,7 +8,10 @@ const AUTH_ROUTES = ["/login", "/forgot-password", "/reset-password"];
 // Cada tipo de cuenta tiene su propia consola y no entra a la otra.
 const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/actors", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/exchange-rates", "/roles", "/users", "/profile"];
 const PLATFORM_PREFIXES = ["/superadmin"];
-const TENANT_HOME = "/customers";
+const TENANT_HOME = "/actors";
+// Módulos desconectados: sus pantallas siguen en el repo, pero las reemplaza Clientes y actores.
+// Para reconectarlos, vaciar esta lista y devolver sus ítems al menú (AppShell.tsx).
+const RETIRED_PREFIXES = ["/customers", "/suppliers", "/employees"];
 const PLATFORM_HOME = "/superadmin/plans";
 
 const matches = (pathname: string, routes: string[]) =>
@@ -37,6 +40,10 @@ export function proxy(request: NextRequest) {
   }
 
   if (scope === "tenant" && inPlatformArea) {
+    return NextResponse.redirect(new URL(TENANT_HOME, request.url));
+  }
+
+  if (matches(pathname, RETIRED_PREFIXES)) {
     return NextResponse.redirect(new URL(TENANT_HOME, request.url));
   }
 
