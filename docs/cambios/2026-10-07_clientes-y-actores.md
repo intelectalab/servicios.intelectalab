@@ -55,7 +55,7 @@ Juntar Clientes, Proveedores y Empleados en una sola pantalla, **Clientes y acto
 
 ## Lo que tus tablas tienen y aquí todavía no
 
-- **Importar** desde Excel (cada módulo tiene su plantilla; no hay una plantilla unificada).
+- Importar desde Excel: hecho el 2026-10-08, ver [2026-10-08_importar-actores-y-servicios.md](2026-10-08_importar-actores-y-servicios.md).
 - **Asignar** (el botón de la barra de selección).
 - Editar en la celda las condiciones de cliente (días de crédito, límite, moneda): no son columnas de esta tabla; se editan en la vista 360.
 - En teléfono las filas se ven como tarjetas, sin cabeceras: ordenar, mover, inmovilizar y el menú de columnas solo están en pantallas anchas.

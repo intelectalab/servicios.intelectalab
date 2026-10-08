@@ -4,6 +4,8 @@ namespace App\Modules\Core\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Models\Contact;
+use App\Modules\Core\Models\CustomFieldDefinition;
+use App\Modules\Core\Models\CustomFieldValue;
 use App\Modules\Core\Models\Customer;
 use App\Modules\Core\Models\Employee;
 use App\Modules\Core\Models\Organization;
@@ -12,9 +14,11 @@ use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\SpreadsheetImport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -104,7 +108,15 @@ class PartyController extends Controller
             ], 409);
         }
 
-        $party = DB::transaction(function () use ($data, $tenantId, $request) {
+        $party = $this->createParty($data, $tenantId, $request);
+
+        return response()->json($this->detail($party), 201);
+    }
+
+    /** Crea la identidad con sus roles y contactos principales, a partir de datos ya validados. */
+    private function createParty(array $data, string $tenantId, Request $request): Party
+    {
+        return DB::transaction(function () use ($data, $tenantId, $request) {
             $party = Party::create(['tenant_id' => $tenantId, 'party_type' => $data['kind'], 'status' => 'ACTIVE']);
 
             if ($data['kind'] === 'PERSON') {
@@ -139,8 +151,6 @@ class PartyController extends Controller
 
             return $party;
         });
-
-        return response()->json($this->detail($party), 201);
     }
 
     /** Datos de la identidad. Solo cambia lo que llega: sirve a la ficha y a la edición en celda. */
@@ -446,9 +456,11 @@ class PartyController extends Controller
         ];
     }
 
-    private function validated(Request $request, bool $creating, ?Party $party = null): array
+    /** Valida los datos del formulario o, con `$input`, los de una fila importada. */
+    private function validated(Request $request, bool $creating, ?Party $party = null, ?array $input = null): array
     {
-        $kind = $creating ? $request->input('kind') : $party->party_type;
+        $input ??= $request->all();
+        $kind = $creating ? ($input['kind'] ?? null) : $party->party_type;
         $need = $creating ? 'required' : 'sometimes';
 
         $rules = [
@@ -482,7 +494,7 @@ class PartyController extends Controller
             ];
         }
 
-        $data = $request->validate($rules, [
+        $data = Validator::make($input, $rules, [
             'roles.required' => 'Selecciona al menos un rol.',
             'legal_name.required' => 'Indica la razón social.',
             'tax_identifier.required' => 'Indica el RUC.',
@@ -490,7 +502,9 @@ class PartyController extends Controller
             'given_names.required' => 'Indica los nombres.',
             'family_name.required' => 'Indica los apellidos.',
             'email.email' => 'Correo inválido.',
-        ]);
+            'sla_level.in' => 'nivel_sla debe ser ESTANDAR o PREMIUM.',
+            'document_type.in' => 'tipo_documento debe ser DNI, CE o PASAPORTE.',
+        ])->validate();
 
         if ($creating && $kind === 'ORGANIZATION' && array_intersect(['EMPLOYEE', 'CONTACT'], $data['roles'])) {
             throw ValidationException::withMessages(['roles' => ['Solo una persona puede ser empleado o contacto.']]);
@@ -505,6 +519,267 @@ class PartyController extends Controller
         }
 
         return $data;
+    }
+
+    // --- Importación ---------------------------------------------------------------
+
+    private const IMPORT_HEADERS = [
+        'tipo', 'razon_social', 'nombre_comercial', 'nombres', 'apellidos', 'tipo_documento', 'numero_documento', 'roles',
+        'sector', 'nivel_sla', 'correo', 'prefijo', 'telefono', 'direccion', 'cargo', 'contacto_de',
+        'dias_credito', 'limite_credito', 'moneda',
+    ];
+
+    private const IMPORT_ALIASES = [
+        'tipo_persona' => 'tipo', 'tipo_actor' => 'tipo', 'tipo_cliente' => 'tipo',
+        'nombre_o_razon_social' => 'razon_social', 'razon_social_o_nombre' => 'razon_social', 'empresa' => 'razon_social',
+        'trade_name' => 'nombre_comercial', 'nombre' => 'nombres', 'apellido' => 'apellidos',
+        'tipo_doc' => 'tipo_documento', 'documento_tipo' => 'tipo_documento',
+        'numero_doc' => 'numero_documento', 'documento_numero' => 'numero_documento', 'documento' => 'numero_documento',
+        'ruc' => 'numero_documento', 'dni' => 'numero_documento',
+        'rol' => 'roles', 'roles_en_core' => 'roles', 'sla' => 'nivel_sla', 'nivel_de_sla' => 'nivel_sla',
+        'email' => 'correo', 'correo_electronico' => 'correo', 'phone' => 'telefono', 'celular' => 'telefono',
+        'prefijo_pais' => 'prefijo', 'codigo_pais' => 'prefijo', 'direccion_fiscal' => 'direccion', 'puesto' => 'cargo',
+        'contacto_de_organizacion' => 'contacto_de', 'organizacion' => 'contacto_de',
+        'dias_de_credito' => 'dias_credito', 'plazo_credito' => 'dias_credito',
+        'limite_de_credito' => 'limite_credito', 'preferred_currency' => 'moneda', 'currency' => 'moneda',
+    ];
+
+    private const IMPORT_ROLES = [
+        'cliente' => 'CUSTOMER', 'customer' => 'CUSTOMER', 'proveedor' => 'SUPPLIER', 'supplier' => 'SUPPLIER',
+        'contacto' => 'CONTACT', 'contact' => 'CONTACT', 'empleado' => 'EMPLOYEE', 'employee' => 'EMPLOYEE',
+    ];
+
+    /** Plantilla de importación, con las columnas personalizadas de la tabla al final. */
+    public function downloadTemplate(Request $request)
+    {
+        $custom = CustomFieldDefinition::where('tenant_id', $request->attributes->get('tenant_id'))
+            ->where('entity_type', 'Party')->orderBy('created_at')->get(['label', 'field_type']);
+        $sample = fn (string $text) => $custom->map(fn ($field) => match ($field->field_type) {
+            'number' => '100', 'date' => '2026-09-16', 'boolean' => 'Sí', default => $text,
+        })->all();
+
+        return SpreadsheetImport::template(
+            'plantilla_importacion_clientes_y_actores.xlsx',
+            'Plantilla de importación de clientes y actores',
+            [...self::IMPORT_HEADERS, ...$custom->pluck('label')->all()],
+            [
+                ['ORGANIZACION', 'Corporación Ejemplo S.A.C.', 'Ejemplo', '', '', 'RUC', '20123456789', 'Cliente, Proveedor',
+                    'Tecnología', 'PREMIUM', 'contacto@ejemplo.pe', '+51', '999888777', 'Av. Principal 123, Lima', '', '',
+                    '45', '5000', 'USD', ...$sample('Norte')],
+                ['PERSONA', '', '', 'Juan Carlos', 'Pérez Gómez', 'DNI', '12345678', 'Contacto',
+                    '', '', 'juan.perez@ejemplo.pe', '+51', '987654321', '', 'Jefe de compras', '20123456789',
+                    '', '', '', ...$sample('Sur')],
+                ['PERSONA', '', '', 'Ana', 'Torres Silva', 'DNI', '87654321', 'Empleado',
+                    '', '', '', '', '', '', 'Técnica', '', '', '', '', ...$sample('Norte')],
+            ],
+            [
+                'tipo: ORGANIZACION o PERSONA. Una organización lleva razon_social y su RUC (11 dígitos) en numero_documento; una persona, nombres y apellidos.',
+                'roles: Cliente, Proveedor, Contacto, Empleado; varios separados por comas. Sin rol, una organización entra como Cliente y una persona como Contacto. Contacto y Empleado son solo para personas.',
+                'tipo_documento (personas): DNI, CE o PASAPORTE. nivel_sla: ESTANDAR o PREMIUM.',
+                'contacto_de (rol Contacto): el RUC o la razón social de la organización, que debe existir o venir antes en este archivo. cargo: con Empleado o Contacto.',
+                'dias_credito, limite_credito y moneda (PEN o USD): solo para el rol Cliente.',
+                'Si el documento ya existe no se duplica: se le agregan los roles que le falten.',
+                'Puedes agregar columnas al final: se crean como columnas personalizadas de la tabla.',
+            ],
+        );
+    }
+
+    /**
+     * Importa organizaciones y personas con sus roles. Cada fila se guarda por
+     * separado: las que fallan se devuelven como avisos y no detienen a las demás.
+     */
+    public function import(Request $request)
+    {
+        $request->validate(['file' => ['required', 'file', 'max:5120']]);
+        $tenantId = $request->attributes->get('tenant_id');
+
+        [$headers, $rows] = SpreadsheetImport::read($request->file('file'), self::IMPORT_ALIASES, [
+            'tipo', 'razon_social', 'nombres', 'apellidos', 'numero_documento', 'roles', 'tipo_documento',
+        ]);
+        $customColumns = array_values(array_diff($headers, self::IMPORT_HEADERS));
+
+        $created = 0;
+        $updated = 0;
+        $warnings = [];
+
+        foreach ($rows as $number => $row) {
+            try {
+                DB::transaction(function () use ($row, $request, $tenantId, $customColumns, $number, &$created, &$updated, &$warnings) {
+                    $data = $this->importData($row, $tenantId);
+
+                    $existing = $this->duplicatesOf($request, [...$data, 'legal_name' => null])[0] ?? null;
+                    if ($existing) {
+                        // Ya existe: no se duplica, solo recibe los roles que le falten.
+                        $party = $this->find($existing['id'], $request);
+                        $missing = array_values(array_diff($data['roles'], $existing['roles']));
+                        foreach ($missing as $role) {
+                            $this->grantRole($party, $role, $tenantId, $data['position'] ?? null);
+                        }
+                        if ($missing) {
+                            $this->audit($request, $party, 'party.role.add', ['note' => 'Importación: '.implode(', ', array_map(fn ($role) => self::ROLE_LABELS[$role], $missing))]);
+                            $updated++;
+                        }
+                        $warnings[] = "Fila {$number}: «{$existing['name']}» ya existía; ".($missing
+                            ? 'se le agregó '.implode(', ', array_map(fn ($role) => self::ROLE_LABELS[$role], $missing)).'.'
+                            : 'no se cambió.');
+
+                        return;
+                    }
+
+                    $party = $this->createParty($data, $tenantId, $request);
+                    $this->importTerms($party, $row);
+                    $this->importCustomFields($party, $row, $customColumns, $tenantId);
+                    $created++;
+                });
+            } catch (ValidationException $e) {
+                $warnings[] = "Fila {$number}: ".collect($e->errors())->flatten()->first();
+            } catch (\Illuminate\Database\QueryException) {
+                $warnings[] = "Fila {$number}: no se pudo guardar (revisa que los datos no sean demasiado largos).";
+            }
+        }
+
+        if ($created + $updated === 0) {
+            return response()->json(['message' => 'No se pudo importar ningún registro.', 'errors' => ['file' => $warnings]], 422);
+        }
+
+        return response()->json([
+            'imported' => $created,
+            'updated' => $updated,
+            'message' => "Se importaron {$created} registro(s)".($updated ? " y se actualizaron {$updated}" : '').'.',
+            'warnings' => $warnings,
+        ]);
+    }
+
+    /** Una fila del archivo, convertida a los mismos datos que valida el formulario. */
+    private function importData(array $row, string $tenantId): array
+    {
+        $get = fn (string $key) => trim((string) ($row[$key] ?? ''));
+
+        $type = SpreadsheetImport::normalize($get('tipo'));
+        $kind = match (true) {
+            in_array($type, ['organizacion', 'organization', 'empresa', 'juridica'], true) => 'ORGANIZATION',
+            in_array($type, ['persona', 'person', 'natural', 'persona_natural'], true) => 'PERSON',
+            // Sin tipo: con nombres o apellidos es una persona; si no, una organización.
+            default => $get('nombres') !== '' || $get('apellidos') !== '' ? 'PERSON' : 'ORGANIZATION',
+        };
+
+        $roles = [];
+        foreach (preg_split('/[,;\/|]+/', $get('roles')) ?: [] as $name) {
+            $name = SpreadsheetImport::normalize($name);
+            if ($name === '') {
+                continue;
+            }
+            if (! isset(self::IMPORT_ROLES[$name])) {
+                throw ValidationException::withMessages(['roles' => ["Rol desconocido: «{$name}»."]]);
+            }
+            $roles[] = self::IMPORT_ROLES[$name];
+        }
+        $roles = array_values(array_unique($roles)) ?: [$kind === 'ORGANIZATION' ? 'CUSTOMER' : 'CONTACT'];
+
+        $input = array_filter([
+            'kind' => $kind,
+            'roles' => $roles,
+            'email' => $get('correo'),
+            'phone' => $get('telefono'),
+            'phone_country_code' => $get('telefono') !== '' ? $get('prefijo') : '',
+            'address' => $get('direccion'),
+        ], fn ($value) => $value !== '');
+
+        if ($kind === 'ORGANIZATION') {
+            $input += array_filter([
+                'legal_name' => $get('razon_social'),
+                'trade_name' => $get('nombre_comercial'),
+                'tax_identifier' => $get('numero_documento'),
+                'sector' => $get('sector'),
+                'sla_level' => strtoupper(SpreadsheetImport::normalize($get('nivel_sla'))),
+            ], fn ($value) => $value !== '');
+        } else {
+            $documentType = strtoupper(SpreadsheetImport::normalize($get('tipo_documento')));
+            $input += array_filter([
+                // Quien use una sola columna de nombre para todo (como en Clientes) también entra.
+                'given_names' => $get('nombres') !== '' ? $get('nombres') : $get('razon_social'),
+                'family_name' => $get('apellidos'),
+                'document_type' => in_array($documentType, ['PASAPORTE', 'PASSPORT'], true) ? 'PASSPORT' : $documentType,
+                'document_number' => $get('numero_documento'),
+                'position' => array_intersect(['EMPLOYEE', 'CONTACT'], $roles) ? $get('cargo') : '',
+                'contact_of' => in_array('CONTACT', $roles, true) ? $this->organizationFor($get('contacto_de'), $tenantId) : '',
+            ], fn ($value) => $value !== '' && $value !== null);
+        }
+
+        return $this->validated(request(), true, null, $input);
+    }
+
+    /** La organización de "contacto_de", por RUC o por nombre. */
+    private function organizationFor(string $value, string $tenantId): ?string
+    {
+        if ($value === '') {
+            return null;
+        }
+
+        $organization = Organization::whereHas('party', fn ($p) => $p->where('tenant_id', $tenantId))
+            ->where(fn ($q) => $q->where('tax_identifier', $value)
+                ->orWhereRaw('lower(legal_name) = lower(?)', [$value])
+                ->orWhereRaw('lower(trade_name) = lower(?)', [$value]))
+            ->first();
+        if (! $organization) {
+            throw ValidationException::withMessages(['contact_of' => ["contacto_de: no existe la organización «{$value}»."]]);
+        }
+
+        return $organization->party_id;
+    }
+
+    /** Días de crédito, límite y moneda del rol Cliente. */
+    private function importTerms(Party $party, array $row): void
+    {
+        $customer = Customer::where('party_id', $party->id)->first();
+        if (! $customer) {
+            return;
+        }
+
+        $days = trim((string) ($row['dias_credito'] ?? ''));
+        $limit = trim((string) ($row['limite_credito'] ?? ''));
+        $currency = strtoupper(trim((string) ($row['moneda'] ?? '')));
+        if (($days !== '' && ! is_numeric($days)) || ($limit !== '' && (! is_numeric($limit) || (float) $limit < 0))) {
+            throw ValidationException::withMessages(['terms' => ['dias_credito y limite_credito deben ser números.']]);
+        }
+
+        $customer->update(array_filter([
+            'payment_terms_days' => $days === '' ? null : (int) $days,
+            'credit_limit' => $limit === '' ? null : (float) $limit,
+            'preferred_currency' => in_array($currency, ['PEN', 'USD'], true) ? $currency : null,
+        ], fn ($value) => $value !== null));
+    }
+
+    /** Las columnas que no son de la plantilla son columnas personalizadas: se crean si no existen. */
+    private function importCustomFields(Party $party, array $row, array $columns, string $tenantId): void
+    {
+        $definitions = CustomFieldDefinition::where('tenant_id', $tenantId)->where('entity_type', 'Party')->get();
+
+        foreach ($columns as $key) {
+            $value = trim((string) ($row[$key] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+
+            $definition = $definitions->first(fn ($candidate) => SpreadsheetImport::normalize($candidate->label) === $key
+                || SpreadsheetImport::normalize($candidate->field_key) === $key);
+            if (! $definition) {
+                $definition = CustomFieldDefinition::create([
+                    'tenant_id' => $tenantId, 'entity_type' => 'Party', 'field_key' => $key,
+                    'label' => ucfirst(str_replace('_', ' ', $key)), 'field_type' => 'text',
+                ]);
+                $definitions->push($definition);
+            }
+
+            CustomFieldValue::updateOrCreate(
+                ['field_id' => $definition->id, 'entity_id' => $party->id],
+                ['tenant_id' => $tenantId, 'entity_type' => 'Party', 'value' => match ($definition->field_type) {
+                    'date' => SpreadsheetImport::date($value),
+                    'boolean' => SpreadsheetImport::truthy($value) ? 'true' : 'false',
+                    default => $value,
+                }],
+            );
+        }
     }
 
     /** Identidades que ya usan ese documento (o, al crear una organización, esa razón social). */

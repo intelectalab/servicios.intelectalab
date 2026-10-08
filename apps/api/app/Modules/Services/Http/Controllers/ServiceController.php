@@ -11,9 +11,11 @@ use App\Modules\Services\Models\ServicePrice;
 use App\Modules\Services\Models\ServiceRecurringConfig;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\SpreadsheetImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class ServiceController extends Controller
@@ -185,6 +187,143 @@ class ServiceController extends Controller
         $this->audit($request, $service, 'service.price.create', ['amount' => $price->amount, 'valid_from' => $validFrom]);
 
         return response()->json($price, 201);
+    }
+
+    // --- Importación ---------------------------------------------------------------
+
+    private const IMPORT_HEADERS = ['codigo', 'nombre', 'categoria', 'unidad', 'modalidad', 'frecuencia', 'garantia_meses', 'precio', 'descripcion'];
+
+    private const IMPORT_ALIASES = [
+        'code' => 'codigo', 'codigo_servicio' => 'codigo', 'servicio' => 'nombre', 'name' => 'nombre', 'nombre_servicio' => 'nombre',
+        'category' => 'categoria', 'unit' => 'unidad', 'modalidad_de_facturacion' => 'modalidad', 'billing_mode' => 'modalidad',
+        'frequency' => 'frecuencia', 'garantia' => 'garantia_meses', 'garantia_en_meses' => 'garantia_meses', 'warranty_months' => 'garantia_meses',
+        'precio_inicial' => 'precio', 'precio_sin_igv' => 'precio', 'price' => 'precio', 'description' => 'descripcion',
+    ];
+
+    private const IMPORT_MODES = [
+        'unico' => 'ONE_TIME', 'unica' => 'ONE_TIME', 'one_time' => 'ONE_TIME',
+        'recurrente' => 'RECURRING', 'recurring' => 'RECURRING',
+        'por_evento' => 'PER_EVENT', 'evento' => 'PER_EVENT', 'per_event' => 'PER_EVENT',
+    ];
+
+    private const IMPORT_FREQUENCIES = [
+        'mensual' => 'MONTHLY', 'monthly' => 'MONTHLY', 'trimestral' => 'QUARTERLY', 'quarterly' => 'QUARTERLY',
+        'anual' => 'YEARLY', 'yearly' => 'YEARLY',
+    ];
+
+    public function downloadTemplate()
+    {
+        return SpreadsheetImport::template(
+            'plantilla_importacion_servicios.xlsx',
+            'Plantilla de importación de servicios',
+            self::IMPORT_HEADERS,
+            [
+                ['SRV-101', 'Mantenimiento preventivo', 'Mantenimiento', 'visita', 'Único', '', '3', '380', 'Revisión general y limpieza de equipos.'],
+                ['SRV-102', 'Soporte mensual', 'Soporte', 'mes', 'Recurrente', 'Mensual', '0', '1200', ''],
+                ['SRV-103', 'Atención de emergencia', 'Soporte', 'hora', 'Por evento', '', '0', '150', ''],
+            ],
+            [
+                'codigo, nombre y categoria son obligatorios. El código no puede repetirse: si ya existe, la fila se omite.',
+                'categoria: si no existe, se crea con ese nombre.',
+                'modalidad: Único, Recurrente o Por evento (sin dato, Único). frecuencia (solo si es Recurrente): Mensual, Trimestral o Anual.',
+                'precio: en soles y sin IGV; crea la primera versión del precio. Sin precio el servicio no se puede activar.',
+                'Los servicios entran en BORRADOR: se activan desde su ficha.',
+            ],
+        );
+    }
+
+    /** Importa servicios en borrador; cada fila se guarda por separado y las que fallan vuelven como avisos. */
+    public function import(Request $request)
+    {
+        $request->validate(['file' => ['required', 'file', 'max:5120']]);
+        $tenantId = $request->attributes->get('tenant_id');
+
+        [, $rows] = SpreadsheetImport::read($request->file('file'), self::IMPORT_ALIASES, ['codigo', 'nombre', 'categoria', 'precio', 'modalidad']);
+
+        $created = 0;
+        $warnings = [];
+        $rules = (new StoreServiceRequest())->rules();
+        $messages = (new StoreServiceRequest())->messages();
+
+        foreach ($rows as $number => $row) {
+            $get = fn (string $key) => trim((string) ($row[$key] ?? ''));
+
+            try {
+                DB::transaction(function () use ($get, $rules, $messages, $tenantId, $request, &$created) {
+                    $mode = SpreadsheetImport::normalize($get('modalidad'));
+                    $frequency = SpreadsheetImport::normalize($get('frecuencia'));
+                    if ($mode !== '' && ! isset(self::IMPORT_MODES[$mode])) {
+                        throw ValidationException::withMessages(['billing_mode' => ['modalidad debe ser Único, Recurrente o Por evento.']]);
+                    }
+                    if ($frequency !== '' && ! isset(self::IMPORT_FREQUENCIES[$frequency])) {
+                        throw ValidationException::withMessages(['frequency' => ['frecuencia debe ser Mensual, Trimestral o Anual.']]);
+                    }
+                    if ($get('codigo') === '' || $get('nombre') === '' || $get('categoria') === '') {
+                        throw ValidationException::withMessages(['category_id' => ['Código, nombre y categoría son obligatorios.']]);
+                    }
+
+                    $billingMode = self::IMPORT_MODES[$mode] ?? 'ONE_TIME';
+                    $data = Validator::make([
+                        'code' => $get('codigo'),
+                        'name' => $get('nombre'),
+                        'description' => $get('descripcion') ?: null,
+                        'unit' => $get('unidad') ?: null,
+                        'category_id' => $this->categoryFor($get('categoria'), $tenantId),
+                        'billing_mode' => $billingMode,
+                        'frequency' => $billingMode === 'RECURRING' ? (self::IMPORT_FREQUENCIES[$frequency] ?? null) : null,
+                        'warranty_months' => $get('garantia_meses') === '' ? 0 : $get('garantia_meses'),
+                        'price' => $get('precio') === '' ? null : $get('precio'),
+                    ], $rules, $messages)->validate();
+                    $this->assertUniqueCode($data['code']);
+
+                    $service = Service::create([
+                        'tenant_id' => $tenantId,
+                        'status' => 'DRAFT',
+                        'category_id' => $data['category_id'],
+                        'code' => $data['code'],
+                        'name' => $data['name'],
+                        'description' => $data['description'],
+                        'unit' => $data['unit'],
+                        'billing_mode' => $data['billing_mode'],
+                        'warranty_months' => (int) $data['warranty_months'],
+                    ]);
+                    $this->syncRecurrence($service, $data['frequency']);
+
+                    if ((float) ($data['price'] ?? 0) > 0) {
+                        ServicePrice::create([
+                            'tenant_id' => $tenantId, 'service_id' => $service->id, 'currency' => 'PEN',
+                            'amount' => $data['price'], 'valid_from' => now()->toDateString(), 'active' => true,
+                        ]);
+                    }
+
+                    $this->audit($request, $service, 'service.create', ['note' => 'Importado']);
+                    $created++;
+                });
+            } catch (ValidationException $e) {
+                $warnings[] = "Fila {$number}: ".collect($e->errors())->flatten()->first();
+            } catch (\Illuminate\Database\QueryException) {
+                $warnings[] = "Fila {$number}: no se pudo guardar (revisa que los datos no sean demasiado largos).";
+            }
+        }
+
+        if ($created === 0) {
+            return response()->json(['message' => 'No se pudo importar ningún servicio.', 'errors' => ['file' => $warnings]], 422);
+        }
+
+        return response()->json([
+            'imported' => $created,
+            'message' => "Se importaron {$created} servicio(s) en borrador.",
+            'warnings' => $warnings,
+        ]);
+    }
+
+    /** La categoría con ese nombre; si no existe, se crea. */
+    private function categoryFor(string $name, string $tenantId): string
+    {
+        $category = ServiceCategory::whereRaw('lower(name) = ?', [mb_strtolower($name)])->first()
+            ?? ServiceCategory::create(['tenant_id' => $tenantId, 'name' => $name, 'active' => true]);
+
+        return $category->id;
     }
 
     private function attributes(StoreServiceRequest $request): array

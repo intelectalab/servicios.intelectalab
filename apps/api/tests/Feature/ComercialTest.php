@@ -991,6 +991,98 @@ class ComercialTest extends TestCase
         $this->postJson('/api/v1/parties', ['kind' => 'PERSON', 'given_names' => 'A', 'family_name' => 'B', 'roles' => ['CUSTOMER']])->assertStatus(403);
     }
 
+    public function test_actors_and_services_are_imported_from_a_file(): void
+    {
+        [$user, $tenantId] = $this->makeTenantUser(['core.view', 'core.manage', 'services.view', 'services.manage']);
+        Sanctum::actingAs($user);
+        $upload = fn (string $name, string $csv) => ['file' => \Illuminate\Http\UploadedFile::fake()->createWithContent($name, $csv)];
+
+        // Actores: instrucciones con "#", títulos con tildes y espacios, y una columna extra.
+        $csv = implode("\n", [
+            '# Plantilla de importación',
+            'Tipo;Razón social;Nombres;Apellidos;Tipo documento;Número documento;Roles;Sector;Correo;Prefijo;Teléfono;Cargo;Contacto de;Días crédito;Límite crédito;Moneda;Zona Asignada',
+            'ORGANIZACION;Minera Los Andes SAC;;;RUC;20123456789;Cliente, Proveedor;Minería;compras@losandes.pe;+51;999111222;;;45;5000;USD;Norte',
+            'PERSONA;;Raúl;Cárdenas;DNI;44556677;Contacto;;;+57;3001234567;Jefe de compras;20123456789;;;;Sur',
+            'PERSONA;;Ana;Torres;DNI;11223344;Empleado;;;;;Técnica;;;;;',
+            'ORGANIZACION;Sin RUC SAC;;;;;Cliente;;;;;;;;;;',
+            'PERSONA;;Luis;Rojas;DNI;99887766;Gerente;;;;;;;;;;',
+            'PERSONA;;Eva;Paz;DNI;55667788;Contacto;;;;;;20999999999;;;;',
+        ]);
+        $result = $this->post('/api/v1/parties/import', $upload('actores.csv', $csv), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('imported', 3)->assertJsonPath('updated', 0)->json();
+        $this->assertCount(3, $result['warnings']);
+        $this->assertStringContainsString('Fila 6', $result['warnings'][0]);
+        $this->assertStringContainsString('Rol desconocido', $result['warnings'][1]);
+        $this->assertStringContainsString('no existe la organización', $result['warnings'][2]);
+
+        $org = $this->getJson('/api/v1/parties?search=20123456789')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.roles', ['CUSTOMER', 'SUPPLIER'])->assertJsonPath('data.0.sector', 'Minería')
+            ->assertJsonPath('data.0.phone_country_code', '+51')->json('data.0');
+        $this->getJson("/api/v1/parties/{$org['id']}")->assertOk()
+            ->assertJsonPath('customer.payment_terms_days', 45)->assertJsonPath('customer.preferred_currency', 'USD')
+            ->assertJsonPath('contact_people.0.name', 'Raúl Cárdenas')->assertJsonPath('contact_people.0.position', 'Jefe de compras');
+        $this->getJson('/api/v1/parties?role=EMPLOYEE')->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.position', 'Técnica');
+        // La columna extra quedó como columna personalizada de la tabla, con su valor.
+        $field = $this->getJson('/api/v1/custom-fields/definitions?entity_type=Party')->assertOk()->assertJsonPath('0.label', 'Zona asignada')->json('0');
+        $this->getJson("/api/v1/custom-fields/values?entity_type=Party&entity_id={$org['id']}")->assertOk()
+            ->assertJsonPath('0.field_id', $field['id'])->assertJsonPath('0.value', 'Norte');
+
+        // Volver a importar no duplica: a quien ya existe solo se le agrega el rol que le falte.
+        $again = "tipo;razon_social;nombres;apellidos;numero_documento;roles\nORGANIZACION;Minera Los Andes SAC;;;20123456789;Cliente\nPERSONA;;Ana;Torres;11223344;Cliente";
+        $this->post('/api/v1/parties/import', $upload('otra.csv', $again), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('imported', 0)->assertJsonPath('updated', 1);
+        $this->getJson('/api/v1/parties')->assertOk()->assertJsonPath('total', 3);
+        $this->getJson('/api/v1/parties?search=11223344')->assertOk()->assertJsonPath('data.0.roles', ['CUSTOMER', 'EMPLOYEE']);
+
+        // Un archivo sin cabeceras reconocibles, o sin ninguna fila válida, se rechaza.
+        $this->post('/api/v1/parties/import', $upload('mal.csv', "a;b;c\n1;2;3"), ['Accept' => 'application/json'])->assertStatus(422);
+        $this->post('/api/v1/parties/import', $upload('mal.csv', "tipo;razon_social;numero_documento\nORGANIZACION;X SAC;123"), ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonPath('message', 'No se pudo importar ningún registro.');
+        $this->get('/api/v1/parties/template')->assertOk()->assertHeader('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+        // Servicios: entran en borrador, con su categoría (se crea si falta), recurrencia y precio.
+        $services = implode("\n", [
+            'Código,Nombre,Categoría,Unidad,Modalidad,Frecuencia,Garantía meses,Precio,Descripción',
+            'SRV-101,Mantenimiento preventivo,Mantenimiento,visita,Único,,3,380,Revisión general',
+            'SRV-102,Soporte mensual,Soporte,mes,Recurrente,Mensual,0,1200,',
+            'SRV-103,Sin frecuencia,Soporte,mes,Recurrente,,0,100,',
+            'SRV-101,Repetido,Soporte,,,,,,',
+            ',Sin código,Soporte,,,,,,',
+        ]);
+        $result = $this->post('/api/v1/services/import', $upload('servicios.csv', $services), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('imported', 2)->json();
+        $this->assertCount(3, $result['warnings']);
+        $this->assertStringContainsString('frecuencia', $result['warnings'][0]);
+        $this->assertStringContainsString('único', $result['warnings'][1]);
+        $this->assertStringContainsString('son obligatorios', $result['warnings'][2]);
+        $this->getJson('/api/v1/services?search=SRV-101')->assertOk()->assertJsonPath('total', 1)
+            ->assertJsonPath('data.0.status', 'DRAFT')->assertJsonPath('data.0.category.name', 'Mantenimiento')
+            ->assertJsonPath('data.0.warranty_months', 3)->assertJsonPath('data.0.current_price.amount', '380.0000');
+        $this->getJson('/api/v1/services?search=SRV-102')->assertOk()
+            ->assertJsonPath('data.0.billing_mode', 'RECURRING')->assertJsonPath('data.0.recurrence.frequency', 'MONTHLY');
+        $this->assertSame(2, DB::table('service_categories')->where('tenant_id', $tenantId)->count());
+        $this->get('/api/v1/services/template')->assertOk();
+
+        // La plantilla Excel que se descarga se puede importar tal cual, con sus filas de ejemplo.
+        [$other] = $this->makeTenantUser(['core.view', 'core.manage', 'services.view', 'services.manage']);
+        Sanctum::actingAs($other);
+        $template = fn (string $path) => ['file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('plantilla.xlsx', $this->get($path)->streamedContent())];
+        $this->post('/api/v1/parties/import', $template('/api/v1/parties/template'), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('imported', 3)->assertJsonPath('warnings', []);
+        $this->getJson('/api/v1/parties?search=20123456789')->assertOk()
+            ->assertJsonPath('data.0.roles', ['CUSTOMER', 'SUPPLIER'])->assertJsonPath('data.0.sla_level', 'PREMIUM')->assertJsonPath('data.0.phone', '999888777');
+        $this->getJson('/api/v1/parties?role=CONTACT')->assertOk()->assertJsonPath('data.0.contact_of.name', 'Ejemplo')->assertJsonPath('data.0.person.document_number', '12345678');
+        $this->post('/api/v1/services/import', $template('/api/v1/services/template'), ['Accept' => 'application/json'])
+            ->assertOk()->assertJsonPath('imported', 3)->assertJsonPath('warnings', []);
+        $this->getJson('/api/v1/services?search=SRV-103')->assertOk()->assertJsonPath('data.0.billing_mode', 'PER_EVENT')->assertJsonPath('data.0.unit', 'hora');
+
+        // Importar pide el permiso de gestión.
+        [$reader] = $this->makeTenantUser(['core.view', 'services.view']);
+        Sanctum::actingAs($reader);
+        $this->post('/api/v1/parties/import', $upload('actores.csv', $csv), ['Accept' => 'application/json'])->assertStatus(403);
+        $this->post('/api/v1/services/import', $upload('servicios.csv', $services), ['Accept' => 'application/json'])->assertStatus(403);
+    }
+
     public function test_roles_matrix_is_edited_through_the_permission_tables(): void
     {
         [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage']);

@@ -16,6 +16,7 @@ import {
 import { PickSelect } from "@/components/ui/pick-select";
 import { ActorsTable } from "./ActorsTable";
 import { ActorForm } from "./ActorForm";
+import { ImportModal } from "@/components/dashboard/ImportModal";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Actor, ActorKind } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
@@ -65,6 +66,7 @@ export default function ActorsList() {
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [creating, setCreating] = useState<ActorKind | null>(null);
+  const [importing, setImporting] = useState(false);
   const [bulk, setBulk] = useState<{ type: "activate" | "deactivate"; ids: string[] } | null>(null);
   const [fieldModal, setFieldModal] = useState(false);
   const [fieldForm, setFieldForm] = useState<{ label: string; field_type: FieldType }>({ label: "", field_type: "text" });
@@ -287,6 +289,10 @@ export default function ActorsList() {
               <Plus size={16} />
               <span>Nueva persona</span>
             </Btn>
+            <Btn variant="ghost" onClick={() => setImporting(true)} permission="core.manage">
+              <Upload size={16} />
+              <span>Importar</span>
+            </Btn>
           </>
         }
       />
@@ -489,6 +495,17 @@ export default function ActorsList() {
           </>
         )}
       </Card>
+
+      {importing && (
+        <ImportModal
+          title="Importar clientes y actores"
+          endpoint="/v1/parties"
+          templateName="plantilla_importacion_clientes_y_actores.xlsx"
+          hint="Una fila por organización o persona, con sus roles. Si el documento ya existe no se duplica: se le agregan los roles que falten. Las columnas que agregues al final se vuelven columnas personalizadas."
+          onClose={() => setImporting(false)}
+          onImported={refresh}
+        />
+      )}
 
       {creating && (
         <ActorForm

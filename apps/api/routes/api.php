@@ -164,9 +164,11 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:services.view')->group(function () {
             Route::get('/service-categories', [ServiceCategoryController::class, 'index']);
             Route::get('/services', [ServiceController::class, 'index']);
+            Route::get('/services/template', [ServiceController::class, 'downloadTemplate']);
             Route::get('/services/{service}', [ServiceController::class, 'show']);
         });
         Route::middleware('permission:services.manage')->group(function () {
+            Route::post('/services/import', [ServiceController::class, 'import']);
             Route::post('/services', [ServiceController::class, 'store']);
             Route::put('/services/{service}', [ServiceController::class, 'update']);
             Route::post('/services/{service}/activate', [ServiceController::class, 'activate']);
@@ -233,11 +235,13 @@ Route::prefix('v1')->group(function () {
         // Clientes y actores: la identidad con sus roles de cliente, proveedor y empleado
         Route::middleware('permission:core.view')->group(function () {
             Route::get('/parties', [PartyController::class, 'index']);
+            Route::get('/parties/template', [PartyController::class, 'downloadTemplate']);
             Route::get('/parties/{party}', [PartyController::class, 'show']);
         });
         Route::middleware('permission:core.manage')->group(function () {
             Route::post('/parties/bulk-deactivate', [PartyController::class, 'bulkDeactivate']);
             Route::post('/parties/bulk-activate', [PartyController::class, 'bulkActivate']);
+            Route::post('/parties/import', [PartyController::class, 'import']);
             Route::post('/parties', [PartyController::class, 'store']);
             Route::put('/parties/{party}', [PartyController::class, 'update']);
             Route::post('/parties/{party}/roles', [PartyController::class, 'addRole']);

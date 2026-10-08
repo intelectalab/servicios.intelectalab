@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { BILLING_MODES, SERVICE_STATES, billingLabel, excelTone, money, stateOf } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
@@ -11,6 +11,7 @@ import {
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
 } from "@/components/ui/proto";
 import ServiceFormModal from "./ServiceFormModal";
+import { ImportModal } from "@/components/dashboard/ImportModal";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Service, ServiceCategory } from "@/types/commercial";
 
@@ -97,6 +98,7 @@ export default function ServicesList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   // La búsqueda espera a que se deje de escribir.
@@ -114,7 +116,8 @@ export default function ServicesList() {
       .then((list) => { if (!cancelled) setCategories(list); })
       .catch(() => { /* sin categorías el filtro queda vacío */ });
     return () => { cancelled = true; };
-  }, []);
+    // También tras importar, que puede crear categorías nuevas.
+  }, [reload]);
 
   function filterParams() {
     const params = new URLSearchParams();
@@ -177,13 +180,19 @@ export default function ServicesList() {
       <PageHead
         title="Catálogo de servicios"
         actions={
-          <Btn
-            onClick={() => setCreating(true)}
-            permission="services.manage"
-          >
-            <Plus size={16} />
-            <span>Nuevo servicio</span>
-          </Btn>
+          <>
+            <Btn
+              onClick={() => setCreating(true)}
+              permission="services.manage"
+            >
+              <Plus size={16} />
+              <span>Nuevo servicio</span>
+            </Btn>
+            <Btn variant="ghost" onClick={() => setImporting(true)} permission="services.manage">
+              <Upload size={16} />
+              <span>Importar</span>
+            </Btn>
+          </>
         }
       />
 
@@ -235,6 +244,17 @@ export default function ServicesList() {
           </>
         )}
       </Card>
+
+      {importing && (
+        <ImportModal
+          title="Importar servicios"
+          endpoint="/v1/services"
+          templateName="plantilla_importacion_servicios.xlsx"
+          hint="Una fila por servicio. Entran en borrador, con su categoría (se crea si no existe) y su precio inicial. Un código que ya existe se omite."
+          onClose={() => setImporting(false)}
+          onImported={() => setReload((n) => n + 1)}
+        />
+      )}
 
       {creating && (
         <ServiceFormModal
