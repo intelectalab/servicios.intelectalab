@@ -5,11 +5,14 @@ namespace App\Services;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\ValidationException;
 use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\DataValidation;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Style\Border;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -27,6 +30,9 @@ class SpreadsheetImport
     private const INK = 'FF1D1D1B';
     private const SOFT = 'FFE3F2FA';
     private const BORDER = 'FFCFE0E8';
+
+    /** Filas en blanco de la plantilla, con sus listas desplegables. */
+    private const BLANK_ROWS = 200;
 
     /** "Razón Social" → "razon_social". */
     public static function normalize(string $header): string
@@ -121,8 +127,10 @@ class SpreadsheetImport
      * @param  string[]  $headers
      * @param  array<int, array<int, string|int|float>>  $examples
      * @param  string[]  $notes
+     * @param  array<string, string[]>  $lists  columnas con lista desplegable: cabecera => opciones
+     * @param  string[]  $openLists  columnas cuya lista solo sugiere (aceptan otro valor)
      */
-    public static function template(string $filename, string $title, array $headers, array $examples, array $notes): StreamedResponse
+    public static function template(string $filename, string $title, array $headers, array $examples, array $notes, array $lists = [], array $openLists = []): StreamedResponse
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -179,6 +187,48 @@ class SpreadsheetImport
             $sheet->getStyle("A{$line}:{$last}{$line}")->applyFromArray([
                 'font' => ['name' => 'Arial', 'size' => 10, 'color' => ['argb' => self::INK]],
             ] + $border);
+        }
+
+        // Filas en blanco listas para llenar, con el mismo borde y formato de texto.
+        $firstData = $line - count($examples) + 1;
+        $lastData = $line + self::BLANK_ROWS;
+        $sheet->getStyle('A'.($line + 1).":{$last}{$lastData}")->applyFromArray([
+            'font' => ['name' => 'Arial', 'size' => 10, 'color' => ['argb' => self::INK]],
+            'numberFormat' => ['formatCode' => '@'],
+        ] + $border);
+
+        // Listas desplegables. Las opciones van en una hoja oculta: así pueden llevar comas y ser largas.
+        $lists = array_filter($lists);
+        if ($lists) {
+            $options = $spreadsheet->createSheet();
+            $options->setTitle('Listas');
+            $position = 0;
+            foreach ($lists as $header => $values) {
+                $index = array_search($header, $headers, true);
+                if ($index === false) {
+                    continue;
+                }
+                $position++;
+                $source = Coordinate::stringFromColumnIndex($position);
+                foreach (array_values($values) as $row => $value) {
+                    $options->setCellValueExplicit($source.($row + 1), (string) $value, DataType::TYPE_STRING);
+                }
+                $open = in_array($header, $openLists, true);
+                $column = Coordinate::stringFromColumnIndex($index + 1);
+
+                $validation = new DataValidation();
+                $validation->setType(DataValidation::TYPE_LIST);
+                $validation->setErrorStyle(DataValidation::STYLE_STOP);
+                $validation->setAllowBlank(true);
+                $validation->setShowDropDown(true);
+                $validation->setShowErrorMessage(! $open);
+                $validation->setErrorTitle('Valor no válido');
+                $validation->setError('Elige una opción de la lista.');
+                $validation->setFormula1("Listas!\${$source}\$1:\${$source}\$".count($values));
+                $sheet->setDataValidation("{$column}{$firstData}:{$column}{$lastData}", $validation);
+            }
+            $options->setSheetState(Worksheet::SHEETSTATE_HIDDEN);
+            $spreadsheet->setActiveSheetIndex(0);
         }
 
         return response()->streamDownload(

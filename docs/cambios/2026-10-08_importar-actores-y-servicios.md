@@ -59,3 +59,18 @@ No se probó en el navegador: subir un `.xlsx` (sí en las pruebas automáticas,
 ## Pendiente
 
 - La lista de países y esta importación no existen en Clientes, Proveedores y Empleados con el estilo nuevo: siguen con las suyas.
+
+## Listas desplegables en las plantillas (2026-10-08)
+
+Pediste que la plantilla Excel deje **seleccionar** los datos que tienen opciones (RUC, DNI, CE…), como la plantilla de tu módulo anterior.
+
+- **Clientes y actores:** tienen lista `tipo` (ORGANIZACION, PERSONA), `tipo_documento` (RUC, DNI, CE, PASAPORTE), `roles`, `nivel_sla` (ESTANDAR, PREMIUM), `dias_credito` (15, 30, 45, 60), `moneda` (PEN, USD) y las columnas personalizadas de tipo Sí / No.
+- **Servicios:** `categoria` (las categorías que ya tiene la empresa), `modalidad` (Único, Recurrente, Por evento) y `frecuencia` (Mensual, Trimestral, Anual).
+- En `roles`, `dias_credito` y `categoria` la lista solo sugiere: se puede escribir otro valor (otra combinación de roles, otro plazo, una categoría nueva). En las demás, Excel rechaza lo que no esté en la lista.
+- La plantilla trae ahora **200 filas en blanco** con borde, formato de texto (para que el RUC no pierda dígitos) y las listas.
+
+Archivos: `app/Services/SpreadsheetImport.php` (las opciones van en una hoja oculta "Listas"), `PartyController.php`, `ServiceController.php`. Solo API; sin migraciones.
+
+Diferencias con tu plantilla anterior: no hay lista para `estado` (aquí todo entra activo, o en borrador los servicios) y se añadió la de `roles`, que no existía.
+
+Probado: las 58 pruebas pasan (incluida la que vuelve a importar las plantillas tal como se descargan). Se descargaron las dos plantillas de la API local y se revisó el archivo por dentro: las listas están en las columnas correctas, de la primera fila de ejemplo a la última en blanco, y la hoja "Listas" queda oculta. **No se abrió en Excel**: falta ver ahí la flecha del desplegable.

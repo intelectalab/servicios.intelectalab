@@ -316,7 +316,12 @@ export function ActorsTable({
     ...STATIC_COLUMNS.slice(4),
   ], [customFieldDefinitions, hiddenColumns]);
 
-  const frozen = useMemo(() => ["name", ...frozenColumns.filter((key) => key !== "name")], [frozenColumns]);
+  // Nombre no se mueve: va siempre primero. Se inmoviliza si se pide, o junto con cualquier otra
+  // columna inmovilizada (que queda a su lado).
+  const frozen = useMemo(
+    () => (frozenColumns.length ? ["name", ...frozenColumns.filter((key) => key !== "name")] : []),
+    [frozenColumns],
+  );
 
   const orderedKeys = useMemo(() => {
     const available = new Set(columns.map((column) => column.key));
@@ -363,7 +368,11 @@ export function ActorsTable({
     frozen.includes(key) ? { left: frozenOffsets[key] ?? 0, position: "sticky", zIndex: header ? 70 : 20 } : undefined;
 
   const toggleFrozen = (key: string) => {
-    if (key === "name") return;
+    // Liberar Nombre libera también las que estaban inmovilizadas a su lado.
+    if (key === "name") {
+      setFrozenColumns((current) => (current.length ? [] : ["name"]));
+      return;
+    }
     setFrozenColumns((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]));
     setOpenMenu(null);
   };
@@ -580,9 +589,9 @@ export function ActorsTable({
             <button type="button" onClick={() => handleSort(key, "asc")} className={MENU_ITEM}><ArrowUp size={14} className="app-muted" /> Orden ascendente</button>
             <button type="button" onClick={() => handleSort(key, "desc")} className={MENU_ITEM}><ArrowDown size={14} className="app-muted" /> Orden descendente</button>
             <div className="my-1 border-t border-[color:var(--app-border)]" />
-            <button type="button" onClick={() => toggleFrozen(key)} disabled={key === "name"} className={MENU_ITEM}>
+            <button type="button" onClick={() => toggleFrozen(key)} className={MENU_ITEM}>
               {isFrozen ? <PinOff size={14} className="app-muted" /> : <Pin size={14} className="app-muted" />}
-              {key === "name" ? "Siempre fija" : isFrozen ? "Desinmovilizar columna" : "Inmovilizar columna"}
+              {isFrozen ? "Desinmovilizar columna" : "Inmovilizar columna"}
             </button>
             <button type="button" onClick={() => addFilter(key)} className={MENU_ITEM}><Filter size={14} className="app-muted" /> Filtrar por esta columna</button>
             {definition && (

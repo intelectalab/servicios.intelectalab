@@ -580,7 +580,19 @@ class PartyController extends Controller
                 'dias_credito, limite_credito y moneda (PEN o USD): solo para el rol Cliente.',
                 'Si el documento ya existe no se duplica: se le agregan los roles que le falten.',
                 'Puedes agregar columnas al final: se crean como columnas personalizadas de la tabla.',
+                'Las columnas tipo, tipo_documento, roles, nivel_sla, dias_credito y moneda tienen lista desplegable.',
             ],
+            [
+                'tipo' => ['ORGANIZACION', 'PERSONA'],
+                'tipo_documento' => ['RUC', 'DNI', 'CE', 'PASAPORTE'],
+                'roles' => ['Cliente', 'Proveedor', 'Cliente, Proveedor', 'Contacto', 'Empleado', 'Cliente, Contacto', 'Proveedor, Contacto', 'Cliente, Empleado'],
+                'nivel_sla' => ['ESTANDAR', 'PREMIUM'],
+                'dias_credito' => ['15', '30', '45', '60'],
+                'moneda' => ['PEN', 'USD'],
+                ...$custom->where('field_type', 'boolean')->mapWithKeys(fn ($field) => [$field->label => ['Sí', 'No']])->all(),
+            ],
+            // Aceptan otro valor: más combinaciones de roles u otro plazo de crédito.
+            ['roles', 'dias_credito'],
         );
     }
 

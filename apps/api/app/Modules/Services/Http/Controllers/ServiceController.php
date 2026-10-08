@@ -228,7 +228,14 @@ class ServiceController extends Controller
                 'modalidad: Único, Recurrente o Por evento (sin dato, Único). frecuencia (solo si es Recurrente): Mensual, Trimestral o Anual.',
                 'precio: en soles y sin IGV; crea la primera versión del precio. Sin precio el servicio no se puede activar.',
                 'Los servicios entran en BORRADOR: se activan desde su ficha.',
+                'Las columnas categoria, modalidad y frecuencia tienen lista desplegable; en categoria también puedes escribir una nueva.',
             ],
+            [
+                'categoria' => ServiceCategory::orderBy('name')->pluck('name')->all(),
+                'modalidad' => ['Único', 'Recurrente', 'Por evento'],
+                'frecuencia' => ['Mensual', 'Trimestral', 'Anual'],
+            ],
+            ['categoria'],
         );
     }
 

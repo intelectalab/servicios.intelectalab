@@ -166,3 +166,17 @@ Probado con admin: "Actor de Prueba S.A.C." muestra las dos tarjetas; el formula
 
 - Decidir si este módulo reemplaza a los tres. Si es así, falta traer lo de la lista "Lo que tus tablas tienen y aquí todavía no".
 - En la base hay identidades repetidas (la misma empresa creada una vez como cliente y otra como proveedor). El módulo nuevo evita crear más, pero no une las que ya existen.
+
+## La columna Nombre ya no está fija siempre (2026-10-08)
+
+Pediste que Nombre no quede inmovilizada de forma permanente, sino con la opción de fijarla.
+
+- Su menú (los tres puntos) ahora ofrece **Inmovilizar columna / Desinmovilizar columna**, como las demás. Al entrar ya no viene fija.
+- **No se puede mover:** sigue siendo siempre la primera.
+- Si se inmoviliza **otra** columna, Nombre se inmoviliza también y la otra queda a su lado.
+- Desinmovilizar Nombre libera también las que estaban fijas a su lado (no pueden quedar fijas sin ella).
+- La columna de casillas sigue fija a la izquierda, como antes.
+
+Archivo: `components/dashboard/actors/ActorsTable.tsx`.
+
+Probado en el navegador con Ventas, con la ventana a 900 px: al entrar Nombre está libre; Inmovilizar la fija; Desinmovilizar la libera; al inmovilizar Estado quedan fijas Nombre y Estado, una junto a la otra, también al desplazar la tabla; Desinmovilizar Nombre libera las dos. No se comprobó que la elección se conserve al recargar la página.
