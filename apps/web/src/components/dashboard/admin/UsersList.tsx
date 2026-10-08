@@ -6,9 +6,11 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { exportCsv, exportXlsx, type ExportColumn } from "@/lib/export-table";
 import {
   Btn, Card, Chip, DataTable, ExportButtons, Field, FilterSelect, Filters, FormGrid, INPUT, LoadError, Modal, PAGE_SIZES,
-  PageHead, Pager, Screen, SearchInput, SearchSelect, SelectionBar, useRowSelection, useToasts, type Column,
+  PageHead, Pager, Screen, SearchInput, SearchSelect, SelectionBar, Tabs, useRowSelection, useToasts, type Column,
   type SortState,
 } from "@/components/ui/proto";
+import { PickSelect } from "@/components/ui/pick-select";
+import { ORG_UNIT_TEXT, OrgUnits, type OrgUnitKind } from "@/components/dashboard/admin/OrgUnits";
 
 type CompanyUser = {
   id: string;
@@ -17,6 +19,7 @@ type CompanyUser = {
   status: string;
   role: { id: string; name: string; is_admin: boolean } | null;
   branch: { id: string; name: string } | null;
+  team: { id: string; name: string } | null;
   employee_id: string | null;
   /** Entra con verificación en dos pasos (por su rol o porque se le exige). */
   mfa: boolean;
@@ -32,6 +35,7 @@ type UsersResponse = {
   users: CompanyUser[];
   roles: (Option & { code: string })[];
   branches: Option[];
+  teams: Option[];
   employees: Employee[];
   /** Usuarios activos que permite el plan; null si no hay límite. */
   limit: number | null;
@@ -49,6 +53,12 @@ function firstError(err: unknown, fallback: string) {
   return fallback;
 }
 
+/** Opciones activas, más la que la persona ya tiene aunque se haya desactivado. */
+function withCurrent(options: Option[], current?: Option | null): [string, string][] {
+  const list = current && !options.some((option) => option.id === current.id) ? [...options, current] : options;
+  return list.map((option) => [option.id, option.name]);
+}
+
 function UserModal({
   user, options, onClose, onSaved,
 }: { user: CompanyUser | null; options: UsersResponse; onClose: () => void; onSaved: (created: boolean) => void }) {
@@ -56,6 +66,7 @@ function UserModal({
   const [email, setEmail] = useState(user?.email ?? "");
   const [roleId, setRoleId] = useState(user?.role?.id ?? "");
   const [branchId, setBranchId] = useState(user?.branch?.id ?? "");
+  const [teamId, setTeamId] = useState(user?.team?.id ?? "");
   const [employeeId, setEmployeeId] = useState(user?.employee_id ?? "");
   const [mfa, setMfa] = useState(user?.mfa_enabled ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -82,6 +93,7 @@ function UserModal({
           email: email.trim(),
           role_id: roleId,
           branch_id: branchId || null,
+          team_id: teamId || null,
           employee_id: employeeId || null,
           mfa,
         }),
@@ -109,17 +121,31 @@ function UserModal({
             <input className={INPUT} type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={255} />
           </Field>
           <Field label="Rol" required error={errors.role_id}>
-            <select className={INPUT} value={roleId} onChange={(e) => setRoleId(e.target.value)}>
-              <option value="">Seleccionar…</option>
-              {options.roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
-            </select>
+            <PickSelect
+              className={INPUT}
+              value={roleId}
+              onChange={setRoleId}
+              options={[["", "Seleccionar…"], ...options.roles.map((role): [string, string] => [role.id, role.name])]}
+            />
           </Field>
-          {options.branches.length > 0 && (
+          {(options.branches.length > 0 || user?.branch) && (
             <Field label="Sede principal" error={errors.branch_id}>
-              <select className={INPUT} value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-                <option value="">Sin sede</option>
-                {options.branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}</option>)}
-              </select>
+              <PickSelect
+                className={INPUT}
+                value={branchId}
+                onChange={setBranchId}
+                options={[["", "Sin sede"], ...withCurrent(options.branches, user?.branch)]}
+              />
+            </Field>
+          )}
+          {(options.teams.length > 0 || user?.team) && (
+            <Field label="Equipo" error={errors.team_id}>
+              <PickSelect
+                className={INPUT}
+                value={teamId}
+                onChange={setTeamId}
+                options={[["", "Sin equipo"], ...withCurrent(options.teams, user?.team)]}
+              />
             </Field>
           )}
           <Field label="Empleado vinculado" span={2} error={errors.employee_id} hint="La cuenta de acceso y el empleado son registros distintos; aquí se enlazan.">
@@ -171,6 +197,9 @@ export default function UsersList() {
   const [editing, setEditing] = useState<CompanyUser | "new" | null>(null);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Además de los usuarios, aquí se gestionan las sedes y los equipos a los que pertenecen.
+  const [tab, setTab] = useState<"users" | OrgUnitKind>("users");
+  const [creatingUnit, setCreatingUnit] = useState(false);
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(userKey);
 
   useEffect(() => {
@@ -210,14 +239,15 @@ export default function UsersList() {
   );
   if (sort) {
     const value = (user: CompanyUser) =>
-      sort.key === "role" ? user.role?.name ?? "" : sort.key === "branch" ? user.branch?.name ?? ""
+      sort.key === "role" ? user.role?.name ?? "" : sort.key === "branch" ? user.branch?.name ?? "" : sort.key === "team" ? user.team?.name ?? ""
         : sort.key === "mfa" ? (user.mfa ? "1" : "0") : sort.key === "status" ? (isActive(user) ? "Activo" : "Inactivo") : user.name;
     filtered.sort((a, b) => value(a).localeCompare(value(b), "es") * (sort.dir === "asc" ? 1 : -1));
   }
   const lastPage = Math.max(1, Math.ceil(filtered.length / perPage));
   const current = Math.min(page, lastPage);
   const rows = filtered.slice((current - 1) * perPage, current * perPage);
-  const showBranch = (data?.branches.length ?? 0) > 0;
+  const showBranch = (data?.branches.length ?? 0) > 0 || (data?.users ?? []).some((user) => user.branch);
+  const showTeam = (data?.teams.length ?? 0) > 0 || (data?.users ?? []).some((user) => user.team);
 
   const columns: Column<CompanyUser>[] = [
     {
@@ -236,6 +266,7 @@ export default function UsersList() {
     },
     { label: "Rol", sortKey: "role", render: (user) => (user.role ? <Chip tone="accent">{user.role.name}</Chip> : <span className="app-muted">Sin rol</span>) },
     ...(showBranch ? [{ label: "Sede", sortKey: "branch", render: (user: CompanyUser) => user.branch?.name ?? "—" }] : []),
+    ...(showTeam ? [{ label: "Equipo", sortKey: "team", render: (user: CompanyUser) => user.team?.name ?? "—" }] : []),
     { label: "MFA", sortKey: "mfa", render: (user) => <Chip tone={user.mfa ? "success" : "muted"}>{user.mfa ? "Activo" : "No"}</Chip> },
     { label: "Estado", sortKey: "status", render: (user) => <Chip tone={isActive(user) ? "success" : "muted"}>{isActive(user) ? "Activo" : "Inactivo"}</Chip> },
     {
@@ -256,6 +287,7 @@ export default function UsersList() {
     { label: "Correo", value: (user) => user.email, width: 34 },
     { label: "Rol", value: (user) => user.role?.name ?? "", width: 20 },
     { label: "Sede", value: (user) => user.branch?.name ?? "", width: 20 },
+    { label: "Equipo", value: (user) => user.team?.name ?? "", width: 20 },
     { label: "Verificación en dos pasos", value: (user) => (user.mfa ? "Activo" : "No"), width: 24, kind: "center" },
     { label: "Último acceso", value: (user) => lastLogin(user.last_login_at), width: 22, kind: "center" },
     {
@@ -285,13 +317,41 @@ export default function UsersList() {
       <PageHead
         title="Usuarios"
         actions={
-          <Btn onClick={() => setEditing("new")} permission="users.manage" disabled={!data}>
-            <Plus size={16} />
-            <span>Nuevo usuario</span>
-          </Btn>
+          tab === "users" ? (
+            <Btn onClick={() => setEditing("new")} permission="users.manage" disabled={!data}>
+              <Plus size={16} />
+              <span>Nuevo usuario</span>
+            </Btn>
+          ) : (
+            <Btn onClick={() => setCreatingUnit(true)} permission="users.manage">
+              <Plus size={16} />
+              <span>{ORG_UNIT_TEXT[tab].create}</span>
+            </Btn>
+          )
         }
       />
 
+      <Tabs
+        tabs={[["users", "Usuarios", null], ["branches", ORG_UNIT_TEXT.branches.tab, null], ["teams", ORG_UNIT_TEXT.teams.tab, null]]}
+        value={tab}
+        onChange={(value) => {
+          setTab(value as typeof tab);
+          setCreatingUnit(false);
+        }}
+      />
+
+      {tab !== "users" && (
+        <OrgUnits
+          key={tab}
+          kind={tab}
+          creating={creatingUnit}
+          onCloseCreate={() => setCreatingUnit(false)}
+          onChanged={() => setReload((n) => n + 1)}
+          toast={toast}
+        />
+      )}
+
+      {tab === "users" && (<>
       <Filters>
         <SearchInput
           value={search}
@@ -356,6 +416,7 @@ export default function UsersList() {
           El plan permite {data.limit} usuarios activos; hay {data.users.filter(isActive).length}.
         </p>
       )}
+      </>)}
 
       {editing && data && (
         <UserModal

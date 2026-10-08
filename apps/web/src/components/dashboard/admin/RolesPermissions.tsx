@@ -3,7 +3,8 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { useAccess } from "@/lib/access-context";
+import { SCOPE_LABELS, useAccess, type Scope } from "@/lib/access-context";
+import { PickSelect } from "@/components/ui/pick-select";
 import { Btn, Card, Field, INPUT, LoadError, Modal, PageHead, Screen, TD, TH, deniedText, useToasts } from "@/components/ui/proto";
 
 type Role = {
@@ -14,11 +15,13 @@ type Role = {
   is_admin: boolean;
   users: number;
   permissions: string[];
+  /** Alcance del rol en cada recurso que lo lleva. */
+  scopes: Record<string, Scope>;
 };
 
 type Permission = { code: string; name: string; description: string | null };
 
-type RolesResponse = { roles: Role[]; permissions: Permission[] };
+type RolesResponse = { roles: Role[]; permissions: Permission[]; scope_resources: { code: string; name: string }[] };
 
 type Settings = { segregation: boolean; direct_order: boolean };
 
@@ -47,6 +50,7 @@ const RESOURCES: Record<string, string> = {
   quotations: "Cotizaciones",
   contracts: "Contratos",
   orders: "Órdenes",
+  portal: "Solicitudes del portal",
   crm: "CRM",
   operations: "Operaciones",
   documents: "Documentos",
@@ -62,8 +66,14 @@ const RESOURCES: Record<string, string> = {
 
 // Acciones de la matriz, en el orden en que se muestran.
 const ACTIONS: Record<string, string> = {
-  view: "Ver", manage: "Gestionar", approve: "Aprobar", export: "Exportar", use: "Usar", reveal: "Revelar", delete: "Eliminar",
+  view: "Ver", create: "Crear", manage: "Gestionar", approve: "Aprobar", export: "Exportar", use: "Usar", reveal: "Revelar", delete: "Eliminar",
 };
+
+// Alcances que se pueden elegir, de menor a mayor.
+const SCOPE_OPTIONS = (["OWN", "TEAM", "BRANCH", "TENANT"] as Scope[]).map((scope): [string, string] => [scope, SCOPE_LABELS[scope]]);
+
+const SCOPE_SELECT =
+  "h-8 w-full min-w-[150px] rounded-lg border border-[#CFD5DE] bg-[var(--app-surface)] px-2.5 text-[12.5px] outline-none focus:border-[#1B8FC9] disabled:bg-[var(--app-surface-muted)] disabled:opacity-70";
 
 function firstError(err: unknown, fallback: string) {
   if (err instanceof ApiError) return (err.errors && Object.values(err.errors)[0]?.[0]) || err.message;
@@ -108,7 +118,7 @@ function RoleModal({ onClose, onSaved }: { onClose: () => void; onSaved: (id: st
             <textarea className={INPUT} rows={2} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} />
           </Field>
         </div>
-        <p className="app-muted mt-3 text-[12.5px]">El rol nace sin permisos: márcalos después en la matriz.</p>
+        <p className="app-muted mt-3 text-[12.5px]">El rol nace sin permisos y alcanzando solo lo propio: ajústalo después en la matriz.</p>
         {error && <p className="mt-2 text-[12.5px] text-[#D93A40]">{error}</p>}
         <div className="mt-4 flex justify-end gap-2">
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
@@ -163,6 +173,8 @@ export default function RolesPermissions() {
     (a, b) => (Object.keys(RESOURCES).indexOf(a) + 100) % 100 - (Object.keys(RESOURCES).indexOf(b) + 100) % 100,
   );
   const actions = Object.keys(ACTIONS).filter((action) => resources.some((resource) => codes.has(`${resource}.${action}`)));
+  // Recursos cuyo alcance se elige (en los demás, quien tiene el permiso ve toda la empresa).
+  const scoped = new Set(data?.scope_resources.map((resource) => resource.code));
 
   /** Marca o desmarca un permiso y lo guarda al instante, como el prototipo. */
   async function toggle(code: string, on: boolean) {
@@ -187,6 +199,32 @@ export default function RolesPermissions() {
     } catch (err) {
       apply(before);
       toast(firstError(err, "No se pudo guardar el permiso."), "danger");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /** Cambia qué registros de ese recurso alcanza el rol y lo guarda al instante. */
+  async function changeScope(resource: string, scope: Scope) {
+    if (!role || !data) return;
+    const before = role.scopes;
+    const apply = (scopes: Record<string, Scope>) =>
+      setData((current) => current && {
+        ...current,
+        roles: current.roles.map((item) => (item.id === role.id ? { ...item, scopes } : item)),
+      });
+
+    apply({ ...before, [resource]: scope });
+    setSaving(true);
+    try {
+      await apiFetch(`/v1/roles/${role.id}/permissions`, {
+        method: "PUT",
+        body: JSON.stringify({ permissions: role.permissions.filter((item) => codes.has(item)), scopes: { [resource]: scope } }),
+      });
+      toast("Alcance actualizado");
+    } catch (err) {
+      apply(before);
+      toast(firstError(err, "No se pudo guardar el alcance."), "danger");
     } finally {
       setSaving(false);
     }
@@ -263,6 +301,7 @@ export default function RolesPermissions() {
                     <tr>
                       <th className={TH}>Recurso</th>
                       {actions.map((action) => <th key={action} className={`${TH} text-center`}>{ACTIONS[action]}</th>)}
+                      <th className={TH}>Alcance</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -293,11 +332,40 @@ export default function RolesPermissions() {
                             </td>
                           );
                         })}
+                        <td className={TD} data-label="Alcance">
+                          {scoped.has(resource) ? (
+                            <span
+                              className="block sm:max-w-[190px]"
+                              title={
+                                !can("users.manage")
+                                  ? deniedText("users.manage")
+                                  : role.is_admin || role.permissions.includes(`${resource}.view`)
+                                    ? undefined
+                                    : "Marca «Ver» para elegir el alcance."
+                              }
+                            >
+                              <PickSelect
+                                ariaLabel={`Alcance ${RESOURCES[resource] ?? resource}`}
+                                className={SCOPE_SELECT}
+                                value={role.scopes[resource] ?? "OWN"}
+                                onChange={(scope) => changeScope(resource, scope as Scope)}
+                                options={SCOPE_OPTIONS}
+                                disabled={!canEdit || saving || !role.permissions.includes(`${resource}.view`)}
+                              />
+                            </span>
+                          ) : (
+                            <span className="app-muted">{SCOPE_LABELS.TENANT}</span>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              <p className="app-muted mt-3 text-[12.5px]">
+                El alcance decide qué registros ve el rol: los propios, los de su equipo, los de su sede o los de toda la empresa.
+                La sede y el equipo de cada persona se asignan en Usuarios.
+              </p>
               {role.is_admin && (
                 <p className="app-muted mt-3 text-[12.5px]">
                   El rol Administrador no se recorta desde aquí para no dejar la empresa sin administrador.

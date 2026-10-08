@@ -2,6 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Portal\Models\PortalRequest;
+use App\Modules\Services\Models\Contract;
+use App\Modules\Services\Models\Order;
+use App\Modules\Services\Models\Quotation;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -33,6 +37,14 @@ class CheckRecordVersion
         'portalRequest' => 'portal_requests',
     ];
 
+    /** Tablas cuyo modelo filtra por el alcance del rol. */
+    private const SCOPED = [
+        'quotations' => Quotation::class,
+        'contracts' => Contract::class,
+        'orders' => Order::class,
+        'portal_requests' => PortalRequest::class,
+    ];
+
     public function handle(Request $request, Closure $next): Response
     {
         if ($request->isMethodSafe()) {
@@ -56,7 +68,7 @@ class CheckRecordVersion
 
             // No subió: o el registro no existe para esta empresa (el controlador responde 404),
             // o existe con otra versión (alguien lo cambió antes).
-            if ($bumped === 0 && $expected !== null && DB::table($table)->where('id', $id)->exists()) {
+            if ($bumped === 0 && $expected !== null && $this->visible($table, $id)) {
                 DB::rollBack();
 
                 return response()->json([
@@ -75,6 +87,17 @@ class CheckRecordVersion
 
             throw $e;
         }
+    }
+
+    /**
+     * ¿Existe el registro para quien hace la petición? Uno fuera de su alcance (lo propio,
+     * equipo, sede) no debe delatarse con un 409: el controlador responderá 404.
+     */
+    private function visible(string $table, string $id): bool
+    {
+        $model = self::SCOPED[$table] ?? null;
+
+        return $model ? $model::whereKey($id)->exists() : DB::table($table)->where('id', $id)->exists();
     }
 
     /** @return array{0: ?string, 1: ?string} tabla e id del registro que modifica la ruta */

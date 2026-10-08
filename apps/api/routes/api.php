@@ -32,6 +32,7 @@ use App\Modules\Portal\Http\Controllers\PortalController;
 use App\Modules\Portal\Http\Controllers\PortalRequestController;
 use App\Modules\Core\Http\Controllers\EmployeeController;
 use App\Modules\Core\Http\Controllers\SearchController;
+use App\Modules\Core\Http\Controllers\OrgUnitController;
 use App\Modules\Core\Http\Controllers\RoleController;
 use App\Modules\Core\Http\Controllers\UserController;
 use App\Modules\Core\Http\Controllers\TenantSettingsController;
@@ -69,6 +70,13 @@ Route::prefix('v1')->group(function () {
             Route::post('/users', [UserController::class, 'store']);
             Route::put('/users/{user}', [UserController::class, 'update']);
             Route::post('/users/{user}/status', [UserController::class, 'setStatus']);
+        });
+
+        // Sedes y equipos: de ellos depende el alcance "Sede" y "Equipo" de los roles.
+        Route::middleware('permission:users.view')->get('/org-units', [OrgUnitController::class, 'index']);
+        Route::middleware('permission:users.manage')->group(function () {
+            Route::post('/org-units/{kind}', [OrgUnitController::class, 'store']);
+            Route::put('/org-units/{kind}/{unit}', [OrgUnitController::class, 'update']);
         });
 
         // Ajustes de la empresa (segregación de funciones)
@@ -214,8 +222,10 @@ Route::prefix('v1')->group(function () {
             Route::get('/contracts', [ContractController::class, 'index']);
             Route::get('/contracts/{contract}', [ContractController::class, 'show']);
         });
+        // Crear es un permiso aparte de gestionar: quien vende genera el contrato o la orden de su
+        // cotización aprobada sin poder editarlos, suspenderlos ni terminarlos.
+        Route::middleware('permission:contracts.create')->post('/quotations/{quotation}/contract', [ContractController::class, 'generateFromQuotation']);
         Route::middleware('permission:contracts.manage')->group(function () {
-            Route::post('/quotations/{quotation}/contract', [ContractController::class, 'generateFromQuotation']);
             Route::put('/contracts/{contract}', [ContractController::class, 'update']);
             Route::post('/contracts/{contract}/suspend', [ContractController::class, 'suspend']);
             Route::post('/contracts/{contract}/reactivate', [ContractController::class, 'reactivate']);
@@ -224,10 +234,10 @@ Route::prefix('v1')->group(function () {
         });
         // Activar es un permiso aparte, como aprobar una cotización.
         Route::middleware('permission:contracts.approve')->post('/contracts/{contract}/activate', [ContractController::class, 'activate']);
-        Route::middleware('permission:orders.manage')->post('/contracts/{contract}/orders', [ContractController::class, 'createOrder']);
+        Route::middleware('permission:orders.create')->post('/contracts/{contract}/orders', [ContractController::class, 'createOrder']);
 
         // Orden directa desde una cotización aprobada
-        Route::middleware('permission:orders.manage')->post('/quotations/{quotation}/order', [OrderController::class, 'generateFromQuotation']);
+        Route::middleware('permission:orders.create')->post('/quotations/{quotation}/order', [OrderController::class, 'generateFromQuotation']);
 
         // Órdenes
         Route::middleware('permission:orders.view')->group(function () {

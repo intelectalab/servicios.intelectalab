@@ -2,11 +2,17 @@
 
 namespace App\Modules\Services\Models;
 
+use App\Models\Concerns\ScopedByAccess;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class Order extends Model
 {
+    use ScopedByAccess;
+
+    /** Recurso cuyo alcance (lo propio, equipo, sede, empresa) limita qué registros se ven. */
+    public const ACCESS_RESOURCE = 'orders';
+
     protected $table = 'orders';
 
     protected $keyType = 'string';
@@ -24,6 +30,7 @@ class Order extends Model
         'total',
         'notes',
         'created_by',
+        'branch_id',
     ];
 
     protected $casts = [

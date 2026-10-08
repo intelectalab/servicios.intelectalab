@@ -80,7 +80,8 @@ class ContractController extends Controller
             ]);
         }
 
-        $existing = Contract::where('quotation_id', $quotation->id)->first();
+        // Sin importar quién lo generó: la cotización da un solo contrato.
+        $existing = Contract::ignoringAccessScope()->where('quotation_id', $quotation->id)->first();
         if ($existing) {
             throw ValidationException::withMessages([
                 'quotation_id' => ['Esta cotización ya tiene un contrato generado.'],
@@ -110,6 +111,8 @@ class ContractController extends Controller
                 'terms' => $request->terms ?? $quotation->notes,
                 'sla_level' => 'ESTANDAR',
                 'created_by' => $request->user()->id,
+                // El contrato sigue en la sede de la venta, la genere quien la genere.
+                'branch_id' => $quotation->branch_id,
             ]);
 
             AuditLogger::log(
@@ -271,7 +274,7 @@ class ContractController extends Controller
         if ($contract->status !== 'ACTIVE') {
             throw ValidationException::withMessages(['status' => ['El contrato debe estar vigente.']]);
         }
-        if (Order::where('contract_id', $contract->id)->exists()) {
+        if (Order::ignoringAccessScope()->where('contract_id', $contract->id)->exists()) {
             throw ValidationException::withMessages(['contract_id' => ['El contrato ya tiene una orden.']]);
         }
 
@@ -290,6 +293,7 @@ class ContractController extends Controller
                 'total' => $contract->total_value,
                 'notes' => "Orden desde {$contract->contract_number}",
                 'created_by' => $request->user()->id,
+                'branch_id' => $contract->branch_id,
             ]);
 
             foreach ($contract->items as $item) {

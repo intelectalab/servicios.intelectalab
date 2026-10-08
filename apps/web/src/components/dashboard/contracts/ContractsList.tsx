@@ -11,6 +11,7 @@ import {
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Contract } from "@/types/commercial";
@@ -155,6 +156,7 @@ export default function ContractsList() {
             setPage(1);
           }}
         />
+        <ScopeNote resource="contracts" />
       </Filters>
 
       <Card flush>

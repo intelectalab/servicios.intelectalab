@@ -11,6 +11,7 @@ import {
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Order } from "@/types/commercial";
@@ -160,6 +161,7 @@ export default function OrdersList() {
             setPage(1);
           }}
         />
+        <ScopeNote resource="orders" />
       </Filters>
 
       <Card flush>

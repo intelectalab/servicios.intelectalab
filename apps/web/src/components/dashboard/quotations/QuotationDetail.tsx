@@ -271,7 +271,7 @@ export default function QuotationDetail() {
             {status === "APPROVED" && (
               <Btn
                 onClick={convertToContract}
-                permission="contracts.manage"
+                permission="contracts.create"
                 disabled={busy || Boolean(quotation.contract)}
                 title={quotation.contract ? "Ya se convirtió en contrato" : undefined}
               >
@@ -283,7 +283,7 @@ export default function QuotationDetail() {
               <Btn
                 variant="secondary"
                 onClick={createOrder}
-                permission="orders.manage"
+                permission="orders.create"
                 disabled={busy || Boolean(quotation.order)}
                 title={quotation.order ? "Ya tiene orden" : undefined}
               >

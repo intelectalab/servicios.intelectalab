@@ -10,6 +10,7 @@ import {
   PageHead, Pager, Screen, SearchInput, SelectionBar, useRowSelection, useToasts, type Column, type Tone,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { PortalRequest, PortalRequestStatus } from "@/types/commercial";
@@ -261,6 +262,7 @@ export default function PortalRequestsList() {
             setPage(1);
           }}
         />
+        <ScopeNote resource="portal" />
       </Filters>
 
       <Card flush>

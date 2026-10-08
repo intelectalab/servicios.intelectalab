@@ -317,7 +317,7 @@ export default function ContractDetail() {
               <Btn
                 variant="secondary"
                 onClick={createOrder}
-                permission="orders.manage"
+                permission="orders.create"
                 disabled={busy || orders.length > 0}
                 title={orders.length ? "Ya tiene orden" : undefined}
               >

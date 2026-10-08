@@ -168,7 +168,7 @@ class QuotationController extends Controller
             // La solicitud del portal queda cotizada y enlazada a esta cotización.
             if ($portalRequest) {
                 $previous = $portalRequest->status;
-                $portalRequest->update(['status' => 'QUOTED', 'quotation_id' => $quotation->id]);
+                $portalRequest->update(['status' => 'QUOTED', 'quotation_id' => $quotation->id] + $portalRequest->claimFor($request->user()->id));
                 AuditLogger::log(
                     tenantId: $tenantId,
                     userId: $request->user()->id,
@@ -377,6 +377,7 @@ class QuotationController extends Controller
                 ...$totals,
                 'notes' => $quotation->notes,
                 'created_by' => $request->user()->id,
+                'branch_id' => $quotation->branch_id,
             ]);
 
             foreach ($itemsData as $itemData) {

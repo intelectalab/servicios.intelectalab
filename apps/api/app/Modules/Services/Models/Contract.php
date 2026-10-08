@@ -2,11 +2,17 @@
 
 namespace App\Modules\Services\Models;
 
+use App\Models\Concerns\ScopedByAccess;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class Contract extends Model
 {
+    use ScopedByAccess;
+
+    /** Recurso cuyo alcance (lo propio, equipo, sede, empresa) limita qué registros se ven. */
+    public const ACCESS_RESOURCE = 'contracts';
+
     protected $table = 'contracts';
 
     protected $keyType = 'string';
@@ -25,6 +31,7 @@ class Contract extends Model
         'terms',
         'sla_level',
         'created_by',
+        'branch_id',
     ];
 
     protected $casts = [

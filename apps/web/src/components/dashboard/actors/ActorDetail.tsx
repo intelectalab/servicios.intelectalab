@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, FileText, Pencil, Plus, Settings, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Lock, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES } from "@/lib/contracts";
 import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, phoneText, rolesText } from "@/lib/actors";
 import {
-  Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useToasts,
+  Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useDenied, useToasts,
   type Column,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
@@ -81,13 +81,28 @@ function firstError(err: unknown, fallback: string) {
 
 /** Tabla de una pestaña de la vista 360, dentro de su tarjeta. */
 function Listing<T extends { id: string }>({
-  title, cols, rows, onRowClick,
-}: { title: string; cols: Column<T>[]; rows: T[]; onRowClick?: (row: T) => void }) {
+  title, cols, rows, onRowClick, permission,
+}: {
+  title: string;
+  cols: Column<T>[];
+  rows: T[];
+  onRowClick?: (row: T) => void;
+  /** Permiso de ver de ese módulo: sin él la API no envía las filas y aquí se avisa, sin esconder la sección. */
+  permission?: string;
+}) {
+  const denied = useDenied(permission);
   return (
     <Card title={title} flush>
-      <div className="pt-3 sm:px-1.5 sm:pb-2.5">
-        <DataTable cols={cols} rows={rows} rowKey={(row) => row.id} onRowClick={onRowClick} dense />
-      </div>
+      {denied ? (
+        <p className="app-muted flex items-center gap-2 px-5 pb-5 pt-3 text-[13px]">
+          <Lock size={14} className="shrink-0" aria-hidden="true" />
+          <span>{denied}</span>
+        </p>
+      ) : (
+        <div className="pt-3 sm:px-1.5 sm:pb-2.5">
+          <DataTable cols={cols} rows={rows} rowKey={(row) => row.id} onRowClick={onRowClick} dense />
+        </div>
+      )}
     </Card>
   );
 }
@@ -444,15 +459,15 @@ export default function ActorDetail() {
 
       {tab === "comercial" && (
         <>
-          <Listing title="Cotizaciones" cols={QUOTATION_COLUMNS} rows={actor.quotations} onRowClick={(row) => router.push(`/quotations/${row.id}`)} />
-          <Listing title="Contratos" cols={CONTRACT_COLUMNS} rows={actor.contracts} onRowClick={(row) => router.push(`/contracts/${row.id}`)} />
+          <Listing title="Cotizaciones" permission="quotations.view" cols={QUOTATION_COLUMNS} rows={actor.quotations} onRowClick={(row) => router.push(`/quotations/${row.id}`)} />
+          <Listing title="Contratos" permission="contracts.view" cols={CONTRACT_COLUMNS} rows={actor.contracts} onRowClick={(row) => router.push(`/contracts/${row.id}`)} />
         </>
       )}
-      {tab === "operaciones" && <Listing title="Órdenes de trabajo" cols={WORK_ORDER_COLUMNS} rows={actor.work_orders} />}
-      {tab === "finanzas" && <Listing title="Comprobantes" cols={INVOICE_COLUMNS} rows={actor.invoices} />}
-      {tab === "soporte" && <Listing title="Tickets" cols={TICKET_COLUMNS} rows={actor.tickets} />}
+      {tab === "operaciones" && <Listing title="Órdenes de trabajo" permission="operations.view" cols={WORK_ORDER_COLUMNS} rows={actor.work_orders} />}
+      {tab === "finanzas" && <Listing title="Comprobantes" permission="billing.view" cols={INVOICE_COLUMNS} rows={actor.invoices} />}
+      {tab === "soporte" && <Listing title="Tickets" permission="support.view" cols={TICKET_COLUMNS} rows={actor.tickets} />}
       {tab === "documentos" && <Listing title="Documentos vinculados" cols={DOCUMENT_COLUMNS} rows={actor.documents} />}
-      {tab === "crm" && <Listing title="Leads y oportunidades vinculados" cols={CRM_COLUMNS} rows={crmRows} />}
+      {tab === "crm" && <Listing title="Leads y oportunidades vinculados" permission="crm.view" cols={CRM_COLUMNS} rows={crmRows} />}
 
       {contactForm && (
         <ContactForm

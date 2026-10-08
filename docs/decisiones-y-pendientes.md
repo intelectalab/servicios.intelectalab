@@ -20,6 +20,19 @@ Estado al 2026-10-08.
 - Ediciones simultáneas: los registros editables llevan `lock_version`; la web envía `If-Match` y la API responde 409 si otra persona lo cambió (`CheckRecordVersion`). Toda tabla nueva que se edite desde una ficha debe llevar `lock_version` y su entrada en ese control.
 - Envíos repetidos: las altas y conversiones llevan `Idempotency-Key` (`Idempotency`); lo pone solo el cliente `lib/api.ts`.
 
+### Alcance en los permisos (2026-10-08)
+- Un rol define qué puede hacer (permisos) y qué registros alcanza (alcance): **Propios, Equipo, Sede o Toda la empresa**. Se elige por rol y por recurso en Roles y permisos. Detalle en [cambios/2026-10-08_alcance-en-permisos.md](cambios/2026-10-08_alcance-en-permisos.md).
+- Aplica a Cotizaciones, Contratos, Órdenes y Solicitudes del portal. En los demás recursos, quien tiene el permiso ve toda la empresa.
+- Fuera de alcance = "no existe" (404), igual que un registro de otra empresa.
+- Reparto: Ventas, lo propio (la bandeja de solicitudes, completa); Gerencia y Administrador, toda la empresa. El Administrador no se recorta.
+- Rol nuevo o sin alcance definido: solo lo propio. Sin equipo o sin sede asignados, el alcance se queda en lo propio. Un documento sin sede no se abre a todas las sedes.
+- Un contrato o una orden también es "propio" de quien hizo la cotización de origen. El documento nace en la sede de quien lo crea y contrato y orden heredan la de la cotización.
+- Una solicitud del portal sin tomar la ve quien pueda atenderla; quien la toma, cotiza o rechaza queda como responsable.
+- El filtro lo aplican solos los modelos (`ScopedByAccess`), no cada controlador. Todo modelo nuevo que deba respetar el alcance usa ese trait, declara su recurso y se añade a `AccessScope::RESOURCES` y al CHECK de `role_scopes`.
+- Sedes y equipos se gestionan en Usuarios (pestañas); no se borran, se desactivan. Una sede y un equipo por persona.
+- En Contratos y Órdenes, **Crear** es un permiso aparte de Gestionar (`contracts.create`, `orders.create`): Ventas genera el contrato y la orden de su cotización aprobada, pero no los edita ni les cambia el estado. Quien gestionaba conserva crear.
+- La vista del cliente entrega cada parte (comprobantes y saldo, tickets, órdenes de trabajo, leads) solo con el permiso de ver de su módulo y si la empresa lo tiene; la pestaña sin permiso no se esconde, muestra el candado. Para decidirlo dentro de una pantalla se usa `CheckPermission::granted`.
+
 ### Menú lateral
 - `MENU_ITEMS` (en `apps/web/src/components/layout/AppShell.tsx`) replica los grupos y el orden del prototipo.
 - Las pantallas que aún no existen van con `soon: true`: se ven atenuadas y no navegan. En modo íconos la barra muestra un ícono por módulo (los mismos que desplegada) y al pulsarlo abre un panel con sus pantallas (2026-10-06). Al construir una se cambia `soon` por `href` + `module` + `requiredPermission`.
@@ -31,7 +44,7 @@ Estado al 2026-10-08.
 - Solo CLIENTES, PROVEEDORES y EMPLEADOS son obligatorios (`is_core`) y comparten el permiso `core`. El resto sigue al plan.
 - La relación módulo → permisos vive en `module_catalog.permission_prefixes`.
 - Aprobar o rechazar cotizaciones es un permiso propio, `quotations.approve` (2026-10-05). Los permisos de un módulo son todos los de la tabla `permissions` que empiezan con su prefijo, no solo `view` y `manage`.
-- La matriz de "Roles y permisos" muestra las acciones que existen en la tabla `permissions` (Ver, Gestionar, Aprobar), no las seis del prototipo, y no tiene Alcance. Ver y editar la matriz depende de `users.view` / `users.manage`. El rol Administrador no se recorta.
+- La matriz de "Roles y permisos" muestra las acciones que existen en la tabla `permissions` (Ver, Gestionar, Aprobar), no las seis del prototipo; desde el 2026-10-08 tiene la columna Alcance. Ver y editar la matriz depende de `users.view` / `users.manage`. El rol Administrador no se recorta.
 - Un ítem del menú sin `module` no depende del plan (pantallas de administración de la empresa).
 - Una acción que el rol no permite no se esconde: el botón aparece deshabilitado, con candado y "Tu rol no tiene permiso …" al pasar el cursor (`Btn permission="…"` y `LinkBtn` en `proto.tsx`). Lo que sí se oculta es la pantalla entera en el menú.
 - Usuarios: un rol por usuario; desactivar es quitar el acceso a la empresa (`tenant_users.status`), no borrar la cuenta. El usuario nuevo no recibe contraseña: la crea con un código por correo. La cuenta se vincula a un empleado existente (`employees.user_id`), no se crea el empleado.
@@ -77,6 +90,7 @@ Estado al 2026-10-08.
 
 ## Pendientes
 
+- Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
 - Separar la consola de plataforma en su propio usuario de base; cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.

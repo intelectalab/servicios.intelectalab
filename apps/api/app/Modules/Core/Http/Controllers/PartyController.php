@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\CheckPermission;
 use App\Modules\Core\Models\Contact;
 use App\Modules\Core\Models\CustomFieldDefinition;
 use App\Modules\Core\Models\CustomFieldValue;
@@ -12,6 +13,8 @@ use App\Modules\Core\Models\Organization;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
+use App\Modules\Services\Models\Contract;
+use App\Modules\Services\Models\Quotation;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
@@ -481,9 +484,21 @@ class PartyController extends Controller
             ->firstOrFail();
 
         $customerId = $party->customer?->id;
-        $ofCustomer = fn (string $table) => DB::table($table)->where("{$table}.customer_id", $customerId ?? '00000000-0000-0000-0000-000000000000');
+        // Cada parte de la vista del cliente pide el permiso de ver de su módulo (y que la empresa
+        // tenga el módulo): ver clientes no da acceso a sus comprobantes, tickets u oportunidades.
+        $can = fn (string $permission) => CheckPermission::granted(request(), $permission);
+        $ofCustomer = fn (string $table, string $permission) => DB::table($table)
+            ->where("{$table}.customer_id", $customerId ?? '00000000-0000-0000-0000-000000000000')
+            ->when(! $can($permission), fn ($query) => $query->whereRaw('false'));
 
-        $receivables = $ofCustomer('receivables')->where('balance_amount', '>', 0)->where('status', '<>', 'PAID');
+        // Cotizaciones y contratos: solo con su permiso de ver y dentro del alcance del rol
+        // (lo propio, equipo, sede o empresa), igual que en sus listados.
+        $ofCustomerInScope = fn (string $model, string $permission) => $model::query()
+            ->where('customer_id', $customerId ?? '00000000-0000-0000-0000-000000000000')
+            ->when(! $can($permission), fn ($query) => $query->whereRaw('false'))
+            ->toBase();
+
+        $receivables = $ofCustomer('receivables', 'billing.view')->where('balance_amount', '>', 0)->where('status', '<>', 'PAID');
 
         return [
             ...$this->summary($party),
@@ -515,28 +530,29 @@ class PartyController extends Controller
                     ])
                     ->all()
                 : [],
-            'finance' => $customerId ? [
+            'finance' => $customerId && $can('billing.view') ? [
                 'outstanding' => (float) (clone $receivables)->sum('balance_amount'),
                 'overdue' => (float) (clone $receivables)->where('due_date', '<', now()->toDateString())->sum('balance_amount'),
                 'open_documents' => (clone $receivables)->count(),
             ] : null,
-            'quotations' => $ofCustomer('quotations')->orderByDesc('created_at')->limit(100)
+            'quotations' => $ofCustomerInScope(Quotation::class, 'quotations.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'quotation_number', 'created_at', 'total', 'currency', 'status']),
-            'contracts' => $ofCustomer('contracts')->orderByDesc('created_at')->limit(100)
+            'contracts' => $ofCustomerInScope(Contract::class, 'contracts.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'contract_number', 'start_date', 'end_date', 'total_value', 'currency', 'status']),
-            'work_orders' => $ofCustomer('work_orders')
+            'work_orders' => $ofCustomer('work_orders', 'operations.view')
                 ->leftJoin('users', 'users.id', '=', 'work_orders.assigned_user_id')
                 ->orderByDesc('work_orders.created_at')->limit(100)
                 ->get(['work_orders.id', 'work_orders.code', 'work_orders.description', 'work_orders.scheduled_start', 'work_orders.status', 'users.name as technician']),
-            'invoices' => $ofCustomer('invoices')->orderByDesc('created_at')->limit(100)
+            'invoices' => $ofCustomer('invoices', 'billing.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'invoice_number', 'issue_date', 'total', 'currency', 'status']),
-            'tickets' => $ofCustomer('support_tickets')->orderByDesc('created_at')->limit(100)
+            'tickets' => $ofCustomer('support_tickets', 'support.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'ticket_number', 'subject', 'priority', 'status']),
             // Los documentos aún no se enlazan a una identidad.
             'documents' => [],
-            'leads' => DB::table('crm_leads')->where('party_id', $party->id)->orderByDesc('created_at')->limit(100)
+            'leads' => DB::table('crm_leads')->where('party_id', $party->id)
+                ->when(! $can('crm.view'), fn ($query) => $query->whereRaw('false'))->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'person_name', 'organization_name', 'status']),
-            'opportunities' => $ofCustomer('crm_opportunities')->orderByDesc('created_at')->limit(100)
+            'opportunities' => $ofCustomer('crm_opportunities', 'crm.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'name', 'status']),
             'history' => AuditHistory::for('Party', $party->id),
         ];

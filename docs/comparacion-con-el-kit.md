@@ -95,8 +95,8 @@ Son cosas que funcionan y que el kit pide de otra manera. Ninguna es un error de
 ## 3. Lo que NO CUMPLE (no existe hoy)
 
 **Cimientos técnicos que el kit llama "no negociables"**
-- **Alcance en los permisos**: hoy quien puede ver cotizaciones ve todas las de la empresa. El kit pide que Ventas vea solo las suyas, cada sede las suyas, y el cliente del portal solo las propias.
-- **Protección contra envíos repetidos** (clave de idempotencia) y **contra ediciones simultáneas** (número de versión del registro).
+- **Alcance en los permisos** *(hecho el 2026-10-08 para cotizaciones, contratos, órdenes y solicitudes: [cambios/2026-10-08_alcance-en-permisos.md](cambios/2026-10-08_alcance-en-permisos.md); el portal del cliente no existe aún)*: hasta entonces quien podía ver cotizaciones veía todas las de la empresa. El kit pide que Ventas vea solo las suyas, cada sede las suyas, y el cliente del portal solo las propias.
+- **Protección contra envíos repetidos** (clave de idempotencia) y **contra ediciones simultáneas** (número de versión del registro). *(Hecho el 2026-10-08.)*
 - **Bandeja de eventos** (outbox) para avisos, contabilidad e integraciones.
 - **Número de seguimiento** de cada petición, visible en los errores.
 - **Identificadores de prueba en pantalla** (`data-testid`): no hay ninguno, así que ninguna prueba automática del kit puede correr.

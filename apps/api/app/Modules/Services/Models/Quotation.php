@@ -2,11 +2,17 @@
 
 namespace App\Modules\Services\Models;
 
+use App\Models\Concerns\ScopedByAccess;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 class Quotation extends Model
 {
+    use ScopedByAccess;
+
+    /** Recurso cuyo alcance (lo propio, equipo, sede, empresa) limita qué registros se ven. */
+    public const ACCESS_RESOURCE = 'quotations';
+
     protected $table = 'quotations';
 
     protected $keyType = 'string';
@@ -31,6 +37,7 @@ class Quotation extends Model
         'previous_id',
         'created_by',
         'approved_at',
+        'branch_id',
     ];
 
     protected $casts = [

@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
-import { AccessProvider } from "@/lib/access-context";
+import { AccessProvider, type Scope } from "@/lib/access-context";
 import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
 
@@ -105,6 +105,7 @@ const SIDEBAR_STATE_KEY = "erp-sidebar-open";
 type AccessResponse = {
   modules: string[];
   permissions: string[];
+  scopes?: Record<string, Scope>;
   tenant: { name: string; code: string } | null;
   roles: string[];
 };
@@ -117,6 +118,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const [scopes, setScopes] = useState<Record<string, Scope>>({});
   const [modules, setModules] = useState<string[]>([]);
   const [tenantName, setTenantName] = useState<string | undefined>(undefined);
   const [roleName, setRoleName] = useState<string | undefined>(undefined);
@@ -156,6 +158,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         if (!cancelled) {
           setModules(access.modules);
           setPermissions(access.permissions);
+          setScopes(access.scopes ?? {});
           setTenantName(access.tenant?.name);
           setRoleName(access.roles[0]);
         }
@@ -262,7 +265,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">
-          <AccessProvider value={{ permissions, loading: permissionsLoading }}>{children}</AccessProvider>
+          <AccessProvider value={{ permissions, scopes, loading: permissionsLoading }}>{children}</AccessProvider>
         </main>
       </div>
     </div>

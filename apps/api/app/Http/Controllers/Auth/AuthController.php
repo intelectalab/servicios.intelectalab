@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Mail\MfaCodeMail;
 use App\Models\User;
 use App\Modules\Subscription\Support\TenantModules;
+use App\Services\AccessScope;
 use App\Services\AuditLogger;
 use App\Services\LoginThrottle;
 use App\Services\PlatformAuditLogger;
@@ -301,6 +302,8 @@ class AuthController extends Controller
         return response()->json([
             'modules' => $tenantId ? TenantModules::enabledCodes($tenantId) : [],
             'permissions' => $request->user()->permissionCodes(),
+            // Qué alcanza la persona en cada recurso con alcance (lo propio, equipo, sede, empresa).
+            'scopes' => (object) AccessScope::all(),
             // Para la cabecera: a qué empresa pertenece la sesión y con qué rol.
             'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->first(['name', 'code', 'legal_name']) : null,
             // Razón social y RUC de la empresa, para los documentos que se descargan (cotización en PDF).

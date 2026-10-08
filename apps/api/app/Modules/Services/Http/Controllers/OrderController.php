@@ -110,7 +110,7 @@ class OrderController extends Controller
                 'status' => ['La configuración de la empresa no permite órdenes directas.'],
             ]);
         }
-        if (Order::where('quotation_id', $quotation->id)->exists()) {
+        if (Order::ignoringAccessScope()->where('quotation_id', $quotation->id)->exists()) {
             throw ValidationException::withMessages([
                 'quotation_id' => ['La cotización ya tiene una orden.'],
             ]);
@@ -130,6 +130,7 @@ class OrderController extends Controller
                 'total' => $quotation->total,
                 'notes' => "Orden directa desde {$quotation->quotation_number}",
                 'created_by' => $request->user()->id,
+                'branch_id' => $quotation->branch_id,
             ]);
 
             foreach (QuotationItem::where('quotation_id', $quotation->id)->get() as $item) {

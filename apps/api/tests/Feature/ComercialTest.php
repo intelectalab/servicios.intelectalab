@@ -22,6 +22,17 @@ class ComercialTest extends TestCase
     /** Módulos del plan de la empresa de prueba: sin ellos la API rechaza sus permisos (MODULE_DISABLED). */
     private const MODULES = ['SERVICIOS', 'COTIZACIONES', 'CONTRATOS', 'FINANZAS'];
 
+    /**
+     * Estas pruebas son de los flujos comerciales, no del alcance: sus roles ven toda la
+     * empresa. El alcance restringido (lo propio, equipo, sede) se prueba en AccessScopeTest.
+     */
+    private function grantWholeCompany(string $tenantId, string $roleId): void
+    {
+        foreach (['quotations', 'contracts', 'orders', 'portal'] as $resource) {
+            DB::table('role_scopes')->insert(['role_id' => $roleId, 'tenant_id' => $tenantId, 'resource' => $resource, 'scope' => 'TENANT']);
+        }
+    }
+
     /** Otro usuario del mismo tenant, con su propio rol y permisos (p. ej. Gerencia, que aprueba). */
     private function makeColleague(string $tenantId, string $name, array $permissions): User
     {
@@ -48,6 +59,7 @@ class ComercialTest extends TestCase
         foreach (DB::table('permissions')->whereIn('code', $permissions)->pluck('id') as $permissionId) {
             DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
         }
+        $this->grantWholeCompany($tenantId, $roleId);
 
         return $user;
     }
@@ -90,6 +102,7 @@ class ComercialTest extends TestCase
         foreach (DB::table('permissions')->whereIn('code', $permissions)->pluck('id') as $permissionId) {
             DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
         }
+        $this->grantWholeCompany($tenantId, $roleId);
         foreach ($modules as $module) {
             DB::table('tenant_modules')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => $module, 'enabled' => true,
@@ -591,9 +604,9 @@ class ComercialTest extends TestCase
 
     public function test_contract_lifecycle_from_an_approved_quotation(): void
     {
-        [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'contracts.view', 'contracts.manage']);
+        [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'contracts.view', 'contracts.create', 'contracts.manage']);
         $manager = $this->makeColleague($tenantId, 'Gerente', [
-            'quotations.view', 'quotations.approve', 'contracts.view', 'contracts.manage', 'contracts.approve', 'orders.manage',
+            'quotations.view', 'quotations.approve', 'contracts.view', 'contracts.create', 'contracts.manage', 'contracts.approve', 'orders.create', 'orders.manage',
         ]);
         $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
         Sanctum::actingAs($seller);
@@ -677,7 +690,7 @@ class ComercialTest extends TestCase
     public function test_approved_quotation_becomes_a_direct_order_once(): void
     {
         [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'tenant.manage']);
-        $manager = $this->makeColleague($tenantId, 'Gerente', ['quotations.view', 'quotations.approve', 'orders.manage']);
+        $manager = $this->makeColleague($tenantId, 'Gerente', ['quotations.view', 'quotations.approve', 'orders.create', 'orders.manage']);
         $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
         Sanctum::actingAs($seller);
 
@@ -686,7 +699,7 @@ class ComercialTest extends TestCase
             'items' => [['description' => 'Auditoría', 'quantity' => 2, 'unit_price' => 100, 'tax_rate' => 18]],
         ])->json('id');
         $this->postJson("/api/v1/quotations/{$quotation}/submit")->assertOk();
-        // Sin el permiso orders.manage no se convierte.
+        // Sin el permiso orders.create no se convierte.
         $this->postJson("/api/v1/quotations/{$quotation}/order")->assertStatus(403);
 
         Sanctum::actingAs($manager);
@@ -723,7 +736,7 @@ class ComercialTest extends TestCase
     public function test_order_lifecycle_follows_the_linear_sequence(): void
     {
         [$seller, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'orders.view']);
-        $manager = $this->makeColleague($tenantId, 'Gerente', ['quotations.view', 'quotations.approve', 'orders.view', 'orders.manage']);
+        $manager = $this->makeColleague($tenantId, 'Gerente', ['quotations.view', 'quotations.approve', 'orders.view', 'orders.create', 'orders.manage']);
         $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
         Sanctum::actingAs($seller);
 

@@ -46,11 +46,13 @@ class UserController extends Controller
         $users = DB::table('tenant_users')
             ->join('users', 'users.id', '=', 'tenant_users.user_id')
             ->leftJoin('branches', 'branches.id', '=', 'tenant_users.default_branch_id')
+            ->leftJoin('teams', 'teams.id', '=', 'tenant_users.team_id')
             ->where('tenant_users.tenant_id', $tenantId)
             ->orderBy('users.name')
             ->get([
                 'users.id', 'users.name', 'users.email', 'users.mfa_enabled', 'users.last_login_at',
                 'tenant_users.status', 'tenant_users.default_branch_id', 'branches.name as branch_name',
+                'tenant_users.team_id', 'teams.name as team_name',
             ])
             ->map(function ($user) use ($roles, $employees) {
                 $role = ($roles[$user->id] ?? collect())->first();
@@ -63,6 +65,7 @@ class UserController extends Controller
                     'status' => $user->status,
                     'role' => $role ? ['id' => $role->id, 'name' => $role->name, 'is_admin' => $isAdmin] : null,
                     'branch' => $user->default_branch_id ? ['id' => $user->default_branch_id, 'name' => $user->branch_name] : null,
+                    'team' => $user->team_id ? ['id' => $user->team_id, 'name' => $user->team_name] : null,
                     'employee_id' => $employees->firstWhere('user_id', $user->id)['id'] ?? null,
                     // El administrador siempre entra con verificación en dos pasos.
                     'mfa' => (bool) $user->mfa_enabled || $isAdmin,
@@ -75,6 +78,7 @@ class UserController extends Controller
             'users' => $users,
             'roles' => DB::table('roles')->where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'code', 'name']),
             'branches' => DB::table('branches')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']),
+            'teams' => DB::table('teams')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']),
             'employees' => $employees->values(),
             'limit' => $this->userLimit($tenantId),
         ]);
@@ -107,6 +111,7 @@ class UserController extends Controller
             DB::table('tenant_users')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'user_id' => $user->id,
                 'default_branch_id' => $data['branch_id'] ?? null,
+                'team_id' => $data['team_id'] ?? null,
                 'status' => 'ACTIVE', 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('user_roles')->insert([
@@ -124,7 +129,7 @@ class UserController extends Controller
             action: 'user.create',
             entityType: 'User',
             entityId: $user->id,
-            metadata: ['email' => $user->email, 'role_id' => $data['role_id']],
+            metadata: ['email' => $user->email, 'role_id' => $data['role_id'], 'branch_id' => $data['branch_id'] ?? null, 'team_id' => $data['team_id'] ?? null],
         );
 
         // Mismo correo que "¿Olvidó su contraseña?": un código para crear la contraseña.
@@ -161,6 +166,7 @@ class UserController extends Controller
             ]);
             DB::table('tenant_users')->where('id', $member->id)->update([
                 'default_branch_id' => $data['branch_id'] ?? null,
+                'team_id' => $data['team_id'] ?? null,
                 'updated_at' => now(),
             ]);
 
@@ -181,8 +187,9 @@ class UserController extends Controller
             action: 'user.update',
             entityType: 'User',
             entityId: $member->user_id,
-            beforeData: ['role_id' => $currentRoleId],
-            afterData: ['role_id' => $data['role_id']],
+            // Rol, sede y equipo deciden qué registros alcanza la persona.
+            beforeData: ['role_id' => $currentRoleId, 'branch_id' => $member->default_branch_id, 'team_id' => $member->team_id],
+            afterData: ['role_id' => $data['role_id'], 'branch_id' => $data['branch_id'] ?? null, 'team_id' => $data['team_id'] ?? null],
         );
 
         return response()->json(['id' => $member->user_id]);
@@ -236,6 +243,7 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'role_id' => ['required', 'uuid'],
             'branch_id' => ['nullable', 'uuid'],
+            'team_id' => ['nullable', 'uuid'],
             'employee_id' => ['nullable', 'uuid'],
             'mfa' => ['nullable', 'boolean'],
         ], [
@@ -247,12 +255,15 @@ class UserController extends Controller
 
         $data['email'] = strtolower(trim($data['email']));
 
-        // Rol, sede y empleado deben ser de esta empresa (las tres tablas están bajo RLS).
+        // Rol, sede, equipo y empleado deben ser de esta empresa (las cuatro tablas están bajo RLS).
         if (! DB::table('roles')->where('tenant_id', $tenantId)->where('id', $data['role_id'])->exists()) {
             throw ValidationException::withMessages(['role_id' => ['Selecciona un rol.']]);
         }
         if (! empty($data['branch_id']) && ! DB::table('branches')->where('tenant_id', $tenantId)->where('id', $data['branch_id'])->exists()) {
             throw ValidationException::withMessages(['branch_id' => ['Sede no válida.']]);
+        }
+        if (! empty($data['team_id']) && ! DB::table('teams')->where('tenant_id', $tenantId)->where('id', $data['team_id'])->exists()) {
+            throw ValidationException::withMessages(['team_id' => ['Equipo no válido.']]);
         }
         if (! empty($data['employee_id']) && ! DB::table('employees')->where('tenant_id', $tenantId)->where('id', $data['employee_id'])->exists()) {
             throw ValidationException::withMessages(['employee_id' => ['Empleado no válido.']]);

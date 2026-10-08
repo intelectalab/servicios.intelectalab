@@ -3,7 +3,9 @@
 namespace App\Modules\Services\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\CheckPermission;
 use App\Modules\Services\Http\Requests\StoreServiceRequest;
+use App\Modules\Services\Models\Quotation;
 use App\Modules\Services\Models\QuotationItem;
 use App\Modules\Services\Models\Service;
 use App\Modules\Services\Models\ServiceCategory;
@@ -60,9 +62,12 @@ class ServiceController extends Controller
         $service = Service::findOrFail($service);
         $service->load([...self::LIST_RELATIONS, 'prices']);
 
-        // Cotizaciones que usan el servicio, con el precio que guardó cada una.
+        // Cotizaciones que usan el servicio, con el precio que guardó cada una: solo las que
+        // la persona puede ver (permiso de cotizaciones y alcance de su rol).
         $usage = QuotationItem::where('service_id', $service->id)
             ->join('quotations', 'quotations.id', '=', 'quotation_items.quotation_id')
+            ->whereIn('quotations.id', Quotation::query()->select('quotations.id'))
+            ->when(! CheckPermission::granted(request(), 'quotations.view'), fn ($query) => $query->whereRaw('false'))
             ->orderByDesc('quotations.created_at')
             ->limit(50)
             ->get([

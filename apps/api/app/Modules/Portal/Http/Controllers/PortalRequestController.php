@@ -96,7 +96,7 @@ class PortalRequestController extends Controller
         }
 
         $previous = $portalRequest->status;
-        $portalRequest->update(array_filter(['status' => $to, 'resolution_note' => $reason]));
+        $portalRequest->update(array_filter(['status' => $to, 'resolution_note' => $reason]) + $portalRequest->claimFor($request->user()->id));
 
         AuditLogger::log(
             tenantId: $request->attributes->get('tenant_id'),

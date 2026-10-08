@@ -11,6 +11,7 @@ import {
   SearchInput, SelectionBar, Tabs, Who, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
+import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Quotation, QuotationStatus, QuotationSummary } from "@/types/commercial";
@@ -242,6 +243,7 @@ export default function QuotationsList() {
             setPage(1);
           }}
         />
+        <ScopeNote resource="quotations" />
       </Filters>
 
       <Card flush>
