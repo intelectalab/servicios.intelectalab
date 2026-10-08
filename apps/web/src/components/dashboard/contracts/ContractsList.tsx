@@ -9,13 +9,14 @@ import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/e
 import {
   Badge, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
+  applySort, type SortState,
 } from "@/components/ui/proto";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Contract } from "@/types/commercial";
 
 const COLUMNS: Column<Contract>[] = [
   {
-    label: "Contrato",
+    label: "Contrato", sortKey: "number",
     render: (contract) => (
       <div className="min-w-[150px]">
         <strong className="font-semibold">{contract.contract_number}</strong>
@@ -23,12 +24,12 @@ const COLUMNS: Column<Contract>[] = [
       </div>
     ),
   },
-  { label: "Cliente", render: (contract) => customerName(contract.customer) },
-  { label: "Vigencia", render: (contract) => <span className="whitespace-nowrap">{validity(contract)}</span> },
-  { label: "SLA", render: (contract) => <Chip tone={contract.sla_level === "PREMIUM" ? "accent" : "neutral"}>{slaLabel(contract.sla_level)}</Chip> },
-  { label: "Valor", num: true, render: (contract) => money(contract.total_value, contract.currency) },
+  { label: "Cliente", sortKey: "customer", render: (contract) => customerName(contract.customer) },
+  { label: "Vigencia", sortKey: "start_date", render: (contract) => <span className="whitespace-nowrap">{validity(contract)}</span> },
+  { label: "SLA", sortKey: "sla", render: (contract) => <Chip tone={contract.sla_level === "PREMIUM" ? "accent" : "neutral"}>{slaLabel(contract.sla_level)}</Chip> },
+  { label: "Valor", sortKey: "total", num: true, render: (contract) => money(contract.total_value, contract.currency) },
   {
-    label: "Estado",
+    label: "Estado", sortKey: "status",
     render: (contract) => {
       const [label, tone] = stateOf(CONTRACT_STATES, contract.status);
       return <Badge tone={tone}>{label}</Badge>;
@@ -68,6 +69,7 @@ export default function ContractsList() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
+  const [sort, setSort] = useState<SortState>(null);
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(contractKey);
 
   const [data, setData] = useState<PaginatedResponse<Contract> | null>(null);
@@ -90,6 +92,7 @@ export default function ContractsList() {
       const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
       if (search) params.set("search", search);
       if (status) params.set("status", status);
+      applySort(params, sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<Contract>>(`/v1/contracts?${params}`);
@@ -105,7 +108,7 @@ export default function ContractsList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, status, reload]);
+  }, [page, perPage, search, status, sort, reload]);
 
   /** Exporta las filas marcadas o, sin `picked`, todas las del filtro y búsqueda actuales. */
   async function runExport(format: "xlsx" | "csv", picked?: Contract[]) {
@@ -114,7 +117,7 @@ export default function ContractsList() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      const rows = picked ?? (await fetchAllPages<Contract>("/v1/contracts", params));
+      const rows = picked ?? (await fetchAllPages<Contract>("/v1/contracts", applySort(params, sort)));
       if (format === "xlsx") await exportXlsx("contratos", "Contratos", EXPORT_COLUMNS, rows);
       else exportCsv("contratos", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -154,7 +157,8 @@ export default function ContractsList() {
               onClear={clearSelection}
             />
             <DataTable
-              tableId="contracts" cols={COLUMNS}
+              tableId="contracts" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={contractKey}
               selection={selection}
@@ -164,6 +168,7 @@ export default function ContractsList() {
             />
             {data && (
               <Pager
+                loading={loading}
                 page={data.current_page}
                 lastPage={data.last_page}
                 total={data.total}

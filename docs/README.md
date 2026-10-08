@@ -41,6 +41,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | Clientes, Proveedores y Empleados desconectados; queda Clientes y actores | [cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md](cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md) |
 | 2026-10-08 | Dos dominios: la página pública y el sistema (`SITE_URL` / `APP_URL`) | [cambios/2026-10-08_dos-dominios-landing-y-sistema.md](cambios/2026-10-08_dos-dominios-landing-y-sistema.md) |
 | 2026-10-08 | Tablas de los listados como la de Clientes y actores: cabecera y casillas fijas, mover e inmovilizar columnas | [cambios/2026-10-08_tablas-de-listado-como-actores.md](cambios/2026-10-08_tablas-de-listado-como-actores.md) |
+| 2026-10-08 | Orden real desde la cabecera, paginación que responde y carga rápida de Clientes y actores | [cambios/2026-10-08_orden-real-paginacion-y-carga.md](cambios/2026-10-08_orden-real-paginacion-y-carga.md) |
 
 ## Cómo se escribe cada entrada
 

@@ -12,6 +12,7 @@ import { useColumnFilters } from "@/hooks/useColumnFilters";
 import {
   Btn, Card, Empty, ExportButtons, Field, FilterSelect, Filters, INPUT, LoadError, Modal, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, useToasts,
+  applySort, type SortState,
 } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ActorsTable } from "./ActorsTable";
@@ -27,15 +28,12 @@ type FieldType = CustomFieldDefinition["field_type"];
 const FIELD_TYPES: [FieldType, string][] = [["text", "Texto"], ["number", "Número"], ["date", "Fecha"], ["boolean", "Sí / No"]];
 const FILTER_SELECT = "app-surface app-text rounded border border-[color:var(--app-border)] px-2 py-0.5 text-xs outline-none";
 
-/** Valores de las columnas personalizadas de cada actor. */
-async function loadCustomValues(actors: Actor[]): Promise<Values> {
-  const entries = await Promise.all(actors.map(async (actor) => {
-    const values = await apiFetch<{ field_id: string; value: string }[]>(
-      `/v1/custom-fields/values?entity_type=${ACTOR_ENTITY}&entity_id=${actor.id}`,
-    ).catch(() => []);
-    return [actor.id, Object.fromEntries(values.map((item) => [item.field_id, item.value ?? ""]))] as const;
-  }));
-  return Object.fromEntries(entries);
+/** Valores de las columnas personalizadas de cada actor; llegan con el listado, sin pedirlos fila por fila. */
+function customValuesOf(actors: Actor[]): Values {
+  return Object.fromEntries(actors.map((actor) => [
+    actor.id,
+    Object.fromEntries(Object.entries(actor.custom_values ?? {}).map(([fieldId, value]) => [fieldId, value ?? ""])),
+  ]));
 }
 
 const errorText = (err: unknown, fallback: string) =>
@@ -55,6 +53,7 @@ export default function ActorsList() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
+  const [sort, setSort] = useState<SortState>(null);
 
   const [data, setData] = useState<PaginatedResponse<Actor> | null>(null);
   const [definitions, setDefinitions] = useState<CustomFieldDefinition[]>([]);
@@ -121,8 +120,17 @@ export default function ActorsList() {
     if (role) params.set("role", role);
     if (kind) params.set("kind", kind);
     if (status) params.set("status", status);
-    return params;
+    return applySort(params, sort);
   };
+
+  // Las columnas personalizadas no cambian al paginar, ordenar o filtrar: se piden solo al entrar o al recargar.
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<CustomFieldDefinition[]>(`/v1/custom-fields/definitions?entity_type=${ACTOR_ENTITY}`)
+      .then((fields) => { if (!cancelled) setDefinitions(fields); })
+      .catch(() => { if (!cancelled) setDefinitions([]); });
+    return () => { cancelled = true; };
+  }, [reload]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,15 +142,10 @@ export default function ActorsList() {
       params.set("page", String(page));
 
       try {
-        const [response, fields] = await Promise.all([
-          apiFetch<PaginatedResponse<Actor>>(`/v1/parties?${params}`),
-          apiFetch<CustomFieldDefinition[]>(`/v1/custom-fields/definitions?entity_type=${ACTOR_ENTITY}`).catch(() => []),
-        ]);
-        const values = await loadCustomValues(response.data);
+        const response = await apiFetch<PaginatedResponse<Actor>>(`/v1/parties?${params}`);
         if (cancelled) return;
         setData(response);
-        setDefinitions(fields);
-        setCustomValues(values);
+        setCustomValues(customValuesOf(response.data));
         setSelectedIds([]);
         setError("");
       } catch {
@@ -154,7 +157,7 @@ export default function ActorsList() {
     load();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- queryParams solo lee los filtros de la lista
-  }, [page, perPage, search, role, kind, status, reload]);
+  }, [page, perPage, search, role, kind, status, sort, reload]);
 
   const refresh = () => setReload((n) => n + 1);
   const changeFilter = (setter: (value: string) => void) => (value: string) => {
@@ -237,7 +240,8 @@ export default function ActorsList() {
     setExporting(true);
     try {
       const rows = picked ?? (await fetchAllPages<Actor>("/v1/parties", queryParams()));
-      const values = definitions.length ? await loadCustomValues(rows) : {};
+      // Lo editado en la celda durante esta visita manda sobre lo que llegó con el listado.
+      const values: Values = { ...customValuesOf(rows), ...customValues };
       const columns: ExportColumn<Actor>[] = [
         { label: "Tipo", value: (actor) => kindLabel(actor), width: 15, kind: "center" },
         { label: "Nombre", value: (actor) => actor.name, width: 34 },
@@ -454,8 +458,17 @@ export default function ActorsList() {
             ) : filteredItems.length === 0 ? (
               <Empty text={hasServerFilters || activeFilters.length ? "No hay registros con estos filtros." : "Sin registros."} />
             ) : (
-              <div data-table-scroll className="proto-tbl-wrap isolate max-h-[calc(100vh-290px)] min-h-[220px] overflow-auto max-sm:max-h-none">
+              <div
+                data-table-scroll
+                aria-busy={loading}
+                className={`proto-tbl-wrap isolate max-h-[calc(100vh-290px)] min-h-[220px] overflow-auto transition-opacity duration-150 max-sm:max-h-none ${loading ? "pointer-events-none opacity-50" : ""}`}
+              >
                 <ActorsTable
+                  sort={sort}
+                  onSort={(next) => {
+                    setSort(next);
+                    setPage(1);
+                  }}
                   actors={filteredItems}
                   customFieldDefinitions={definitions}
                   customValues={customValues}
@@ -480,6 +493,7 @@ export default function ActorsList() {
 
             {data && (
               <Pager
+                loading={loading}
                 page={data.current_page}
                 lastPage={data.last_page}
                 total={data.total}

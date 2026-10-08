@@ -9,6 +9,7 @@ import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/e
 import {
   Badge, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, Kpi, Kpis, LinkBtn, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, SelectionBar, Tabs, Who, useRowSelection, useToasts, type Column,
+  applySort, type SortState,
 } from "@/components/ui/proto";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Quotation, QuotationStatus, QuotationSummary } from "@/types/commercial";
@@ -29,7 +30,7 @@ function sourceOf(quotation: Quotation): [string, "accent" | "neutral"] {
 
 const COLUMNS: Column<Quotation>[] = [
   {
-    label: "Número",
+    label: "Número", sortKey: "number",
     render: (quotation) => (
       <div className="min-w-[150px]">
         <strong className="font-semibold">{quotation.quotation_number}</strong>
@@ -39,16 +40,16 @@ const COLUMNS: Column<Quotation>[] = [
       </div>
     ),
   },
-  { label: "Cliente", render: (quotation) => customerName(quotation.customer) },
+  { label: "Cliente", sortKey: "customer", render: (quotation) => customerName(quotation.customer) },
   {
-    label: "Origen",
+    label: "Origen", sortKey: "source",
     render: (quotation) => {
       const [label, tone] = sourceOf(quotation);
       return <Chip tone={tone}>{label}</Chip>;
     },
   },
   {
-    label: "Válida hasta",
+    label: "Válida hasta", sortKey: "valid_until",
     render: (quotation) => (
       <span className="inline-flex flex-wrap items-center gap-1.5">
         {shortDate(quotation.valid_until)}
@@ -56,10 +57,10 @@ const COLUMNS: Column<Quotation>[] = [
       </span>
     ),
   },
-  { label: "Total", num: true, render: (quotation) => money(quotation.total, quotation.currency) },
-  { label: "Responsable", render: (quotation) => <Who name={quotation.creator?.name} /> },
+  { label: "Total", sortKey: "total", num: true, render: (quotation) => money(quotation.total, quotation.currency) },
+  { label: "Responsable", sortKey: "creator", render: (quotation) => <Who name={quotation.creator?.name} /> },
   {
-    label: "Estado",
+    label: "Estado", sortKey: "status",
     render: (quotation) => {
       const [label, tone] = stateOf(QUOTATION_STATES, quotation.status);
       return <Badge tone={tone}>{label}</Badge>;
@@ -110,6 +111,7 @@ export default function QuotationsList() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
+  const [sort, setSort] = useState<SortState>(null);
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(quotationKey);
 
   const [data, setData] = useState<PaginatedResponse<Quotation> | null>(null);
@@ -142,6 +144,7 @@ export default function QuotationsList() {
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
       if (source) params.set("source", source);
+      applySort(params, sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<Quotation>>(`/v1/quotations?${params}`);
@@ -157,7 +160,7 @@ export default function QuotationsList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, tab, source, reload]);
+  }, [page, perPage, search, tab, source, sort, reload]);
 
   /** Exporta las filas marcadas o, sin `picked`, todas las de la pestaña y búsqueda actuales. */
   async function runExport(format: "xlsx" | "csv", picked?: Quotation[]) {
@@ -167,7 +170,7 @@ export default function QuotationsList() {
       if (search) params.set("search", search);
       if (tab !== "ALL") params.set("status", tab);
       if (source) params.set("source", source);
-      const rows = picked ?? (await fetchAllPages<Quotation>("/v1/quotations", params));
+      const rows = picked ?? (await fetchAllPages<Quotation>("/v1/quotations", applySort(params, sort)));
       if (format === "xlsx") await exportXlsx("cotizaciones", "Cotizaciones", EXPORT_COLUMNS, rows);
       else exportCsv("cotizaciones", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -241,7 +244,8 @@ export default function QuotationsList() {
               onClear={clearSelection}
             />
             <DataTable
-              tableId="quotations" cols={COLUMNS}
+              tableId="quotations" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={quotationKey}
               selection={selection}
@@ -250,6 +254,7 @@ export default function QuotationsList() {
             />
             {data && (
               <Pager
+                loading={loading}
                 page={data.current_page}
                 lastPage={data.last_page}
                 total={data.total}

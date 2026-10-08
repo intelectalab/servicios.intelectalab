@@ -7,6 +7,7 @@ import { exportCsv, exportXlsx, type ExportColumn } from "@/lib/export-table";
 import {
   Btn, Card, Chip, DataTable, ExportButtons, Field, FilterSelect, Filters, FormGrid, INPUT, LoadError, Modal, PAGE_SIZES,
   PageHead, Pager, Screen, SearchInput, SearchSelect, SelectionBar, useRowSelection, useToasts, type Column,
+  type SortState,
 } from "@/components/ui/proto";
 
 type CompanyUser = {
@@ -161,6 +162,7 @@ export default function UsersList() {
   const [data, setData] = useState<UsersResponse | null>(null);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
+  const [sort, setSort] = useState<SortState>(null);
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("");
@@ -206,6 +208,12 @@ export default function UsersList() {
       (!role || user.role?.id === role) &&
       (!status || user.status === status),
   );
+  if (sort) {
+    const value = (user: CompanyUser) =>
+      sort.key === "role" ? user.role?.name ?? "" : sort.key === "branch" ? user.branch?.name ?? ""
+        : sort.key === "mfa" ? (user.mfa ? "1" : "0") : sort.key === "status" ? (isActive(user) ? "Activo" : "Inactivo") : user.name;
+    filtered.sort((a, b) => value(a).localeCompare(value(b), "es") * (sort.dir === "asc" ? 1 : -1));
+  }
   const lastPage = Math.max(1, Math.ceil(filtered.length / perPage));
   const current = Math.min(page, lastPage);
   const rows = filtered.slice((current - 1) * perPage, current * perPage);
@@ -213,7 +221,7 @@ export default function UsersList() {
 
   const columns: Column<CompanyUser>[] = [
     {
-      label: "Usuario",
+      label: "Usuario", sortKey: "name",
       render: (user) => (
         <div className="flex min-w-[200px] items-center gap-2.5">
           <span aria-hidden="true" className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-[#E3F2FA] text-[11.5px] font-semibold text-[#0F5A82]">
@@ -226,10 +234,10 @@ export default function UsersList() {
         </div>
       ),
     },
-    { label: "Rol", render: (user) => (user.role ? <Chip tone="accent">{user.role.name}</Chip> : <span className="app-muted">Sin rol</span>) },
-    ...(showBranch ? [{ label: "Sede", render: (user: CompanyUser) => user.branch?.name ?? "—" }] : []),
-    { label: "MFA", render: (user) => <Chip tone={user.mfa ? "success" : "muted"}>{user.mfa ? "Activo" : "No"}</Chip> },
-    { label: "Estado", render: (user) => <Chip tone={isActive(user) ? "success" : "muted"}>{isActive(user) ? "Activo" : "Inactivo"}</Chip> },
+    { label: "Rol", sortKey: "role", render: (user) => (user.role ? <Chip tone="accent">{user.role.name}</Chip> : <span className="app-muted">Sin rol</span>) },
+    ...(showBranch ? [{ label: "Sede", sortKey: "branch", render: (user: CompanyUser) => user.branch?.name ?? "—" }] : []),
+    { label: "MFA", sortKey: "mfa", render: (user) => <Chip tone={user.mfa ? "success" : "muted"}>{user.mfa ? "Activo" : "No"}</Chip> },
+    { label: "Estado", sortKey: "status", render: (user) => <Chip tone={isActive(user) ? "success" : "muted"}>{isActive(user) ? "Activo" : "Inactivo"}</Chip> },
     {
       label: "Acciones",
       render: (user) => (
@@ -324,7 +332,7 @@ export default function UsersList() {
               onExport={(format) => runExport(format, selectedRows)}
               onClear={clearSelection}
             />
-            <DataTable tableId="users" cols={columns} rows={rows} rowKey={userKey} selection={selection} loading={!data} empty="No hay usuarios con estos filtros." />
+            <DataTable tableId="users" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} cols={columns} rows={rows} rowKey={userKey} selection={selection} loading={!data} empty="No hay usuarios con estos filtros." />
             {data && (
               <Pager
                 page={current}

@@ -9,13 +9,14 @@ import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/e
 import {
   Badge, Card, DataTable, ExportButtons, FilterSelect, Filters, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
+  applySort, type SortState,
 } from "@/components/ui/proto";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Order } from "@/types/commercial";
 
 const COLUMNS: Column<Order>[] = [
   {
-    label: "Orden",
+    label: "Orden", sortKey: "number",
     render: (order) => (
       <div className="min-w-[150px]">
         <strong className="font-semibold">{order.order_number}</strong>
@@ -23,11 +24,11 @@ const COLUMNS: Column<Order>[] = [
       </div>
     ),
   },
-  { label: "Cliente", render: (order) => customerName(order.customer) },
+  { label: "Cliente", sortKey: "customer", render: (order) => customerName(order.customer) },
   { label: "Origen", render: (order) => <span className="whitespace-nowrap">{orderOrigin(order)}</span> },
-  { label: "Fecha", render: (order) => <span className="whitespace-nowrap">{shortDate(order.order_date)}</span> },
+  { label: "Fecha", sortKey: "date", render: (order) => <span className="whitespace-nowrap">{shortDate(order.order_date)}</span> },
   {
-    label: "Estado",
+    label: "Estado", sortKey: "status",
     render: (order) => {
       const [label, tone] = stateOf(ORDER_STATES, order.status);
       return <Badge tone={tone}>{label}</Badge>;
@@ -67,6 +68,7 @@ export default function OrdersList() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
+  const [sort, setSort] = useState<SortState>(null);
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(orderKey);
 
   const [data, setData] = useState<PaginatedResponse<Order> | null>(null);
@@ -95,6 +97,7 @@ export default function OrdersList() {
       const params = new URLSearchParams({ per_page: String(perPage), page: String(page) });
       if (search) params.set("search", search);
       if (status) params.set("status", status);
+      applySort(params, sort);
 
       try {
         const response = await apiFetch<PaginatedResponse<Order>>(`/v1/orders?${params}`);
@@ -110,7 +113,7 @@ export default function OrdersList() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, search, status, reload]);
+  }, [page, perPage, search, status, sort, reload]);
 
   /** Exporta las filas marcadas o, sin `picked`, todas las del filtro y búsqueda actuales. */
   async function runExport(format: "xlsx" | "csv", picked?: Order[]) {
@@ -119,7 +122,7 @@ export default function OrdersList() {
       const params = new URLSearchParams();
       if (search) params.set("search", search);
       if (status) params.set("status", status);
-      const rows = picked ?? (await fetchAllPages<Order>("/v1/orders", params));
+      const rows = picked ?? (await fetchAllPages<Order>("/v1/orders", applySort(params, sort)));
       if (format === "xlsx") await exportXlsx("ordenes", "Órdenes", EXPORT_COLUMNS, rows);
       else exportCsv("ordenes", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -159,7 +162,8 @@ export default function OrdersList() {
               onClear={clearSelection}
             />
             <DataTable
-              tableId="orders" cols={COLUMNS}
+              tableId="orders" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={orderKey}
               selection={selection}
@@ -169,6 +173,7 @@ export default function OrdersList() {
             />
             {data && (
               <Pager
+                loading={loading}
                 page={data.current_page}
                 lastPage={data.last_page}
                 total={data.total}

@@ -30,6 +30,8 @@ export interface Actor {
   employee_code: string | null;
   user_name: string | null;
   created_at: string | null;
+  /** Valores de las columnas personalizadas (id de la columna → valor); llegan con el listado. */
+  custom_values?: Record<string, string | null>;
 }
 
 export interface ActorContact {

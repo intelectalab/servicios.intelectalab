@@ -11,6 +11,7 @@ use App\Modules\Services\Models\ServicePrice;
 use App\Modules\Services\Models\ServiceRecurringConfig;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -33,9 +34,16 @@ class ServiceController extends Controller
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.addcslashes($search, '%_\\').'%';
                 $q->where(fn ($w) => $w->where('code', 'ILIKE', $like)->orWhere('name', 'ILIKE', $like));
-            })
-            ->orderBy('name')
-            ->orderBy('id');
+            });
+
+        ListSort::apply($query, $request, [
+            'name' => 'services.name',
+            'category' => '(SELECT sc.name FROM service_categories sc WHERE sc.id = services.category_id)',
+            'billing_mode' => 'services.billing_mode',
+            'price' => '(SELECT sp.amount FROM service_prices sp WHERE sp.service_id = services.id AND sp.active ORDER BY sp.valid_from DESC LIMIT 1)',
+            'warranty' => 'services.warranty_months',
+            'status' => 'services.status',
+        ], fn ($q) => $q->orderBy('name')->orderBy('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));
     }

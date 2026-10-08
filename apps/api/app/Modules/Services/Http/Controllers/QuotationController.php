@@ -15,6 +15,7 @@ use App\Modules\Services\Models\ServicePrice;
 use App\Services\AuditHistory;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Services\AuditLogger;
+use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -62,9 +63,17 @@ class QuotationController extends Controller
                         ->orWhereHas('customer.party.person', fn ($p) => $p
                             ->whereRaw("concat_ws(' ', given_names, family_name) ILIKE ?", [$like]));
                 });
-            })
-            ->orderByDesc('created_at')
-            ->orderByDesc('id');
+            });
+
+        ListSort::apply($query, $request, [
+            'number' => 'quotations.quotation_number',
+            'customer' => ListSort::customerName('quotations'),
+            'source' => "COALESCE(quotations.source_type, 'DIRECT')",
+            'valid_until' => 'quotations.valid_until',
+            'total' => 'quotations.total',
+            'creator' => '(SELECT u.name FROM users u WHERE u.id = quotations.created_by)',
+            'status' => 'quotations.status',
+        ], fn ($q) => $q->orderByDesc('created_at')->orderByDesc('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));
     }

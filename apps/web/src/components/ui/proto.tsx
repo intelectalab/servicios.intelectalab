@@ -7,7 +7,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import {
-  AlertCircle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Lock, MoreVertical, Pin, PinOff,
+  AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, GripVertical, Info, Loader2, Lock, MoreVertical, Pin, PinOff,
   Search, Upload, X,
 } from "lucide-react";
 import Link from "next/link";
@@ -301,12 +301,26 @@ export function Kpi({
 export type Column<T> = {
   label: string;
   num?: boolean;
+  /** Clave con la que el listado pide el orden a la API; sin ella la columna no se ordena. */
+  sortKey?: string;
   render: (row: T) => ReactNode;
 };
 
 export const TH = "app-muted whitespace-nowrap border-b border-[color:var(--app-border)] px-3.5 pb-3 pt-3.5 text-left text-[10.5px] font-semibold uppercase tracking-[.06em]";
 export const TD = "border-b border-[color:var(--app-border)] px-3.5 py-[13px] align-middle";
 const NUM = "text-right tabular-nums whitespace-nowrap";
+
+/** Orden pedido desde la cabecera de una tabla; `null` es el orden habitual del listado. */
+export type SortState = { key: string; dir: "asc" | "desc" } | null;
+
+/** Añade el orden a los parámetros de la petición del listado. */
+export function applySort(params: URLSearchParams, sort: SortState) {
+  if (sort) {
+    params.set("sort", sort.key);
+    params.set("dir", sort.dir);
+  }
+  return params;
+}
 
 export type Selection<T> = {
   ids: ReadonlySet<string>;
@@ -319,7 +333,13 @@ const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[#CFD5DE] accent-[#1B8FC
 
 export function DataTable<T>({
   cols, rows, rowKey, onRowClick, selection, loading = false, empty = "No hay registros con estos filtros.", dense = false, tableId,
+  sort = null, onSort, refreshing = false,
 }: {
+  /** Orden actual y cómo cambiarlo (lo aplica la API, sobre todo el listado). */
+  sort?: SortState;
+  onSort?: (sort: SortState) => void;
+  /** Hay una carga en curso con filas ya a la vista: se atenúan hasta que llegue la respuesta. */
+  refreshing?: boolean;
   /** Con un nombre propio, la tabla es la de los listados: cabecera fija y columnas que se mueven e inmovilizan. */
   tableId?: string;
   cols: Column<T>[];
@@ -344,7 +364,12 @@ export function DataTable<T>({
   if (!rows.length) return <Empty text={empty} />;
 
   if (tableId) {
-    return <ColumnTable tableId={tableId} cols={cols} rows={rows} rowKey={rowKey} onRowClick={onRowClick} selection={selection} dense={dense} />;
+    return (
+      <ColumnTable
+        tableId={tableId} cols={cols} rows={rows} rowKey={rowKey} onRowClick={onRowClick} selection={selection} dense={dense}
+        sort={sort} onSort={onSort} refreshing={refreshing}
+      />
+    );
   }
 
   const allSelected = selection ? rows.every((row) => selection.ids.has(rowKey(row))) : false;
@@ -431,8 +456,11 @@ function readStoredList(key: string): string[] {
  * inmoviliza también la primera, y queda a su lado. Se recuerda en el navegador.
  */
 function ColumnTable<T>({
-  tableId, cols, rows, rowKey, onRowClick, selection, dense,
+  tableId, cols, rows, rowKey, onRowClick, selection, dense, sort, onSort, refreshing,
 }: {
+  sort: SortState;
+  onSort?: (sort: SortState) => void;
+  refreshing: boolean;
   tableId: string;
   cols: Column<T>[];
   rows: T[];
@@ -576,7 +604,11 @@ function ColumnTable<T>({
   const edge = frozen.length === 0 ? "sm:border-r sm:border-r-[color:var(--app-border)]" : "";
 
   return (
-    <div data-table-scroll className="proto-tbl-wrap isolate max-h-[calc(100vh-290px)] overflow-auto max-sm:max-h-none">
+    <div
+      data-table-scroll
+      aria-busy={refreshing}
+      className={`proto-tbl-wrap isolate max-h-[calc(100vh-290px)] overflow-auto transition-opacity duration-150 max-sm:max-h-none ${refreshing ? "pointer-events-none opacity-50" : ""}`}
+    >
       <table className="proto-tbl w-full border-separate border-spacing-0 text-left text-[13px]">
         <thead>
           <tr>
@@ -595,6 +627,12 @@ function ColumnTable<T>({
               const key = col.label;
               const isFrozen = frozen.includes(key);
               if (key === "") return <th key={key} className={`${TH} sticky top-0 z-40 bg-[var(--app-surface)]`} />;
+              const sortKey = onSort ? col.sortKey : undefined;
+              const sorted = sortKey && sort?.key === sortKey ? sort.dir : null;
+              const sortBy = (dir: "asc" | "desc" | null) => {
+                if (sortKey) onSort?.(dir ? { key: sortKey, dir } : null);
+                setOpenMenu(null);
+              };
               return (
                 <th
                   key={key}
@@ -608,7 +646,11 @@ function ColumnTable<T>({
                   className={`${TH} group/th sticky top-0 bg-[var(--app-surface)] ${divider(key)} ${openMenu === key ? "z-[100]" : "z-40"} ${dragged === key ? "opacity-50" : ""}`}
                 >
                   <div className={`flex items-center gap-2 ${col.num ? "justify-end" : "justify-between"}`}>
-                    <div className="flex select-none items-center gap-1.5">
+                    <div
+                      className={`flex select-none items-center gap-1.5 ${sortKey ? "cursor-pointer" : ""}`}
+                      title={sortKey ? "Ordenar" : undefined}
+                      onClick={sortKey ? () => sortBy(sorted === "asc" ? "desc" : "asc") : undefined}
+                    >
                       {key !== first && (
                         <span
                           draggable
@@ -627,6 +669,7 @@ function ColumnTable<T>({
                         </span>
                       )}
                       <span>{col.label}</span>
+                      {sorted && <span className="font-bold text-[#1B8FC9]">{sorted === "asc" ? "↑" : "↓"}</span>}
                     </div>
                     <button
                       type="button"
@@ -637,7 +680,7 @@ function ColumnTable<T>({
                         setPlace({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 232)), top: rect.bottom + 6 });
                         setOpenMenu(openMenu === key ? null : key);
                       }}
-                      className={`cursor-pointer rounded p-1 hover:bg-[var(--app-surface-muted)] ${openMenu === key ? "opacity-100" : "opacity-0 group-hover/th:opacity-100 focus:opacity-100"}`}
+                      className={`cursor-pointer rounded p-1 hover:bg-[var(--app-surface-muted)] ${sorted || openMenu === key ? "opacity-100" : "opacity-0 group-hover/th:opacity-100 focus:opacity-100"}`}
                     >
                       <MoreVertical size={14} />
                     </button>
@@ -647,6 +690,14 @@ function ColumnTable<T>({
                   )}
                   {openMenu === key && createPortal(
                     <div ref={menuRef} style={place} className={`${poppins.className} ${COL_MENU}`}>
+                      {sortKey && (
+                        <>
+                          <button type="button" onClick={() => sortBy("asc")} className={COL_MENU_ITEM}><ArrowUp size={14} className="app-muted" /> Orden ascendente</button>
+                          <button type="button" onClick={() => sortBy("desc")} className={COL_MENU_ITEM}><ArrowDown size={14} className="app-muted" /> Orden descendente</button>
+                          {sorted && <button type="button" onClick={() => sortBy(null)} className={COL_MENU_ITEM}><X size={14} className="app-muted" /> Quitar orden</button>}
+                          <div className="my-1 border-t border-[color:var(--app-border)]" />
+                        </>
+                      )}
                       <button type="button" onClick={() => toggleFrozen(key)} className={COL_MENU_ITEM}>
                         {isFrozen ? <PinOff size={14} className="app-muted" /> : <Pin size={14} className="app-muted" />}
                         {isFrozen ? "Desinmovilizar columna" : "Inmovilizar columna"}
@@ -788,12 +839,16 @@ function pageNumbers(page: number, lastPage: number) {
 }
 
 const PAGE_BTN = "grid h-8 min-w-8 cursor-pointer place-items-center rounded-lg border px-1.5 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
-const PAGE_BTN_IDLE = "app-surface app-text border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]";
+// Sin "app-surface": esa clase gana a las de hover y el botón no cambiaba al pasar el cursor.
+const PAGE_BTN_IDLE = "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] enabled:hover:border-[#1B8FC9] enabled:hover:bg-[rgb(27_143_201/0.14)] enabled:hover:text-[#1B8FC9] enabled:active:scale-90";
+const PAGE_BTN_ON = "border-[#1B8FC9] bg-[#1B8FC9] text-[#fff]";
 
 /** Pie de un listado: exportar, "Mostrando X a Y de N", filas por página y páginas numeradas. */
 export function Pager({
-  page, lastPage, total, perPage, onPage, onPerPage, left,
+  page, lastPage, total, perPage, onPage, onPerPage, left, loading,
 }: {
+  /** Carga en curso: la página pulsada se marca al instante, con un indicador, hasta que llega. */
+  loading?: boolean;
   page: number;
   lastPage: number;
   total: number;
@@ -802,11 +857,21 @@ export function Pager({
   onPerPage: (perPage: number) => void;
   left?: ReactNode;
 }) {
+  // Página recién pulsada: se muestra como elegida sin esperar a la respuesta.
+  const [pending, setPending] = useState<{ target: number; from: number } | null>(null);
+  const waiting = pending && pending.from === page && loading !== false ? pending.target : null;
+  const shown = waiting ?? page;
+
   if (!total) return null;
   const from = (page - 1) * perPage + 1;
   const to = Math.min(page * perPage, total);
+  const go = (target: number) => {
+    if (target === shown) return;
+    setPending({ target, from: page });
+    onPage(target);
+  };
   const jump = (target: number, label: string, icon: ReactNode, disabled: boolean) => (
-    <button type="button" onClick={() => onPage(target)} disabled={disabled} title={label} aria-label={label} className={`${PAGE_BTN} ${PAGE_BTN_IDLE}`}>
+    <button type="button" onClick={() => go(target)} disabled={disabled} title={label} aria-label={label} className={`${PAGE_BTN} ${PAGE_BTN_IDLE}`}>
       {icon}
     </button>
   );
@@ -817,6 +882,7 @@ export function Pager({
       <span className={left ? "" : "mr-auto"}>
         Mostrando <strong className="app-text font-semibold">{from}</strong> a <strong className="app-text font-semibold">{to}</strong> de{" "}
         <strong className="app-text font-semibold">{total}</strong>
+        {loading && <Loader2 size={13} className="ml-2 inline animate-spin text-[#1B8FC9]" aria-label="Cargando" />}
       </span>
       <label className="flex items-center gap-1.5">
         Filas por página:
@@ -831,25 +897,25 @@ export function Pager({
         </select>
       </label>
       <nav aria-label="Paginación" className="flex items-center gap-1">
-        {jump(1, "Primera página", <ChevronsLeft size={15} />, page <= 1)}
-        {jump(page - 1, "Página anterior", <ChevronLeft size={15} />, page <= 1)}
-        {pageNumbers(page, lastPage).map((n, index) =>
+        {jump(1, "Primera página", <ChevronsLeft size={15} />, shown <= 1)}
+        {jump(shown - 1, "Página anterior", <ChevronLeft size={15} />, shown <= 1)}
+        {pageNumbers(shown, lastPage).map((n, index) =>
           n === "gap" ? (
             <span key={`gap-${index}`} className="grid h-8 w-6 place-items-center">…</span>
           ) : (
             <button
               key={n}
               type="button"
-              onClick={() => onPage(n)}
-              aria-current={n === page ? "page" : undefined}
-              className={`${PAGE_BTN} ${n === page ? "border-[#1B8FC9] bg-[#1B8FC9] text-[#fff]" : PAGE_BTN_IDLE}`}
+              onClick={() => go(n)}
+              aria-current={n === shown ? "page" : undefined}
+              className={`${PAGE_BTN} ${n === shown ? PAGE_BTN_ON : PAGE_BTN_IDLE}`}
             >
-              {n}
+              {n === waiting ? <Loader2 size={13} className="animate-spin" /> : n}
             </button>
           ),
         )}
-        {jump(page + 1, "Página siguiente", <ChevronRight size={15} />, page >= lastPage)}
-        {jump(lastPage, "Última página", <ChevronsRight size={15} />, page >= lastPage)}
+        {jump(shown + 1, "Página siguiente", <ChevronRight size={15} />, shown >= lastPage)}
+        {jump(lastPage, "Última página", <ChevronsRight size={15} />, shown >= lastPage)}
       </nav>
     </div>
   );

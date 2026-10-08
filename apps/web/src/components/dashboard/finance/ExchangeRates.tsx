@@ -8,6 +8,7 @@ import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/e
 import {
   Btn, Card, Chip, DataTable, ExportButtons, Field, INPUT, Kpi, Kpis, LoadError, Modal, PAGE_SIZES, PageHead, Pager, Screen,
   SelectionBar, useRowSelection, useToasts, type Column,
+  applySort, type SortState,
 } from "@/components/ui/proto";
 import type { PaginatedResponse } from "@/types/customer";
 import type { ExchangeRate, ExchangeRateSummary } from "@/types/commercial";
@@ -15,10 +16,10 @@ import type { ExchangeRate, ExchangeRateSummary } from "@/types/commercial";
 const rate3 = (value: string | number) => Number(value).toFixed(3);
 
 const COLUMNS: Column<ExchangeRate>[] = [
-  { label: "Fecha", render: (rate) => shortDate(rate.rate_date) },
-  { label: "Compra", num: true, render: (rate) => rate3(rate.buy) },
-  { label: "Venta", num: true, render: (rate) => rate3(rate.sell) },
-  { label: "Fuente", render: (rate) => <Chip tone={rate.source === "Manual" ? "warning" : "neutral"}>{rate.source}</Chip> },
+  { label: "Fecha", sortKey: "date", render: (rate) => shortDate(rate.rate_date) },
+  { label: "Compra", sortKey: "buy", num: true, render: (rate) => rate3(rate.buy) },
+  { label: "Venta", sortKey: "sell", num: true, render: (rate) => rate3(rate.sell) },
+  { label: "Fuente", sortKey: "source", render: (rate) => <Chip tone={rate.source === "Manual" ? "warning" : "neutral"}>{rate.source}</Chip> },
 ];
 
 const EXPORT_COLUMNS: ExportColumn<ExchangeRate>[] = [
@@ -94,6 +95,7 @@ export default function ExchangeRates() {
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [reload, setReload] = useState(0);
+  const [sort, setSort] = useState<SortState>(null);
   const [modal, setModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(rateKey);
@@ -117,7 +119,8 @@ export default function ExchangeRates() {
     async function load() {
       setLoading(true);
       try {
-        const response = await apiFetch<PaginatedResponse<ExchangeRate>>(`/v1/exchange-rates?per_page=${perPage}&page=${page}`);
+        const params = applySort(new URLSearchParams({ per_page: String(perPage), page: String(page) }), sort);
+        const response = await apiFetch<PaginatedResponse<ExchangeRate>>(`/v1/exchange-rates?${params}`);
         if (!cancelled) {
           setData(response);
           setError("");
@@ -130,12 +133,12 @@ export default function ExchangeRates() {
     }
     load();
     return () => { cancelled = true; };
-  }, [page, perPage, reload]);
+  }, [page, perPage, sort, reload]);
 
   async function runExport(format: "xlsx" | "csv", picked?: ExchangeRate[]) {
     setExporting(true);
     try {
-      const rows = picked ?? (await fetchAllPages<ExchangeRate>("/v1/exchange-rates", new URLSearchParams()));
+      const rows = picked ?? (await fetchAllPages<ExchangeRate>("/v1/exchange-rates", applySort(new URLSearchParams(), sort)));
       if (format === "xlsx") await exportXlsx("tipo-de-cambio", "Tipo de cambio (USD)", EXPORT_COLUMNS, rows);
       else exportCsv("tipo-de-cambio", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -190,7 +193,8 @@ export default function ExchangeRates() {
               onClear={clearSelection}
             />
             <DataTable
-              tableId="exchange-rates" cols={COLUMNS}
+              tableId="exchange-rates" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
+              cols={COLUMNS}
               rows={data?.data ?? []}
               rowKey={rateKey}
               selection={selection}
@@ -200,6 +204,7 @@ export default function ExchangeRates() {
             />
             {data && (
               <Pager
+                loading={loading}
                 page={data.current_page}
                 lastPage={data.last_page}
                 total={data.total}

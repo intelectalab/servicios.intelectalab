@@ -14,6 +14,7 @@ use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -76,13 +77,24 @@ class PartyController extends Controller
                             ->where('contacts.contact_type', 'EMAIL')
                             ->where('contacts.value', 'ILIKE', $like));
                 });
-            })
-            ->orderByDesc('parties.created_at')
-            ->orderByDesc('parties.id');
+            });
 
-        return response()->json(
-            $query->paginate($request->integer('per_page', 20))->through(fn (Party $party) => $this->summary($party))
-        );
+        ListSort::apply($query, $request, $this->sortColumns($request), fn ($q) => $q
+            ->orderByDesc('parties.created_at')
+            ->orderByDesc('parties.id'), 'parties.id');
+
+        $page = $query->paginate($request->integer('per_page', 20));
+
+        // Valores de las columnas personalizadas de toda la página, en una sola consulta.
+        $custom = DB::table('custom_field_values')
+            ->where('entity_type', 'Party')
+            ->whereIn('entity_id', $page->getCollection()->pluck('id'))
+            ->get(['entity_id', 'field_id', 'value'])
+            ->groupBy('entity_id');
+
+        return response()->json($page->through(fn (Party $party) => $this->summary($party) + [
+            'custom_values' => (object) ($custom->get($party->id)?->pluck('value', 'field_id')->all() ?? []),
+        ]));
     }
 
     public function show(string $party, Request $request)
@@ -283,6 +295,39 @@ class PartyController extends Controller
         });
 
         return $party->fresh();
+    }
+
+    /** Columnas por las que se puede ordenar el listado: las fijas y las personalizadas (por su id). */
+    private function sortColumns(Request $request): array
+    {
+        $organization = fn (string $column) => "(SELECT {$column} FROM organizations o WHERE o.party_id = parties.id)";
+        $person = fn (string $column) => "(SELECT {$column} FROM persons p WHERE p.party_id = parties.id)";
+        $has = fn (string $table, string $key, string $label) => "CASE WHEN EXISTS (SELECT 1 FROM {$table} r WHERE r.{$key} = parties.id) THEN '{$label}' END";
+
+        $columns = [
+            'name' => 'lower(COALESCE('.$organization('COALESCE(o.trade_name, o.legal_name)').', '.$person("concat_ws(' ', p.given_names, p.family_name)").'))',
+            'document' => 'COALESCE('.$organization('o.tax_identifier').', '.$person('p.document_number').')',
+            'roles' => "NULLIF(concat_ws(', ', ".$has('customers', 'party_id', 'Cliente').', '.$has('suppliers', 'party_id', 'Proveedor').', '
+                .$person("CASE WHEN p.metadata->>'contact' = 'true' THEN 'Contacto' END").', '.$has('employees', 'person_party_id', 'Empleado')."), '')",
+            'relation' => 'lower(COALESCE('.$organization("NULLIF(o.metadata->>'sector', '')")
+                .', (SELECT NULLIF(e.position, \'\') FROM employees e WHERE e.person_party_id = parties.id LIMIT 1), '
+                .$person("NULLIF(p.metadata->>'position', '')").'))',
+            'status' => '('.self::STATUS_SQL.')',
+        ];
+
+        // Una columna personalizada se pide por su id; las numéricas se ordenan como número.
+        $sort = (string) $request->query('sort', '');
+        if (Str::isUuid($sort)) {
+            $field = CustomFieldDefinition::where('entity_type', 'Party')->find($sort);
+            if ($field) {
+                $value = "(SELECT NULLIF(v.value, '') FROM custom_field_values v WHERE v.field_id = '{$field->id}' AND v.entity_id = parties.id)";
+                $columns[$sort] = $field->field_type === 'number'
+                    ? "CASE WHEN {$value} ~ '^-?[0-9]+([.][0-9]+)?$' THEN {$value}::numeric END"
+                    : "lower({$value})";
+            }
+        }
+
+        return $columns;
     }
 
     private function baseQuery(Request $request)

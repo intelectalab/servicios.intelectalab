@@ -7,6 +7,7 @@ use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Finance\Models\Invoice;
 use App\Modules\Services\Models\Quotation;
 use App\Services\AuditLogger;
+use App\Services\ListSort;
 use Illuminate\Http\Request;
 
 class ExchangeRateController extends Controller
@@ -15,11 +16,16 @@ class ExchangeRateController extends Controller
 
     public function index(Request $request)
     {
-        $rates = ExchangeRate::where('currency', self::CURRENCY)
-            ->orderByDesc('rate_date')
-            ->paginate($request->integer('per_page', 15));
+        $query = ExchangeRate::where('currency', self::CURRENCY);
 
-        return response()->json($rates);
+        ListSort::apply($query, $request, [
+            'date' => 'rate_date',
+            'buy' => 'buy',
+            'sell' => 'sell',
+            'source' => 'source',
+        ], fn ($q) => $q->orderByDesc('rate_date'));
+
+        return response()->json($query->paginate($request->integer('per_page', 15)));
     }
 
     /** Tipo de cambio vigente hoy; `null` si aún no se registró ninguno. */

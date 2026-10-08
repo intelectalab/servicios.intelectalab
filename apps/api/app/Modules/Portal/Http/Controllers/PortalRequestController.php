@@ -5,6 +5,7 @@ namespace App\Modules\Portal\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Services\AuditLogger;
+use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -41,9 +42,14 @@ class PortalRequestController extends Controller
                         ->orWhereHas('customer.party.person', fn ($p) => $p
                             ->whereRaw("concat_ws(' ', given_names, family_name) ILIKE ?", [$like]));
                 });
-            })
-            ->orderByDesc('created_at')
-            ->orderByDesc('id');
+            });
+
+        ListSort::apply($query, $request, [
+            'number' => 'portal_requests.request_number',
+            'customer' => ListSort::customerName('portal_requests'),
+            'service' => '(SELECT s.name FROM services s WHERE s.id = portal_requests.service_id)',
+            'status' => 'portal_requests.status',
+        ], fn ($q) => $q->orderByDesc('created_at')->orderByDesc('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));
     }

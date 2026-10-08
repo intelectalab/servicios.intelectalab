@@ -2,12 +2,12 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FocusEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, Building2, Eye, EyeOff, Filter, GripVertical, Loader2, MoreVertical, Pin, PinOff, Plus, Trash2, User } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, Eye, EyeOff, Filter, GripVertical, Loader2, MoreVertical, Pin, PinOff, Plus, Trash2, User, X } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
 import { poppins } from "@/lib/fonts";
-import { ACTOR_ENTITY, ACTOR_STATES, DOCUMENT_TYPES, ROLE_LABELS, ROLE_TONES, actorDocument, actorRelation, actorSubtitle, rolesText } from "@/lib/actors";
-import { Badge, Chip, TD, TH } from "@/components/ui/proto";
+import { ACTOR_ENTITY, ACTOR_STATES, DOCUMENT_TYPES, ROLE_LABELS, ROLE_TONES, actorDocument, actorRelation, actorSubtitle } from "@/lib/actors";
+import { Badge, Chip, TD, TH, type SortState } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
 import type { Actor } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
@@ -20,6 +20,9 @@ type FilterType = "text" | "number" | "select" | "date";
 
 interface ActorsTableProps {
   actors: Actor[];
+  /** Orden actual y cómo cambiarlo: lo aplica la API sobre todo el listado, no solo sobre esta página. */
+  sort: SortState;
+  onSort: (sort: SortState) => void;
   customFieldDefinitions: CustomFieldDefinition[];
   /** Valores de las columnas personalizadas por actor; los carga la pantalla. */
   customValues: Record<string, Record<string, string>>;
@@ -80,7 +83,7 @@ const errorText = (err: unknown) =>
   err instanceof ApiError ? (err.errors && Object.values(err.errors)[0]?.[0]) || err.message : "No se pudo guardar el cambio.";
 
 export function ActorsTable({
-  actors, customFieldDefinitions, customValues, onCustomValue, selectedIds, editable, onToggleSelection, onSelectAll, onOpen,
+  actors, sort, onSort, customFieldDefinitions, customValues, onCustomValue, selectedIds, editable, onToggleSelection, onSelectAll, onOpen,
   onActorChange, onAddCustomField, onRequestDeleteCustomField, onAddFilter, onError,
 }: ActorsTableProps) {
   // Edición en la celda
@@ -100,8 +103,6 @@ export function ActorsTable({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Orden, columnas inmovilizadas, ocultas y su posición (se recuerdan en el navegador)
-  const [sortColumn, setSortColumn] = useState<string | null>(null);
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [hiddenColumns, setHiddenColumns] = useState<string[]>([]);
   const [frozenColumns, setFrozenColumns] = useState<string[]>([]);
@@ -284,29 +285,13 @@ export function ActorsTable({
 
   // --- Orden y columnas ---------------------------------------------------------
 
-  const sortValue = (actor: Actor, key: string): string => {
-    if (key === "name") return actor.name.toLowerCase();
-    if (key === "document") return actorDocument(actor);
-    if (key === "roles") return rolesText(actor);
-    if (key === "relation") return actorRelation(actor).toLowerCase();
-    if (key === "status") return actor.status;
-    return String(customValues[actor.id]?.[key] ?? "");
-  };
+  // El orden lo aplica la API (abarca todo el listado); las filas llegan ya ordenadas.
+  const sortedActors = actors;
+  const sortColumn = sort?.key ?? null;
+  const sortDirection = sort?.dir ?? "asc";
 
-  const sortedActors = useMemo(() => {
-    if (!sortColumn) return actors;
-    const numeric = customFieldDefinitions.find((definition) => definition.id === sortColumn)?.field_type === "number";
-    return [...actors].sort((a, b) => {
-      const [valueA, valueB] = [sortValue(a, sortColumn), sortValue(b, sortColumn)];
-      const result = numeric ? Number(valueA) - Number(valueB) : valueA.localeCompare(valueB, "es");
-      return sortDirection === "asc" ? result : -result;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- sortValue solo lee customValues
-  }, [actors, sortColumn, sortDirection, customValues, customFieldDefinitions]);
-
-  const handleSort = (key: string, direction: "asc" | "desc") => {
-    setSortColumn(key);
-    setSortDirection(direction);
+  const handleSort = (key: string, direction: "asc" | "desc" | null) => {
+    onSort(direction ? { key, dir: direction } : null);
     setOpenMenu(null);
   };
 
@@ -572,7 +557,7 @@ export function ActorsTable({
             aria-label={`Opciones de la columna ${title}`}
             onClick={(event) => {
               event.stopPropagation();
-              setPlace(menuPlace(event.currentTarget, 224, definition ? 270 : 180));
+              setPlace(menuPlace(event.currentTarget, 224, definition ? 310 : 220));
               setOpenMenu(openMenu === key ? null : key);
             }}
             className={`cursor-pointer rounded p-1 hover:bg-[var(--app-surface-muted)] ${sorted || openMenu === key ? "opacity-100" : "opacity-0 group-hover/th:opacity-100 focus:opacity-100"}`}
@@ -588,6 +573,7 @@ export function ActorsTable({
           <div ref={menuRef} style={place} className={`${poppins.className} ${MENU} w-56`}>
             <button type="button" onClick={() => handleSort(key, "asc")} className={MENU_ITEM}><ArrowUp size={14} className="app-muted" /> Orden ascendente</button>
             <button type="button" onClick={() => handleSort(key, "desc")} className={MENU_ITEM}><ArrowDown size={14} className="app-muted" /> Orden descendente</button>
+            {sorted && <button type="button" onClick={() => handleSort(key, null)} className={MENU_ITEM}><X size={14} className="app-muted" /> Quitar orden</button>}
             <div className="my-1 border-t border-[color:var(--app-border)]" />
             <button type="button" onClick={() => toggleFrozen(key)} className={MENU_ITEM}>
               {isFrozen ? <PinOff size={14} className="app-muted" /> : <Pin size={14} className="app-muted" />}
