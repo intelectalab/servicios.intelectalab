@@ -186,3 +186,9 @@ En las pruebas existentes, los roles que gestionaban contratos y órdenes recibi
 En el navegador: como **Ventas**, la ficha de "Empresa AAA" muestra su cotización en Comercial y el candado con su mensaje en Operaciones, Finanzas, Soporte y CRM. Como **Administrador**, la matriz de Ventas muestra la columna Crear marcada en Contratos y Órdenes y Gestionar sin marcar; la cotización aprobada conserva sus botones de conversión.
 
 **No se probó en el navegador:** que Ventas convierta de verdad una cotización suya (no tiene ninguna aprobada; está en las pruebas automáticas), ni estas pantallas a 375 px tras el cambio.
+
+## Ajuste aparte (2026-10-08): altura de la tabla de Clientes y actores
+
+La tabla de Clientes y actores tenía una altura mínima de 220 px que las demás no tienen. Venía de cuando los menús de las columnas se dibujaban dentro de la tabla y se cortaban con pocas filas; hoy se dibujan por encima de la página, así que el mínimo solo dejaba un hueco vacío. Se quitó (`ActorsList.tsx`): las seis tablas de listado quedan iguales, con tope en el alto de la ventana menos 290 px y sin mínimo.
+
+Probado en el navegador como Ventas, con el listado filtrado a una sola fila (la tabla mide 133 px): el menú de cada una de las cinco columnas y el de "Gestionar columnas" se abren completos, fuera de la tabla. Como Administrador, también con una sola fila: al editar en celda, el desplegable de Estado (Activo / Inactivo) y el de Tipo de documento de una persona (DNI / CE / Pasaporte) se abren completos fuera de la tabla; se cancelaron sin guardar. No se probó a 375 px (ahí la tabla no tiene tope).

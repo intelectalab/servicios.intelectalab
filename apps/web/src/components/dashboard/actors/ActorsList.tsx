@@ -362,7 +362,7 @@ export default function ActorsList() {
               <div
                 data-table-scroll
                 aria-busy={loading}
-                className={`proto-tbl-wrap isolate max-h-[calc(100vh-290px)] min-h-[220px] overflow-auto transition-opacity duration-150 max-sm:max-h-none ${loading ? "pointer-events-none opacity-50" : ""}`}
+                className={`proto-tbl-wrap isolate max-h-[calc(100vh-290px)] overflow-auto transition-opacity duration-150 max-sm:max-h-none ${loading ? "pointer-events-none opacity-50" : ""}`}
               >
                 <ActorsTable
                   sort={sort}
