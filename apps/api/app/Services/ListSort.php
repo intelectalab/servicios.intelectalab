@@ -22,6 +22,23 @@ class ListSort
     }
 
     /**
+     * Ordena una columna de códigos (ACTIVE, DRAFT…) por el texto que la pantalla
+     * muestra (Vigente, Borrador…), para que el orden sea el alfabético que se ve.
+     * Los textos van sin tildes y en minúsculas: solo sirven para comparar.
+     *
+     * @param  array<string, string>  $labels  código => texto visible
+     */
+    public static function labels(string $column, array $labels): string
+    {
+        $cases = '';
+        foreach ($labels as $code => $label) {
+            $cases .= " WHEN '{$code}' THEN '".strtolower(\Illuminate\Support\Str::ascii($label))."'";
+        }
+
+        return "CASE {$column}{$cases} ELSE lower({$column}) END";
+    }
+
+    /**
      * Aplica el orden pedido si la columna está en `$columns`; si no, el de siempre.
      *
      * @param  \Illuminate\Database\Eloquent\Builder|\Illuminate\Database\Query\Builder  $query

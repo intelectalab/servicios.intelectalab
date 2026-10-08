@@ -48,7 +48,7 @@ class PortalRequestController extends Controller
             'number' => 'portal_requests.request_number',
             'customer' => ListSort::customerName('portal_requests'),
             'service' => '(SELECT s.name FROM services s WHERE s.id = portal_requests.service_id)',
-            'status' => 'portal_requests.status',
+            'status' => ListSort::labels('portal_requests.status', ['SUBMITTED' => 'Recibida', 'IN_REVIEW' => 'En revisión', 'QUOTED' => 'Cotizada', 'REJECTED' => 'Rechazada']),
         ], fn ($q) => $q->orderByDesc('created_at')->orderByDesc('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));

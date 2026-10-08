@@ -46,9 +46,11 @@ class ContractController extends Controller
             'number' => 'contracts.contract_number',
             'customer' => ListSort::customerName('contracts'),
             'start_date' => 'contracts.start_date',
-            'sla' => 'contracts.sla_level',
+            'sla' => ListSort::labels('contracts.sla_level', ['ESTANDAR' => 'Estándar', 'PREMIUM' => 'Premium']),
             'total' => 'contracts.total_value',
-            'status' => 'contracts.status',
+            'status' => ListSort::labels('contracts.status', [
+                'DRAFT' => 'Borrador', 'ACTIVE' => 'Vigente', 'SUSPENDED' => 'Suspendido', 'TERMINATED' => 'Terminado', 'EXPIRED' => 'Vencido',
+            ]),
         ], fn ($q) => $q->orderByDesc('created_at')->orderByDesc('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));

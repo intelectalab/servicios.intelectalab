@@ -94,11 +94,14 @@ En el navegador con `admin@erp-saas.test`:
 
 Sigue sin probar: el Excel (se revisó el CSV, que sale de las mismas filas) y arrastrar columnas con el ratón.
 
-### Detalle encontrado
+### Estado, Modalidad, SLA y Origen ordenan por el texto visible
 
-**Estado y Modalidad ordenan por su código interno, no por el texto que se ve:** en Contratos el orden ascendente sale Vigente, Borrador, Suspendido (por ACTIVE, DRAFT, SUSPENDED). Agrupa bien, pero no es alfabético en español. No se cambió.
+Ordenaban por su código interno (en Contratos salía Vigente, Borrador, Suspendido, por ACTIVE, DRAFT, SUSPENDED). Pediste que sea por el texto que se ve: ahora el orden ascendente es **Borrador, Suspendido, Vigente**. Aplica a Estado en Servicios, Cotizaciones, Contratos, Órdenes y Solicitudes; Modalidad en Servicios; SLA en Contratos y Origen en Cotizaciones. En Clientes y actores ya coincidía (Activo, Inactivo).
+
+Archivos: `ListSort.php` (`labels`) y los cinco controladores. Probado en la base (códigos y su texto, en orden) y contra la API con Cotizaciones, Servicios y Solicitudes; las 58 pruebas pasan. No se volvió a mirar en pantalla.
+
+Si se cambia el texto de un estado en la web (`lib/commercial.ts`, `lib/contracts.ts`, `lib/orders.ts`), hay que cambiarlo también en el controlador para que el orden siga coincidiendo.
 
 ## Pendiente
 
 - El servidor local (`php artisan serve`) atiende una petición a la vez; publicado, con un servidor normal, las llamadas van en paralelo.
-- Ordenar Estado y Modalidad por el texto visible, si se quiere alfabético.

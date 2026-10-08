@@ -39,10 +39,10 @@ class ServiceController extends Controller
         ListSort::apply($query, $request, [
             'name' => 'services.name',
             'category' => '(SELECT sc.name FROM service_categories sc WHERE sc.id = services.category_id)',
-            'billing_mode' => 'services.billing_mode',
+            'billing_mode' => ListSort::labels('services.billing_mode', ['ONE_TIME' => 'Único', 'RECURRING' => 'Recurrente', 'PER_EVENT' => 'Por evento']),
             'price' => '(SELECT sp.amount FROM service_prices sp WHERE sp.service_id = services.id AND sp.active ORDER BY sp.valid_from DESC LIMIT 1)',
             'warranty' => 'services.warranty_months',
-            'status' => 'services.status',
+            'status' => ListSort::labels('services.status', ['DRAFT' => 'Borrador', 'ACTIVE' => 'Activo', 'INACTIVE' => 'Inactivo', 'ARCHIVED' => 'Archivado']),
         ], fn ($q) => $q->orderBy('name')->orderBy('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));

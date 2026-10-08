@@ -48,7 +48,9 @@ class OrderController extends Controller
             'number' => 'orders.order_number',
             'customer' => ListSort::customerName('orders'),
             'date' => 'orders.order_date',
-            'status' => 'orders.status',
+            'status' => ListSort::labels('orders.status', [
+                'DRAFT' => 'Borrador', 'CONFIRMED' => 'Confirmada', 'IN_PROGRESS' => 'En ejecución', 'COMPLETED' => 'Completada', 'CANCELLED' => 'Cancelada',
+            ]),
         ], fn ($q) => $q->orderByDesc('created_at')->orderByDesc('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));

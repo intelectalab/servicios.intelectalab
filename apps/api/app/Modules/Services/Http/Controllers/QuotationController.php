@@ -68,11 +68,13 @@ class QuotationController extends Controller
         ListSort::apply($query, $request, [
             'number' => 'quotations.quotation_number',
             'customer' => ListSort::customerName('quotations'),
-            'source' => "COALESCE(quotations.source_type, 'DIRECT')",
+            'source' => ListSort::labels("COALESCE(quotations.source_type, 'DIRECT')", ['DIRECT' => 'Directa', 'OPPORTUNITY' => 'CRM', 'PORTAL' => 'Portal']),
             'valid_until' => 'quotations.valid_until',
             'total' => 'quotations.total',
             'creator' => '(SELECT u.name FROM users u WHERE u.id = quotations.created_by)',
-            'status' => 'quotations.status',
+            'status' => ListSort::labels('quotations.status', [
+                'DRAFT' => 'Borrador', 'SUBMITTED' => 'Enviada', 'APPROVED' => 'Aprobada', 'REJECTED' => 'Rechazada', 'EXPIRED' => 'Vencida', 'CANCELLED' => 'Cancelada',
+            ]),
         ], fn ($q) => $q->orderByDesc('created_at')->orderByDesc('id'));
 
         return response()->json($query->paginate($request->integer('per_page', 20)));
