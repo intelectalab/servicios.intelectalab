@@ -173,6 +173,23 @@ export default function ActorsList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- queryParams solo lee los filtros de la lista
   }, [page, perPage, search, role, kind, status, columnFilters, sort, reload]);
 
+  // Rol y Estado ya se filtran arriba: desde su columna se abre ese desplegable en vez de crear
+  // un segundo filtro del mismo dato, que podría contradecirlo.
+  function addColumnFilter(columnId: string, label: string, type: "text" | "number" | "select" | "date") {
+    const top = columnId === "roles" ? "Rol" : columnId === "status" ? "Estado" : null;
+    if (!top) {
+      handleAddFilter(columnId, label, type);
+      return;
+    }
+    const select = filtersRef.current?.querySelector<HTMLSelectElement>(`select[aria-label="${top}"]`);
+    if (!select) return;
+    select.scrollIntoView({ block: "center" });
+    select.focus();
+    try {
+      select.showPicker();
+    } catch { /* si el navegador no deja abrirlo solo, queda enfocado */ }
+  }
+
   const refresh = () => setReload((n) => n + 1);
   const changeFilter = (setter: (value: string) => void) => (value: string) => {
     setter(value);
@@ -329,7 +346,7 @@ export default function ActorsList() {
             }`}
           >
             <Filter size={14} />
-            Más filtros
+            Filtros por columna
             {activeFilters.length > 0 && (
               <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#1B8FC9] px-1 text-[10px] font-bold text-[#fff]">{activeFilters.length}</span>
             )}
@@ -499,7 +516,7 @@ export default function ActorsList() {
                     setFieldModal(true);
                   }}
                   onRequestDeleteCustomField={setFieldToDelete}
-                  onAddFilter={handleAddFilter}
+                  onAddFilter={addColumnFilter}
                   onError={(message) => toast(message, "danger")}
                 />
               </div>

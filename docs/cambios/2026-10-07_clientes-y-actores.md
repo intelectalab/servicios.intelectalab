@@ -180,3 +180,15 @@ Pediste que Nombre no quede inmovilizada de forma permanente, sino con la opció
 Archivo: `components/dashboard/actors/ActorsTable.tsx`.
 
 Probado en el navegador con Ventas, con la ventana a 900 px: al entrar Nombre está libre; Inmovilizar la fija; Desinmovilizar la libera; al inmovilizar Estado quedan fijas Nombre y Estado, una junto a la otra, también al desplazar la tabla; Desinmovilizar Nombre libera las dos. No se comprobó que la elección se conserve al recargar la página.
+
+## Un solo filtro para Rol y Estado (2026-10-08)
+
+Los filtros de arriba (Rol, Estado) y "Filtrar por esta columna" podían filtrar el mismo dato dos veces y contradecirse (Estado: Inactivo arriba y Estado = Activo en el panel dejaba la tabla vacía).
+
+- En las columnas **Roles** y **Estado**, "Filtrar por esta columna" ya no crea un filtro aparte: lleva al desplegable de arriba (Rol o Estado) y lo abre.
+- Las demás columnas (Nombre, Documento, Sector / relación y las personalizadas) siguen con su filtro por columna.
+- El botón "Más filtros" pasó a llamarse **Filtros por columna**.
+
+Archivo: `components/dashboard/actors/ActorsList.tsx`.
+
+Probado en el navegador con Ventas: desde Estado y desde Roles el foco pasa al desplegable de arriba y no se agrega ningún filtro al panel; desde Documento se agrega uno y el botón muestra "Filtros por columna 1". No se comprobó con el ratón que el desplegable se abra solo (en la prueba automática queda enfocado).
