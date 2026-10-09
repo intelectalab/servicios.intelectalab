@@ -16,8 +16,19 @@ class StoreLeadRequest extends FormRequest
         return [
             'person_name' => ['nullable', 'string', 'max:255'],
             'organization_name' => ['nullable', 'string', 'max:255'],
+            'position' => ['nullable', 'string', 'max:255'],
             'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:100'],
+            'phone' => ['nullable', 'string', 'max:50'],
+            'interest' => ['nullable', 'string', 'max:255'],
+            'source_id' => ['required', 'uuid'],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'email.email' => 'Correo inválido.',
+            'source_id.required' => 'Indica la fuente.',
         ];
     }
 }

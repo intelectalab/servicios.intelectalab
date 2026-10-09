@@ -101,7 +101,7 @@ class ModuleAccessTest extends TestCase
 
     public function test_module_codes_stored_in_lowercase_still_count(): void
     {
-        Sanctum::actingAs($this->makeTenantUser(['crm'], ['crm.view']));
+        Sanctum::actingAs($this->makeTenantUser(['crm'], ['leads.view']));
 
         $this->assertContains('CRM', $this->getJson('/api/v1/me/access')->json('modules'));
         $this->getJson('/api/v1/crm/leads')->assertOk();
@@ -109,7 +109,7 @@ class ModuleAccessTest extends TestCase
 
     public function test_module_route_is_closed_when_the_tenant_does_not_have_it(): void
     {
-        Sanctum::actingAs($this->makeTenantUser([], ['crm.view']));
+        Sanctum::actingAs($this->makeTenantUser([], ['leads.view']));
 
         $this->getJson('/api/v1/crm/leads')->assertStatus(403);
     }
@@ -123,7 +123,7 @@ class ModuleAccessTest extends TestCase
         $this->assertNotContains('billing.view', $base);
 
         $withFinance = ModulePermissions::codesFor(['finanzas', 'CRM']);
-        foreach (['billing.view', 'billing.manage', 'finance.view', 'crm.manage'] as $code) {
+        foreach (['billing.view', 'billing.manage', 'finance.view', 'leads.manage', 'opportunities.manage'] as $code) {
             $this->assertContains($code, $withFinance);
         }
     }

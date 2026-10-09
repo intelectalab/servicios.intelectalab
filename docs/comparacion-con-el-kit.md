@@ -110,7 +110,7 @@ Son cosas que funcionan y que el kit pide de otra manera. Ninguna es un error de
 - Sedes y equipos gestionables.
 - Autorización interna por niveles y firma electrónica (fase F3 del kit).
 - Tarea automática que venza las cotizaciones (hoy es un botón).
-- Ruta CRM de las solicitudes del portal.
+- Ruta CRM de las solicitudes del portal. *(El CRM empezó el 2026-10-08 con Leads y Pipeline: [cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md); esta ruta sigue pendiente.)*
 - Operaciones, Finanzas, Soporte, Documentos: hay rutas de API sueltas, sin pantalla ni pruebas.
 - Compras, Tesorería, Contabilidad: nada.
 - Datos de demostración del kit (dos empresas): no son cargables, los nombres de tabla no coinciden.

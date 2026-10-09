@@ -68,6 +68,8 @@ export default function QuotationEditor() {
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null);
   // Solicitud del portal que se está cotizando, cuando se llega desde su bandeja.
   const [portalRequestId, setPortalRequestId] = useState<string | null>(null);
+  // Oportunidad del CRM desde la que se cotiza, cuando se llega desde su ficha.
+  const [opportunityId, setOpportunityId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +125,7 @@ export default function QuotationEditor() {
           const customer = query.get("c");
           if (customer && customerList.some((item) => item.id === customer)) setCustomerId(customer);
           setPortalRequestId(query.get("r"));
+          setOpportunityId(query.get("o"));
           const service = servicePage.data.find((item) => item.id === query.get("s"));
           if (service?.current_price) {
             setLines([{
@@ -245,6 +248,7 @@ export default function QuotationEditor() {
           valid_until: validUntil || null,
           notes: terms.trim() || null,
           ...(!id && portalRequestId ? { portal_request_id: portalRequestId } : {}),
+          ...(!id && !portalRequestId && opportunityId ? { opportunity_id: opportunityId } : {}),
           items: lines.map((line) => ({
             service_id: line.service_id,
             description: line.name,

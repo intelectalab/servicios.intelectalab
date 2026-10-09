@@ -456,7 +456,14 @@ export default function QuotationDetail() {
           <Card title="Trazabilidad">
             <Kv
               rows={[
-                ["Origen", SOURCES[quotation.source_type ?? ""] ?? "Cotización directa ERP"],
+                [
+                  "Origen",
+                  quotation.source_opportunity ? (
+                    <Link key="source" href={`/crm/opportunities/${quotation.source_opportunity.id}`} className="text-[color:var(--p-brand-text)] hover:underline">
+                      Oportunidad CRM {quotation.source_opportunity.opportunity_number}
+                    </Link>
+                  ) : (SOURCES[quotation.source_type ?? ""] ?? "Cotización directa ERP"),
+                ],
                 quotation.previous
                   ? [
                       "Versión anterior",

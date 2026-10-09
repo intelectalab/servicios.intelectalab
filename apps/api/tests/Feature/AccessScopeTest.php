@@ -49,7 +49,7 @@ class AccessScopeTest extends TestCase
         return $this->tenantId;
     }
 
-    /** Rol con esos permisos y ese alcance en los cuatro recursos (null = sin definir). */
+    /** Rol con esos permisos y ese alcance en todos los recursos que lo llevan (null = sin definir). */
     private function makeRole(string $code, array $permissions, ?string $scope): string
     {
         $roleId = (string) Str::uuid();
@@ -67,7 +67,7 @@ class AccessScopeTest extends TestCase
         return $roleId;
     }
 
-    private function setScope(string $roleId, string $scope, array $resources = ['quotations', 'contracts', 'orders', 'portal']): void
+    private function setScope(string $roleId, string $scope, array $resources = ['quotations', 'contracts', 'orders', 'portal', 'leads', 'opportunities']): void
     {
         foreach ($resources as $resource) {
             DB::table('role_scopes')->updateOrInsert(
@@ -426,13 +426,13 @@ class AccessScopeTest extends TestCase
 
         Sanctum::actingAs($admin);
         $list = $this->getJson('/api/v1/roles')->assertOk()->json();
-        $this->assertSame(['quotations', 'contracts', 'orders', 'portal'], collect($list['scope_resources'])->pluck('code')->all());
+        $this->assertSame(['quotations', 'contracts', 'orders', 'portal', 'leads', 'opportunities'], collect($list['scope_resources'])->pluck('code')->all());
         $this->assertSame('TENANT', collect($list['roles'])->firstWhere('id', $salesId)['scopes']['quotations']);
 
         // Un rol nuevo nace alcanzando solo lo propio.
         $newRole = $this->postJson('/api/v1/roles', ['name' => 'Preventa'])->assertCreated()->json('id');
         $this->assertSame(
-            ['contracts' => 'OWN', 'orders' => 'OWN', 'portal' => 'OWN', 'quotations' => 'OWN'],
+            ['contracts' => 'OWN', 'leads' => 'OWN', 'opportunities' => 'OWN', 'orders' => 'OWN', 'portal' => 'OWN', 'quotations' => 'OWN'],
             DB::table('role_scopes')->where('role_id', $newRole)->orderBy('resource')->pluck('scope', 'resource')->all(),
         );
 
@@ -593,6 +593,7 @@ class AccessScopeTest extends TestCase
         ]);
         DB::table('crm_leads')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'party_id' => $partyId, 'organization_name' => 'Minera Los Andes SAC',
+            'lead_number' => 'LD-TEST-0001',
         ]);
 
         // Ver clientes no da acceso a sus tickets ni a sus leads.
@@ -604,7 +605,7 @@ class AccessScopeTest extends TestCase
         $this->assertNull($view['finance']);
 
         // Con el permiso de Soporte ve los tickets; el de CRM no vale porque la empresa no tiene ese módulo.
-        Sanctum::actingAs($this->makeUser('Agente', $this->makeRole('SOPORTE', ['core.view', 'support.view', 'crm.view'], 'TENANT')));
+        Sanctum::actingAs($this->makeUser('Agente', $this->makeRole('SOPORTE', ['core.view', 'support.view', 'leads.view'], 'TENANT')));
         $view = $this->getJson("/api/v1/parties/{$partyId}")->assertOk()->json();
         $this->assertSame(['TCK-TEST-0001'], collect($view['tickets'])->pluck('ticket_number')->all());
         $this->assertSame([], $view['leads']);

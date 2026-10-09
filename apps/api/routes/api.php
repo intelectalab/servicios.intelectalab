@@ -27,6 +27,7 @@ use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmLeadController;
+use App\Modules\Crm\Http\Controllers\CrmOpportunityController;
 use App\Modules\Core\Http\Controllers\PartyController;
 use App\Modules\Portal\Http\Controllers\PortalController;
 use App\Modules\Portal\Http\Controllers\PortalRequestController;
@@ -372,14 +373,39 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:credentials.delete')->post('/credentials/{credential}/revoke', [CredentialController::class, 'revoke']);
 
         // CRM - protegido por permiso Y por el switch ON/OFF del tenant
-        Route::middleware(['module:crm', 'permission:crm.view'])->group(function () {
+        Route::middleware(['module:crm', 'permission:leads.view'])->group(function () {
             Route::get('/crm/leads', [CrmLeadController::class, 'index']);
+            Route::get('/crm/leads/summary', [CrmLeadController::class, 'summary']);
+            Route::get('/crm/leads/options', [CrmLeadController::class, 'options']);
             Route::get('/crm/leads/{lead}', [CrmLeadController::class, 'show']);
         });
-        Route::middleware(['module:crm', 'permission:crm.manage'])->group(function () {
+        Route::middleware(['module:crm', 'permission:leads.manage'])->group(function () {
             Route::post('/crm/leads', [CrmLeadController::class, 'store']);
+            Route::put('/crm/leads/{lead}', [CrmLeadController::class, 'update']);
+            Route::post('/crm/leads/{lead}/contact', [CrmLeadController::class, 'contact']);
             Route::post('/crm/leads/{lead}/qualify', [CrmLeadController::class, 'qualify']);
-            Route::post('/crm/leads/{lead}/convert', [CrmLeadController::class, 'convert']);
+            Route::post('/crm/leads/{lead}/disqualify', [CrmLeadController::class, 'disqualify']);
+            // Desconectado (2026-10-08): convertía el lead en cliente sin buscar duplicados. El cliente
+            // se crea o se reutiliza al convertir la oportunidad ganada (/crm/opportunities/{id}/convert).
+            // Route::post('/crm/leads/{lead}/convert', [CrmLeadController::class, 'convert']);
+        });
+
+        // Pipeline de oportunidades
+        Route::middleware(['module:crm', 'permission:opportunities.view'])->group(function () {
+            Route::get('/crm/opportunities', [CrmOpportunityController::class, 'index']);
+            Route::get('/crm/opportunities/summary', [CrmOpportunityController::class, 'summary']);
+            Route::get('/crm/opportunities/options', [CrmOpportunityController::class, 'options']);
+            Route::get('/crm/opportunities/{opportunity}', [CrmOpportunityController::class, 'show']);
+        });
+        Route::middleware(['module:crm', 'permission:opportunities.manage'])->group(function () {
+            // Calificar un lead y crear su oportunidad.
+            Route::post('/crm/leads/{lead}/opportunity', [CrmLeadController::class, 'createOpportunity']);
+            Route::post('/crm/opportunities', [CrmOpportunityController::class, 'store']);
+            Route::put('/crm/opportunities/{opportunity}', [CrmOpportunityController::class, 'update']);
+            Route::post('/crm/opportunities/{opportunity}/stage', [CrmOpportunityController::class, 'moveStage']);
+            Route::post('/crm/opportunities/{opportunity}/win', [CrmOpportunityController::class, 'win']);
+            Route::post('/crm/opportunities/{opportunity}/lose', [CrmOpportunityController::class, 'lose']);
+            Route::post('/crm/opportunities/{opportunity}/convert', [CrmOpportunityController::class, 'convert']);
         });
 
         // Rutas de prueba de permisos: solo en desarrollo y en las pruebas automáticas.

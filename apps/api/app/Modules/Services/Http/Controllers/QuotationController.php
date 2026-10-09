@@ -3,8 +3,10 @@
 namespace App\Modules\Services\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\CheckPermission;
 use App\Modules\Core\Http\Controllers\TenantSettingsController;
 use App\Modules\Core\Models\Customer;
+use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Services\Http\Requests\StoreQuotationRequest;
 use App\Modules\Services\Models\Quotation;
@@ -125,8 +127,9 @@ class QuotationController extends Controller
         $currency = $request->currency ?? 'PEN';
         $exchangeRate = $this->exchangeRateFor($currency);
         $portalRequest = $this->portalRequestToQuote($request);
+        $opportunity = $portalRequest ? null : $this->opportunityToQuote($request);
 
-        $quotation = DB::transaction(function () use ($request, $tenantId, $currency, $exchangeRate, $portalRequest) {
+        $quotation = DB::transaction(function () use ($request, $tenantId, $currency, $exchangeRate, $portalRequest, $opportunity) {
             $quotationNumber = SequentialNumberGenerator::next(
                 $tenantId,
                 'quotations',
@@ -146,8 +149,8 @@ class QuotationController extends Controller
                 'valid_until' => $request->valid_until,
                 ...$totals,
                 'notes' => $request->notes,
-                'source_type' => $portalRequest ? 'PORTAL' : null,
-                'source_id' => $portalRequest?->id,
+                'source_type' => $portalRequest ? 'PORTAL' : ($opportunity ? 'OPPORTUNITY' : null),
+                'source_id' => $portalRequest?->id ?? $opportunity?->id,
                 'created_by' => $request->user()->id,
             ]);
 
@@ -439,6 +442,33 @@ class QuotationController extends Controller
         return $portalRequest;
     }
 
+    /**
+     * Oportunidad del CRM desde la que se cotiza: la persona tiene que alcanzarla, no puede
+     * estar perdida y la cotización va a su cliente.
+     */
+    private function opportunityToQuote(StoreQuotationRequest $request): ?CrmOpportunity
+    {
+        if (! $request->filled('opportunity_id')) {
+            return null;
+        }
+
+        $opportunity = CheckPermission::granted($request, 'opportunities.view')
+            ? CrmOpportunity::find($request->opportunity_id)
+            : null;
+        if (! $opportunity || ! $opportunity->customer_id || $opportunity->customer_id !== $request->customer_id) {
+            throw ValidationException::withMessages([
+                'opportunity_id' => ['La oportunidad no existe o es de otro cliente.'],
+            ]);
+        }
+        if ($opportunity->status === 'LOST') {
+            throw ValidationException::withMessages([
+                'opportunity_id' => ['No se cotiza desde una oportunidad perdida.'],
+            ]);
+        }
+
+        return $opportunity;
+    }
+
     private function exchangeRateFor(string $currency): ?float
     {
         if ($currency === 'PEN') {
@@ -573,6 +603,10 @@ class QuotationController extends Controller
             'direct_order_enabled' => TenantSettingsController::settings($quotation->tenant_id)['direct_order'],
             // Para que la ficha avise antes de intentar aprobar.
             'own_approval_blocked' => $this->ownApprovalBlocked($quotation, request()),
+            // Oportunidad de origen, si la persona puede verla y la alcanza.
+            'source_opportunity' => $quotation->source_type === 'OPPORTUNITY' && CheckPermission::granted(request(), 'opportunities.view')
+                ? CrmOpportunity::query()->whereKey($quotation->source_id)->first(['id', 'opportunity_number', 'name'])
+                : null,
             'history' => AuditHistory::for('Quotation', $quotation->id),
         ];
     }

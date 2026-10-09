@@ -48,6 +48,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | Alcance en los permisos: lo propio, equipo, sede o toda la empresa; sedes y equipos en Usuarios | [cambios/2026-10-08_alcance-en-permisos.md](cambios/2026-10-08_alcance-en-permisos.md) |
 | 2026-10-08 | Modo oscuro con colores propios: tema desde el inicio de sesión y paleta para fondo oscuro | [cambios/2026-10-08_modo-oscuro.md](cambios/2026-10-08_modo-oscuro.md) |
 | 2026-10-08 | Buscador de los listados: "/" para entrar y Escape para salir, en todos | [cambios/2026-10-08_buscador-de-listados-barra-y-escape.md](cambios/2026-10-08_buscador-de-listados-barra-y-escape.md) |
+| 2026-10-08 | CRM, flujo principal: Leads y Pipeline de oportunidades (tabla y tablero), ganar / perder y convertir a cliente sin duplicar | [cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md) |
 
 ## Cómo se escribe cada entrada
 

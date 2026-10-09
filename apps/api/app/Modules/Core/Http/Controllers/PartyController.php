@@ -13,6 +13,8 @@ use App\Modules\Core\Models\Organization;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
+use App\Modules\Crm\Models\CrmLead;
+use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Services\Models\Contract;
 use App\Modules\Services\Models\Quotation;
 use App\Services\AuditHistory;
@@ -169,6 +171,38 @@ class PartyController extends Controller
 
             return $party;
         });
+    }
+
+    /**
+     * Para otros módulos que dan de alta una identidad (el CRM, al convertir una oportunidad):
+     * misma validación y misma búsqueda de duplicados que el alta de esta pantalla.
+     *
+     * @return array{party: ?Party, duplicates: array}
+     */
+    public function createFromModule(Request $request, array $input): array
+    {
+        $data = $this->validated($request, true, null, $input);
+
+        $duplicates = $this->duplicatesOf($request, $data);
+        if ($duplicates) {
+            return ['party' => null, 'duplicates' => $duplicates];
+        }
+
+        return ['party' => $this->createParty($data, $request->attributes->get('tenant_id'), $request), 'duplicates' => []];
+    }
+
+    /** El cliente de una identidad; si aún no lo es, le agrega el rol (queda en su historial). */
+    public function customerOf(Party $party, Request $request, bool $create = true): ?Customer
+    {
+        $customer = Customer::where('party_id', $party->id)->first();
+        if ($customer || ! $create) {
+            return $customer;
+        }
+
+        $this->grantRole($party, 'CUSTOMER', $request->attributes->get('tenant_id'));
+        $this->audit($request, $party, 'party.role.add', ['note' => 'Rol agregado: '.self::ROLE_LABELS['CUSTOMER']]);
+
+        return Customer::where('party_id', $party->id)->firstOrFail();
     }
 
     /** Datos de la identidad. Solo cambia lo que llega: sirve a la ficha y a la edición en celda. */
@@ -549,11 +583,12 @@ class PartyController extends Controller
                 ->get(['id', 'ticket_number', 'subject', 'priority', 'status']),
             // Los documentos aún no se enlazan a una identidad.
             'documents' => [],
-            'leads' => DB::table('crm_leads')->where('party_id', $party->id)
-                ->when(! $can('crm.view'), fn ($query) => $query->whereRaw('false'))->orderByDesc('created_at')->limit(100)
-                ->get(['id', 'person_name', 'organization_name', 'status']),
-            'opportunities' => $ofCustomer('crm_opportunities', 'crm.view')->orderByDesc('created_at')->limit(100)
-                ->get(['id', 'name', 'status']),
+            // Leads y oportunidades: por sus modelos, para respetar el alcance del rol.
+            'leads' => CrmLead::query()->where('party_id', $party->id)
+                ->when(! $can('leads.view'), fn ($query) => $query->whereRaw('false'))->orderByDesc('created_at')->limit(100)
+                ->toBase()->get(['id', 'lead_number', 'person_name', 'organization_name', 'status']),
+            'opportunities' => $ofCustomerInScope(CrmOpportunity::class, 'opportunities.view')->orderByDesc('created_at')->limit(100)
+                ->get(['id', 'opportunity_number', 'name', 'status']),
             'history' => AuditHistory::for('Party', $party->id),
         ];
     }

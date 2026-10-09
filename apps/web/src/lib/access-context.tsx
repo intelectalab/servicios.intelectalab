@@ -15,7 +15,7 @@ export const SCOPE_LABELS: Record<Scope, string> = {
 
 export type Access = {
   permissions: string[];
-  /** Alcance del usuario por recurso (cotizaciones, contratos, órdenes, portal). */
+  /** Alcance del usuario por recurso (cotizaciones, contratos, órdenes, portal, leads, oportunidades). */
   scopes?: Record<string, Scope>;
   /** Mientras carga /me/access aún no se sabe qué puede hacer el usuario. */
   loading: boolean;

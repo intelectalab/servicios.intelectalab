@@ -86,6 +86,8 @@ export interface Quotation {
   exchange_rate: string | null;
   /** Origen: vacío o DIRECT (directa), OPPORTUNITY (CRM), PORTAL. */
   source_type: string | null;
+  /** Oportunidad del CRM desde la que se cotizó, si la persona la alcanza. */
+  source_opportunity?: { id: string; opportunity_number: string; name: string } | null;
   valid_until: string | null;
   subtotal: string;
   tax_total: string;

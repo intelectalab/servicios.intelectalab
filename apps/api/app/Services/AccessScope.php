@@ -29,6 +29,8 @@ class AccessScope
         'contracts' => 'Contratos',
         'orders' => 'Órdenes',
         'portal' => 'Solicitudes del portal',
+        'leads' => 'Leads',
+        'opportunities' => 'Oportunidades',
     ];
 
     /** De menor a mayor alcance. */
@@ -99,6 +101,8 @@ class AccessScope
                 ->orWhereIn("{$table}.contract_id", fn ($sub) => $sub->select('id')->from('contracts')->whereIn('created_by', $owners)),
             // Una solicitud que nadie tomó todavía la ve quien pueda atenderla.
             'portal' => $query->whereNull("{$table}.taken_by")->orWhereIn("{$table}.taken_by", $owners),
+            // En el CRM lo propio es lo que la persona lleva como responsable.
+            'leads', 'opportunities' => $query->whereIn("{$table}.owner_user_id", $owners),
         };
     }
 

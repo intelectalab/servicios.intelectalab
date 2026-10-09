@@ -57,8 +57,8 @@ export interface ActorDetail extends Actor {
   invoices: { id: string; invoice_number: string | null; issue_date: string | null; total: string; currency: string; status: string }[];
   tickets: { id: string; ticket_number: string; subject: string; priority: string; status: string }[];
   documents: { id: string; title: string; category: string; status: string }[];
-  leads: { id: string; person_name: string | null; organization_name: string | null; status: string }[];
-  opportunities: { id: string; name: string; status: string }[];
+  leads: { id: string; lead_number: string; person_name: string | null; organization_name: string | null; status: string }[];
+  opportunities: { id: string; opportunity_number: string; name: string; status: string }[];
   history: HistoryEntry[];
 }
 

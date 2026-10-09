@@ -23,8 +23,9 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 // responde 409 en vez de pisar su cambio.
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
-const RECORD_PATH = new RegExp(`^/v1/([a-z-]+)/(${UUID})(?:[/?]|$)`, "i");
-const LIST_PATH = /^\/v1\/([a-z-]+)(?:\?|$)/i;
+// La colección puede ir dentro de su módulo: "quotations" o "crm/leads".
+const RECORD_PATH = new RegExp(`^/v1/((?:crm/)?[a-z-]+)/(${UUID})(?:[/?]|$)`, "i");
+const LIST_PATH = /^\/v1\/((?:crm\/)?[a-z-]+)(?:\?|$)/i;
 const seenVersions = new Map<string, number>();
 
 type Versioned = { id?: unknown; lock_version?: unknown };
@@ -54,7 +55,7 @@ function trackVersions(path: string, method: string, data: unknown) {
 // Un alta lleva una clave (`Idempotency-Key`). Si el mismo envío sale dos veces en pocos
 // segundos (doble clic, reintento), usa la misma clave y la API lo registra una sola vez.
 
-const CREATE_PATH = new RegExp(`^/v1/(?:[a-z-]+|[a-z-]+/${UUID}/(?:versions|contract|order|orders|prices|roles))$`, "i");
+const CREATE_PATH = new RegExp(`^/v1/(?:crm/)?(?:[a-z-]+|[a-z-]+/${UUID}/(?:versions|contract|order|orders|prices|roles|opportunity|convert))$`, "i");
 const REPEAT_WINDOW_MS = 10_000;
 const recentSends = new Map<string, { key: string; at: number }>();
 

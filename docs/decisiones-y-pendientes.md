@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-08.
+Estado al 2026-10-08 (con el flujo principal del CRM).
 
 ## Decisiones tomadas
 
@@ -22,7 +22,7 @@ Estado al 2026-10-08.
 
 ### Alcance en los permisos (2026-10-08)
 - Un rol define qué puede hacer (permisos) y qué registros alcanza (alcance): **Propios, Equipo, Sede o Toda la empresa**. Se elige por rol y por recurso en Roles y permisos. Detalle en [cambios/2026-10-08_alcance-en-permisos.md](cambios/2026-10-08_alcance-en-permisos.md).
-- Aplica a Cotizaciones, Contratos, Órdenes y Solicitudes del portal. En los demás recursos, quien tiene el permiso ve toda la empresa.
+- Aplica a Cotizaciones, Contratos, Órdenes, Solicitudes del portal y, desde que existe el CRM, Leads y Oportunidades. En los demás recursos, quien tiene el permiso ve toda la empresa.
 - Fuera de alcance = "no existe" (404), igual que un registro de otra empresa.
 - Reparto: Ventas, lo propio (la bandeja de solicitudes, completa); Gerencia y Administrador, toda la empresa. El Administrador no se recorta.
 - Rol nuevo o sin alcance definido: solo lo propio. Sin equipo o sin sede asignados, el alcance se queda en lo propio. Un documento sin sede no se abre a todas las sedes.
@@ -32,6 +32,18 @@ Estado al 2026-10-08.
 - Sedes y equipos se gestionan en Usuarios (pestañas); no se borran, se desactivan. Una sede y un equipo por persona.
 - En Contratos y Órdenes, **Crear** es un permiso aparte de Gestionar (`contracts.create`, `orders.create`): Ventas genera el contrato y la orden de su cotización aprobada, pero no los edita ni les cambia el estado. Quien gestionaba conserva crear.
 - La vista del cliente entrega cada parte (comprobantes y saldo, tickets, órdenes de trabajo, leads) solo con el permiso de ver de su módulo y si la empresa lo tiene; la pestaña sin permiso no se esconde, muestra el candado. Para decidirlo dentro de una pantalla se usa `CheckPermission::granted`.
+
+### CRM (2026-10-08)
+- Se construye por partes. Hecho: Leads y Pipeline de oportunidades (con ganar, perder y convertir). Faltan Actividades, Campañas y Puntuación de leads. Detalle en [cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md).
+- Permisos por recurso con Ver y Gestionar (`leads.*`, `opportunities.*`), como en Comercial; reemplazan a `crm.*`. Calificar un lead y crear su oportunidad pide `opportunities.manage`.
+- Leads y Oportunidades respetan el alcance del rol. "Propio" es lo que la persona lleva como responsable. Ventas, lo propio; Gerencia y Administrador, toda la empresa.
+- El cliente no nace del lead: se crea o se reutiliza al **convertir la oportunidad ganada**, con el mismo control de duplicados de Clientes y actores. Dar de alta la organización o agregarle el rol Cliente pide además `core.manage`; convertir con un cliente que ya existe, no.
+- La ruta que convertía un lead directo en cliente está desconectada (su código sigue en el controlador).
+- Lo que la base garantiza: una oportunidad por lead, una conversión por oportunidad, descartar con motivo, ganar con evidencia, perder con motivo. El registro de conversiones es de solo alta y lectura para la aplicación.
+- La oportunidad sigue siendo de quien llevaba el lead, la cree quien la cree. Lead y oportunidad nacen en la sede de su responsable.
+- Embudo y fuentes: los del prototipo, creados la primera vez que la empresa entra al CRM. Monto de la oportunidad solo en soles.
+- Tablero (kanban): pieza compartida `components/ui/kanban.tsx`; cada tarjeta trae "Mover a…" porque en teléfono no se arrastra. La vista elegida (tabla o tablero) se recuerda en el navegador.
+- Lo del prototipo que depende de una pantalla que falta se muestra y avisa: Puntaje ("—"), Campaña (deshabilitada), Actividades (botón que avisa).
 
 ### Menú lateral
 - `MENU_ITEMS` (en `apps/web/src/components/layout/AppShell.tsx`) replica los grupos y el orden del prototipo.
@@ -92,6 +104,7 @@ Estado al 2026-10-08.
 
 ## Pendientes
 
+- CRM: Actividades, Campañas y Puntuación de leads; solicitudes del portal por la ruta CRM; decidir si Ventas crea el cliente al convertir (hoy le falta `core.manage`); pantalla para editar etapas y fuentes; importar leads.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.

@@ -24,8 +24,8 @@ import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
 const MENU_ITEMS: MenuItem[] = [
   { label: "Panel de control", icon: Home, superModule: "Inicio", soon: true },
 
-  { label: "Leads", icon: Target, superModule: "CRM", soon: true },
-  { label: "Pipeline", icon: Filter, superModule: "CRM", soon: true },
+  { href: "/crm/leads", label: "Leads", module: "CRM", requiredPermission: "leads.view", icon: Target, superModule: "CRM" },
+  { href: "/crm/opportunities", label: "Pipeline", module: "CRM", requiredPermission: "opportunities.view", icon: Filter, superModule: "CRM" },
   { label: "Actividades", icon: CalendarDays, superModule: "CRM", soon: true },
   { label: "Campañas", icon: Send, superModule: "CRM", soon: true },
   { label: "Puntuación de leads", icon: ChartColumn, superModule: "CRM", soon: true },

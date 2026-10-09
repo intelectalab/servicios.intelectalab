@@ -1119,14 +1119,14 @@ class ComercialTest extends TestCase
         $codes = collect($list['permissions'])->pluck('code');
         $this->assertTrue($codes->contains('quotations.approve'));
         $this->assertTrue($codes->contains('core.view'));
-        $this->assertFalse($codes->contains('crm.view'));
+        $this->assertFalse($codes->contains('leads.view'));
 
         // Rol nuevo, sin permisos; no se repite el nombre.
         $roleId = $this->postJson('/api/v1/roles', ['name' => 'Gerencia comercial', 'description' => 'Aprueba'])
             ->assertCreated()->assertJsonPath('code', 'GERENCIA_COMERCIAL')->json('id');
         $this->postJson('/api/v1/roles', ['name' => 'Gerencia Comercial'])->assertStatus(422);
 
-        $this->putJson("/api/v1/roles/{$roleId}/permissions", ['permissions' => ['quotations.view', 'crm.view']])->assertStatus(422);
+        $this->putJson("/api/v1/roles/{$roleId}/permissions", ['permissions' => ['quotations.view', 'leads.view']])->assertStatus(422);
         $this->putJson("/api/v1/roles/{$roleId}/permissions", ['permissions' => ['quotations.view', 'quotations.approve']])
             ->assertOk()->assertJsonPath('permissions', ['quotations.approve', 'quotations.view']);
         $this->putJson("/api/v1/roles/{$roleId}/permissions", ['permissions' => ['quotations.view']])

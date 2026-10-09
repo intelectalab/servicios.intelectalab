@@ -20,6 +20,8 @@ class StoreQuotationRequest extends FormRequest
             'notes' => ['nullable', 'string'],
             // Solicitud del portal que se está cotizando (solo al crear).
             'portal_request_id' => ['nullable', 'uuid'],
+            // Oportunidad del CRM desde la que se cotiza (solo al crear).
+            'opportunity_id' => ['nullable', 'uuid'],
 
             'items' => ['required', 'array', 'min:1'],
             'items.*.service_id' => ['nullable', 'uuid'],

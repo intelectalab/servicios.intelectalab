@@ -7,6 +7,7 @@ import { ArrowLeft, FileText, Lock, Pencil, Plus, Settings, Trash2 } from "lucid
 import { ApiError, apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES } from "@/lib/contracts";
+import { LEAD_STATES, OPPORTUNITY_STATES } from "@/lib/crm";
 import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, phoneText, rolesText } from "@/lib/actors";
 import {
   Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useDenied, useToasts,
@@ -64,12 +65,16 @@ const DOCUMENT_COLUMNS: Column<Row<"documents">>[] = [
   { label: "Estado", render: (row) => raw(row.status) },
 ];
 
-type CrmRow = { id: string; label: string; type: string; status: string };
+const LEAD_COLUMNS: Column<Row<"leads">>[] = [
+  { label: "Lead", render: (row) => <strong className="font-semibold">{row.lead_number}</strong> },
+  { label: "Prospecto", render: (row) => row.organization_name || row.person_name || "—" },
+  { label: "Estado", render: (row) => <Badge tone={stateOf(LEAD_STATES, row.status)[1]}>{stateOf(LEAD_STATES, row.status)[0]}</Badge> },
+];
 
-const CRM_COLUMNS: Column<CrmRow>[] = [
-  { label: "Registro", render: (row) => <strong className="font-semibold">{row.label}</strong> },
-  { label: "Tipo", render: (row) => row.type },
-  { label: "Estado", render: (row) => raw(row.status) },
+const OPPORTUNITY_COLUMNS: Column<Row<"opportunities">>[] = [
+  { label: "Oportunidad", render: (row) => <strong className="font-semibold">{row.opportunity_number}</strong> },
+  { label: "Nombre", render: (row) => row.name },
+  { label: "Estado", render: (row) => <Badge tone={stateOf(OPPORTUNITY_STATES, row.status)[1]}>{stateOf(OPPORTUNITY_STATES, row.status)[0]}</Badge> },
 ];
 
 const dateTime = (value: string) => new Date(value).toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" });
@@ -207,10 +212,6 @@ export default function ActorDetail() {
   const isOrg = actor.kind === "ORGANIZATION";
   const isCustomer = actor.roles.includes("CUSTOMER");
   const visited = actor.history.flatMap((entry) => (entry.metadata.to ? [entry.metadata.to] : [])).concat("ACTIVE");
-  const crmRows: CrmRow[] = [
-    ...actor.opportunities.map((row) => ({ id: row.id, label: row.name, type: "Oportunidad", status: row.status })),
-    ...actor.leads.map((row) => ({ id: row.id, label: row.person_name || row.organization_name || "—", type: "Lead", status: row.status })),
-  ];
 
   const tabs: [string, string, number | null][] = [
     ["resumen", "Resumen", null],
@@ -219,7 +220,7 @@ export default function ActorDetail() {
     ["finanzas", "Finanzas", actor.invoices.length],
     ["soporte", "Soporte", actor.tickets.length],
     ["documentos", "Documentos", actor.documents.length],
-    ["crm", "CRM", crmRows.length],
+    ["crm", "CRM", actor.opportunities.length + actor.leads.length],
   ];
 
   return (
@@ -467,7 +468,12 @@ export default function ActorDetail() {
       {tab === "finanzas" && <Listing title="Comprobantes" permission="billing.view" cols={INVOICE_COLUMNS} rows={actor.invoices} />}
       {tab === "soporte" && <Listing title="Tickets" permission="support.view" cols={TICKET_COLUMNS} rows={actor.tickets} />}
       {tab === "documentos" && <Listing title="Documentos vinculados" cols={DOCUMENT_COLUMNS} rows={actor.documents} />}
-      {tab === "crm" && <Listing title="Leads y oportunidades vinculados" permission="crm.view" cols={CRM_COLUMNS} rows={crmRows} />}
+      {tab === "crm" && (
+        <>
+          <Listing title="Oportunidades" permission="opportunities.view" cols={OPPORTUNITY_COLUMNS} rows={actor.opportunities} onRowClick={(row) => router.push(`/crm/opportunities/${row.id}`)} />
+          <Listing title="Leads" permission="leads.view" cols={LEAD_COLUMNS} rows={actor.leads} onRowClick={(row) => router.push(`/crm/leads/${row.id}`)} />
+        </>
+      )}
 
       {contactForm && (
         <ContactForm
