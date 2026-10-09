@@ -123,7 +123,7 @@ class ExportPermissionTest extends TestCase
         $this->getJson('/api/v1/parties?export=1')->assertStatus(403);
         $this->postJson('/api/v1/exports', ['resource' => 'core', 'format' => 'csv', 'rows' => 1])->assertStatus(403);
         // Un listado que no existe o un formato desconocido no se registra.
-        $this->postJson('/api/v1/exports', ['resource' => 'audit', 'format' => 'csv', 'rows' => 1])->assertStatus(422);
+        $this->postJson('/api/v1/exports', ['resource' => 'payroll', 'format' => 'csv', 'rows' => 1])->assertStatus(422);
         $this->postJson('/api/v1/exports', ['resource' => 'quotations', 'format' => 'pdf', 'rows' => 1])->assertStatus(422);
         $this->assertSame(1, $this->exports());
     }

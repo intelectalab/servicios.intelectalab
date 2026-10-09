@@ -73,7 +73,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Integraciones", icon: Plug, superModule: "Control", soon: true },
   { label: "Workflows", icon: Workflow, superModule: "Control", soon: true },
   { label: "Reportes", icon: ChartLine, superModule: "Control", soon: true },
-  { label: "Auditoría", icon: Eye, superModule: "Control", soon: true },
+  { href: "/audit", label: "Auditoría", requiredPermission: "audit.view", icon: Eye, superModule: "Control" },
 
   { label: "Configuración", icon: Settings, superModule: "Administración", soon: true },
   { label: "Módulos y plan", icon: ToggleLeft, superModule: "Administración", soon: true },

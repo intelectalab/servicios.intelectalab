@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-08 (con el flujo principal del CRM).
+Estado al 2026-10-08 (con el flujo principal del CRM y la pantalla Auditoría).
 
 ## Decisiones tomadas
 
@@ -45,6 +45,14 @@ Estado al 2026-10-08 (con el flujo principal del CRM).
 - Embudo y fuentes: los del prototipo, creados la primera vez que la empresa entra al CRM. Monto de la oportunidad solo en soles.
 - Tablero (kanban): pieza compartida `components/ui/kanban.tsx`; cada tarjeta trae "Mover a…" porque en teléfono no se arrastra. La vista elegida (tabla o tablero) se recuerda en el navegador.
 - Lo del prototipo que depende de una pantalla que falta se muestra y avisa: Puntaje ("—"), Campaña (deshabilitada), Actividades (botón que avisa).
+
+### Auditoría (2026-10-08)
+- Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
+- Permisos `audit.view` y `audit.export`, sin módulo del plan. Como en el prototipo, los tienen Administrador y Gerencia.
+- **La auditoría no tiene alcance:** quien tiene `audit.view` ve los movimientos de toda la empresa y de todos los módulos, también los que su rol no abre. Es un permiso para pocos.
+- Los textos de acciones y entidades viven en `App\Services\AuditCatalog`: una acción o entidad nueva que se registre debe añadirse ahí (si no, se muestra con su código).
+- La API nunca entrega el valor de una clave con nombre de secreto, aunque un registro lo hubiera guardado.
+- El detalle se abre en una ventana sobre el listado (no en una página ni en el panel lateral del prototipo), para no perder los filtros.
 
 ### Menú lateral
 - `MENU_ITEMS` (en `apps/web/src/components/layout/AppShell.tsx`) replica los grupos y el orden del prototipo.
@@ -113,6 +121,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM).
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
 - Separar la consola de plataforma en su propio usuario de base; cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
 - El drawer de planes (`SaasPlanDrawer.tsx`) tiene su lista de módulos escrita a mano y no coincide con `module_catalog`.
+- Auditoría: casi ningún movimiento guarda antes y después (solo el detalle); la entidad se muestra con su identificador, no con su número; falta decidir cuánto tiempo se conserva. El filtro "hoy" usa el día del servidor (UTC), como en los demás listados.
 - No hay página para la auditoría de plataforma (`GET /v1/superadmin/audit`), ni comando para crear superadmins, ni contador de notificaciones.
 - Mi perfil: las preferencias de notificación se guardan pero aún no cambian nada (falta Notificaciones); no se cierra una sesión concreta, solo todas las demás.
 - `php artisan tenants:sync-permissions` da a los tenants ya registrados los permisos de sus módulos. Falta confirmar si se corrió.

@@ -61,6 +61,7 @@ const RESOURCES: Record<string, string> = {
   support: "Soporte",
   credentials: "Credential Vault",
   reports: "Reportes",
+  audit: "Auditoría",
   users: "Usuarios y roles",
   tenant: "Empresa",
 };

@@ -33,6 +33,7 @@ use App\Modules\Portal\Http\Controllers\PortalController;
 use App\Modules\Portal\Http\Controllers\PortalRequestController;
 use App\Modules\Core\Http\Controllers\EmployeeController;
 use App\Modules\Core\Http\Controllers\SearchController;
+use App\Modules\Core\Http\Controllers\AuditController;
 use App\Modules\Core\Http\Controllers\OrgUnitController;
 use App\Modules\Core\Http\Controllers\RoleController;
 use App\Modules\Core\Http\Controllers\UserController;
@@ -85,6 +86,12 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:users.manage')->group(function () {
             Route::post('/org-units/{kind}', [OrgUnitController::class, 'store']);
             Route::put('/org-units/{kind}/{unit}', [OrgUnitController::class, 'update']);
+        });
+
+        // Auditoría de la empresa (Control): solo lectura
+        Route::middleware('permission:audit.view')->group(function () {
+            Route::get('/audit', [AuditController::class, 'index']);
+            Route::get('/audit/options', [AuditController::class, 'options']);
         });
 
         // Ajustes de la empresa (segregación de funciones)
