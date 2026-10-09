@@ -57,6 +57,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM y la pantalla Auditoría).
 ### Menú lateral
 - `MENU_ITEMS` (en `apps/web/src/components/layout/AppShell.tsx`) replica los grupos y el orden del prototipo.
 - Las pantallas que aún no existen van con `soon: true`: se ven atenuadas y no navegan. En modo íconos la barra muestra un ícono por módulo (los mismos que desplegada) y al pulsarlo abre un panel con sus pantallas (2026-10-06). Al construir una se cambia `soon` por `href` + `module` + `requiredPermission`.
+- Los grupos que cada persona abre o cierra se recuerdan en su navegador (2026-10-08); un grupo que nunca tocó arranca abierto si tiene alguna pantalla construida y plegado si no.
 - **Clientes y actores** (`/actors`) reemplaza a Clientes, Proveedores y Empleados desde el 2026-10-08. Los tres están **desconectados, no eliminados**: no salen en el menú y sus rutas llevan a `/actors`, pero sus pantallas, componentes y API siguen en el repo. Sin botón Asignar. El inicio de la empresa es `/actors` y el buscador de la cabecera busca ahí.
 - "Servicios" pasó a llamarse "Catálogo de servicios", como en el prototipo (2026-10-05).
 - Módulo fuera del plan → candado "Plan". Módulo en el plan pero sin permiso → oculto. Los datos vienen de `GET /v1/me/access`.

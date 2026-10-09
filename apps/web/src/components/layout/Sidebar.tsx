@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut, Lock, Sparkles, X, ChevronRight, Layers, Clock3, UserRound, Building2 } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import { poppins } from "@/lib/fonts";
 
 type MenuIcon = ComponentType<{ size?: number; strokeWidth?: number; color?: string; className?: string }>;
@@ -56,6 +56,55 @@ type SidebarProps = {
  */
 // Ojo: aquí no se usan clases "bg-white…": globals.css las repinta en tema oscuro.
 const SIDEBAR_BACKGROUND = "linear-gradient(180deg, #1B8FC9 0%, #1679AB 22%, #0F5A82 100%)";
+
+// Grupos del menú que la persona dejó plegados (true) o desplegados (false). Se recuerda en su
+// navegador; todas las barras abiertas (escritorio, teléfono, otra pestaña) leen lo mismo.
+const SIDEBAR_GROUPS_KEY = "erp-sidebar-groups";
+const SIDEBAR_GROUPS_EVENT = "erp-sidebar-groups-change";
+
+function subscribeToGroups(onChange: () => void) {
+  window.addEventListener(SIDEBAR_GROUPS_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(SIDEBAR_GROUPS_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+// Si el navegador no deja guardar, el menú se sigue abriendo y cerrando; solo no se recuerda.
+const unsavedGroups: { text: string | null } = { text: null };
+
+function storedGroupsText() {
+  if (unsavedGroups.text !== null) return unsavedGroups.text;
+  try {
+    return window.localStorage.getItem(SIDEBAR_GROUPS_KEY) ?? "{}";
+  } catch {
+    return "{}";
+  }
+}
+
+function saveGroups(text: string) {
+  try {
+    window.localStorage.setItem(SIDEBAR_GROUPS_KEY, text);
+    unsavedGroups.text = null;
+  } catch {
+    unsavedGroups.text = text;
+  }
+  window.dispatchEvent(new Event(SIDEBAR_GROUPS_EVENT));
+}
+
+function parseGroups(text: string): Record<string, boolean> {
+  try {
+    const stored: unknown = JSON.parse(text);
+    if (!stored || typeof stored !== "object" || Array.isArray(stored)) return {};
+    return Object.fromEntries(Object.entries(stored).filter(([, collapsed]) => typeof collapsed === "boolean")) as Record<string, boolean>;
+  } catch {
+    return {};
+  }
+}
+
+// Los nombres largos del menú no se cortan con "…": pasan a la línea siguiente.
+const WRAP = "min-w-0 leading-snug [overflow-wrap:anywhere]";
 
 function initials(name: string) {
   return name
@@ -128,7 +177,7 @@ export default function Sidebar({
     });
   }
   // Los grupos que todavía no tienen ninguna pantalla construida arrancan plegados.
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+  const [defaultCollapsed] = useState<Record<string, boolean>>(() => {
     const builtGroups = new Set(items.filter((item) => !item.soon).map((item) => item.superModule || "CORE"));
     const initial: Record<string, boolean> = {};
     for (const item of items) {
@@ -137,9 +186,13 @@ export default function Sidebar({
     }
     return initial;
   });
+  // Lo que la persona abrió o cerró a mano manda sobre lo anterior. En el servidor no hay nada
+  // guardado: se dibuja lo de siempre y el navegador lo ajusta al cargar.
+  const storedText = useSyncExternalStore(subscribeToGroups, storedGroupsText, () => "{}");
+  const collapsedGroups = useMemo(() => ({ ...defaultCollapsed, ...parseGroups(storedText) }), [defaultCollapsed, storedText]);
 
   const toggleGroup = (group: string) => {
-    setCollapsedGroups((prev) => ({ ...prev, [group]: !prev[group] }));
+    saveGroups(JSON.stringify({ ...parseGroups(storedGroupsText()), [group]: !collapsedGroups[group] }));
   };
 
   function showTooltip(event: { currentTarget: HTMLElement }, label: string, locked?: boolean) {
@@ -255,7 +308,7 @@ export default function Sidebar({
                   }`}
                 >
                   <GroupIcon size={18} strokeWidth={2} className="shrink-0 opacity-90" />
-                  <span className="truncate">{superModule}</span>
+                  <span className={WRAP}>{superModule}</span>
                   <ChevronRight
                     size={15}
                     className={`ml-auto shrink-0 transition-transform duration-200 ${isCollapsed ? "" : "rotate-90"}`}
@@ -273,7 +326,7 @@ export default function Sidebar({
                             title="Próximamente"
                             className="flex cursor-default items-center gap-2 py-2 pl-[52px] pr-[18px] text-[12.8px] text-white/45"
                           >
-                            <span className="truncate">{item.label}</span>
+                            <span className={WRAP}>{item.label}</span>
                             <Clock3 size={12} aria-label="Próximamente" className="ml-auto shrink-0" />
                           </div>
                         );
@@ -304,7 +357,7 @@ export default function Sidebar({
                           }`}
                         >
                           {active && <span className="absolute inset-y-0 left-0 w-1 bg-[#fff]" />}
-                          <span className="truncate">{label}</span>
+                          <span className={WRAP}>{label}</span>
 
                           {locked && (
                             <span className="ml-auto flex shrink-0 items-center gap-1 rounded-[5px] bg-[rgb(255_255_255/0.15)] px-1.5 text-[10px] font-semibold leading-[18px] text-white">
@@ -346,7 +399,7 @@ export default function Sidebar({
                     title="Próximamente"
                     className="flex cursor-default items-center gap-2 px-4 py-2 text-[12.8px] text-white/45"
                   >
-                    <span className="truncate">{item.label}</span>
+                    <span className={WRAP}>{item.label}</span>
                     <Clock3 size={12} aria-label="Próximamente" className="ml-auto shrink-0" />
                   </div>
                 );
@@ -379,7 +432,7 @@ export default function Sidebar({
                   }`}
                 >
                   {active && <span className="absolute inset-y-0 left-0 w-1 bg-[#fff]" />}
-                  <span className="truncate">{label}</span>
+                  <span className={WRAP}>{label}</span>
                   {locked && (
                     <span className="ml-auto flex shrink-0 items-center gap-1 rounded-[5px] bg-[rgb(255_255_255/0.15)] px-1.5 text-[10px] font-semibold leading-[18px] text-white">
                       <Lock size={10} />

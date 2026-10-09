@@ -104,10 +104,16 @@ En el navegador (`app.localhost:3000`):
 
 ### Lo que no se probó
 
-- **Pasar el cursor por los botones y por las filas, con los ojos:** la ventana de pruebas quedaba oculta a ratos. Son las piezas compartidas de los demás listados.
-- **Mover e inmovilizar columnas** en esta tabla: es la misma pieza (`DataTable`) que en los otros listados; no se repitió aquí.
-- **Con muchos movimientos:** la empresa de prueba tiene unos 950. La consulta usa el índice por empresa y fecha; con cientos de miles convendría medirla (ver Pendiente).
-- **El candado de "Abrir registro"** (rol con auditoría pero sin el módulo del registro): no hay un rol así; es el mismo `LinkBtn` con permiso del resto del sistema.
+- **Pasar el cursor, con los ojos:** la ventana de pruebas estaba oculta y no admite el cursor real. Se comprobó de otra forma (ver la segunda ronda).
+
+### Segunda ronda: lo que faltaba probar
+
+Pediste probar lo que faltaba.
+
+- **Mover e inmovilizar columnas** (Gerencia): se arrastró IP delante de Actor y se inmovilizó Acción; el orden y la columna fija quedaron guardados, la columna fija se pegó junto a Fecha con su desplazamiento, y al salir y volver a la pantalla todo seguía igual, con "Desinmovilizar columna" en su menú. Al terminar se devolvió la tabla a su orden original.
+- **Candado de "Abrir registro":** se simuló en el navegador un rol con auditoría pero sin `quotations.view`: en el detalle de una cotización el botón sale deshabilitado, con candado y "Tu rol no tiene permiso quotations.view".
+- **Al pasar el cursor:** como la ventana no admitía el cursor real, se leyó en las hojas de estilo qué regla aplica a cada pieza: la fila cambia de fondo (y lleva el cursor de mano), "Exportar a Excel" cambia fondo y texto, "Cerrar" del detalle cambia fondo y borde, y la X del detalle se aclara. No es lo mismo que verlo: conviene que le pases el cursor una vez.
+- **Con muchos movimientos:** se cargaron **500 000** movimientos en la empresa de prueba dentro de una transacción que luego se deshizo (no quedó ninguno: 1 005 antes y después). Tiempos en la base: primera página, 1 ms; contar el total, 19 ms; página 5 000, 7 ms; filtro Entidad, 14 ms; filtro Usuario, 20 ms; buscador de texto libre, 0,34 s; orden por Entidad, 44 ms; lista de entidades del filtro, 27 ms. Medido como dueño de las tablas, sin la regla de aislamiento, que añade una comparación por fila.
 
 ### Datos de prueba que quedaron en "Tenant A - Prueba"
 
