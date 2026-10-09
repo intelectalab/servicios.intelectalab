@@ -45,6 +45,8 @@ Cómo quedaron tus roles en "Tenant A - Prueba":
 | Gerencia | Ver | Ver, Gestionar | Toda la empresa |
 | Ventas | Ver, Gestionar | Ver, Gestionar | **Propios** |
 
+Ventas tiene además `core.manage` desde la segunda parte.
+
 Es el reparto del prototipo. En las demás empresas, los roles llamados Ventas y Gerencia recibieron lo mismo; no surte efecto mientras la empresa no tenga el módulo CRM.
 
 ## Qué se cambió
@@ -97,7 +99,7 @@ Es el reparto del prototipo. En las demás empresas, los roles llamados Ventas y
 - **Puntaje:** la columna y el dato de la ficha se muestran con "—". El puntaje automático llega con la pantalla Puntuación de leads.
 - **Campaña** en el formulario del lead: el campo está, deshabilitado, hasta que exista Campañas.
 - **Actividades** en la ficha de oportunidad: la tarjeta y el botón Agregar están; el botón avisa que aún no está disponible.
-- **Convertir pide además `core.manage`** para crear una organización o agregar el rol Cliente. En el prototipo Ventas puede hacerlo; aquí Ventas no tiene ese permiso, así que convierte solo con clientes que ya existen. Es lo más protegido; se cambia dándole `core.manage` a Ventas si prefieres.
+- **Convertir pide además `core.manage`** para crear una organización o agregar el rol Cliente. Ventas no lo tenía; se le dio después (ver "Segunda parte").
 - **Al convertir se puede buscar cualquier identidad**, no solo las coincidencias por nombre: así un cliente registrado con otro nombre se reutiliza en vez de duplicarse.
 - **Textos de la conversión:** "identidad", "organización" y "cliente" en lugar de Party, Organization y Customer. Se quitaron la lista decorativa de pasos y los códigos de regla (S10-R-008…).
 - **"Mover a…" también en las tarjetas de leads** (el prototipo lo tiene solo en oportunidades): en teléfono no se puede arrastrar.
@@ -169,11 +171,22 @@ En el navegador (`app.localhost:3000`):
 - La organización **Minera Prueba CRM S.A.C.** (RUC 20601234561), creada al convertir `OP-2026-0003`.
 - El embudo "Ventas" con sus cuatro etapas y las siete fuentes.
 
+## Segunda parte (2026-10-08): Ventas puede crear el cliente al convertir
+
+Pediste darle a Ventas el permiso necesario. Recibió **`core.manage`** (Gestionar Clientes y actores), como en el prototipo.
+
+- Migración `2026_10_08_000500_let_sales_manage_identities`. **Ya corrida en la base local.** Solo añade; alcanza a los roles Ventas que ya gestionan oportunidades (hoy, el de "Tenant A - Prueba").
+- **Qué más le da ese permiso:** no es solo la conversión. Ventas ahora también puede crear, editar, importar e inactivar identidades en Clientes y actores, y gestionar sus contactos y columnas personalizadas. No existe un permiso más fino para "solo crear clientes"; si lo quieres, hay que crearlo.
+- La regla no cambió: un rol sin `core.manage` sigue sin poder crear identidades desde el CRM (la prueba automática sigue en pie).
+
+Probado: las 101 pruebas pasan. En el navegador, como Ventas: en Clientes y actores, "Nueva organización", "Nueva persona" e "Importar" ya no llevan candado; en la conversión, "Crear organización + cliente" sale habilitado con sus campos (se abrió simulando en el navegador que la oportunidad abierta estaba ganada; no se guardó ni se cambió ningún dato).
+
+**No se probó:** que Ventas complete una conversión creando el cliente (no hay una oportunidad suya ganada sin convertir; la misma operación se probó completa como Administrador y está en las pruebas automáticas).
+
 ## Pendiente
 
 - **Siguiente tanda del CRM:** Actividades, Campañas y Puntuación de leads (siguen en "próximamente").
 - Solicitudes del portal por la ruta CRM (que una solicitud se vuelva oportunidad).
-- Decidir si Ventas debe poder crear el cliente al convertir (hoy no: le falta `core.manage`).
 - Pantalla para editar etapas del embudo y fuentes (hoy son las del prototipo).
 - Importar leads desde Excel (el prototipo lo tiene en Importación masiva).
 - Dos movimientos del mismo registro en el mismo segundo pueden salir en otro orden en el historial (la auditoría guarda la hora al segundo; ya pasaba en las demás fichas).

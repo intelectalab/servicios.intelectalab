@@ -37,7 +37,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM).
 - Se construye por partes. Hecho: Leads y Pipeline de oportunidades (con ganar, perder y convertir). Faltan Actividades, Campañas y Puntuación de leads. Detalle en [cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md).
 - Permisos por recurso con Ver y Gestionar (`leads.*`, `opportunities.*`), como en Comercial; reemplazan a `crm.*`. Calificar un lead y crear su oportunidad pide `opportunities.manage`.
 - Leads y Oportunidades respetan el alcance del rol. "Propio" es lo que la persona lleva como responsable. Ventas, lo propio; Gerencia y Administrador, toda la empresa.
-- El cliente no nace del lead: se crea o se reutiliza al **convertir la oportunidad ganada**, con el mismo control de duplicados de Clientes y actores. Dar de alta la organización o agregarle el rol Cliente pide además `core.manage`; convertir con un cliente que ya existe, no.
+- El cliente no nace del lead: se crea o se reutiliza al **convertir la oportunidad ganada**, con el mismo control de duplicados de Clientes y actores. Dar de alta la organización o agregarle el rol Cliente pide además `core.manage`; convertir con un cliente que ya existe, no. Ventas tiene `core.manage` (lo pediste el 2026-10-08), así que también gestiona Clientes y actores.
 - La ruta que convertía un lead directo en cliente está desconectada (su código sigue en el controlador).
 - Lo que la base garantiza: una oportunidad por lead, una conversión por oportunidad, descartar con motivo, ganar con evidencia, perder con motivo. El registro de conversiones es de solo alta y lectura para la aplicación.
 - La oportunidad sigue siendo de quien llevaba el lead, la cree quien la cree. Lead y oportunidad nacen en la sede de su responsable.
@@ -104,7 +104,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM).
 
 ## Pendientes
 
-- CRM: Actividades, Campañas y Puntuación de leads; solicitudes del portal por la ruta CRM; decidir si Ventas crea el cliente al convertir (hoy le falta `core.manage`); pantalla para editar etapas y fuentes; importar leads.
+- CRM: Actividades, Campañas y Puntuación de leads; solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
