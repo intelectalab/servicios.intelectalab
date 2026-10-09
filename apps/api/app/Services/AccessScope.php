@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
  *
  *   OWN     lo propio: lo que la persona creó (o tomó, en las solicitudes)
  *   TEAM    lo propio y lo de su equipo
- *   BRANCH  lo propio y lo de su sede
+ *   BRANCH  lo propio y lo de sus sedes (la principal y las adicionales)
  *   TENANT  toda la empresa
  *
  * Se guarda por rol y recurso en `role_scopes` y lo aplican solos los modelos que usan
@@ -81,8 +81,8 @@ class AccessScope
             self::owned($visible, $resource, $table, $owners);
 
             // Un documento sin sede no es de ninguna: no se abre a todas las sedes.
-            if ($scope === 'BRANCH' && $context['branch_id']) {
-                $visible->orWhere("{$table}.branch_id", $context['branch_id']);
+            if ($scope === 'BRANCH' && $context['branch_ids']) {
+                $visible->orWhereIn("{$table}.branch_id", $context['branch_ids']);
             }
         });
     }
@@ -106,7 +106,7 @@ class AccessScope
         };
     }
 
-    /** @return array{user_id: string, branch_id: ?string, team_user_ids: string[], scopes: array<string, string>}|null */
+    /** @return array{user_id: string, branch_id: ?string, branch_ids: string[], team_user_ids: string[], scopes: array<string, string>}|null */
     private static function context(): ?array
     {
         $request = request();
@@ -141,9 +141,13 @@ class AccessScope
             ? DB::table('tenant_users')->where('tenant_id', $tenantId)->where('team_id', $member->team_id)->pluck('user_id')->all()
             : [];
 
+        // Las sedes adicionales amplían lo que se ve; lo que la persona crea nace en la principal.
+        $extraBranchIds = DB::table('tenant_user_branches')->where('tenant_id', $tenantId)->where('user_id', $userId)->pluck('branch_id')->all();
+
         return [
             'user_id' => $userId,
             'branch_id' => $member?->default_branch_id,
+            'branch_ids' => array_values(array_unique(array_filter([$member?->default_branch_id, ...$extraBranchIds]))),
             'team_user_ids' => array_values(array_unique([$userId, ...$teamUserIds])),
             'scopes' => self::scopesFor($roles),
         ];

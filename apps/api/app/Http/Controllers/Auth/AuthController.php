@@ -393,6 +393,11 @@ class AuthController extends Controller
                     ->orderBy('roles.name')->pluck('roles.name')->unique()->values()
                 : [],
             'branch' => $member?->branch,
+            'extra_branches' => $tenantId
+                ? DB::table('tenant_user_branches')->join('branches', 'branches.id', '=', 'tenant_user_branches.branch_id')
+                    ->where('tenant_user_branches.tenant_id', $tenantId)->where('tenant_user_branches.user_id', $user->id)
+                    ->orderBy('branches.name')->pluck('branches.name')
+                : [],
             'team' => $member?->team,
             'mfa' => $this->requiresMfa($user, $tenantId),
             'sessions' => $user->tokens()

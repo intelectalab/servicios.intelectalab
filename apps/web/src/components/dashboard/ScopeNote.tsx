@@ -6,20 +6,20 @@ import { Chip } from "@/components/ui/proto";
 const HINTS: Record<Exclude<Scope, "TENANT">, string> = {
   OWN: "Tu rol alcanza solo lo propio: lo que tú registraste y lo que nació de tus cotizaciones.",
   TEAM: "Tu rol alcanza lo propio y lo de las personas de tu equipo.",
-  BRANCH: "Tu rol alcanza lo propio y lo de tu sede.",
+  BRANCH: "Tu rol alcanza lo propio y lo de tus sedes.",
 };
 
 const PORTAL_HINTS: typeof HINTS = {
   OWN: "Tu rol alcanza las solicitudes que nadie tomó todavía y las que tomaste tú.",
   TEAM: "Tu rol alcanza las solicitudes que nadie tomó todavía y las que tomó tu equipo.",
-  BRANCH: "Tu rol alcanza las solicitudes que nadie tomó todavía, las que tomaste tú y las de tu sede.",
+  BRANCH: "Tu rol alcanza las solicitudes que nadie tomó todavía, las que tomaste tú y las de tus sedes.",
 };
 
 // En el CRM lo propio es lo que la persona lleva como responsable.
 const CRM_HINTS: typeof HINTS = {
   OWN: "Tu rol alcanza solo lo propio: lo que llevas como responsable.",
   TEAM: "Tu rol alcanza lo que llevas tú y lo que llevan las personas de tu equipo.",
-  BRANCH: "Tu rol alcanza lo que llevas tú y lo de tu sede.",
+  BRANCH: "Tu rol alcanza lo que llevas tú y lo de tus sedes.",
 };
 
 const hintsOf = (resource: string) =>

@@ -51,6 +51,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | CRM, flujo principal: Leads y Pipeline de oportunidades (tabla y tablero), ganar / perder y convertir a cliente sin duplicar | [cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md) |
 | 2026-10-08 | Exportar como permiso aparte en los nueve listados, comprobado en la API, con tope de filas por página y auditoría | [cambios/2026-10-08_permiso-de-exportar.md](cambios/2026-10-08_permiso-de-exportar.md) |
 | 2026-10-08 | Mi perfil y seguridad: cuenta, cambiar contraseña, sesiones recientes (cerrar las demás) y preferencias de notificación | [cambios/2026-10-08_mi-perfil.md](cambios/2026-10-08_mi-perfil.md) |
+| 2026-10-08 | Sedes adicionales por persona: amplían lo que se ve con el alcance "Sede"; lo creado nace en la sede principal | [cambios/2026-10-08_sedes-adicionales.md](cambios/2026-10-08_sedes-adicionales.md) |
 
 ## Cómo se escribe cada entrada
 

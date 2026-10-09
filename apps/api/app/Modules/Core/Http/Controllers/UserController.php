@@ -43,6 +43,13 @@ class UserController extends Controller
                 'code' => $employee->employee_code,
             ]);
 
+        $extraBranches = DB::table('tenant_user_branches')
+            ->join('branches', 'branches.id', '=', 'tenant_user_branches.branch_id')
+            ->where('tenant_user_branches.tenant_id', $tenantId)
+            ->orderBy('branches.name')
+            ->get(['tenant_user_branches.user_id', 'branches.id', 'branches.name'])
+            ->groupBy('user_id');
+
         $users = DB::table('tenant_users')
             ->join('users', 'users.id', '=', 'tenant_users.user_id')
             ->leftJoin('branches', 'branches.id', '=', 'tenant_users.default_branch_id')
@@ -54,7 +61,7 @@ class UserController extends Controller
                 'tenant_users.status', 'tenant_users.default_branch_id', 'branches.name as branch_name',
                 'tenant_users.team_id', 'teams.name as team_name',
             ])
-            ->map(function ($user) use ($roles, $employees) {
+            ->map(function ($user) use ($roles, $employees, $extraBranches) {
                 $role = ($roles[$user->id] ?? collect())->first();
                 $isAdmin = $role && strtoupper($role->code) === 'ADMIN';
 
@@ -66,6 +73,8 @@ class UserController extends Controller
                     'role' => $role ? ['id' => $role->id, 'name' => $role->name, 'is_admin' => $isAdmin] : null,
                     'branch' => $user->default_branch_id ? ['id' => $user->default_branch_id, 'name' => $user->branch_name] : null,
                     'team' => $user->team_id ? ['id' => $user->team_id, 'name' => $user->team_name] : null,
+                    // Sedes adicionales: amplían lo que la persona ve con el alcance "Sede".
+                    'extra_branches' => ($extraBranches[$user->id] ?? collect())->map(fn ($branch) => ['id' => $branch->id, 'name' => $branch->name])->values(),
                     'employee_id' => $employees->firstWhere('user_id', $user->id)['id'] ?? null,
                     // El administrador siempre entra con verificación en dos pasos.
                     'mfa' => (bool) $user->mfa_enabled || $isAdmin,
@@ -119,6 +128,7 @@ class UserController extends Controller
                 'scope' => 'TENANT', 'created_at' => now(),
             ]);
             $this->linkEmployee($tenantId, $user->id, $data['employee_id'] ?? null);
+            $this->syncExtraBranches($tenantId, $user->id, $data['extra_branch_ids']);
 
             return $user;
         });
@@ -129,7 +139,7 @@ class UserController extends Controller
             action: 'user.create',
             entityType: 'User',
             entityId: $user->id,
-            metadata: ['email' => $user->email, 'role_id' => $data['role_id'], 'branch_id' => $data['branch_id'] ?? null, 'team_id' => $data['team_id'] ?? null],
+            metadata: ['email' => $user->email, 'role_id' => $data['role_id'], 'branch_id' => $data['branch_id'] ?? null, 'extra_branch_ids' => $data['extra_branch_ids'], 'team_id' => $data['team_id'] ?? null],
         );
 
         // Mismo correo que "¿Olvidó su contraseña?": un código para crear la contraseña.
@@ -158,6 +168,8 @@ class UserController extends Controller
             throw ValidationException::withMessages(['role_id' => ['La empresa no puede quedarse sin administrador.']]);
         }
 
+        $extraBefore = DB::table('tenant_user_branches')->where('tenant_id', $tenantId)->where('user_id', $member->user_id)->orderBy('branch_id')->pluck('branch_id')->all();
+
         DB::transaction(function () use ($data, $tenantId, $member, $roleChanges) {
             User::where('id', $member->user_id)->update([
                 'name' => $data['name'],
@@ -179,6 +191,7 @@ class UserController extends Controller
                 ]);
             }
             $this->linkEmployee($tenantId, $member->user_id, $data['employee_id'] ?? null);
+            $this->syncExtraBranches($tenantId, $member->user_id, $data['extra_branch_ids']);
         });
 
         AuditLogger::log(
@@ -188,8 +201,8 @@ class UserController extends Controller
             entityType: 'User',
             entityId: $member->user_id,
             // Rol, sede y equipo deciden qué registros alcanza la persona.
-            beforeData: ['role_id' => $currentRoleId, 'branch_id' => $member->default_branch_id, 'team_id' => $member->team_id],
-            afterData: ['role_id' => $data['role_id'], 'branch_id' => $data['branch_id'] ?? null, 'team_id' => $data['team_id'] ?? null],
+            beforeData: ['role_id' => $currentRoleId, 'branch_id' => $member->default_branch_id, 'extra_branch_ids' => $extraBefore, 'team_id' => $member->team_id],
+            afterData: ['role_id' => $data['role_id'], 'branch_id' => $data['branch_id'] ?? null, 'extra_branch_ids' => $data['extra_branch_ids'], 'team_id' => $data['team_id'] ?? null],
         );
 
         return response()->json(['id' => $member->user_id]);
@@ -236,6 +249,17 @@ class UserController extends Controller
         return response()->json(['id' => $member->user_id, 'status' => $data['status']]);
     }
 
+    /** Deja a la persona exactamente con esas sedes adicionales. */
+    private function syncExtraBranches(string $tenantId, string $userId, array $branchIds): void
+    {
+        $assigned = DB::table('tenant_user_branches')->where('tenant_id', $tenantId)->where('user_id', $userId);
+        (clone $assigned)->whereNotIn('branch_id', $branchIds)->delete();
+
+        foreach (array_diff($branchIds, (clone $assigned)->pluck('branch_id')->all()) as $branchId) {
+            DB::table('tenant_user_branches')->insert(['tenant_id' => $tenantId, 'user_id' => $userId, 'branch_id' => $branchId]);
+        }
+    }
+
     private function validated(Request $request, string $tenantId): array
     {
         $data = $request->validate([
@@ -243,6 +267,8 @@ class UserController extends Controller
             'email' => ['required', 'email', 'max:255'],
             'role_id' => ['required', 'uuid'],
             'branch_id' => ['nullable', 'uuid'],
+            'extra_branch_ids' => ['sometimes', 'array', 'max:50'],
+            'extra_branch_ids.*' => ['uuid'],
             'team_id' => ['nullable', 'uuid'],
             'employee_id' => ['nullable', 'uuid'],
             'mfa' => ['nullable', 'boolean'],
@@ -262,6 +288,18 @@ class UserController extends Controller
         if (! empty($data['branch_id']) && ! DB::table('branches')->where('tenant_id', $tenantId)->where('id', $data['branch_id'])->exists()) {
             throw ValidationException::withMessages(['branch_id' => ['Sede no válida.']]);
         }
+        // Sedes adicionales: de esta empresa, sin repetir la principal, y solo si hay principal
+        // (lo que la persona crea tiene que nacer en alguna).
+        $extra = array_values(array_unique(array_diff($data['extra_branch_ids'] ?? [], [$data['branch_id'] ?? null])));
+        if ($extra && empty($data['branch_id'])) {
+            throw ValidationException::withMessages(['extra_branch_ids' => ['Elige primero la sede principal.']]);
+        }
+        if ($extra && DB::table('branches')->where('tenant_id', $tenantId)->whereIn('id', $extra)->count() !== count($extra)) {
+            throw ValidationException::withMessages(['extra_branch_ids' => ['Sede no válida.']]);
+        }
+        sort($extra);
+        $data['extra_branch_ids'] = $extra;
+
         if (! empty($data['team_id']) && ! DB::table('teams')->where('tenant_id', $tenantId)->where('id', $data['team_id'])->exists()) {
             throw ValidationException::withMessages(['team_id' => ['Equipo no válido.']]);
         }

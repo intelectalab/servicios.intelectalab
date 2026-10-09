@@ -82,7 +82,7 @@ En el navegador (`app.localhost:3000`):
 ### Lo que no se probó
 
 - **Contratos y Órdenes como Ventas:** sus listados están vacíos para esa cuenta y sin filas no hay botones de exportar. Usan la misma pieza y están en las pruebas automáticas.
-- **Usuarios y la columna Exportar de Roles y permisos:** no se entró como Administrador en esta tanda. La API que arma la matriz sí está probada.
+- **Usuarios:** no se probó exportar ese listado en el navegador. *(La columna **Exportar** de Roles y permisos se vio después, como Administrador: aparece, y en Ventas sale sin marcar en Clientes, Cotizaciones y Leads.)*
 - **Los filtros en la auditoría, en el navegador:** se añadieron después de la prueba con Gerencia (ahí salieron vacíos porque no había filtros puestos). Está en la prueba automática de la API.
 - Claro, oscuro y 375 px: no cambió el diseño; el candado es el mismo de los demás botones.
 

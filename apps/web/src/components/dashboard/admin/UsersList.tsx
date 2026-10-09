@@ -19,6 +19,8 @@ type CompanyUser = {
   status: string;
   role: { id: string; name: string; is_admin: boolean } | null;
   branch: { id: string; name: string } | null;
+  /** Sedes adicionales: amplían lo que la persona ve con el alcance "Sede". */
+  extra_branches: { id: string; name: string }[];
   team: { id: string; name: string } | null;
   employee_id: string | null;
   /** Entra con verificación en dos pasos (por su rol o porque se le exige). */
@@ -66,11 +68,18 @@ function UserModal({
   const [email, setEmail] = useState(user?.email ?? "");
   const [roleId, setRoleId] = useState(user?.role?.id ?? "");
   const [branchId, setBranchId] = useState(user?.branch?.id ?? "");
+  const [extraBranchIds, setExtraBranchIds] = useState<string[]>(user?.extra_branches.map((branch) => branch.id) ?? []);
   const [teamId, setTeamId] = useState(user?.team?.id ?? "");
   const [employeeId, setEmployeeId] = useState(user?.employee_id ?? "");
   const [mfa, setMfa] = useState(user?.mfa_enabled ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // Sedes que se pueden marcar como adicionales: todas menos la principal (y las que ya tenga, aunque estén desactivadas).
+  const extraOptions = [
+    ...options.branches,
+    ...(user?.extra_branches.filter((branch) => !options.branches.some((option) => option.id === branch.id)) ?? []),
+  ].filter((branch) => branch.id !== branchId).map((branch): [string, string] => [branch.id, branch.name]);
 
   // Empleados sin cuenta, más el que ya esté vinculado a este usuario.
   const employees = options.employees.filter((employee) => !employee.user_id || employee.user_id === user?.id);
@@ -93,6 +102,8 @@ function UserModal({
           email: email.trim(),
           role_id: roleId,
           branch_id: branchId || null,
+          // La principal no se repite como adicional; sin principal no hay adicionales.
+          extra_branch_ids: branchId ? extraBranchIds.filter((id) => id !== branchId) : [],
           team_id: teamId || null,
           employee_id: employeeId || null,
           mfa,
@@ -137,6 +148,34 @@ function UserModal({
                 options={[["", "Sin sede"], ...withCurrent(options.branches, user?.branch)]}
               />
             </Field>
+          )}
+          {extraOptions.length > 0 && (
+            <div className="flex min-w-0 flex-col gap-[5px] md:col-span-3">
+              <span className="text-[12.5px] font-medium">Sedes adicionales</span>
+              <div className={`flex flex-wrap gap-x-4 gap-y-2 rounded-[9px] border border-[color:var(--p-field-border)] px-3 py-2.5 ${branchId ? "" : "opacity-55"}`}>
+                {extraOptions.map(([id, label]) => (
+                  <label key={id} className={`flex items-center gap-2 ${branchId ? "cursor-pointer" : "cursor-not-allowed"}`}>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 cursor-pointer rounded border-[color:var(--p-field-border)] accent-[#1B8FC9] disabled:cursor-not-allowed"
+                      checked={Boolean(branchId) && extraBranchIds.includes(id)}
+                      disabled={!branchId}
+                      onChange={(e) => setExtraBranchIds((list) => (e.target.checked ? [...list, id] : list.filter((item) => item !== id)))}
+                    />
+                    <span>{label}</span>
+                  </label>
+                ))}
+              </div>
+              {errors.extra_branch_ids ? (
+                <small className="text-xs text-[color:var(--p-danger-text)]">{errors.extra_branch_ids}</small>
+              ) : (
+                <small className="app-muted text-xs">
+                  {branchId
+                    ? "Con el alcance «Sede», la persona ve también lo de estas sedes. Lo que ella crea nace en su sede principal."
+                    : "Se guardan con una sede principal: elígela primero."}
+                </small>
+              )}
+            </div>
           )}
           {(options.teams.length > 0 || user?.team) && (
             <Field label="Equipo" error={errors.team_id}>
@@ -265,7 +304,19 @@ export default function UsersList() {
       ),
     },
     { label: "Rol", sortKey: "role", render: (user) => (user.role ? <Chip tone="accent">{user.role.name}</Chip> : <span className="app-muted">Sin rol</span>) },
-    ...(showBranch ? [{ label: "Sede", sortKey: "branch", render: (user: CompanyUser) => user.branch?.name ?? "—" }] : []),
+    ...(showBranch ? [{
+      label: "Sede", sortKey: "branch",
+      render: (user: CompanyUser) => (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          {user.branch?.name ?? "—"}
+          {user.extra_branches.length > 0 && (
+            <span title={`Sedes adicionales: ${user.extra_branches.map((branch) => branch.name).join(", ")}`}>
+              <Chip tone="neutral">+{user.extra_branches.length}</Chip>
+            </span>
+          )}
+        </span>
+      ),
+    }] : []),
     ...(showTeam ? [{ label: "Equipo", sortKey: "team", render: (user: CompanyUser) => user.team?.name ?? "—" }] : []),
     { label: "MFA", sortKey: "mfa", render: (user) => <Chip tone={user.mfa ? "success" : "muted"}>{user.mfa ? "Activo" : "No"}</Chip> },
     { label: "Estado", sortKey: "status", render: (user) => <Chip tone={isActive(user) ? "success" : "muted"}>{isActive(user) ? "Activo" : "Inactivo"}</Chip> },
@@ -287,6 +338,7 @@ export default function UsersList() {
     { label: "Correo", value: (user) => user.email, width: 34 },
     { label: "Rol", value: (user) => user.role?.name ?? "", width: 20 },
     { label: "Sede", value: (user) => user.branch?.name ?? "", width: 20 },
+    { label: "Sedes adicionales", value: (user) => user.extra_branches.map((branch) => branch.name).join(", "), width: 28 },
     { label: "Equipo", value: (user) => user.team?.name ?? "", width: 20 },
     { label: "Verificación en dos pasos", value: (user) => (user.mfa ? "Activo" : "No"), width: 24, kind: "center" },
     { label: "Último acceso", value: (user) => lastLogin(user.last_login_at), width: 22, kind: "center" },

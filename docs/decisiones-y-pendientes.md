@@ -29,7 +29,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM).
 - Un contrato o una orden también es "propio" de quien hizo la cotización de origen. El documento nace en la sede de quien lo crea y contrato y orden heredan la de la cotización.
 - Una solicitud del portal sin tomar la ve quien pueda atenderla; quien la toma, cotiza o rechaza queda como responsable.
 - El filtro lo aplican solos los modelos (`ScopedByAccess`), no cada controlador. Todo modelo nuevo que deba respetar el alcance usa ese trait, declara su recurso y se añade a `AccessScope::RESOURCES` y al CHECK de `role_scopes`.
-- Sedes y equipos se gestionan en Usuarios (pestañas); no se borran, se desactivan. Una sede y un equipo por persona.
+- Sedes y equipos se gestionan en Usuarios (pestañas); no se borran, se desactivan. Un equipo por persona. **Una sede principal y, si hace falta, sedes adicionales** (2026-10-08, [cambios/2026-10-08_sedes-adicionales.md](cambios/2026-10-08_sedes-adicionales.md)): lo que la persona crea nace en la principal; las adicionales solo amplían lo que ve con el alcance "Sede" y requieren tener principal.
 - En Contratos y Órdenes, **Crear** es un permiso aparte de Gestionar (`contracts.create`, `orders.create`): Ventas genera el contrato y la orden de su cotización aprobada, pero no los edita ni les cambia el estado. Quien gestionaba conserva crear.
 - La vista del cliente entrega cada parte (comprobantes y saldo, tickets, órdenes de trabajo, leads) solo con el permiso de ver de su módulo y si la empresa lo tiene; la pestaña sin permiso no se esconde, muestra el candado. Para decidirlo dentro de una pantalla se usa `CheckPermission::granted`.
 

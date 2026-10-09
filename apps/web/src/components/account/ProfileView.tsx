@@ -29,6 +29,8 @@ type Profile = {
   tenant: string | null;
   roles: string[];
   branch: string | null;
+  /** Sedes adicionales: lo que la persona ve además de su sede. */
+  extra_branches: string[];
   team: string | null;
   mfa: boolean;
   sessions: Session[];
@@ -215,7 +217,8 @@ export default function ProfileView() {
                   rows={[
                     ["Empresa", profile.tenant ?? "Plataforma SaaS"],
                     ["Rol", profile.is_super_admin ? "SuperAdmin SaaS" : profile.roles.join(", ") || "—"],
-                    profile.is_super_admin ? null : ["Sede", profile.branch ?? "—"],
+                    profile.is_super_admin ? null : [profile.extra_branches.length ? "Sede principal" : "Sede", profile.branch ?? "—"],
+                    profile.extra_branches.length ? ["Sedes adicionales", profile.extra_branches.join(", ")] : null,
                     profile.team ? ["Equipo", profile.team] : null,
                     [
                       "Verificación en dos pasos",

@@ -109,6 +109,14 @@ class OrgUnitController extends Controller
             ->selectRaw("{$config['member']} as unit_id, count(*) as total")
             ->groupBy($config['member'])
             ->pluck('total', 'unit_id');
+        // En una sede cuentan también quienes la tienen como adicional.
+        if ($kind === 'branches') {
+            $extra = DB::table('tenant_user_branches')->where('tenant_id', $tenantId)
+                ->selectRaw('branch_id, count(*) as total')->groupBy('branch_id')->pluck('total', 'branch_id');
+            foreach ($extra as $branchId => $total) {
+                $members[$branchId] = (int) ($members[$branchId] ?? 0) + (int) $total;
+            }
+        }
 
         return DB::table($config['table'])
             ->where('tenant_id', $tenantId)

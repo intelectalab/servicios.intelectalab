@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\AccessScope;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -276,6 +277,72 @@ class AccessScopeTest extends TestCase
         // Si Ana pasa a Arequipa, alcanza lo de Arequipa y conserva lo que ella creó; lo de Beto ya no.
         DB::table('tenant_users')->where('user_id', $ana->id)->update(['default_branch_id' => $arequipa]);
         $this->assertSame($this->sorted($ofAna, $ofCarla), $this->visibleQuotations($ana));
+    }
+
+    public function test_additional_branches_widen_what_is_seen_but_not_where_things_are_born(): void
+    {
+        $this->makeTenant();
+        $sales = $this->makeRole('VENTAS', self::SALES, 'BRANCH');
+        $admin = $this->makeUser('Admin', $this->makeRole('ADMIN', ['users.view', 'users.manage'], null));
+        $lima = $this->makeBranch('Lima');
+        $arequipa = $this->makeBranch('Arequipa');
+        $cusco = $this->makeBranch('Cusco');
+        $zonal = $this->makeUser('Zonal', $sales, branchId: $lima);
+        $inArequipa = $this->makeUser('Carla', $sales, branchId: $arequipa);
+        $inCusco = $this->makeUser('Dante', $sales, branchId: $cusco);
+        [$customerId] = $this->makeCustomer();
+        $ofArequipa = $this->quote($inArequipa, $customerId);
+        $ofCusco = $this->quote($inCusco, $customerId);
+        $form = fn (array $extra) => [
+            'name' => 'Zonal', 'email' => $zonal->email, 'role_id' => $sales, 'branch_id' => $lima, ...$extra,
+        ];
+
+        // Con solo su sede no alcanza las otras.
+        $this->assertSame([], $this->visibleQuotations($zonal));
+
+        // Se le asigna Arequipa como sede adicional (la principal repetida se ignora).
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/users/{$zonal->id}", $form(['extra_branch_ids' => [$arequipa, $lima]]))->assertOk();
+        $this->assertSame([$arequipa], DB::table('tenant_user_branches')->where('user_id', $zonal->id)->pluck('branch_id')->all());
+        $listed = collect($this->getJson('/api/v1/users')->assertOk()->json('users'))->firstWhere('id', $zonal->id);
+        $this->assertSame(['Arequipa'], array_column($listed['extra_branches'], 'name'));
+        $log = DB::table('audit_logs')->where('action', 'user.update')->where('entity_id', $zonal->id)->first();
+        $this->assertSame([[], [$arequipa]], [json_decode($log->before_data, true)['extra_branch_ids'], json_decode($log->after_data, true)['extra_branch_ids']]);
+        // En el conteo de la sede figura también quien la tiene como adicional.
+        $branches = collect($this->getJson('/api/v1/org-units')->json('branches'))->pluck('users', 'name');
+        $this->assertSame([2, 1, 1], [$branches['Arequipa'], $branches['Cusco'], $branches['Lima']]);
+
+        // Ve lo de Arequipa (y actúa sobre ello), no lo de Cusco; lo que crea nace en su sede principal.
+        AccessScope::forget();
+        $this->assertSame([$ofArequipa], $this->visibleQuotations($zonal));
+        $this->getJson("/api/v1/quotations/{$ofArequipa}")->assertOk();
+        $this->getJson("/api/v1/quotations/{$ofCusco}")->assertStatus(404);
+        $own = $this->quote($zonal, $customerId);
+        $this->assertSame($lima, DB::table('quotations')->where('id', $own)->value('branch_id'));
+        $this->getJson('/api/v1/me/profile')->assertOk()->assertJsonPath('branch', 'Lima')->assertJsonPath('extra_branches', ['Arequipa']);
+
+        // Reglas: hace falta sede principal, y las sedes tienen que ser de la empresa.
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/users/{$zonal->id}", [...$form(['extra_branch_ids' => [$cusco]]), 'branch_id' => null])
+            ->assertStatus(422)->assertJsonValidationErrors('extra_branch_ids');
+        $this->putJson("/api/v1/users/{$zonal->id}", $form(['extra_branch_ids' => [(string) Str::uuid()]]))
+            ->assertStatus(422)->assertJsonValidationErrors('extra_branch_ids');
+        $this->assertSame([$arequipa], DB::table('tenant_user_branches')->where('user_id', $zonal->id)->pluck('branch_id')->all());
+
+        // Cambiar la lista la reemplaza; quitarla devuelve a la persona a su sola sede.
+        $this->putJson("/api/v1/users/{$zonal->id}", $form(['extra_branch_ids' => [$cusco]]))->assertOk();
+        AccessScope::forget();
+        $this->assertSame($this->sorted($ofCusco, $own), $this->visibleQuotations($zonal));
+        Sanctum::actingAs($admin);
+        $this->putJson("/api/v1/users/{$zonal->id}", $form(['extra_branch_ids' => []]))->assertOk();
+        AccessScope::forget();
+        $this->assertSame([$own], $this->visibleQuotations($zonal));
+
+        // Con alcance "Propios" las sedes adicionales no amplían nada.
+        DB::table('tenant_user_branches')->insert(['tenant_id' => $this->tenantId, 'user_id' => $zonal->id, 'branch_id' => $arequipa]);
+        $this->setScope($sales, 'OWN');
+        AccessScope::forget();
+        $this->assertSame([$own], $this->visibleQuotations($zonal));
     }
 
     public function test_contracts_and_orders_follow_who_made_the_sale(): void

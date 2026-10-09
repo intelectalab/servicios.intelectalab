@@ -213,7 +213,7 @@ Como no era todo, se separó lo que no le corresponde:
 
 Probado: **101 pruebas pasan**. La prueba de actores comprueba ahora que con solo gestionar el borrado de un contacto responde 403 y no borra nada, y que con `core.delete` sí; y que la columna personalizada no se elimina sin el permiso. En el navegador, como Ventas: en la ficha de "Actor de Prueba S.A.C.", **Editar** el dato de contacto está habilitado y **Eliminar** sale con candado y "Tu rol no tiene permiso core.delete"; Nueva organización, Nueva persona, Importar, Editar e Inactivar siguen habilitados.
 
-**No se probó en el navegador:** el candado de "Eliminar columna" en el menú de una columna personalizada (la columna "Año" no estaba a la vista en la tabla; la regla está en la prueba automática), ni la casilla Eliminar en Roles y permisos como Administrador (la matriz se arma sola con los permisos que existen).
+**No se probó en el navegador:** el candado de "Eliminar columna" en el menú de una columna personalizada (la columna "Año" no estaba a la vista en la tabla; la regla está en la prueba automática), la casilla **Eliminar** de Roles y permisos se vio después como Administrador: aparece la columna y en Ventas sale sin marcar.
 
 Queda igual que antes: Exportar no es un permiso en este sistema (quien ve el listado lo exporta); en el prototipo Ventas no exporta clientes.
 
