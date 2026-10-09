@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'super.admin' => \App\Http\Middleware\EnsureIsSuperAdmin::class,
             'idempotency' => \App\Http\Middleware\Idempotency::class,
             'record.version' => \App\Http\Middleware\CheckRecordVersion::class,
+            'list.export' => \App\Http\Middleware\ListExport::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

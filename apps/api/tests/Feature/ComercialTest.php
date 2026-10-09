@@ -981,6 +981,13 @@ class ComercialTest extends TestCase
         $contacts = collect($this->getJson("/api/v1/parties/{$org['id']}")->json('contacts'))->where('contact_type', 'PHONE');
         $this->assertCount(2, $contacts);
         $this->assertSame(['María López (Compras)'], $contacts->where('is_primary', true)->pluck('contact_name')->all());
+        // Eliminar es un permiso aparte de gestionar: quien gestiona identidades no borra sus contactos.
+        $this->deleteJson("/api/v1/contacts/{$contact['id']}")->assertStatus(403)->assertJsonPath('code', 'PERMISSION_DENIED');
+        $this->assertSame(1, DB::table('contacts')->where('id', $contact['id'])->count());
+        DB::table('role_permissions')->insert([
+            'role_id' => DB::table('user_roles')->where('user_id', $user->id)->value('role_id'),
+            'permission_id' => DB::table('permissions')->where('code', 'core.delete')->value('id'),
+        ]);
         $this->deleteJson("/api/v1/contacts/{$contact['id']}")->assertOk();
         // Las condiciones comerciales se editan en el cliente de esa identidad.
         $this->putJson('/api/v1/customers/'.$org['customer_id'], ['payment_terms_days' => 45, 'credit_limit' => 5000, 'preferred_currency' => 'USD'])->assertOk();
@@ -1047,6 +1054,9 @@ class ComercialTest extends TestCase
         $field = $this->getJson('/api/v1/custom-fields/definitions?entity_type=Party')->assertOk()->assertJsonPath('0.label', 'Zona asignada')->json('0');
         $this->getJson("/api/v1/custom-fields/values?entity_type=Party&entity_id={$org['id']}")->assertOk()
             ->assertJsonPath('0.field_id', $field['id'])->assertJsonPath('0.value', 'Norte');
+        // Quien gestiona identidades no elimina la columna (borraría sus valores en todas las filas): es otro permiso.
+        $this->deleteJson("/api/v1/custom-fields/definitions/{$field['id']}")->assertStatus(403);
+        $this->getJson('/api/v1/custom-fields/definitions?entity_type=Party')->assertOk()->assertJsonPath('0.id', $field['id']);
 
         // Volver a importar no duplica: a quien ya existe solo se le agrega el rol que le falte.
         $again = "tipo;razon_social;nombres;apellidos;numero_documento;roles\nORGANIZACION;Minera Los Andes SAC;;;20123456789;Cliente\nPERSONA;;Ana;Torres;11223344;Cliente";

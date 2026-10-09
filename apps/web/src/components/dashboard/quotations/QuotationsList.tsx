@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, Clock, FileText, Plus, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, customerDocument, customerName, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
-import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
   Badge, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, Kpi, Kpis, LinkBtn, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, SelectionBar, Tabs, Who, useRowSelection, useToasts, type Column,
@@ -174,6 +174,8 @@ export default function QuotationsList() {
       if (tab !== "ALL") params.set("status", tab);
       if (source) params.set("source", source);
       const rows = picked ?? (await fetchAllPages<Quotation>("/v1/quotations", applySort(columnFilters.apply(params), sort)));
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("quotations", format, rows.length, Boolean(picked));
       if (format === "xlsx") await exportXlsx("cotizaciones", "Cotizaciones", EXPORT_COLUMNS, rows);
       else exportCsv("cotizaciones", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -252,6 +254,7 @@ export default function QuotationsList() {
         ) : (
           <>
             <SelectionBar
+              permission="quotations.export"
               count={selectedRows.length}
               busy={exporting}
               onExport={(format) => runExport(format, selectedRows)}
@@ -279,7 +282,7 @@ export default function QuotationsList() {
                   setPerPage(size);
                   setPage(1);
                 }}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+                left={<ExportButtons permission="quotations.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>

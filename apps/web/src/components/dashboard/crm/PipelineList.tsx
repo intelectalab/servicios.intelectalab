@@ -7,7 +7,7 @@ import { Check, Filter as Funnel, Plus, Target, TrendingUp } from "lucide-react"
 import { apiFetch } from "@/lib/api";
 import { customerName, excelTone, money, setFlash, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { OPPORTUNITY_STATES, compactMoney, firstError, relativeDay, weighted, type ViewMode } from "@/lib/crm";
-import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import { useAccess } from "@/lib/access-context";
 import {
   Badge, Btn, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, Kpi, Kpis, LoadError, Notice, PAGE_SIZES, PageHead, Pager, Screen,
@@ -207,6 +207,8 @@ export default function PipelineList() {
     try {
       const params = applySort(columnFilters.apply(withTopFilters(new URLSearchParams(), { search, stage, ownerId }, false)), sort);
       const rows = picked ?? (await fetchAllPages<Opportunity>("/v1/crm/opportunities", params));
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("opportunities", format, rows.length, Boolean(picked));
       if (format === "xlsx") await exportXlsx("oportunidades", "Pipeline de oportunidades", EXPORT_COLUMNS, rows);
       else exportCsv("oportunidades", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -361,7 +363,7 @@ export default function PipelineList() {
         </>
       ) : (
         <Card flush>
-          <SelectionBar count={selectedRows.length} busy={exporting} onExport={(format) => runExport(format, selectedRows)} onClear={clearSelection} />
+          <SelectionBar permission="opportunities.export" count={selectedRows.length} busy={exporting} onExport={(format) => runExport(format, selectedRows)} onClear={clearSelection} />
           <DataTable
             tableId="crm-opportunities" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
             onFilter={(column) => addColumnFilter(columnFilters, column)}
@@ -385,7 +387,7 @@ export default function PipelineList() {
                 setPerPage(size);
                 setPage(1);
               }}
-              left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+              left={<ExportButtons permission="opportunities.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
             />
           )}
         </Card>

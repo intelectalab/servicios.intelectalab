@@ -7,7 +7,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
 import { excelTone, stateOf, takeFlash, setFlash } from "@/lib/commercial";
 import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, actorDocument, actorRelation, kindLabel, rolesText } from "@/lib/actors";
-import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import { ColumnFilterBar, openTopFilter, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import {
   Btn, Card, Empty, ExportButtons, Field, FilterSelect, Filters, INPUT, LoadError, Modal, PAGE_SIZES, PageHead, Pager, Screen,
@@ -42,6 +42,8 @@ export default function ActorsList() {
   const { can } = useAccess();
   const { toast, toasts } = useToasts();
   const editable = can("core.manage");
+  // Eliminar una columna personalizada es un permiso aparte de gestionar.
+  const canDelete = can("core.delete");
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -264,6 +266,8 @@ export default function ActorsList() {
           tone: (actor) => excelTone(stateOf(ACTOR_STATES, actor.status)[1]),
         },
       ];
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("core", format, rows.length, Boolean(picked));
       if (format === "xlsx") await exportXlsx("clientes-y-actores", "Clientes y actores", columns, rows);
       else exportCsv("clientes-y-actores", columns, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -317,11 +321,11 @@ export default function ActorsList() {
               <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--p-brand-line)] bg-[var(--p-brand-soft)] px-3.5 py-2 text-[13px] text-[color:var(--p-brand-soft-text)]">
                 <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#1B8FC9] px-1.5 text-xs font-semibold text-[#fff]">{selectedIds.length}</span>
                 <span className="mr-auto font-medium">{selectedIds.length === 1 ? "fila seleccionada" : "filas seleccionadas"}</span>
-                <Btn size="sm" disabled={exporting} onClick={() => runExport("xlsx", selected)}>
+                <Btn size="sm" disabled={exporting} onClick={() => runExport("xlsx", selected)} permission="core.export">
                   <Upload size={14} />
                   <span>{exporting ? "Exportando…" : "Exportar selección a Excel"}</span>
                 </Btn>
-                <Btn variant="secondary" size="sm" disabled={exporting} onClick={() => runExport("csv", selected)}>CSV</Btn>
+                <Btn variant="secondary" size="sm" disabled={exporting} onClick={() => runExport("csv", selected)} permission="core.export">CSV</Btn>
                 {selected.some((actor) => actor.status === "INACTIVE") && (
                   <Btn variant="secondary" size="sm" permission="core.manage" disabled={busy} onClick={() => askBulk("activate")}>
                     <CheckCircle size={14} />
@@ -365,6 +369,7 @@ export default function ActorsList() {
                     setCustomValues((current) => ({ ...current, [actorId]: { ...(current[actorId] ?? {}), [fieldId]: value } }))}
                   selectedIds={selectedIds}
                   editable={editable}
+                  canDelete={canDelete}
                   onToggleSelection={(id) => setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]))}
                   onSelectAll={setSelectedIds}
                   onOpen={(id) => router.push(`/actors/${id}`)}
@@ -392,7 +397,7 @@ export default function ActorsList() {
                   setPerPage(size);
                   setPage(1);
                 }}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+                left={<ExportButtons permission="core.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>
@@ -481,7 +486,7 @@ export default function ActorsList() {
           footer={
             <>
               <Btn variant="ghost" onClick={() => setFieldToDelete(null)}>Volver</Btn>
-              <Btn variant="danger" disabled={busy} onClick={deleteField}>Eliminar columna</Btn>
+              <Btn variant="danger" disabled={busy} onClick={deleteField} permission="core.delete">Eliminar columna</Btn>
             </>
           }
         >

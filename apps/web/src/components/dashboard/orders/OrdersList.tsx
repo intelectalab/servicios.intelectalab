@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { customerDocument, customerName, excelTone, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { ORDER_STATES, orderOrigin } from "@/lib/orders";
-import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
   Badge, Card, DataTable, ExportButtons, FilterSelect, Filters, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
@@ -126,6 +126,8 @@ export default function OrdersList() {
       if (search) params.set("search", search);
       if (status) params.set("status", status);
       const rows = picked ?? (await fetchAllPages<Order>("/v1/orders", applySort(columnFilters.apply(params), sort)));
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("orders", format, rows.length, Boolean(picked));
       if (format === "xlsx") await exportXlsx("ordenes", "Órdenes", EXPORT_COLUMNS, rows);
       else exportCsv("ordenes", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -170,6 +172,7 @@ export default function OrdersList() {
         ) : (
           <>
             <SelectionBar
+              permission="orders.export"
               count={selectedRows.length}
               busy={exporting}
               onExport={(format) => runExport(format, selectedRows)}
@@ -198,7 +201,7 @@ export default function OrdersList() {
                   setPerPage(size);
                   setPage(1);
                 }}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+                left={<ExportButtons permission="orders.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>

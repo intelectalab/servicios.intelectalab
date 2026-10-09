@@ -176,12 +176,46 @@ En el navegador (`app.localhost:3000`):
 Pediste darle a Ventas el permiso necesario. Recibió **`core.manage`** (Gestionar Clientes y actores), como en el prototipo.
 
 - Migración `2026_10_08_000500_let_sales_manage_identities`. **Ya corrida en la base local.** Solo añade; alcanza a los roles Ventas que ya gestionan oportunidades (hoy, el de "Tenant A - Prueba").
-- **Qué más le da ese permiso:** no es solo la conversión. Ventas ahora también puede crear, editar, importar e inactivar identidades en Clientes y actores, y gestionar sus contactos y columnas personalizadas. No existe un permiso más fino para "solo crear clientes"; si lo quieres, hay que crearlo.
+- **Qué más le da ese permiso:** no es solo la conversión. Ventas ahora también puede crear, editar, importar e inactivar identidades en Clientes y actores. Lo que el prototipo no le da (eliminar) se separó en la tercera parte.
 - La regla no cambió: un rol sin `core.manage` sigue sin poder crear identidades desde el CRM (la prueba automática sigue en pie).
 
 Probado: las 101 pruebas pasan. En el navegador, como Ventas: en Clientes y actores, "Nueva organización", "Nueva persona" e "Importar" ya no llevan candado; en la conversión, "Crear organización + cliente" sale habilitado con sus campos (se abrió simulando en el navegador que la oportunidad abierta estaba ganada; no se guardó ni se cambió ningún dato).
 
 **No se probó:** que Ventas complete una conversión creando el cliente (no hay una oportunidad suya ganada sin convertir; la misma operación se probó completa como Administrador y está en las pruebas automáticas).
+
+## Tercera parte (2026-10-08): "Eliminar" aparte de "Gestionar" en Clientes y actores
+
+Preguntaste si en el prototipo Ventas puede hacer todo lo que le da `core.manage`, y pediste separar los permisos si no era así.
+
+**Lo que dice el prototipo** (su matriz de roles): sobre clientes y actores, Ventas tiene **Ver, Crear y Editar**; no tiene **Eliminar** ni Exportar. Además puede importar. Inactivar y agregar un rol cuentan ahí como "editar".
+
+| Acción de `core.manage` | ¿Ventas en el prototipo? |
+| --- | --- |
+| Crear y editar identidades, agregar rol | Sí |
+| Inactivar / reactivar (baja lógica) | Sí (es "editar") |
+| Importar | Sí |
+| Agregar y editar datos de contacto | Sí |
+| **Eliminar un dato de contacto** | **No** (no tiene Eliminar) |
+| **Eliminar una columna personalizada** | **No** (el prototipo no tiene columnas personalizadas; es un borrado que afecta a todas las filas) |
+
+Como no era todo, se separó lo que no le corresponde:
+
+- Permiso nuevo **`core.delete`** ("Eliminar"): eliminar datos de contacto y eliminar columnas personalizadas. En Roles y permisos aparece como la casilla **Eliminar** de la fila "Clientes, proveedores y empleados".
+- `core.manage` sigue cubriendo crear, editar, agregar rol, inactivar / reactivar, importar, datos de contacto (agregar y editar) y crear columnas personalizadas.
+- **Nadie perdió nada:** todo rol que podía gestionar recibió también eliminar, **menos Ventas**.
+
+| Archivo | Cambio |
+| --- | --- |
+| Migración `2026_10_08_000600_separate_delete_in_identities` | El permiso y su reparto. **Ya corrida en la base local.** Solo añade |
+| `routes/api.php` | `DELETE /contacts/{id}` y `DELETE /custom-fields/definitions/{id}` piden `core.delete` |
+| `ActorDetail.tsx` | El botón de eliminar un dato de contacto lleva el permiso nuevo (candado y mensaje si falta) |
+| `ActorsList.tsx`, `ActorsTable.tsx` | "Eliminar columna" lleva el permiso nuevo, con candado en el menú de la columna |
+
+Probado: **101 pruebas pasan**. La prueba de actores comprueba ahora que con solo gestionar el borrado de un contacto responde 403 y no borra nada, y que con `core.delete` sí; y que la columna personalizada no se elimina sin el permiso. En el navegador, como Ventas: en la ficha de "Actor de Prueba S.A.C.", **Editar** el dato de contacto está habilitado y **Eliminar** sale con candado y "Tu rol no tiene permiso core.delete"; Nueva organización, Nueva persona, Importar, Editar e Inactivar siguen habilitados.
+
+**No se probó en el navegador:** el candado de "Eliminar columna" en el menú de una columna personalizada (la columna "Año" no estaba a la vista en la tabla; la regla está en la prueba automática), ni la casilla Eliminar en Roles y permisos como Administrador (la matriz se arma sola con los permisos que existen).
+
+Queda igual que antes: Exportar no es un permiso en este sistema (quien ve el listado lo exporta); en el prototipo Ventas no exporta clientes.
 
 ## Pendiente
 

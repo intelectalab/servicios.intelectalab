@@ -9,7 +9,7 @@ class ModulePermissions
     /**
      * Permisos de administración del propio tenant; no dependen de ningún módulo.
      */
-    public const BASE = ['users.view', 'users.manage', 'tenant.manage'];
+    public const BASE = ['users.view', 'users.manage', 'users.export', 'tenant.manage'];
 
     /**
      * Códigos de permiso para el administrador de un tenant con esos módulos:

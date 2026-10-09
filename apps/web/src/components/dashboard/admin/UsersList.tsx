@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { exportCsv, exportXlsx, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, type ExportColumn } from "@/lib/export-table";
 import {
   Btn, Card, Chip, DataTable, ExportButtons, Field, FilterSelect, Filters, FormGrid, INPUT, LoadError, Modal, PAGE_SIZES,
   PageHead, Pager, Screen, SearchInput, SearchSelect, SelectionBar, Tabs, useRowSelection, useToasts, type Column,
@@ -302,6 +302,8 @@ export default function UsersList() {
   async function runExport(format: "xlsx" | "csv", picked: CompanyUser[]) {
     setExporting(true);
     try {
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("users", format, picked.length, picked !== filtered);
       if (format === "xlsx") await exportXlsx("usuarios", "Usuarios", exportColumns, picked);
       else exportCsv("usuarios", exportColumns, picked);
       toast(`${picked.length} ${picked.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -387,6 +389,7 @@ export default function UsersList() {
         ) : (
           <>
             <SelectionBar
+              permission="users.export"
               count={selectedRows.length}
               busy={exporting}
               onExport={(format) => runExport(format, selectedRows)}
@@ -404,7 +407,7 @@ export default function UsersList() {
                   setPerPage(size);
                   setPage(1);
                 }}
-                left={<ExportButtons total={filtered.length} busy={exporting} onExport={(format) => runExport(format, filtered)} />}
+                left={<ExportButtons permission="users.export" total={filtered.length} busy={exporting} onExport={(format) => runExport(format, filtered)} />}
               />
             )}
           </>

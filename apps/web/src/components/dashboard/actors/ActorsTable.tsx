@@ -2,12 +2,12 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type FocusEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { ArrowDown, ArrowUp, Building2, Eye, EyeOff, Filter, GripVertical, Loader2, MoreVertical, Pencil, Pin, PinOff, Plus, Trash2, User, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, Eye, EyeOff, Filter, GripVertical, Loader2, Lock, MoreVertical, Pencil, Pin, PinOff, Plus, Trash2, User, X } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
 import { poppins } from "@/lib/fonts";
 import { ACTOR_ENTITY, ACTOR_STATES, DOCUMENT_TYPES, ROLE_LABELS, ROLE_TONES, actorDocument, actorRelation, actorSubtitle } from "@/lib/actors";
-import { Badge, Chip, TD, TH, type SortState } from "@/components/ui/proto";
+import { Badge, Chip, TD, TH, deniedText, type SortState } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
 import type { Actor } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
@@ -30,6 +30,8 @@ interface ActorsTableProps {
   selectedIds: string[];
   /** Sin permiso de gestión las celdas no se editan. */
   editable: boolean;
+  /** Puede eliminar columnas personalizadas (permiso aparte de gestionar). */
+  canDelete: boolean;
   onToggleSelection: (id: string) => void;
   onSelectAll: (ids: string[]) => void;
   onOpen: (id: string) => void;
@@ -83,7 +85,7 @@ const errorText = (err: unknown) =>
   err instanceof ApiError ? (err.errors && Object.values(err.errors)[0]?.[0]) || err.message : "No se pudo guardar el cambio.";
 
 export function ActorsTable({
-  actors, sort, onSort, customFieldDefinitions, customValues, onCustomValue, selectedIds, editable, onToggleSelection, onSelectAll, onOpen,
+  actors, sort, onSort, customFieldDefinitions, customValues, onCustomValue, selectedIds, editable, canDelete, onToggleSelection, onSelectAll, onOpen,
   onActorChange, onAddCustomField, onRequestDeleteCustomField, onAddFilter, onError,
 }: ActorsTableProps) {
   // Edición en la celda
@@ -643,14 +645,16 @@ export function ActorsTable({
                 </button>
                 <button
                   type="button"
-                  disabled={!editable}
+                  disabled={!canDelete}
+                  title={canDelete ? undefined : deniedText("core.delete")}
                   onClick={() => {
                     onRequestDeleteCustomField(definition);
                     setOpenMenu(null);
                   }}
-                  className={`${MENU_ITEM} text-[color:var(--p-danger-text)]`}
+                  className={`${MENU_ITEM} text-[color:var(--p-danger-text)] disabled:cursor-not-allowed disabled:opacity-45`}
                 >
                   <Trash2 size={14} /> Eliminar columna
+                  {!canDelete && <Lock size={13} className="ml-auto shrink-0" aria-hidden="true" />}
                 </button>
               </>
             )}

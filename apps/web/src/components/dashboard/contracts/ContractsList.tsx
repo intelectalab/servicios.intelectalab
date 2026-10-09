@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { customerDocument, customerName, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { CONTRACT_STATES, slaLabel, validity } from "@/lib/contracts";
-import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
   Badge, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
@@ -121,6 +121,8 @@ export default function ContractsList() {
       if (search) params.set("search", search);
       if (status) params.set("status", status);
       const rows = picked ?? (await fetchAllPages<Contract>("/v1/contracts", applySort(columnFilters.apply(params), sort)));
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("contracts", format, rows.length, Boolean(picked));
       if (format === "xlsx") await exportXlsx("contratos", "Contratos", EXPORT_COLUMNS, rows);
       else exportCsv("contratos", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -165,6 +167,7 @@ export default function ContractsList() {
         ) : (
           <>
             <SelectionBar
+              permission="contracts.export"
               count={selectedRows.length}
               busy={exporting}
               onExport={(format) => runExport(format, selectedRows)}
@@ -193,7 +196,7 @@ export default function ContractsList() {
                   setPerPage(size);
                   setPage(1);
                 }}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+                left={<ExportButtons permission="contracts.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>

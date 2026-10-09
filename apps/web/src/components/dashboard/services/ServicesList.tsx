@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Upload } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { BILLING_MODES, SERVICE_STATES, billingLabel, excelTone, money, stateOf } from "@/lib/commercial";
-import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
   Badge, Btn, Card, Chip, DataTable, ExportButtons, FilterSelect, Filters, LoadError, PAGE_SIZES, PageHead, Pager, Screen,
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
@@ -170,6 +170,8 @@ export default function ServicesList() {
     setExporting(true);
     try {
       const rows = picked ?? (await fetchAllPages<Service>("/v1/services", applySort(columnFilters.apply(filterParams()), sort)));
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("services", format, rows.length, Boolean(picked));
       if (format === "xlsx") await exportXlsx("catalogo_servicios", "Catálogo de servicios", EXPORT_COLUMNS, rows);
       else exportCsv("catalogo_servicios", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -231,6 +233,7 @@ export default function ServicesList() {
         ) : (
           <>
             <SelectionBar
+              permission="services.export"
               count={selectedRows.length}
               busy={exporting}
               onExport={(format) => runExport(format, selectedRows)}
@@ -258,7 +261,7 @@ export default function ServicesList() {
                   setPerPage(size);
                   setPage(1);
                 }}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+                left={<ExportButtons permission="services.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>

@@ -840,19 +840,26 @@ export function useRowSelection<T>(rowKey: (row: T) => string) {
 
 /** Barra que aparece sobre la tabla cuando hay filas marcadas. */
 export function SelectionBar({
-  count, busy, onExport, onClear,
-}: { count: number; busy: boolean; onExport: (format: "xlsx" | "csv") => void; onClear: () => void }) {
+  count, busy, onExport, onClear, permission,
+}: {
+  count: number;
+  busy: boolean;
+  onExport: (format: "xlsx" | "csv") => void;
+  onClear: () => void;
+  /** Permiso de exportar del listado: sin él los botones quedan con candado y su motivo. */
+  permission?: string;
+}) {
   if (!count) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--p-brand-line)] bg-[var(--p-brand-soft)] px-3.5 py-2 text-[13px] text-[color:var(--p-brand-soft-text)]">
       <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#1B8FC9] px-1.5 text-xs font-semibold text-[#fff]">{count}</span>
       <span className="mr-auto font-medium">{count === 1 ? "fila seleccionada" : "filas seleccionadas"}</span>
-      <Btn size="sm" disabled={busy} onClick={() => onExport("xlsx")}>
+      <Btn size="sm" disabled={busy} onClick={() => onExport("xlsx")} permission={permission}>
         <Upload size={14} />
         <span>{busy ? "Exportando…" : "Exportar selección a Excel"}</span>
       </Btn>
-      <Btn variant="secondary" size="sm" disabled={busy} onClick={() => onExport("csv")}>CSV</Btn>
+      <Btn variant="secondary" size="sm" disabled={busy} onClick={() => onExport("csv")} permission={permission}>CSV</Btn>
       <button type="button" onClick={onClear} className="cursor-pointer px-1.5 text-xs font-medium underline-offset-2 hover:underline">
         Quitar selección
       </button>
@@ -1287,15 +1294,21 @@ export function Timeline({ items, empty = "Sin movimientos." }: { items: Timelin
 
 /** Botones "Exportar a Excel" y "CSV" del pie de un listado. */
 export function ExportButtons({
-  total, busy, onExport,
-}: { total: number; busy: boolean; onExport: (format: "xlsx" | "csv") => void }) {
+  total, busy, onExport, permission,
+}: {
+  total: number;
+  busy: boolean;
+  onExport: (format: "xlsx" | "csv") => void;
+  /** Permiso de exportar del listado: sin él los botones quedan con candado y su motivo. */
+  permission?: string;
+}) {
   return (
     <div role="group" aria-label="Exportar listado" className="mr-auto flex gap-1.5">
-      <Btn variant="ghost" size="sm" disabled={busy} onClick={() => onExport("xlsx")} title={`Exportar las ${total} filas filtradas a Excel`}>
+      <Btn variant="ghost" size="sm" disabled={busy} onClick={() => onExport("xlsx")} title={`Exportar las ${total} filas filtradas a Excel`} permission={permission}>
         <Upload size={14} />
         <span>{busy ? "Exportando…" : "Exportar a Excel"}</span>
       </Btn>
-      <Btn variant="ghost" size="sm" disabled={busy} onClick={() => onExport("csv")} title={`Exportar las ${total} filas filtradas a CSV`}>
+      <Btn variant="ghost" size="sm" disabled={busy} onClick={() => onExport("csv")} title={`Exportar las ${total} filas filtradas a CSV`} permission={permission}>
         CSV
       </Btn>
     </div>

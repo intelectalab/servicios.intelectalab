@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError, apiFetch } from "@/lib/api";
 import { customerDocument, customerName, excelTone, shortDate, stateOf } from "@/lib/commercial";
-import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
+import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
   Badge, Btn, Card, Chip, DataTable, ExportButtons, Field, FilterSelect, Filters, INPUT, LinkBtn, LoadError, Modal, PAGE_SIZES,
   PageHead, Pager, Screen, SearchInput, SelectionBar, useRowSelection, useToasts, type Column, type Tone,
@@ -227,6 +227,8 @@ export default function PortalRequestsList() {
       if (search) params.set("search", search);
       if (status) params.set("status", status);
       const rows = picked ?? (await fetchAllPages<PortalRequest>("/v1/portal-requests", applySort(columnFilters.apply(params), sort)));
+      // La API comprueba el permiso de exportar y deja la exportación en auditoría.
+      await recordExport("portal", format, rows.length, Boolean(picked));
       if (format === "xlsx") await exportXlsx("solicitudes-portal", "Solicitudes del portal", EXPORT_COLUMNS, rows);
       else exportCsv("solicitudes-portal", EXPORT_COLUMNS, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
@@ -271,6 +273,7 @@ export default function PortalRequestsList() {
         ) : (
           <>
             <SelectionBar
+              permission="portal.export"
               count={selectedRows.length}
               busy={exporting}
               onExport={(format) => runExport(format, selectedRows)}
@@ -298,7 +301,7 @@ export default function PortalRequestsList() {
                   setPerPage(size);
                   setPage(1);
                 }}
-                left={<ExportButtons total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+                left={<ExportButtons permission="portal.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
               />
             )}
           </>

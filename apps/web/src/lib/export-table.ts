@@ -35,16 +35,36 @@ const TONES: Record<CellTone, { text: string; fill: string }> = {
 };
 
 /** Trae todas las páginas de un listado con los filtros que tenga puestos. */
+// Filtros, búsqueda y orden de la última exportación completa, para dejarlos en auditoría.
+let lastExportQuery = "";
+
 export async function fetchAllPages<T>(path: string, params: URLSearchParams): Promise<T[]> {
   const rows: T[] = [];
+  lastExportQuery = params.toString();
   for (let page = 1; ; page++) {
     const query = new URLSearchParams(params);
     query.set("per_page", String(PAGE_SIZE));
     query.set("page", String(page));
+    // Marca la petición como exportación: la API exige el permiso de exportar del listado.
+    query.set("export", "1");
     const response = await apiFetch<PaginatedResponse<T>>(`${path}?${query}`);
     rows.push(...response.data);
     if (page >= response.last_page) return rows;
   }
+}
+
+/**
+ * Registra la exportación antes de generar el archivo: la API comprueba el permiso
+ * `<recurso>.export` y la deja en auditoría (quién, qué listado, cuántas filas). Sin el
+ * permiso responde 403 y el archivo no se genera.
+ */
+export async function recordExport(resource: string, format: "xlsx" | "csv", rows: number, selection = false) {
+  // De una selección no hay filtros que anotar: son las filas marcadas en pantalla.
+  const filters = selection ? "" : decodeURIComponent(lastExportQuery).slice(0, 2000);
+  await apiFetch("/v1/exports", {
+    method: "POST",
+    body: JSON.stringify({ resource, format, rows, selection, filters: filters || null }),
+  });
 }
 
 function download(blob: Blob, filename: string) {

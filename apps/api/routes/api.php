@@ -52,7 +52,10 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 
     // idempotency: un alta enviada dos veces se registra una vez. record.version: nadie pisa la edición de otro.
-    Route::middleware(['auth:sanctum', 'tenant.context', 'idempotency', 'record.version'])->group(function () {
+    Route::middleware(['auth:sanctum', 'tenant.context', 'idempotency', 'record.version', 'list.export'])->group(function () {
+        // Registro de una exportación: exige el permiso de exportar del listado y queda en auditoría.
+        Route::post('/exports', [\App\Http\Middleware\ListExport::class, 'record']);
+
         Route::get('/me', [AuthController::class, 'me']);
         Route::get('/me/permissions', [AuthController::class, 'permissions']);
         Route::get('/me/access', [AuthController::class, 'access']);
@@ -118,9 +121,10 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware('permission:core.manage')->group(function () {
             Route::post('/custom-fields/definitions', [CustomFieldController::class, 'storeDefinition']);
-            Route::delete('/custom-fields/definitions/{id}', [CustomFieldController::class, 'destroyDefinition']); 
             Route::post('/custom-fields/values', [CustomFieldController::class, 'storeValue']);
         });
+        // Eliminar es un permiso aparte de gestionar: quitar una columna borra sus valores en todas las filas.
+        Route::middleware('permission:core.delete')->delete('/custom-fields/definitions/{id}', [CustomFieldController::class, 'destroyDefinition']);
         
         // Proveedores
         Route::middleware('permission:core.view')->group(function () {
@@ -151,8 +155,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:core.manage')->group(function () {
             Route::post('/contacts', [ContactController::class, 'store']);
             Route::put('/contacts/{contact}', [ContactController::class, 'update']);
-            Route::delete('/contacts/{contact}', [ContactController::class, 'destroy']);
         });
+        Route::middleware('permission:core.delete')->delete('/contacts/{contact}', [ContactController::class, 'destroy']);
 
         // Empleados
         Route::middleware('permission:core.view')->group(function () {

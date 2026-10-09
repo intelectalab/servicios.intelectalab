@@ -372,7 +372,7 @@ export default function ActorDetail() {
                             <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactForm(contact)} aria-label="Editar dato de contacto" title="Editar">
                               <Pencil size={14} />
                             </Btn>
-                            <Btn variant="ghost" size="sm" permission="core.manage" onClick={() => setContactToDelete(contact)} aria-label="Eliminar dato de contacto" title="Eliminar">
+                            <Btn variant="ghost" size="sm" permission="core.delete" onClick={() => setContactToDelete(contact)} aria-label="Eliminar dato de contacto" title="Eliminar">
                               <Trash2 size={14} />
                             </Btn>
                           </span>
