@@ -60,6 +60,10 @@ Route::prefix('v1')->group(function () {
         Route::get('/me/permissions', [AuthController::class, 'permissions']);
         Route::get('/me/access', [AuthController::class, 'access']);
         Route::post('/me/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1,password');
+        // Mi perfil: cuenta, sesiones abiertas y preferencias de notificación (siempre las propias).
+        Route::get('/me/profile', [AuthController::class, 'profile']);
+        Route::post('/me/sessions/revoke-others', [AuthController::class, 'revokeOtherSessions']);
+        Route::put('/me/notification-preferences', [AuthController::class, 'updateNotificationPreferences']);
 
         // Roles y permisos de la empresa (Administración). Como en el prototipo, dependen del recurso "usuarios".
         Route::middleware('permission:users.view')->get('/roles', [RoleController::class, 'index']);

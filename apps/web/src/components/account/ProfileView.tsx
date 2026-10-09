@@ -1,129 +1,331 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { AlertCircle, RefreshCw } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { useEffect, useState, type FormEvent } from "react";
+import { Eye, EyeOff, Globe, Smartphone } from "lucide-react";
+import { ApiError, apiFetch } from "@/lib/api";
+import { Btn, Card, Chip, Field, INPUT, Kv, LoadError, PageHead, Screen, useToasts } from "@/components/ui/proto";
+import { SortableBoard } from "@/components/ui/sortable-cards";
 
-type Me = {
+type Session = {
+  id: number;
+  current: boolean;
+  mobile: boolean;
+  /** "Chrome en Windows"; null si la sesión es anterior a que se guardara este dato. */
+  browser: string | null;
+  mfa: boolean;
+  started_at: string | null;
+  last_used_at: string | null;
+};
+
+type Preferences = { in_app: boolean; email: boolean; whatsapp: boolean };
+
+type Profile = {
   name: string;
   email: string;
-  status: string;
   last_login_at: string | null;
-  created_at: string | null;
+  is_super_admin: boolean;
+  tenant: string | null;
+  roles: string[];
+  branch: string | null;
+  team: string | null;
+  mfa: boolean;
+  sessions: Session[];
+  /** null en la cuenta de plataforma, que no pertenece a ninguna empresa. */
+  notification_preferences: Preferences | null;
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "Activo",
-  INVITED: "Invitado",
-  SUSPENDED: "Suspendido",
-  DISABLED: "Deshabilitado",
-};
+const CHANNELS: { key: keyof Preferences; label: string; hint?: string }[] = [
+  { key: "in_app", label: "En la aplicación (campana)" },
+  { key: "email", label: "Correo electrónico" },
+  { key: "whatsapp", label: "WhatsApp", hint: "Por ejemplo, avisos de OT asignada para técnicos" },
+];
 
-function formatDate(value: string | null) {
+function dateTime(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("es-PE", { dateStyle: "long", timeStyle: "short" });
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" });
+}
+
+/** "hace 5 min", "hace 3 h", "hace 2 días". */
+function ago(value: string | null) {
+  if (!value) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60_000));
+  if (minutes < 1) return "hace un momento";
+  if (minutes < 60) return `hace ${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `hace ${hours} h`;
+  const days = Math.round(hours / 24);
+  return `hace ${days} ${days === 1 ? "día" : "días"}`;
 }
 
 function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("");
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
 }
 
-/** Datos de la cuenta de la sesión; lo usan la consola del tenant y la de plataforma. */
+function firstError(err: unknown, fallback: string) {
+  if (err instanceof ApiError) return (err.errors && Object.values(err.errors)[0]?.[0]) || err.message;
+  return fallback;
+}
+
+/** Mi perfil y seguridad: cuenta, contraseña, sesiones y avisos. Lo usan la consola de la empresa y la de plataforma. */
 export default function ProfileView() {
-  const [me, setMe] = useState<Me | null>(null);
+  const { toast, toasts } = useToasts();
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
 
+  const [current, setCurrent] = useState("");
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  const [closing, setClosing] = useState(false);
+  const [preferences, setPreferences] = useState<Preferences | null>(null);
+  const [savingPreferences, setSavingPreferences] = useState(false);
+
   useEffect(() => {
     let cancelled = false;
-
-    async function load() {
-      try {
-        const data = await apiFetch<Me>("/v1/me");
-        if (!cancelled) {
-          setMe(data);
-          setError("");
-        }
-      } catch {
+    apiFetch<Profile>("/v1/me/profile")
+      .then((data) => {
+        if (cancelled) return;
+        setProfile(data);
+        setPreferences(data.notification_preferences);
+        setError("");
+      })
+      .catch(() => {
         if (!cancelled) setError("No se pudieron cargar los datos de tu cuenta.");
-      }
-    }
-    load();
+      });
     return () => { cancelled = true; };
   }, [reload]);
 
-  const rows: [string, string][] = me
-    ? [
-        ["Nombre", me.name],
-        ["Correo electrónico", me.email],
-        ["Estado", STATUS_LABELS[me.status] ?? me.status],
-        ["Último acceso", formatDate(me.last_login_at)],
-        ["Cuenta creada", formatDate(me.created_at)],
-      ]
-    : [];
+  async function changePassword(event: FormEvent) {
+    event.preventDefault();
+    const found: Record<string, string> = {};
+    if (!current) found.current_password = "Indica tu contraseña actual.";
+    if (password.length < 8 || !/[a-z]/.test(password) || !/[A-Z]/.test(password) || !/\d/.test(password)) {
+      found.password = "Mínimo 8 caracteres, mayúsculas, minúsculas y un número.";
+    }
+    setPasswordErrors(found);
+    if (Object.keys(found).length) return;
+
+    setSavingPassword(true);
+    try {
+      await apiFetch("/v1/me/password", { method: "POST", body: JSON.stringify({ current_password: current, password }) });
+      setCurrent("");
+      setPassword("");
+      toast("Contraseña actualizada", "success", "Se cerraron las demás sesiones de tu cuenta.");
+      setReload((n) => n + 1);
+    } catch (err) {
+      setPasswordErrors(err instanceof ApiError && err.errors ? Object.fromEntries(Object.entries(err.errors).map(([field, messages]) => [field, messages[0]])) : {});
+      toast(firstError(err, "No se pudo actualizar la contraseña."), "danger");
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
+  async function closeOthers() {
+    setClosing(true);
+    try {
+      await apiFetch("/v1/me/sessions/revoke-others", { method: "POST" });
+      toast("Se cerraron las demás sesiones");
+      setReload((n) => n + 1);
+    } catch (err) {
+      toast(firstError(err, "No se pudieron cerrar las sesiones."), "danger");
+    } finally {
+      setClosing(false);
+    }
+  }
+
+  async function savePreferences(event: FormEvent) {
+    event.preventDefault();
+    if (!preferences) return;
+    setSavingPreferences(true);
+    try {
+      setPreferences(await apiFetch<Preferences>("/v1/me/notification-preferences", { method: "PUT", body: JSON.stringify(preferences) }));
+      toast("Preferencias guardadas");
+    } catch (err) {
+      toast(firstError(err, "No se pudieron guardar las preferencias."), "danger");
+    } finally {
+      setSavingPreferences(false);
+    }
+  }
+
+  if (error) {
+    return (
+      <Screen>
+        <Card><LoadError text={error} onRetry={() => setReload((n) => n + 1)} /></Card>
+        {toasts}
+      </Screen>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <Screen>
+        <Card><div className="h-48 animate-pulse rounded bg-[var(--app-surface-muted)]" aria-busy="true" /></Card>
+        {toasts}
+      </Screen>
+    );
+  }
+
+  const others = profile.sessions.filter((session) => !session.current).length;
+  const reveal = (
+    <button
+      type="button"
+      onClick={() => setShow((value) => !value)}
+      aria-label={show ? "Ocultar contraseñas" : "Mostrar contraseñas"}
+      title={show ? "Ocultar" : "Mostrar"}
+      className="app-muted absolute right-1 top-1 grid h-8 w-8 cursor-pointer place-items-center rounded-lg hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]"
+    >
+      {show ? <EyeOff size={16} /> : <Eye size={16} />}
+    </button>
+  );
 
   return (
-    <div className="app-text flex h-full min-h-0 flex-col">
-      <div className="app-surface flex h-full min-h-0 flex-col overflow-auto rounded-br-[40px] rounded-tl-[40px] px-8 py-8 shadow-sm">
-        <h1 className="text-2xl font-bold tracking-tight">Mi perfil</h1>
-        <p className="app-muted mt-1 text-sm">Datos de tu cuenta.</p>
+    <Screen>
+      <PageHead title="Mi perfil y seguridad" />
 
-        {error ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <AlertCircle size={32} className="mb-3 text-red-500" />
-            <p className="app-muted text-sm">{error}</p>
-            <button
-              onClick={() => setReload((n) => n + 1)}
-              className="mt-4 flex cursor-pointer items-center gap-2 text-sm font-medium text-[var(--app-brand-deep)] hover:underline"
-            >
-              <RefreshCw size={14} /> Reintentar
-            </button>
-          </div>
-        ) : (
-          <section className="app-border mt-6 w-full max-w-xl rounded-2xl border p-6">
-            <div className="flex items-center gap-4">
-              {me ? (
-                <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1B8FC9] text-lg font-semibold text-white">
-                  {initials(me.name)}
-                </span>
-              ) : (
-                <span className="h-14 w-14 shrink-0 animate-pulse rounded-full bg-slate-200" />
-              )}
-              <div className="min-w-0">
-                {me ? (
-                  <>
-                    <h2 className="truncate text-lg font-semibold">{me.name}</h2>
-                    <p className="app-muted truncate text-sm">{me.email}</p>
-                  </>
+      <SortableBoard
+        storageKey="erp.cards.profile"
+        className="grid grid-cols-1 gap-x-4 lg:grid-cols-2"
+        zones={[
+          { className: "min-w-0 lg:min-h-24", cards: ["account", "sessions"] },
+          { className: "min-w-0 lg:min-h-24", cards: ["password", ...(preferences ? ["notifications"] : [])] },
+        ]}
+        cards={[
+          {
+            id: "account",
+            node: (
+              <Card title="Cuenta">
+                <div className="mb-3 flex items-center gap-3.5">
+                  <span aria-hidden="true" className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#1B8FC9] text-lg font-semibold text-[#fff]">
+                    {initials(profile.name)}
+                  </span>
+                  <div className="min-w-0">
+                    <h3 className="truncate text-[17px] font-semibold">{profile.name}</h3>
+                    <p className="app-muted truncate">{profile.email}</p>
+                  </div>
+                </div>
+                <Kv
+                  rows={[
+                    ["Empresa", profile.tenant ?? "Plataforma SaaS"],
+                    ["Rol", profile.is_super_admin ? "SuperAdmin SaaS" : profile.roles.join(", ") || "—"],
+                    profile.is_super_admin ? null : ["Sede", profile.branch ?? "—"],
+                    profile.team ? ["Equipo", profile.team] : null,
+                    [
+                      "Verificación en dos pasos",
+                      <span key="mfa" title={profile.mfa ? "Al iniciar sesión se pide un código enviado a tu correo." : undefined}>
+                        <Chip tone={profile.mfa ? "success" : "warning"}>{profile.mfa ? "Activa" : "No activa"}</Chip>
+                      </span>,
+                    ],
+                    ["Último acceso", dateTime(profile.last_login_at)],
+                  ]}
+                />
+              </Card>
+            ),
+          },
+          {
+            id: "password",
+            node: (
+              <Card title="Cambiar contraseña">
+                <form onSubmit={changePassword} className="grid gap-3" noValidate>
+                  <Field label="Contraseña actual" required error={passwordErrors.current_password}>
+                    <span className="relative block">
+                      <input
+                        className={`${INPUT} pr-10`}
+                        type={show ? "text" : "password"}
+                        value={current}
+                        onChange={(e) => setCurrent(e.target.value)}
+                        autoComplete="current-password"
+                      />
+                      {reveal}
+                    </span>
+                  </Field>
+                  <Field label="Nueva contraseña" required error={passwordErrors.password} hint="Mínimo 8 caracteres, mayúsculas, minúsculas y un número.">
+                    <input
+                      className={INPUT}
+                      type={show ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="new-password"
+                    />
+                  </Field>
+                  <div className="flex justify-end">
+                    <Btn type="submit" disabled={savingPassword}>{savingPassword ? "Actualizando…" : "Actualizar contraseña"}</Btn>
+                  </div>
+                </form>
+              </Card>
+            ),
+          },
+          {
+            id: "sessions",
+            node: (
+              <Card title="Sesiones recientes">
+                {profile.sessions.length ? (
+                  <ul className="mb-3 grid gap-2.5">
+                    {profile.sessions.map((session) => (
+                      <li key={session.id} className="flex items-start gap-2.5">
+                        <span className="app-muted mt-0.5 shrink-0">{session.mobile ? <Smartphone size={17} /> : <Globe size={17} />}</span>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <strong className="font-semibold">{session.mobile ? "Navegador móvil" : "Navegador de escritorio"}</strong>
+                            {session.browser && <span className="app-muted text-[12.5px]">· {session.browser}</span>}
+                            {session.current && <Chip tone="accent">Esta sesión</Chip>}
+                            {session.mfa && <span title="Entró con verificación en dos pasos"><Chip tone="success">MFA</Chip></span>}
+                          </div>
+                          <small className="app-muted block text-xs">Inicio {ago(session.started_at)} · {dateTime(session.started_at)}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
-                  <div className="space-y-2">
-                    <div className="h-4 w-40 animate-pulse rounded bg-slate-200" />
-                    <div className="h-3 w-56 animate-pulse rounded bg-slate-200" />
-                  </div>
+                  <p className="app-muted mb-3">Sin sesiones registradas.</p>
                 )}
-              </div>
-            </div>
-
-            {me && (
-              <dl className="app-border mt-6 divide-y divide-[color:var(--app-border)] border-t text-sm">
-                {rows.map(([label, value]) => (
-                  <div key={label} className="flex items-baseline justify-between gap-6 py-3">
-                    <dt className="app-muted shrink-0">{label}</dt>
-                    <dd className="min-w-0 truncate text-right font-medium">{value}</dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </section>
-        )}
-      </div>
-    </div>
+                <Btn
+                  variant="secondary"
+                  size="sm"
+                  onClick={closeOthers}
+                  disabled={closing || others === 0}
+                  title={others === 0 ? "No tienes otras sesiones abiertas" : undefined}
+                >
+                  Cerrar las demás sesiones
+                </Btn>
+              </Card>
+            ),
+          },
+          ...(preferences
+            ? [{
+                id: "notifications",
+                node: (
+                  <Card title="Preferencias de notificación">
+                    <form onSubmit={savePreferences} className="grid gap-3">
+                      {CHANNELS.map((channel) => (
+                        <label key={channel.key} className="flex cursor-pointer items-start gap-2.5">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[color:var(--p-field-border)] accent-[#1B8FC9]"
+                            checked={preferences[channel.key]}
+                            onChange={(e) => setPreferences({ ...preferences, [channel.key]: e.target.checked })}
+                          />
+                          <span>
+                            <span className="font-medium">{channel.label}</span>
+                            {channel.hint && <small className="app-muted block text-xs">{channel.hint}</small>}
+                          </span>
+                        </label>
+                      ))}
+                      <p className="app-muted text-xs">Se aplicarán a tus avisos cuando exista la pantalla Notificaciones.</p>
+                      <div className="flex justify-end">
+                        <Btn type="submit" variant="secondary" disabled={savingPreferences}>Guardar preferencias</Btn>
+                      </div>
+                    </form>
+                  </Card>
+                ),
+              }]
+            : []),
+        ]}
+      />
+      {toasts}
+    </Screen>
   );
 }

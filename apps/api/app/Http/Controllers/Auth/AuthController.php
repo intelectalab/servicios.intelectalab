@@ -164,7 +164,14 @@ class AuthController extends Controller
 
         // "Recordarme" alarga la sesión; sin marcar dura una jornada.
         $minutes = config($remember ? 'sanctum.remember_minutes' : 'sanctum.session_minutes');
-        $token = $user->createToken('api-token', ['*'], now()->addMinutes($minutes))->plainTextToken;
+        $session = $user->createToken('api-token', ['*'], now()->addMinutes($minutes));
+        // Desde dónde se abrió la sesión, para que la persona la reconozca en "Mi perfil".
+        $session->accessToken->forceFill([
+            'user_agent' => Str::limit((string) request()->userAgent(), 500, ''),
+            'ip_address' => request()->ip(),
+            'mfa' => (bool) ($auditMetadata['mfa'] ?? false),
+        ])->save();
+        $token = $session->plainTextToken;
 
         $user->last_login_at = now();
         $user->save();
@@ -352,6 +359,138 @@ class AuthController extends Controller
         $this->audit($user, 'auth.password_changed');
 
         return response()->json(['message' => 'Tu contraseña se actualizó correctamente.']);
+    }
+
+    /**
+     * "Mi perfil": la cuenta, la empresa y el rol con los que trabaja, sus sesiones abiertas
+     * y por qué canales quiere avisos. La cuenta de plataforma no tiene empresa ni preferencias.
+     */
+    public function profile(Request $request)
+    {
+        $user = $request->user();
+        $tenantId = $request->attributes->get('tenant_id');
+        $currentId = $user->currentAccessToken()->id ?? null;
+
+        $member = $tenantId
+            ? DB::table('tenant_users')
+                ->leftJoin('branches', 'branches.id', '=', 'tenant_users.default_branch_id')
+                ->leftJoin('teams', 'teams.id', '=', 'tenant_users.team_id')
+                ->where('tenant_users.tenant_id', $tenantId)->where('tenant_users.user_id', $user->id)
+                ->first(['branches.name as branch', 'teams.name as team'])
+            : null;
+
+        return response()->json([
+            'name' => $user->name,
+            'email' => $user->email,
+            'last_login_at' => $user->last_login_at,
+            'is_super_admin' => (bool) $user->is_super_admin,
+            'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->value('name') : null,
+            'roles' => $tenantId
+                ? DB::table('user_roles')->join('roles', 'roles.id', '=', 'user_roles.role_id')
+                    ->where('user_roles.user_id', $user->id)->where('user_roles.tenant_id', $tenantId)
+                    ->orderBy('roles.name')->pluck('roles.name')->unique()->values()
+                : [],
+            'branch' => $member?->branch,
+            'team' => $member?->team,
+            'mfa' => $this->requiresMfa($user, $tenantId),
+            'sessions' => $user->tokens()
+                ->where(fn ($open) => $open->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->orderByDesc('created_at')->orderByDesc('id')->limit(20)->get()
+                ->map(fn ($token) => [
+                    'id' => $token->id,
+                    'current' => $token->id === $currentId,
+                    'mobile' => (bool) preg_match('/Mobile|Android|iPhone|iPad/i', (string) $token->user_agent),
+                    'browser' => self::browserOf((string) $token->user_agent),
+                    'mfa' => (bool) $token->mfa,
+                    'started_at' => $token->created_at?->toIso8601String(),
+                    'last_used_at' => $token->last_used_at?->toIso8601String(),
+                ]),
+            'notification_preferences' => $tenantId ? $this->notificationPreferences($tenantId, $user->id) : null,
+        ]);
+    }
+
+    /** Cierra todas las sesiones de la cuenta menos la que hace la petición. */
+    public function revokeOtherSessions(Request $request)
+    {
+        $user = $request->user();
+        $currentId = $user->currentAccessToken()->id ?? null;
+        abort_unless($currentId, 422, 'No se pudo identificar la sesión actual.');
+
+        $closed = $user->tokens()->where('id', '!=', $currentId)->delete();
+        $this->audit($user, 'auth.sessions_revoked', ['sessions' => $closed]);
+
+        return response()->json(['closed' => $closed]);
+    }
+
+    /** Canales por los que la persona quiere recibir avisos en su empresa. */
+    public function updateNotificationPreferences(Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        abort_unless($tenantId, 403, 'La cuenta de plataforma no tiene preferencias de notificación.');
+
+        $data = $request->validate([
+            'in_app' => ['required', 'boolean'],
+            'email' => ['required', 'boolean'],
+            'whatsapp' => ['required', 'boolean'],
+        ]);
+        $user = $request->user();
+        $before = $this->notificationPreferences($tenantId, $user->id);
+
+        DB::table('notification_preferences')->updateOrInsert(
+            ['tenant_id' => $tenantId, 'user_id' => $user->id],
+            [...$data, 'updated_at' => now()],
+        );
+
+        AuditLogger::log(
+            tenantId: $tenantId,
+            userId: $user->id,
+            action: 'user.notification_preferences',
+            entityType: 'User',
+            entityId: $user->id,
+            beforeData: $before,
+            afterData: $data,
+        );
+
+        return response()->json($this->notificationPreferences($tenantId, $user->id));
+    }
+
+    /** Sin preferencias guardadas, los tres canales están activos. */
+    private function notificationPreferences(string $tenantId, string $userId): array
+    {
+        $row = DB::table('notification_preferences')->where('tenant_id', $tenantId)->where('user_id', $userId)->first();
+
+        return [
+            'in_app' => (bool) ($row->in_app ?? true),
+            'email' => (bool) ($row->email ?? true),
+            'whatsapp' => (bool) ($row->whatsapp ?? true),
+        ];
+    }
+
+    /** "Chrome en Windows": lo justo para reconocer una sesión. */
+    private static function browserOf(string $userAgent): ?string
+    {
+        if ($userAgent === '') {
+            return null;
+        }
+
+        $browser = match (true) {
+            str_contains($userAgent, 'Edg/') => 'Edge',
+            str_contains($userAgent, 'OPR/') => 'Opera',
+            str_contains($userAgent, 'Firefox/') => 'Firefox',
+            str_contains($userAgent, 'Chrome/') => 'Chrome',
+            str_contains($userAgent, 'Safari/') => 'Safari',
+            default => null,
+        };
+        $system = match (true) {
+            str_contains($userAgent, 'Android') => 'Android',
+            (bool) preg_match('/iPhone|iPad/', $userAgent) => 'iOS',
+            str_contains($userAgent, 'Windows') => 'Windows',
+            str_contains($userAgent, 'Mac OS') => 'macOS',
+            str_contains($userAgent, 'Linux') => 'Linux',
+            default => null,
+        };
+
+        return $browser && $system ? "{$browser} en {$system}" : ($browser ?? $system);
     }
 
     public function logout(Request $request)

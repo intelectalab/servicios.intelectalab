@@ -100,7 +100,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM).
 ### Acceso
 - La página pública y el sistema van en dominios distintos (como `midominio.com` y `app.midominio.com`), con un solo proyecto web: `proxy.ts` decide según `SITE_URL` y `APP_URL`. Sin esas variables todo vive en un dominio. En local: `localhost:3000` y `app.localhost:3000`. Falta elegir el dominio real.
 - Verificación en dos pasos por **código enviado al correo** (no aplicación autenticadora). Obligatoria para superadmin, rol ADMIN del tenant y usuarios de portal.
-- Sesiones de 8 h, o 30 días con "Recordarme". Se permiten varias sesiones a la vez.
+- Sesiones de 8 h, o 30 días con "Recordarme". Se permiten varias sesiones a la vez. Cada sesión guarda desde qué navegador se abrió y si pasó la verificación en dos pasos; en Mi perfil la persona ve las suyas y puede cerrar las demás (2026-10-08, [cambios/2026-10-08_mi-perfil.md](cambios/2026-10-08_mi-perfil.md)).
 - 5 contraseñas incorrectas bloquean la cuenta 15 minutos.
 - El superadmin es `users.is_super_admin` (no un rol), no puede pertenecer a un tenant (triggers) y tiene auditoría propia en `platform_audit_logs`.
 
@@ -113,7 +113,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM).
 - Separar la consola de plataforma en su propio usuario de base; cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
 - El drawer de planes (`SaasPlanDrawer.tsx`) tiene su lista de módulos escrita a mano y no coincide con `module_catalog`.
 - No hay página para la auditoría de plataforma (`GET /v1/superadmin/audit`), ni comando para crear superadmins, ni contador de notificaciones.
-- "Mi perfil" es de solo lectura; el prototipo además lista y cierra sesiones y guarda preferencias de notificación.
+- Mi perfil: las preferencias de notificación se guardan pero aún no cambian nada (falta Notificaciones); no se cierra una sesión concreta, solo todas las demás.
 - `php artisan tenants:sync-permissions` da a los tenants ya registrados los permisos de sus módulos. Falta confirmar si se corrió.
 - Correo real: falta configurar SMTP en `apps/api/.env` (hoy `MAIL_MAILER=log`).
 - El contenido de Planes SaaS y la landing sigue con el estilo anterior.
