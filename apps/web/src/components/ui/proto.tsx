@@ -79,17 +79,19 @@ export function Card({
 
 export type BtnVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-ghost";
 
+// Fondo, texto y borde van como utilidades (no con .app-surface / .app-muted): esas clases
+// ganan a las de "hover:" y el botón se quedaba sin reacción al pasar el cursor.
 const BTN_VARIANTS: Record<BtnVariant, string> = {
-  primary: "bg-[#1B8FC9] text-[#fff] hover:bg-[#1679AB]",
-  secondary: "app-surface app-text border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]",
-  ghost: "app-muted bg-transparent hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]",
-  danger: "bg-[#E5484D] text-[#fff] hover:bg-[#D93A40]",
+  primary: "border-transparent bg-[#1B8FC9] text-[#fff] hover:bg-[#1679AB]",
+  secondary: "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] hover:border-[#1B8FC9] hover:bg-[var(--app-surface-muted)]",
+  ghost: "border-transparent bg-transparent text-[color:var(--app-muted)] hover:bg-[var(--app-surface-muted)] hover:text-[color:var(--app-text)]",
+  danger: "border-transparent bg-[#E5484D] text-[#fff] hover:bg-[#D93A40]",
   "danger-ghost": "border-[color:var(--p-danger-line)] bg-transparent text-[color:var(--p-danger-text)] hover:bg-[var(--p-danger-soft)]",
 };
 
 export function btnClass(variant: BtnVariant = "primary", size: "md" | "sm" = "md", block = false) {
   const sizing = size === "sm" ? "h-[30px] rounded-[7px] px-[11px] text-xs" : "h-[38px] rounded-[9px] px-4 text-[13px]";
-  return `inline-flex cursor-pointer items-center gap-[7px] whitespace-nowrap border border-transparent font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${sizing} ${BTN_VARIANTS[variant]} ${block ? "w-full justify-center" : ""}`;
+  return `inline-flex cursor-pointer items-center gap-[7px] whitespace-nowrap border font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${sizing} ${BTN_VARIANTS[variant]} ${block ? "w-full justify-center" : ""}`;
 }
 
 /** Mensaje que ve quien pasa el cursor por una acción que su rol no permite. */

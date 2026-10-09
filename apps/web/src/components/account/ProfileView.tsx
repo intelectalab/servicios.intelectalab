@@ -23,6 +23,8 @@ type Profile = {
   name: string;
   email: string;
   last_login_at: string | null;
+  created_at: string | null;
+  status: string;
   is_super_admin: boolean;
   tenant: string | null;
   roles: string[];
@@ -33,6 +35,8 @@ type Profile = {
   /** null en la cuenta de plataforma, que no pertenece a ninguna empresa. */
   notification_preferences: Preferences | null;
 };
+
+const STATUS_LABELS: Record<string, string> = { ACTIVE: "Activo", INVITED: "Invitado", SUSPENDED: "Suspendido", DISABLED: "Deshabilitado" };
 
 const CHANNELS: { key: keyof Preferences; label: string; hint?: string }[] = [
   { key: "in_app", label: "En la aplicación (campana)" },
@@ -219,7 +223,9 @@ export default function ProfileView() {
                         <Chip tone={profile.mfa ? "success" : "warning"}>{profile.mfa ? "Activa" : "No activa"}</Chip>
                       </span>,
                     ],
+                    ["Estado", STATUS_LABELS[profile.status] ?? profile.status],
                     ["Último acceso", dateTime(profile.last_login_at)],
+                    ["Cuenta creada", dateTime(profile.created_at)],
                   ]}
                 />
               </Card>

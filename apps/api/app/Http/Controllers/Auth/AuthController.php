@@ -383,6 +383,8 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'last_login_at' => $user->last_login_at,
+            'created_at' => $user->created_at,
+            'status' => $user->status,
             'is_super_admin' => (bool) $user->is_super_admin,
             'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->value('name') : null,
             'roles' => $tenantId

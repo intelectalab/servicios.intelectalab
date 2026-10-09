@@ -180,9 +180,11 @@ class HeaderFeaturesTest extends TestCase
             ->assertJsonPath('branch', null)
             ->assertJsonPath('mfa', false)
             ->assertJsonPath('is_super_admin', false)
+            ->assertJsonPath('status', 'ACTIVE')
             ->assertJsonPath('notification_preferences', ['in_app' => true, 'email' => true, 'whatsapp' => true])
             ->json();
 
+        $this->assertNotNull($profile['created_at']);
         // Solo sus sesiones, la más reciente primero, con la actual marcada y desde dónde se abrió.
         $this->assertCount(2, $profile['sessions']);
         $this->assertSame(
