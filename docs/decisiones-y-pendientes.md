@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-08 (con el flujo principal del CRM y la pantalla Auditoría).
+Estado al 2026-10-09 (con el CRM completo y la pantalla Auditoría).
 
 ## Decisiones tomadas
 
@@ -22,7 +22,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM y la pantalla Auditoría).
 
 ### Alcance en los permisos (2026-10-08)
 - Un rol define qué puede hacer (permisos) y qué registros alcanza (alcance): **Propios, Equipo, Sede o Toda la empresa**. Se elige por rol y por recurso en Roles y permisos. Detalle en [cambios/2026-10-08_alcance-en-permisos.md](cambios/2026-10-08_alcance-en-permisos.md).
-- Aplica a Cotizaciones, Contratos, Órdenes, Solicitudes del portal y, desde que existe el CRM, Leads y Oportunidades. En los demás recursos, quien tiene el permiso ve toda la empresa.
+- Aplica a Cotizaciones, Contratos, Órdenes, Solicitudes del portal y, desde que existe el CRM, Leads, Oportunidades y Actividades. En los demás recursos, quien tiene el permiso ve toda la empresa.
 - Fuera de alcance = "no existe" (404), igual que un registro de otra empresa.
 - Reparto: Ventas, lo propio (la bandeja de solicitudes, completa); Gerencia y Administrador, toda la empresa. El Administrador no se recorta.
 - Rol nuevo o sin alcance definido: solo lo propio. Sin equipo o sin sede asignados, el alcance se queda en lo propio. Un documento sin sede no se abre a todas las sedes.
@@ -34,7 +34,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM y la pantalla Auditoría).
 - La vista del cliente entrega cada parte (comprobantes y saldo, tickets, órdenes de trabajo, leads) solo con el permiso de ver de su módulo y si la empresa lo tiene; la pestaña sin permiso no se esconde, muestra el candado. Para decidirlo dentro de una pantalla se usa `CheckPermission::granted`.
 
 ### CRM (2026-10-08)
-- Se construye por partes. Hecho: Leads y Pipeline de oportunidades (con ganar, perder y convertir). Faltan Actividades, Campañas y Puntuación de leads. Detalle en [cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md).
+- Se construyó por partes: Leads y Pipeline de oportunidades ([cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md)) y, el 2026-10-09, Actividades, Campañas y Puntuación de leads ([cambios/2026-10-09_crm-actividades-campanas-puntuacion.md](cambios/2026-10-09_crm-actividades-campanas-puntuacion.md)).
 - Permisos por recurso con Ver y Gestionar (`leads.*`, `opportunities.*`), como en Comercial; reemplazan a `crm.*`. Calificar un lead y crear su oportunidad pide `opportunities.manage`.
 - Leads y Oportunidades respetan el alcance del rol. "Propio" es lo que la persona lleva como responsable. Ventas, lo propio; Gerencia y Administrador, toda la empresa.
 - El cliente no nace del lead: se crea o se reutiliza al **convertir la oportunidad ganada**, con el mismo control de duplicados de Clientes y actores. Dar de alta la organización o agregarle el rol Cliente pide además `core.manage`; convertir con un cliente que ya existe, no. Ventas tiene `core.manage` (lo pediste el 2026-10-08), así que también gestiona Clientes y actores.
@@ -44,7 +44,10 @@ Estado al 2026-10-08 (con el flujo principal del CRM y la pantalla Auditoría).
 - La oportunidad sigue siendo de quien llevaba el lead, la cree quien la cree. Lead y oportunidad nacen en la sede de su responsable.
 - Embudo y fuentes: los del prototipo, creados la primera vez que la empresa entra al CRM. Monto de la oportunidad solo en soles.
 - Tablero (kanban): pieza compartida `components/ui/kanban.tsx`; cada tarjeta trae "Mover a…" porque en teléfono no se arrastra. La vista elegida (tabla o tablero) se recuerda en el navegador.
-- Lo del prototipo que depende de una pantalla que falta se muestra y avisa: Puntaje ("—"), Campaña (deshabilitada), Actividades (botón que avisa).
+- **Actividades** (2026-10-09): se atan a un lead o a una oportunidad (no a los dos) y llevan alcance por rol; "propio" es lo que la persona registró y lo de los leads y oportunidades que lleva. Se editan mientras están pendientes; una realizada se reabre antes. No se eliminan. "Hoy" en sus indicadores y en su tablero es el día de quien mira.
+- **Campañas** (2026-10-09): quien las ve, ve todas; sus miembros y resultados se cuentan sobre los leads y oportunidades que el rol alcanza. Cancelar pide motivo. El consentimiento se registra por miembro y la campaña decide si lo exige (por defecto, sí). Excluir no borra. Un lead conserva su primera campaña como campaña de origen.
+- **Puntuación de leads** (2026-10-09): criterios fijos (los del prototipo, en `App\Modules\Crm\Support\LeadScoring`); cada empresa cambia solo los puntos (−50 a 50). Se recalcula al crear o editar el lead, al registrarle una actividad, al asociarlo o excluirlo de una campaña y al guardar las reglas. Recalcular no cuenta como una edición del lead. Cambiar las reglas es un permiso propio (`scoring.manage`): en el prototipo lo tenía Ventas con "editar leads"; aquí solo el Administrador.
+- Permisos nuevos del módulo CRM: `activities.*` y `campaigns.*` (Ver, Gestionar, Exportar) y `scoring.manage`. Reparto del prototipo: Gerencia ve actividades y ve y exporta campañas; Ventas gestiona sus actividades y ve campañas.
 
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
@@ -116,7 +119,7 @@ Estado al 2026-10-08 (con el flujo principal del CRM y la pantalla Auditoría).
 
 ## Pendientes
 
-- CRM: Actividades, Campañas y Puntuación de leads; solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads.
+- CRM: solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.

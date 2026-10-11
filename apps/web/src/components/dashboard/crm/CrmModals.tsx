@@ -18,10 +18,12 @@ const SELECT_LIMIT = 200;
 
 /** Alta o edición de un lead. */
 export function LeadFormModal({
-  lead, sources, onClose, onSaved, toast,
+  lead, sources, campaigns = [], onClose, onSaved, toast,
 }: {
   lead?: Lead;
   sources: LeadOptions["sources"];
+  /** Campañas activas a las que se puede asociar el lead. */
+  campaigns?: LeadOptions["campaigns"];
   onClose: () => void;
   onSaved: (lead: LeadDetail) => void;
   toast: Toast;
@@ -33,8 +35,14 @@ export function LeadFormModal({
   const [phone, setPhone] = useState(lead?.phone ?? "");
   const [sourceId, setSourceId] = useState(lead?.source_id ?? "");
   const [interest, setInterest] = useState(lead?.interest ?? "");
+  const [campaignId, setCampaignId] = useState("");
+  const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // Un lead que ya tiene campaña la conserva: sus campañas se gestionan desde la ficha de cada campaña.
+  const assigned = lead?.campaign ?? null;
+  const campaign = campaigns.find((item) => item.id === campaignId);
 
   async function save() {
     const found: Record<string, string> = {};
@@ -42,6 +50,7 @@ export function LeadFormModal({
     if (!contact.trim()) found.person_name = "Indica el contacto.";
     if (!email.trim()) found.email = "Indica el correo.";
     if (!sourceId) found.source_id = "Indica la fuente.";
+    if (campaign?.consent_required && !consent) found.consent = "Esta campaña exige el consentimiento registrado de cada miembro.";
     setErrors(found);
     if (Object.keys(found).length) return;
 
@@ -57,6 +66,7 @@ export function LeadFormModal({
           phone: phone.trim() || null,
           interest: interest.trim() || null,
           source_id: sourceId,
+          ...(campaign ? { campaign_id: campaign.id, campaign_consent: consent } : {}),
         }),
       });
       toast(lead ? "Lead actualizado" : saved.core_party ? "Lead creado y vinculado a la identidad existente en CORE" : "Lead creado");
@@ -106,12 +116,49 @@ export function LeadFormModal({
             options={[["", "Seleccionar…"], ...sources.map((source): [string, string] => [source.id, source.name])]}
           />
         </Field>
-        <Field label="Campaña" hint="Se elegirá aquí cuando exista la pantalla Campañas.">
-          <PickSelect className={INPUT} ariaLabel="Campaña" value="" onChange={() => undefined} options={[["", "Sin campaña"]]} disabled />
+        <Field
+          label="Campaña"
+          error={errors.campaign_id}
+          hint={assigned ? "Sus campañas se gestionan desde la ficha de cada campaña." : campaigns.length ? undefined : "No hay campañas activas."}
+        >
+          {assigned ? (
+            <PickSelect className={INPUT} ariaLabel="Campaña" value="x" onChange={() => undefined} options={[["x", assigned.name]]} disabled />
+          ) : (
+            <PickSelect
+              className={INPUT}
+              ariaLabel="Campaña"
+              value={campaignId}
+              onChange={(value) => {
+                setCampaignId(value);
+                setConsent(false);
+              }}
+              options={[["", "Sin campaña"], ...campaigns.map((item): [string, string] => [item.id, item.name])]}
+              disabled={campaigns.length === 0}
+            />
+          )}
         </Field>
         <Field label="Interés" error={errors.interest}>
           <input className={INPUT} value={interest} onChange={(e) => setInterest(e.target.value)} maxLength={255} />
         </Field>
+        {campaign && (
+          <div className="md:col-span-3">
+            <label className="flex cursor-pointer items-start gap-2 text-[13px]">
+              <input
+                type="checkbox"
+                checked={consent}
+                onChange={(e) => setConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 cursor-pointer rounded border-[color:var(--p-field-border)] accent-[#1B8FC9]"
+              />
+              <span>
+                El lead dio su consentimiento para recibir comunicaciones
+                <small className="app-muted block text-xs">
+                  {campaign.consent_required ? "Se guarda con la campaña: esta lo exige a cada miembro." : "Se guarda con la campaña."}
+                </small>
+              </span>
+            </label>
+            {errors.consent && <small className="text-xs text-[color:var(--p-danger-text)]">{errors.consent}</small>}
+          </div>
+        )}
       </FormGrid>
     </Modal>
   );

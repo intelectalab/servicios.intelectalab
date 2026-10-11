@@ -6,6 +6,8 @@ export type OpportunityStatus = "OPEN" | "WON" | "LOST";
 
 type Named = { id: string; name: string };
 
+export type ScoreGrade = "A" | "B" | "C" | "D";
+
 export interface Lead {
   id: string;
   lead_number: string;
@@ -25,6 +27,13 @@ export interface Lead {
   party_id: string | null;
   /** La enlazada o, si no hay, la que coincide por nombre. */
   core_party_id: string | null;
+  /** Puntaje automático (0 a 100), su grado y los criterios que cumple. */
+  score: number | null;
+  score_grade: ScoreGrade | null;
+  score_hits: string[] | null;
+  /** Campaña a la que el lead quedó asociado. */
+  campaign_id: string | null;
+  campaign: Named | null;
   created_at: string;
   lock_version: number;
 }
@@ -43,6 +52,8 @@ export interface LeadSummary {
 export interface LeadOptions {
   sources: (Named & { code: string })[];
   owners: Named[];
+  /** Campañas activas a las que se puede asociar un lead (vacío sin permiso de ver campañas). */
+  campaigns: (Named & { consent_required: boolean })[];
 }
 
 export interface Stage {
@@ -110,4 +121,100 @@ export interface OpportunityOptions {
   stages: Stage[];
   sources: (Named & { code: string })[];
   owners: Named[];
+}
+
+export type ActivityType = "CALL" | "MEETING" | "EMAIL" | "DEMO" | "VISIT";
+
+export interface Activity {
+  id: string;
+  subject: string;
+  description: string | null;
+  activity_type: ActivityType;
+  due_at: string | null;
+  completed_at: string | null;
+  done: boolean;
+  lead_id: string | null;
+  opportunity_id: string | null;
+  /** Lead u oportunidad al que pertenece; sin nombre si queda fuera del alcance de quien mira. */
+  related: { type: "lead" | "opportunity"; id: string; number: string | null; name: string | null } | null;
+  owner: Named | null;
+  lock_version: number;
+}
+
+export interface ActivitySummary {
+  late: number;
+  today: number;
+  upcoming: number;
+  done: number;
+}
+
+export interface ActivityOptions {
+  opportunities: { id: string; number: string; name: string }[];
+  leads: { id: string; number: string; name: string | null }[];
+  types: { code: ActivityType; label: string }[];
+}
+
+export type CampaignStatus = "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED";
+
+export interface CampaignMetrics {
+  members: number;
+  qualified: number;
+  opportunities: number;
+  won: number;
+  revenue: number;
+}
+
+export interface Campaign {
+  id: string;
+  code: string;
+  name: string;
+  channel: string | null;
+  status: CampaignStatus;
+  starts_at: string | null;
+  ends_at: string | null;
+  budget: number;
+  consent_required: boolean;
+  cancel_reason: string | null;
+  owner: Named | null;
+  metrics: CampaignMetrics;
+  created_at: string;
+  lock_version: number;
+}
+
+export interface CampaignMember {
+  id: string;
+  status: "ADDED" | "EXCLUDED";
+  consent: boolean;
+  added_at: string;
+  lead: { id: string; lead_number: string; name: string | null; person_name: string | null; status: LeadStatus };
+}
+
+export interface CampaignDetail extends Campaign {
+  members: CampaignMember[];
+  /** Miembros que existen pero quedan fuera del alcance de quien mira. */
+  hidden_members: number;
+  available_leads: { id: string; number: string; name: string | null; person_name: string | null }[];
+  history: HistoryEntry[];
+}
+
+export interface CampaignSummary {
+  active: number;
+  members: number;
+  opportunities: number;
+  revenue: number;
+}
+
+export interface ScoringRule {
+  id: string;
+  label: string;
+  condition: string;
+  points: number;
+  default_points: number;
+}
+
+export interface Scoring {
+  rules: ScoringRule[];
+  limits: { min: number; max: number };
+  distribution: { grade: ScoreGrade; total: number }[];
+  priority: { id: string; lead_number: string; name: string | null; score: number; score_grade: ScoreGrade }[];
 }

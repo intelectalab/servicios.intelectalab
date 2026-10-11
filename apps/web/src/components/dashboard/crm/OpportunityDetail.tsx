@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, ArrowLeft, Check, FileText, Pencil, Plus, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, FileText, Pencil, Users } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, customerName, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { OPPORTUNITY_STATES, crmHistoryLabel, dateTime, firstError } from "@/lib/crm";
@@ -12,6 +12,7 @@ import {
   Badge, Btn, Card, DataTable, Kv, LinkBtn, LoadError, PageHead, Screen, Timeline, Who, deniedText, useDenied, useToasts, type Column,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
+import { ActivitiesCard } from "@/components/dashboard/crm/Activities";
 import { CloseOpportunityModal, ConvertOpportunityModal, OpportunityFormModal } from "@/components/dashboard/crm/CrmModals";
 import type { OpportunityDetail as Opportunity, OpportunityOptions } from "@/types/crm";
 
@@ -265,21 +266,7 @@ export default function OpportunityDetail() {
           },
           {
             id: "activities",
-            node: (
-              <Card title="Actividades">
-                <p className="app-muted">Sin actividades.</p>
-                <div className="mt-3">
-                  <Btn
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toast("Aún no disponible", "warning", "Las actividades llegan con la pantalla Actividades del CRM.")}
-                  >
-                    <Plus size={14} />
-                    <span>Agregar</span>
-                  </Btn>
-                </div>
-              </Card>
-            ),
+            node: <ActivitiesCard relation={{ type: "opportunity", id: opportunity.id }} toast={toast} />,
           },
           {
             id: "quotations",

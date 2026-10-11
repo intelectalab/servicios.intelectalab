@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\CrmLead;
 use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Portal\Models\PortalRequest;
@@ -39,6 +40,8 @@ class CheckRecordVersion
         'portalRequest' => 'portal_requests',
         'lead' => 'crm_leads',
         'opportunity' => 'crm_opportunities',
+        'activity' => 'crm_activities',
+        'campaign' => 'crm_campaigns',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -49,6 +52,7 @@ class CheckRecordVersion
         'portal_requests' => PortalRequest::class,
         'crm_leads' => CrmLead::class,
         'crm_opportunities' => CrmOpportunity::class,
+        'crm_activities' => CrmActivity::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

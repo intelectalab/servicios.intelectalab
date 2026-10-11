@@ -48,7 +48,7 @@ class ModuleCatalogSeeder extends Seeder
         ['TIMESHEETS', 'Timesheets', 'Horas trabajadas', 'OPERACIONES_SERVICIO', false, ['operations']],
 
         // CRM — opcional
-        ['CRM', 'CRM', 'Leads, oportunidades y pipeline', 'CRM', false, ['leads', 'opportunities']],
+        ['CRM', 'CRM', 'Leads, oportunidades y pipeline', 'CRM', false, ['leads', 'opportunities', 'activities', 'campaigns', 'scoring']],
     ];
 
     public function run(): void

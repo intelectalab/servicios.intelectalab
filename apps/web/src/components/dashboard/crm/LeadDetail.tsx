@@ -11,6 +11,7 @@ import {
   Badge, Btn, Card, Kv, LinkBtn, LoadError, Notice, PageHead, Screen, StateTrack, Timeline, Who, useToasts, type BtnVariant,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
+import { ActivitiesCard, ScoreChip } from "@/components/dashboard/crm/Activities";
 import { LeadFormModal, QualifyLeadModal, ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import type { LeadDetail as Lead, LeadOptions, LeadStatus } from "@/types/crm";
 
@@ -31,7 +32,7 @@ export default function LeadDetail() {
   const { toast, toasts } = useToasts();
 
   const [lead, setLead] = useState<Lead | null>(null);
-  const [sources, setSources] = useState<LeadOptions["sources"]>([]);
+  const [options, setOptions] = useState<Pick<LeadOptions, "sources" | "campaigns">>({ sources: [], campaigns: [] });
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -56,7 +57,7 @@ export default function LeadDetail() {
   // Las fuentes solo hacen falta para editar.
   useEffect(() => {
     let cancelled = false;
-    apiFetch<LeadOptions>("/v1/crm/leads/options").then((options) => { if (!cancelled) setSources(options.sources); }).catch(() => undefined);
+    apiFetch<LeadOptions>("/v1/crm/leads/options").then((next) => { if (!cancelled) setOptions({ sources: next.sources, campaigns: next.campaigns ?? [] }); }).catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
 
@@ -151,7 +152,7 @@ export default function LeadDetail() {
         className="grid grid-cols-1 gap-x-4 lg:grid-cols-2"
         zones={[
           { className: "min-w-0 lg:min-h-24", cards: ["data"] },
-          { className: "min-w-0 lg:min-h-24", cards: ["cycle"] },
+          { className: "min-w-0 lg:min-h-24", cards: ["cycle", "activities"] },
         ]}
         cards={[
           {
@@ -167,9 +168,14 @@ export default function LeadDetail() {
                     ["Teléfono", lead.phone || "—"],
                     ["Interés", lead.interest || "—"],
                     ["Fuente", lead.source?.name ?? "—"],
+                    lead.campaign ? ["Campaña", lead.campaign.name] : null,
                     [
                       "Puntaje automático",
-                      <span key="score" className="app-muted">— <small className="block text-xs">Disponible cuando exista la pantalla Puntuación de leads.</small></span>,
+                      <div key="score">
+                        <ScoreChip score={lead.score} grade={lead.score_grade} hits={lead.score_hits} />
+                        <small className="app-muted block text-xs">{lead.score_hits?.length ? lead.score_hits.join(" · ") : "Sin criterios cumplidos"}</small>
+                        <Link href="/crm/scoring" className={`${LINK} text-xs`}>Ver reglas</Link>
+                      </div>,
                     ],
                     ["Responsable", <Who key="owner" name={lead.owner?.name} />],
                     ["Creado", shortDate(lead.created_at)],
@@ -186,6 +192,11 @@ export default function LeadDetail() {
                 />
               </Card>
             ),
+          },
+          {
+            id: "activities",
+            // Las interacciones registradas cuentan para el puntaje: al cambiar, la ficha se refresca.
+            node: <ActivitiesCard relation={{ type: "lead", id: lead.id }} toast={toast} onChanged={() => setReload((n) => n + 1)} />,
           },
           {
             id: "cycle",
@@ -240,7 +251,8 @@ export default function LeadDetail() {
       {editing && (
         <LeadFormModal
           lead={lead}
-          sources={sources}
+          sources={options.sources}
+          campaigns={options.campaigns}
           toast={toast}
           onClose={() => setEditing(false)}
           onSaved={(saved) => {

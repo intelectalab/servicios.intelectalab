@@ -7,10 +7,14 @@ use App\Modules\Core\Models\Customer;
 use App\Modules\Core\Models\Organization;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
+use App\Http\Middleware\CheckPermission;
 use App\Modules\Crm\Http\Requests\StoreLeadRequest;
+use App\Modules\Crm\Models\CrmCampaign;
 use App\Modules\Crm\Models\CrmLead;
 use App\Modules\Crm\Models\CrmOpportunity;
+use App\Modules\Crm\Support\CampaignMembership;
 use App\Modules\Crm\Support\CrmCatalog;
+use App\Modules\Crm\Support\LeadScoring;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
@@ -49,7 +53,7 @@ class CrmLeadController extends Controller
         $uuid = fn (string $key) => Str::isUuid((string) $request->query($key)) ? $request->query($key) : null;
 
         $query = CrmLead::query()
-            ->with('source:id,name', 'owner:id,name')
+            ->with('source:id,name', 'owner:id,name', 'campaign:id,name')
             ->select('crm_leads.*')
             ->selectRaw(self::CORE_MATCH.' AS core_party_id')
             ->when($request->filled('status'), fn ($q) => $q->where('crm_leads.status', $request->query('status')))
@@ -68,6 +72,7 @@ class CrmLeadController extends Controller
             'lead' => ColumnFilters::text("concat_ws(' ', crm_leads.organization_name, crm_leads.lead_number, crm_leads.person_name, crm_leads.position)"),
             'contact' => ColumnFilters::text("concat_ws(' ', crm_leads.email, crm_leads.phone)"),
             'interest' => ColumnFilters::text('crm_leads.interest'),
+            'score' => ColumnFilters::number('crm_leads.score'),
             'created' => ColumnFilters::date('crm_leads.created_at'),
         ]);
 
@@ -76,6 +81,7 @@ class CrmLeadController extends Controller
             'contact' => 'lower(crm_leads.email::text)',
             'source' => '(SELECT lower(s.name) FROM crm_sources s WHERE s.id = crm_leads.source_id)',
             'interest' => 'lower(crm_leads.interest)',
+            'score' => 'crm_leads.score',
             'owner' => '(SELECT lower(u.name) FROM users u WHERE u.id = crm_leads.owner_user_id)',
             'created' => 'crm_leads.created_at',
             'status' => ListSort::labels('crm_leads.status', self::STATUS_LABELS),
@@ -102,6 +108,10 @@ class CrmLeadController extends Controller
 
         return response()->json([
             'sources' => CrmCatalog::sources($tenantId)->where('code', '<>', CrmCatalog::EXISTING_CUSTOMER)->values(),
+            // Campañas activas a las que se puede asociar un lead; solo para quien puede ver campañas.
+            'campaigns' => CheckPermission::granted($request, 'campaigns.view')
+                ? CrmCampaign::where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name', 'consent_required'])
+                : [],
             // Responsables de los leads que la persona alcanza.
             'owners' => DB::table('users')
                 ->whereIn('id', CrmLead::query()->whereNotNull('owner_user_id')->distinct()->pluck('owner_user_id'))
@@ -133,6 +143,7 @@ class CrmLeadController extends Controller
             ]);
 
             $this->audit($request, $lead, 'crm_lead.create', ['to' => 'NEW', 'lead_number' => $number]);
+            $this->enroll($request, $lead) || LeadScoring::apply($lead);
 
             return $lead;
         });
@@ -153,6 +164,7 @@ class CrmLeadController extends Controller
                 'party_id' => $lead->party_id ?? $this->matchingPartyId($lead->tenant_id, $data['organization_name'] ?? null),
             ]);
             $this->audit($request, $lead, 'crm_lead.update');
+            $this->enroll($request, $lead) || LeadScoring::apply($lead);
         });
 
         return response()->json($this->detail($lead));
@@ -324,7 +336,7 @@ class CrmLeadController extends Controller
     private function detail(CrmLead $lead): array
     {
         $lead = CrmLead::query()
-            ->with('source:id,name', 'owner:id,name', 'opportunity:id,lead_id,opportunity_number,name,status')
+            ->with('source:id,name', 'owner:id,name', 'campaign:id,name', 'opportunity:id,lead_id,opportunity_number,name,status')
             ->select('crm_leads.*')
             ->selectRaw(self::CORE_MATCH.' AS core_party_id')
             ->findOrFail($lead->id);
@@ -337,6 +349,26 @@ class CrmLeadController extends Controller
             'core_party' => $party ? ['id' => $party->id, 'name' => $party->display_name] : null,
             'history' => AuditHistory::for('CrmLead', $lead->id),
         ];
+    }
+
+    /**
+     * Asocia el lead a la campaña elegida en el formulario (y recalcula su puntaje). Un lead que
+     * ya tiene campaña la conserva: sus campañas se gestionan desde la ficha de cada campaña.
+     */
+    private function enroll(StoreLeadRequest $request, CrmLead $lead): bool
+    {
+        $campaignId = $request->validated('campaign_id');
+        if (! $campaignId || $lead->campaign_id) {
+            return false;
+        }
+
+        $campaign = CheckPermission::granted($request, 'campaigns.view') ? CrmCampaign::find($campaignId) : null;
+        if (! $campaign || $campaign->status !== 'ACTIVE') {
+            throw ValidationException::withMessages(['campaign_id' => ['La campaña indicada no existe o no está activa.']]);
+        }
+        CampaignMembership::add($campaign, $lead, (bool) $request->validated('campaign_consent'), $request->user()->id, 'campaign_id');
+
+        return true;
     }
 
     /** Valida los datos del formulario y los devuelve con los nombres de las columnas. */

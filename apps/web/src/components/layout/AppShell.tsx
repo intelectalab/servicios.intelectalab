@@ -26,9 +26,9 @@ const MENU_ITEMS: MenuItem[] = [
 
   { href: "/crm/leads", label: "Leads", module: "CRM", requiredPermission: "leads.view", icon: Target, superModule: "CRM" },
   { href: "/crm/opportunities", label: "Pipeline", module: "CRM", requiredPermission: "opportunities.view", icon: Filter, superModule: "CRM" },
-  { label: "Actividades", icon: CalendarDays, superModule: "CRM", soon: true },
-  { label: "Campañas", icon: Send, superModule: "CRM", soon: true },
-  { label: "Puntuación de leads", icon: ChartColumn, superModule: "CRM", soon: true },
+  { href: "/crm/activities", label: "Actividades", module: "CRM", requiredPermission: "activities.view", icon: CalendarDays, superModule: "CRM" },
+  { href: "/crm/campaigns", label: "Campañas", module: "CRM", requiredPermission: "campaigns.view", icon: Send, superModule: "CRM" },
+  { href: "/crm/scoring", label: "Puntuación de leads", module: "CRM", requiredPermission: "leads.view", icon: ChartColumn, superModule: "CRM" },
 
   // Clientes, Proveedores y Empleados están desconectados (2026-10-08): sus pantallas siguen
   // en el repo, pero no salen en el menú y sus rutas llevan a Clientes y actores (proxy.ts).

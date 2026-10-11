@@ -18,6 +18,7 @@ import { Kanban, ViewSwitch, useStoredView, type KanbanColumn } from "@/componen
 import { PickSelect } from "@/components/ui/pick-select";
 import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
+import { ScoreChip } from "@/components/dashboard/crm/Activities";
 import { LeadFormModal, QualifyLeadModal, ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Lead, LeadOptions, LeadStatus, LeadSummary } from "@/types/crm";
@@ -38,9 +39,6 @@ const MOVES: Partial<Record<LeadStatus, { path: string; from: LeadStatus[] }>> =
   CONTACTED: { path: "contact", from: ["NEW"] },
   QUALIFIED: { path: "qualify", from: ["NEW", "CONTACTED"] },
 };
-
-/** El puntaje automático llega con la pantalla "Puntuación de leads". */
-const SCORE_PENDING = <span className="app-muted" title="Disponible cuando exista la pantalla Puntuación de leads">—</span>;
 
 /** Si la empresa del lead ya está en Clientes y actores (CORE). */
 function CoreCell({ lead, fallback = null }: { lead: Lead; fallback?: ReactNode }) {
@@ -70,9 +68,17 @@ const COLUMNS: Column<Lead>[] = [
       </div>
     ),
   },
-  { label: "Fuente", sortKey: "source", filter: { top: "Fuente" }, render: (lead) => lead.source?.name ?? "—" },
+  {
+    label: "Fuente", sortKey: "source", filter: { top: "Fuente" },
+    render: (lead) => (
+      <div>
+        {lead.source?.name ?? "—"}
+        {lead.campaign && <small className="app-muted block text-xs">{lead.campaign.name}</small>}
+      </div>
+    ),
+  },
   { label: "Interés", sortKey: "interest", filter: "text", render: (lead) => lead.interest || "—" },
-  { label: "Puntaje", num: true, render: () => SCORE_PENDING },
+  { label: "Puntaje", num: true, sortKey: "score", filter: "number", render: (lead) => <ScoreChip score={lead.score} grade={lead.score_grade} hits={lead.score_hits} /> },
   { label: "CORE", render: (lead) => <CoreCell lead={lead} fallback={<span className="app-muted text-xs">Nuevo</span>} /> },
   { label: "Responsable", sortKey: "owner", filter: { top: "Responsable" }, render: (lead) => <Who name={lead.owner?.name} /> },
   { label: "Creado", sortKey: "created", filter: "date", render: (lead) => <span className="whitespace-nowrap">{shortDate(lead.created_at)}</span> },
@@ -94,6 +100,9 @@ const EXPORT_COLUMNS: ExportColumn<Lead>[] = [
   { label: "Teléfono", value: (lead) => lead.phone ?? "", width: 16 },
   { label: "Fuente", value: (lead) => lead.source?.name ?? "", width: 18 },
   { label: "Interés", value: (lead) => lead.interest ?? "", width: 26 },
+  { label: "Campaña", value: (lead) => lead.campaign?.name ?? "", width: 26 },
+  { label: "Puntaje", value: (lead) => lead.score ?? "", width: 11, kind: "number" },
+  { label: "Grado", value: (lead) => lead.score_grade ?? "", width: 9, kind: "center" },
   { label: "CORE", value: (lead) => (lead.party_id ? "En CORE" : lead.core_party_id ? "Coincidencia" : "Nuevo"), width: 14, kind: "center" },
   { label: "Responsable", value: (lead) => lead.owner?.name ?? "", width: 24 },
   { label: "Creado", value: (lead) => shortDate(lead.created_at), width: 15, kind: "center" },
@@ -141,7 +150,7 @@ export default function LeadsList() {
 
   const [data, setData] = useState<PaginatedResponse<Lead> | null>(null);
   const [summary, setSummary] = useState<LeadSummary | null>(null);
-  const [options, setOptions] = useState<LeadOptions>({ sources: [], owners: [] });
+  const [options, setOptions] = useState<LeadOptions>({ sources: [], owners: [], campaigns: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -367,7 +376,7 @@ export default function LeadsList() {
                 </small>
                 <div className="flex items-center justify-between gap-1.5 text-[12.5px]">
                   <Chip>{lead.source?.name ?? "Sin fuente"}</Chip>
-                  {SCORE_PENDING}
+                  <ScoreChip score={lead.score} grade={lead.score_grade} hits={lead.score_hits} />
                 </div>
                 <CoreCell lead={lead} />
                 <div className="app-muted flex flex-wrap items-center justify-between gap-1.5 text-xs">
@@ -426,6 +435,7 @@ export default function LeadsList() {
       {creating && (
         <LeadFormModal
           sources={options.sources}
+          campaigns={options.campaigns}
           toast={toast}
           onClose={() => setCreating(false)}
           onSaved={() => {

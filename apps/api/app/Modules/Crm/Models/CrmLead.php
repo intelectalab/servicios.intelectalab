@@ -24,10 +24,10 @@ class CrmLead extends Model
     protected $fillable = [
         'tenant_id', 'lead_number', 'source_id', 'party_id', 'person_name', 'organization_name', 'position',
         'email', 'phone', 'interest', 'status', 'score', 'discard_reason', 'owner_user_id', 'branch_id',
-        'converted_at', 'converted_customer_id',
+        'converted_at', 'converted_customer_id', 'campaign_id',
     ];
 
-    protected $casts = ['converted_at' => 'datetime', 'score' => 'decimal:4'];
+    protected $casts = ['converted_at' => 'datetime', 'score' => 'integer', 'score_hits' => 'array'];
 
     protected static function boot()
     {
@@ -48,6 +48,11 @@ class CrmLead extends Model
     public function owner()
     {
         return $this->belongsTo(\App\Models\User::class, 'owner_user_id');
+    }
+
+    public function campaign()
+    {
+        return $this->belongsTo(CrmCampaign::class, 'campaign_id');
     }
 
     public function opportunity()

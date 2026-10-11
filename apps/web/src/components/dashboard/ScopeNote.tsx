@@ -22,8 +22,17 @@ const CRM_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza lo que llevas tú y lo de tus sedes.",
 };
 
+// Una actividad es de quien la registró y de quien lleva el lead o la oportunidad a la que pertenece.
+const ACTIVITY_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza las actividades que registraste y las de los leads y oportunidades que llevas.",
+  TEAM: "Tu rol alcanza tus actividades y las de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus actividades y las de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
-  resource === "portal" ? PORTAL_HINTS : resource === "leads" || resource === "opportunities" ? CRM_HINTS : HINTS;
+  resource === "portal" ? PORTAL_HINTS
+    : resource === "activities" ? ACTIVITY_HINTS
+    : resource === "leads" || resource === "opportunities" ? CRM_HINTS : HINTS;
 
 /**
  * Avisa en un listado que no se está viendo toda la empresa, sino lo que alcanza el rol

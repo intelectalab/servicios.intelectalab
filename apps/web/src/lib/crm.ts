@@ -1,7 +1,7 @@
 import type { Tone } from "@/components/ui/proto";
 import { ApiError } from "@/lib/api";
 import type { HistoryEntry } from "@/types/commercial";
-import type { Lead, LeadStatus, Opportunity, OpportunityStatus } from "@/types/crm";
+import type { Activity, ActivityType, CampaignStatus, Lead, LeadStatus, Opportunity, OpportunityStatus } from "@/types/crm";
 
 export const LEAD_STATES: [LeadStatus, string, Tone][] = [
   ["NEW", "Nuevo", "info"],
@@ -60,6 +60,9 @@ const HISTORY_LABELS: Record<string, string> = {
   "crm_opportunity.update": "Datos editados",
   "crm_opportunity.stage": "Cambio de etapa",
   "crm_opportunity.convert": "Convertida a cliente",
+  "crm_campaign.update": "Datos editados",
+  "crm_campaign.member.add": "Miembro agregado",
+  "crm_campaign.member.exclude": "Miembro excluido",
 };
 
 export const crmHistoryLabel = (entry: HistoryEntry) => HISTORY_LABELS[entry.action] ?? entry.action;
@@ -93,4 +96,49 @@ export function readView(key: string, fallback: ViewMode): ViewMode {
 
 export function saveView(key: string, mode: ViewMode) {
   try { window.localStorage.setItem(VIEW_KEY + key, mode); } catch { /* sin almacenamiento, no se recuerda */ }
+}
+
+export const ACTIVITY_TYPES: [ActivityType, string][] = [
+  ["CALL", "Llamada"],
+  ["MEETING", "Reunión"],
+  ["EMAIL", "Email"],
+  ["DEMO", "Demo"],
+  ["VISIT", "Visita"],
+];
+
+export const activityTypeLabel = (type: string) => ACTIVITY_TYPES.find(([code]) => code === type)?.[1] ?? type;
+
+export type ActivityBucket = "LATE" | "TODAY" | "NEXT" | "DONE";
+
+/** Dónde empieza y dónde termina "hoy" para quien mira la pantalla. */
+export function todayRange(): [Date, Date] {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  return [start, new Date(start.getTime() + 86_400_000)];
+}
+
+/** Columna del tablero de actividades: realizada, atrasada, para hoy o próxima (según su fecha). */
+export function activityBucket(activity: Pick<Activity, "done" | "due_at">): ActivityBucket {
+  if (activity.done) return "DONE";
+  if (!activity.due_at) return "NEXT";
+  const due = new Date(activity.due_at);
+  const [start, end] = todayRange();
+  return due < start ? "LATE" : due < end ? "TODAY" : "NEXT";
+}
+
+export const CAMPAIGN_STATES: [CampaignStatus, string, Tone][] = [
+  ["DRAFT", "Borrador", "neutral"],
+  ["ACTIVE", "Activa", "success"],
+  ["COMPLETED", "Finalizada", "muted"],
+  ["CANCELLED", "Cancelada", "muted"],
+];
+
+/** Estados en los que la campaña se edita y admite cambios en sus miembros. */
+export const CAMPAIGN_OPEN: CampaignStatus[] = ["DRAFT", "ACTIVE"];
+
+/** Valor de un <input type="datetime-local"> para una fecha (hora local). */
+export function toLocalInput(value: string | Date) {
+  const date = typeof value === "string" ? new Date(value) : value;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }

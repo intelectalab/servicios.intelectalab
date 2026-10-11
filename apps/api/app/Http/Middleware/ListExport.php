@@ -30,6 +30,8 @@ class ListExport
         'api/v1/portal-requests' => 'portal',
         'api/v1/crm/leads' => 'leads',
         'api/v1/crm/opportunities' => 'opportunities',
+        'api/v1/crm/activities' => 'activities',
+        'api/v1/crm/campaigns' => 'campaigns',
         'api/v1/users' => 'users',
         'api/v1/audit' => 'audit',
     ];

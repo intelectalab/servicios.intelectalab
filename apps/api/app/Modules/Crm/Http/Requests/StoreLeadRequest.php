@@ -21,6 +21,8 @@ class StoreLeadRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:50'],
             'interest' => ['nullable', 'string', 'max:255'],
             'source_id' => ['required', 'uuid'],
+            'campaign_id' => ['nullable', 'uuid'],
+            'campaign_consent' => ['sometimes', 'boolean'],
         ];
     }
 

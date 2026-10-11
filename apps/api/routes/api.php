@@ -26,7 +26,10 @@ use App\Modules\Finance\Http\Controllers\InvoiceController;
 use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
+use App\Modules\Crm\Http\Controllers\CrmActivityController;
+use App\Modules\Crm\Http\Controllers\CrmCampaignController;
 use App\Modules\Crm\Http\Controllers\CrmLeadController;
+use App\Modules\Crm\Http\Controllers\CrmScoringController;
 use App\Modules\Crm\Http\Controllers\CrmOpportunityController;
 use App\Modules\Core\Http\Controllers\PartyController;
 use App\Modules\Portal\Http\Controllers\PortalController;
@@ -406,6 +409,41 @@ Route::prefix('v1')->group(function () {
         });
 
         // Pipeline de oportunidades
+        // Actividades comerciales (respetan el alcance del rol)
+        Route::middleware(['module:crm', 'permission:activities.view'])->group(function () {
+            Route::get('/crm/activities', [CrmActivityController::class, 'index']);
+            Route::get('/crm/activities/summary', [CrmActivityController::class, 'summary']);
+            Route::get('/crm/activities/options', [CrmActivityController::class, 'options']);
+        });
+        Route::middleware(['module:crm', 'permission:activities.manage'])->group(function () {
+            Route::post('/crm/activities', [CrmActivityController::class, 'store']);
+            Route::put('/crm/activities/{activity}', [CrmActivityController::class, 'update']);
+            Route::post('/crm/activities/{activity}/toggle', [CrmActivityController::class, 'toggle']);
+        });
+
+        // Campañas y sus miembros
+        Route::middleware(['module:crm', 'permission:campaigns.view'])->group(function () {
+            Route::get('/crm/campaigns', [CrmCampaignController::class, 'index']);
+            Route::get('/crm/campaigns/summary', [CrmCampaignController::class, 'summary']);
+            Route::get('/crm/campaigns/{campaign}', [CrmCampaignController::class, 'show']);
+        });
+        Route::middleware(['module:crm', 'permission:campaigns.manage'])->group(function () {
+            Route::post('/crm/campaigns', [CrmCampaignController::class, 'store']);
+            Route::put('/crm/campaigns/{campaign}', [CrmCampaignController::class, 'update']);
+            Route::post('/crm/campaigns/{campaign}/launch', [CrmCampaignController::class, 'launch']);
+            Route::post('/crm/campaigns/{campaign}/complete', [CrmCampaignController::class, 'complete']);
+            Route::post('/crm/campaigns/{campaign}/cancel', [CrmCampaignController::class, 'cancel']);
+            Route::post('/crm/campaigns/{campaign}/members', [CrmCampaignController::class, 'addMember']);
+            Route::post('/crm/campaigns/{campaign}/members/{member}/exclude', [CrmCampaignController::class, 'excludeMember']);
+        });
+
+        // Puntuación de leads: verla pide ver leads; cambiarla es un permiso propio
+        Route::middleware(['module:crm', 'permission:leads.view'])->get('/crm/scoring', [CrmScoringController::class, 'show']);
+        Route::middleware(['module:crm', 'permission:scoring.manage'])->group(function () {
+            Route::put('/crm/scoring/rules', [CrmScoringController::class, 'updateRules']);
+            Route::post('/crm/scoring/rescore', [CrmScoringController::class, 'rescore']);
+        });
+
         Route::middleware(['module:crm', 'permission:opportunities.view'])->group(function () {
             Route::get('/crm/opportunities', [CrmOpportunityController::class, 'index']);
             Route::get('/crm/opportunities/summary', [CrmOpportunityController::class, 'summary']);

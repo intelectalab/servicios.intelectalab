@@ -54,6 +54,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | Sedes adicionales por persona: amplían lo que se ve con el alcance "Sede"; lo creado nace en la sede principal | [cambios/2026-10-08_sedes-adicionales.md](cambios/2026-10-08_sedes-adicionales.md) |
 | 2026-10-08 | Pantalla Auditoría (Control): movimientos de la empresa con buscar, filtrar, ordenar, detalle con antes y después, y exportar con su permiso | [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md) |
 | 2026-10-08 | El menú lateral recuerda qué grupos están abiertos y cerrados al recargar | [cambios/2026-10-08_menu-recuerda-grupos.md](cambios/2026-10-08_menu-recuerda-grupos.md) |
+| 2026-10-09 | CRM: Actividades (con alcance), Campañas (miembros con consentimiento, resultados dentro del alcance) y Puntuación automática de leads | [cambios/2026-10-09_crm-actividades-campanas-puntuacion.md](cambios/2026-10-09_crm-actividades-campanas-puntuacion.md) |
 
 ## Cómo se escribe cada entrada
 

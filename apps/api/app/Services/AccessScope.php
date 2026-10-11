@@ -31,6 +31,7 @@ class AccessScope
         'portal' => 'Solicitudes del portal',
         'leads' => 'Leads',
         'opportunities' => 'Oportunidades',
+        'activities' => 'Actividades',
     ];
 
     /** De menor a mayor alcance. */
@@ -103,6 +104,10 @@ class AccessScope
             'portal' => $query->whereNull("{$table}.taken_by")->orWhereIn("{$table}.taken_by", $owners),
             // En el CRM lo propio es lo que la persona lleva como responsable.
             'leads', 'opportunities' => $query->whereIn("{$table}.owner_user_id", $owners),
+            // Una actividad es propia de quien la registró y de quien lleva el lead o la oportunidad a la que pertenece.
+            'activities' => $query->whereIn("{$table}.owner_user_id", $owners)
+                ->orWhereIn("{$table}.lead_id", fn ($sub) => $sub->select('id')->from('crm_leads')->whereIn('owner_user_id', $owners))
+                ->orWhereIn("{$table}.opportunity_id", fn ($sub) => $sub->select('id')->from('crm_opportunities')->whereIn('owner_user_id', $owners)),
         };
     }
 
