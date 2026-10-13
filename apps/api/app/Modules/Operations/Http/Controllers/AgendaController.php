@@ -28,10 +28,12 @@ class AgendaController extends Controller
 
     private const OPTIONS_LIMIT = 500;
 
-    /** Eventos y órdenes de trabajo programadas entre `from` y `to`. */
+    /** Eventos y órdenes de trabajo programadas entre `from` y `to`; con `user`, solo los de esa persona. */
     public function index(Request $request)
     {
-        $data = $request->validate(['from' => ['required', 'date'], 'to' => ['required', 'date', 'after:from']]);
+        $data = $request->validate(['from' => ['required', 'date'], 'to' => ['required', 'date', 'after:from'], 'user' => ['nullable', 'uuid']]);
+        // Agenda de una sola persona, dentro de lo que quien mira alcanza.
+        $userId = $data['user'] ?? null;
         $from = Carbon::parse($data['from']);
         $to = Carbon::parse($data['to']);
         if ($from->diffInDays($to) > self::MAX_DAYS) {
@@ -41,6 +43,7 @@ class AgendaController extends Controller
         $events = AgendaEvent::query()
             ->with('assignee:id,name', 'customer.party.person', 'customer.party.organization')
             ->where('starts_at', '<', $to)->where('ends_at', '>', $from)
+            ->when($userId, fn ($q) => $q->where('assigned_user_id', $userId))
             ->orderBy('starts_at')->limit(1000)->get();
 
         return response()->json([
@@ -52,6 +55,7 @@ class AgendaController extends Controller
                     ->where('status', '<>', 'CANCELLED')
                     ->whereNotNull('scheduled_start')
                     ->where('scheduled_start', '>=', $from)->where('scheduled_start', '<', $to)
+                    ->when($userId, fn ($q) => $q->where('assigned_user_id', $userId))
                     ->orderBy('scheduled_start')->limit(1000)->get()
                     ->map(fn (WorkOrder $order) => [
                         'id' => $order->id,

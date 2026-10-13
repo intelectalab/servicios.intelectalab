@@ -128,9 +128,64 @@ En el navegador (`app.localhost:3000`):
 ## Pendiente
 
 - **App del técnico** (ver nota abajo) y la pantalla de **plantillas de checklist**.
-- Filtrar la agenda por persona (útil cuando Gerencia vea a toda la empresa) y una vista de mes: no están en el prototipo; dime si las quieres.
+- Una rejilla por horas (bloques proporcionales a la duración) y arrastrar para reprogramar.
 - Recordatorios y avisos al responsable: llegan con Notificaciones.
 - Mover la fecha de una orden de trabajo arrastrándola en la agenda.
+
+---
+
+# Segunda parte (mismo día): filtro por persona, vista de mes y ajustes de diseño
+
+## Qué se pidió
+
+Preguntaste si estaba bien que la agenda fuera solo semanal y si debía mejorarse el diseño. Te propuse un filtro por persona, una vista de mes y cuatro ajustes, y respondiste "haz todo eso".
+
+## Cómo queda
+
+- **Filtro "Persona"** en una barra bajo la cabecera: la agenda de una sola persona (sus eventos y sus órdenes de trabajo), dentro de lo que tu rol alcanza. Lo aplica la API. Con una persona elegida, "Nuevo evento" la propone como responsable.
+- **Vista de mes**, con el conmutador **Semana / Mes** de la cabecera (se recuerda en el navegador). Cada día muestra sus dos primeros eventos y "+N más"; en teléfono, solo cuántos tiene. Un clic en un día lleva a su semana. La navegación pasa a "‹ Mes anterior · Hoy · Siguiente ›".
+- **Hora corta**, en 24 horas: "09:00", "15:00".
+- **Crear desde el día:** un "+" en la cabecera de cada día (aparece al pasar el cursor; en teléfono, siempre) o un clic en el hueco libre del día abren "Nuevo evento" con ese día a las 9:00.
+- **Un punto de color por persona** junto a su nombre, solo cuando hay más de una a la vista.
+- **Los cancelados quedan ocultos**; "Ver cancelados (n)" los muestra.
+
+La rejilla semanal del prototipo no cambió; lo nuevo va encima (conmutador en la cabecera y barra de filtros).
+
+## Qué se cambió
+
+- API: `AgendaController@index` acepta `user`; una comprobación más en `OperationsAgendaTest`.
+- Web: `components/dashboard/operations/Agenda.tsx`.
+
+## Decisiones tomadas
+
+1. **Colores de persona fuera del verde, rojo y ámbar**, que en el sistema son estados. Son ocho tonos, repartidos según el lugar de la persona en la lista de la empresa; a partir de la novena persona se repiten en un tono más claro.
+2. **El "+" de cada día solo sale a quien puede agendar.** Sin permiso no aparece (a diferencia de "Nuevo evento", que sigue saliendo con candado): siete candados en la semana eran ruido.
+3. **En la vista de mes el día no abre eventos sueltos:** lleva a su semana, donde se ve y se gestiona cada uno.
+4. **Ocultar cancelados y el color son cosa de la pantalla;** el filtro por persona sí va por la API.
+
+## Cómo se probó
+
+`php artisan test`: **157 pruebas pasan**. `tsc` y `eslint` sin errores.
+
+En el navegador, con Operaciones: horas en formato corto; "+" del sábado y clic en el hueco del domingo proponen ese día a las 9:00; evento nuevo creado desde ahí; puntos de color distintos para dos personas; filtro por el técnico (solo lo suyo, sin puntos, y "Nuevo evento" lo propone como responsable); "Ver cancelados" muestra y oculta el cancelado; vista de mes (octubre con 35 días a la vista, noviembre con 42), mes siguiente y Hoy; clic en el día 22 → su semana. Claro, oscuro y 375 px sin desborde (en teléfono el contador del día cabe en su casilla).
+
+### Lo que no se probó
+
+- **Que el "+" no aparezca** con una cuenta sin permiso de agendar (Técnico, Gerencia): no volví a entrar con ellas en esta parte.
+- **El paso del cursor** que hace aparecer el "+": no se puede simular; se pulsó por código.
+- **Un mes cargado** (muchos eventos por día): con los datos de prueba hay como mucho uno por día; el "+N más" está construido pero no se vio con datos.
+
+### Datos de prueba
+
+Se sumó "Planificación semanal (prueba)", programado, de Operaciones (dom 18 oct., 9:00).
+
+## Ajuste posterior: buscador en el filtro de persona
+
+Pediste un buscador en el filtro "Persona". Ahora usa el desplegable propio con buscador (`PickSelect`), como los formularios.
+
+Al probarlo, escribir "tomas" no encontraba a "Tomás": el buscador de ese desplegable distinguía tildes. Se corrigió en la pieza compartida (`components/ui/pick-select.tsx`), así que mejora en todos los formularios que la usan con buscador (responsables, clientes, etc.).
+
+Probado en el navegador con Operaciones: la lista completa, "tomas" → Tomás Quispe, "oscar" → Óscar Ramos, elegir filtra la semana por la API y "Persona: todos" la restablece. No se pudo capturar la pantalla (la ventana de pruebas estaba oculta) ni se abrió la lista en teléfono; a 375 px el control ocupa el ancho de la barra sin desborde.
 
 ## Nota: App del técnico, ¿Flutter?
 

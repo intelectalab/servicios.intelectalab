@@ -36,8 +36,10 @@ export function PickSelect({
   const listId = useId();
 
   const current = options.find(([key]) => key === value);
-  const text = query.trim().toLowerCase();
-  const shown = searchable && text ? options.filter(([, label]) => label.toLowerCase().includes(text)) : options;
+  // Sin tildes ni mayúsculas: "tomas" encuentra "Tomás".
+  const plain = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const text = plain(query.trim());
+  const shown = searchable && text ? options.filter(([, label]) => plain(label).includes(text)) : options;
 
   const show = () => {
     setQuery("");

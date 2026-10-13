@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { Check, Pencil, Plus, Wrench } from "lucide-react";
+import { CalendarDays, CalendarRange, Check, Pencil, Plus, Wrench } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
 import { dateTime, fieldErrors, firstError, toLocalInput } from "@/lib/crm";
 import { AGENDA_STATES, AGENDA_TYPES } from "@/lib/operations";
 import {
-  Badge, Btn, Field, FormGrid, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, useToasts, type Tone,
+  Badge, Btn, Field, Filters, FormGrid, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, useToasts, type Tone,
 } from "@/components/ui/proto";
+import { useAccess } from "@/lib/access-context";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
@@ -19,15 +20,8 @@ type Toast = (text: string, tone?: "success" | "danger" | "warning", detail?: st
 
 const DAY_MS = 86_400_000;
 
-/** Lunes de la semana de hoy (en el horario de quien mira), movido `offset` semanas. */
-function weekStart(offset: number): Date {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - ((start.getDay() + 6) % 7) + offset * 7);
-  return start;
-}
-
-const hour = (value: string) => new Date(value).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit" });
+// En 24 horas ("09:00", "15:30"): cabe en una línea junto al tipo.
+const hour = (value: string) => new Date(value).toLocaleTimeString("es-PE", { hour: "2-digit", minute: "2-digit", hour12: false });
 const sameDay = (value: string, day: Date) => new Date(value).toDateString() === day.toDateString();
 
 // Verde, ámbar y gris son estados; lo demás va en el azul del logo. La orden de trabajo, en neutro.
@@ -42,34 +36,94 @@ const EVENT_TONE: Record<Tone, string> = {
 };
 const ITEM = "grid w-full gap-px rounded-md border-l-[3px] border-current px-2 py-1.5 text-left text-xs transition-shadow hover:shadow-[0_2px_8px_rgba(16,24,40,.14)]";
 
-type Entry = { key: string; at: string; event?: AgendaEvent; order?: AgendaWorkOrder };
+type Entry = { key: string; at: string; person: { id: string; name: string } | null; event?: AgendaEvent; order?: AgendaWorkOrder };
+type View = "week" | "month";
+
+const VIEW_KEY = "erp.view.agenda";
+const viewListeners = new Set<() => void>();
+
+/** Vista elegida (semana o mes), recordada en el navegador de cada persona. */
+function useAgendaView(): [View, (view: View) => void] {
+  const view = useSyncExternalStore<View>(
+    (listener) => {
+      viewListeners.add(listener);
+      return () => { viewListeners.delete(listener); };
+    },
+    () => {
+      try { return window.localStorage.getItem(VIEW_KEY) === "month" ? "month" : "week"; } catch { return "week"; }
+    },
+    () => "week",
+  );
+  const change = useCallback((next: View) => {
+    try { window.localStorage.setItem(VIEW_KEY, next); } catch { /* sin almacenamiento, no se recuerda */ }
+    viewListeners.forEach((listener) => listener());
+  }, []);
+
+  return [view, change];
+}
+
+const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
+const addDays = (date: Date, days: number) => new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+/** Lunes de la semana de ese día. */
+const mondayOf = (date: Date) => addDays(date, -((date.getDay() + 6) % 7));
+
+// Tonos para distinguir personas. Sin verde, rojo ni ámbar, que en el sistema son estados.
+const PERSON_HUES = [205, 265, 320, 185, 240, 295, 345, 222];
+
+/** Color de una persona según su lugar en la lista de la empresa: estable y distinto entre las primeras. */
+function personColor(index: number): string {
+  return `hsl(${PERSON_HUES[index % PERSON_HUES.length]} 62% ${index >= PERSON_HUES.length ? 62 : 48}%)`;
+}
+
+const SEG = "app-surface inline-flex h-[38px] items-center gap-0.5 rounded-[9px] border border-[color:var(--app-border)] p-[3px]";
+const segButton = (on: boolean) =>
+  `inline-flex h-full cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-[7px] px-2.5 text-[12.5px] font-medium transition-colors ${
+    on ? "bg-[#1B8FC9] text-[#fff]" : "app-muted hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]"
+  }`;
 
 export default function Agenda() {
   const { toast, toasts } = useToasts();
-  const [offset, setOffset] = useState(0);
+  const { can, loading: accessLoading } = useAccess();
+  const [view, setView] = useAgendaView();
+  // Día de referencia: la semana o el mes que se muestra es el que lo contiene.
+  const [cursor, setCursor] = useState(() => startOfDay(new Date()));
+  const [person, setPerson] = useState("");
+  const [showCancelled, setShowCancelled] = useState(false);
   const [week, setWeek] = useState<AgendaWeek | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [options, setOptions] = useState<AgendaOptions | null>(null);
 
-  const [form, setForm] = useState<{ event?: AgendaEvent } | null>(null);
+  const [form, setForm] = useState<{ event?: AgendaEvent; day?: Date } | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const canCreate = !accessLoading && can("agenda.create");
+  const today = startOfDay(new Date());
+
+  // Días a la vista: la semana (lunes a domingo) o las semanas completas que cubren el mes.
   const days = useMemo(() => {
-    const start = weekStart(offset);
-    return Array.from({ length: 7 }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
-  }, [offset]);
+    if (view === "week") {
+      const start = mondayOf(cursor);
+      return Array.from({ length: 7 }, (_, index) => addDays(start, index));
+    }
+    const start = mondayOf(new Date(cursor.getFullYear(), cursor.getMonth(), 1));
+    const last = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+    const length = Math.ceil((Math.round((last.getTime() - start.getTime()) / DAY_MS) + 1) / 7) * 7;
+    return Array.from({ length }, (_, index) => addDays(start, index));
+  }, [view, cursor]);
 
   useEffect(() => {
     let cancelled = false;
     const from = days[0];
-    const to = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 7);
+    const to = addDays(days[days.length - 1], 1);
 
     async function load() {
       setLoading(true);
       try {
-        const next = await apiFetch<AgendaWeek>(`/v1/agenda?${new URLSearchParams({ from: from.toISOString(), to: to.toISOString() })}`);
+        const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+        if (person) params.set("user", person);
+        const next = await apiFetch<AgendaWeek>(`/v1/agenda?${params}`);
         if (!cancelled) {
           setWeek(next);
           setError("");
@@ -82,9 +136,9 @@ export default function Agenda() {
     }
     load();
     return () => { cancelled = true; };
-  }, [days, reload]);
+  }, [days, person, reload]);
 
-  // Personas y clientes del formulario: después de la semana.
+  // Personas y clientes (filtro y formulario): después de la agenda.
   useEffect(() => {
     let cancelled = false;
     apiFetchLater<AgendaOptions>("/v1/agenda/options")
@@ -93,35 +147,57 @@ export default function Agenda() {
     return () => { cancelled = true; };
   }, []);
 
+  const cancelledCount = (week?.data ?? []).filter((event) => event.status === "CANCELLED").length;
   const entries: Entry[] = useMemo(() => [
-    ...(week?.data ?? []).map((event) => ({ key: event.id, at: event.starts_at, event })),
-    ...(week?.work_orders ?? []).map((order) => ({ key: order.id, at: order.starts_at, order })),
-  ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), [week]);
+    ...(week?.data ?? []).filter((event) => showCancelled || event.status !== "CANCELLED")
+      .map((event) => ({ key: event.id, at: event.starts_at, person: event.assignee, event })),
+    ...(week?.work_orders ?? []).map((order) => ({ key: order.id, at: order.starts_at, person: order.assignee, order })),
+  ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), [week, showCancelled]);
 
+  // El color por persona solo ayuda cuando hay más de una a la vista.
+  const colored = !person && new Set(entries.map((entry) => entry.person?.id).filter(Boolean)).size > 1;
+  const colorOf = (id: string) => {
+    const index = (options?.people ?? []).map((item) => item.id).sort().indexOf(id);
+    return personColor(index < 0 ? 0 : index);
+  };
   const opened = week?.data.find((event) => event.id === openId) ?? null;
-  const today = new Date();
-  const range = `${days[0].toLocaleDateString("es-PE", { day: "numeric", month: "short" })} – ${days[6].toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" })}`;
+
+  const range = view === "week"
+    ? `${days[0].toLocaleDateString("es-PE", { day: "numeric", month: "short" })} – ${days[6].toLocaleDateString("es-PE", { day: "numeric", month: "short", year: "numeric" })}`
+    : cursor.toLocaleDateString("es-PE", { month: "long", year: "numeric" }).replace(/^./, (letter) => letter.toUpperCase());
+  const onToday = view === "week"
+    ? mondayOf(cursor).getTime() === mondayOf(today).getTime()
+    : cursor.getFullYear() === today.getFullYear() && cursor.getMonth() === today.getMonth();
+  const step = (direction: -1 | 1) => setCursor((current) => (
+    view === "week" ? addDays(current, direction * 7) : new Date(current.getFullYear(), current.getMonth() + direction, 1)
+  ));
+
+  const who = (entry: Entry, fallback: string) => (
+    <span className="app-muted inline-flex min-w-0 items-center gap-1 [overflow-wrap:anywhere]">
+      {colored && entry.person && <i aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full" style={{ background: colorOf(entry.person.id) }} />}
+      {entry.person?.name ?? fallback}
+    </span>
+  );
 
   return (
     <Screen>
       <PageHead
         title="Agenda"
-        sub={<span className="inline-flex flex-wrap items-center gap-2"><strong className="app-text text-[14px] font-semibold">{range}</strong><ScopeNote resource="agenda" /></span>}
+        sub={<strong className="app-text text-[14px] font-semibold">{range}</strong>}
         actions={
           <>
-            <div role="group" aria-label="Semana" className="app-surface inline-flex h-[38px] items-center gap-0.5 rounded-[9px] border border-[color:var(--app-border)] p-[3px]">
-              {([[-1, "‹ Semana anterior"], [0, "Hoy"], [1, "Siguiente ›"]] as [number, string][]).map(([step, label]) => (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setOffset((current) => (step === 0 ? 0 : current + step))}
-                  className={`h-full cursor-pointer whitespace-nowrap rounded-[7px] px-2.5 text-[12.5px] font-medium transition-colors ${
-                    step === 0 && offset === 0 ? "bg-[#1B8FC9] text-[#fff]" : "app-muted hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]"
-                  }`}
-                >
-                  {label}
+            <div role="group" aria-label="Tipo de vista" className={SEG}>
+              {([["week", "Semana", <CalendarDays key="week" size={15} />], ["month", "Mes", <CalendarRange key="month" size={15} />]] as [View, string, ReactNode][]).map(([mode, label, icon]) => (
+                <button key={mode} type="button" aria-pressed={view === mode} onClick={() => setView(mode)} className={segButton(view === mode)}>
+                  {icon}
+                  <span>{label}</span>
                 </button>
               ))}
+            </div>
+            <div role="group" aria-label={view === "week" ? "Semana" : "Mes"} className={SEG}>
+              <button type="button" onClick={() => step(-1)} className={segButton(false)}>‹ {view === "week" ? "Semana anterior" : "Mes anterior"}</button>
+              <button type="button" onClick={() => setCursor(today)} className={segButton(onToday)}>Hoy</button>
+              <button type="button" onClick={() => step(1)} className={segButton(false)}>Siguiente ›</button>
             </div>
             <Btn onClick={() => setForm({})} permission="agenda.create">
               <Plus size={16} />
@@ -131,63 +207,143 @@ export default function Agenda() {
         }
       />
 
+      <Filters>
+        <div className="flex-[1_1_180px] sm:w-[240px] sm:flex-none">
+          <PickSelect
+            className="app-surface app-text flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-[9px] border border-[color:var(--app-border)] px-2.5 text-left text-[13px] outline-none focus:border-[#1B8FC9]"
+            ariaLabel="Persona" searchable value={person} onChange={setPerson} disabled={!options}
+            options={[["", "Persona: todos"], ...(options?.people ?? []).map((item): [string, string] => [item.id, item.name])]}
+          />
+        </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[13px]">
+          <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} className="h-4 w-4 cursor-pointer accent-[#1B8FC9]" />
+          <span>Ver cancelados{cancelledCount ? ` (${cancelledCount})` : ""}</span>
+        </label>
+        <ScopeNote resource="agenda" />
+      </Filters>
+
       {error ? (
         <LoadError text={error} onRetry={() => setReload((n) => n + 1)} />
-      ) : (
+      ) : view === "week" ? (
         <div
           className={`grid grid-cols-1 gap-2 pb-1.5 transition-opacity sm:grid-cols-[repeat(7,minmax(130px,1fr))] sm:overflow-x-auto ${loading && week ? "opacity-60" : ""}`}
           aria-busy={loading}
         >
           {days.map((day) => {
             const list = entries.filter((entry) => sameDay(entry.at, day));
-            const isToday = day.toDateString() === today.toDateString();
+            const isToday = day.getTime() === today.getTime();
             return (
               <section
                 key={day.toISOString()}
                 aria-label={day.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" })}
-                className={`app-surface grid content-start gap-1.5 rounded-xl border p-2 sm:min-h-[180px] ${
+                // Un clic en el hueco libre del día agenda ahí.
+                onClick={(event) => { if (canCreate && event.target === event.currentTarget) setForm({ day }); }}
+                className={`group app-surface grid content-start gap-1.5 rounded-xl border p-2 sm:min-h-[180px] ${canCreate ? "cursor-cell" : ""} ${
                   isToday ? "border-[#1B8FC9] shadow-[inset_0_0_0_1px_#1B8FC9]" : "border-[color:var(--app-border)]"
                 }`}
               >
-                <header className="app-muted flex items-baseline justify-between text-xs capitalize">
+                <header className="app-muted pointer-events-none flex items-center justify-between gap-1 text-xs capitalize">
                   <span>{day.toLocaleDateString("es-PE", { weekday: "short" })}</span>
-                  <strong className="app-text text-xl font-semibold tabular-nums">{day.getDate()}</strong>
+                  <span className="inline-flex items-center gap-1">
+                    {canCreate && (
+                      <button
+                        type="button"
+                        onClick={() => setForm({ day })}
+                        title="Nuevo evento este día"
+                        aria-label={`Nuevo evento el ${day.toLocaleDateString("es-PE", { weekday: "long", day: "numeric" })}`}
+                        className="pointer-events-auto grid h-6 w-6 cursor-pointer place-items-center rounded-md text-[color:var(--p-brand-text)] hover:bg-[var(--p-brand-soft)] sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    )}
+                    <strong className="app-text text-xl font-semibold tabular-nums">{day.getDate()}</strong>
+                  </span>
                 </header>
                 {!week ? (
-                  <div className="h-10 animate-pulse rounded-md bg-[var(--app-surface-muted)]" />
+                  <div className="pointer-events-none h-10 animate-pulse rounded-md bg-[var(--app-surface-muted)]" />
                 ) : list.length ? (
-                  list.map(({ key, event, order }) =>
-                    event ? (
+                  list.map((entry) =>
+                    entry.event ? (
                       <button
-                        key={key}
+                        key={entry.key}
                         type="button"
-                        onClick={() => setOpenId(event.id)}
-                        className={`${ITEM} cursor-pointer ${EVENT_TONE[stateOf(AGENDA_STATES, event.status)[1]]} ${event.status === "CANCELLED" ? "line-through decoration-1" : ""}`}
+                        onClick={() => setOpenId(entry.key)}
+                        className={`${ITEM} cursor-pointer ${EVENT_TONE[stateOf(AGENDA_STATES, entry.event.status)[1]]} ${entry.event.status === "CANCELLED" ? "line-through decoration-1" : ""}`}
                       >
-                        <small className="tabular-nums">{hour(event.starts_at)} · {stateOf(AGENDA_TYPES, event.event_type)[0]}</small>
-                        <strong className="app-text font-semibold [overflow-wrap:anywhere]">{event.title}</strong>
-                        <span className="app-muted [overflow-wrap:anywhere]">{event.assignee?.name ?? "Sin responsable"}</span>
+                        <small className="tabular-nums">{hour(entry.at)} · {stateOf(AGENDA_TYPES, entry.event.event_type)[0]}</small>
+                        <strong className="app-text font-semibold [overflow-wrap:anywhere]">{entry.event.title}</strong>
+                        {who(entry, "Sin responsable")}
                       </button>
-                    ) : order ? (
-                      <Link key={key} href={`/work-orders/${order.id}`} className={`${ITEM} ${EVENT_TONE[order.status === "COMPLETED" ? "success" : "neutral"]}`}>
-                        <small className="inline-flex items-center gap-1 tabular-nums"><Wrench size={11} aria-hidden="true" />{hour(order.starts_at)} · {order.code}</small>
-                        <strong className="app-text font-semibold [overflow-wrap:anywhere]">{order.title}</strong>
-                        <span className="app-muted [overflow-wrap:anywhere]">{order.assignee?.name ?? "Sin asignar"}</span>
+                    ) : entry.order ? (
+                      <Link key={entry.key} href={`/work-orders/${entry.order.id}`} className={`${ITEM} ${EVENT_TONE[entry.order.status === "COMPLETED" ? "success" : "neutral"]}`}>
+                        <small className="inline-flex items-center gap-1 tabular-nums"><Wrench size={11} aria-hidden="true" />{hour(entry.at)} · {entry.order.code}</small>
+                        <strong className="app-text font-semibold [overflow-wrap:anywhere]">{entry.order.title}</strong>
+                        {who(entry, "Sin asignar")}
                       </Link>
                     ) : null,
                   )
                 ) : (
-                  <p className="app-muted my-1 text-center text-xs sm:my-3">—</p>
+                  <p className="app-muted pointer-events-none my-1 text-center text-xs sm:my-3">—</p>
                 )}
               </section>
             );
           })}
+        </div>
+      ) : (
+        <div className={`app-surface overflow-hidden rounded-xl border border-[color:var(--app-border)] transition-opacity ${loading && week ? "opacity-60" : ""}`} aria-busy={loading}>
+          <div className="app-muted grid grid-cols-7 border-b border-[color:var(--app-border)] text-center text-[10.5px] font-semibold uppercase tracking-[.06em]">
+            {days.slice(0, 7).map((day) => <span key={day.getDay()} className="px-1 py-2">{day.toLocaleDateString("es-PE", { weekday: "short" })}</span>)}
+          </div>
+          <div className="grid grid-cols-7">
+            {days.map((day, index) => {
+              const list = entries.filter((entry) => sameDay(entry.at, day));
+              const isToday = day.getTime() === today.getTime();
+              const outside = day.getMonth() !== cursor.getMonth();
+              return (
+                <button
+                  key={day.toISOString()}
+                  type="button"
+                  // El día lleva a su semana, donde se ve y se gestiona cada evento.
+                  onClick={() => { setCursor(day); setView("week"); }}
+                  title="Ver la semana de este día"
+                  aria-label={`${day.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" })}: ${list.length} en agenda`}
+                  className={`grid min-h-[64px] cursor-pointer content-start gap-1 border-[color:var(--app-border)] p-1.5 text-left transition-colors hover:bg-[var(--app-surface-muted)] sm:min-h-[104px] sm:p-2 ${
+                    index % 7 ? "border-l" : ""
+                  } ${index >= 7 ? "border-t" : ""} ${outside ? "bg-[var(--app-surface-muted)]" : ""}`}
+                >
+                  <span className="flex flex-wrap items-center justify-between gap-0.5">
+                    <strong
+                      className={`grid h-6 min-w-6 place-items-center rounded-full px-1 text-[13px] font-semibold tabular-nums ${
+                        isToday ? "bg-[#1B8FC9] text-[#fff]" : outside ? "app-muted" : "app-text"
+                      }`}
+                    >
+                      {day.getDate()}
+                    </strong>
+                    {list.length > 0 && <span className="rounded-[9px] bg-[var(--p-brand-soft)] px-1.5 text-[11px] font-semibold tabular-nums text-[color:var(--p-brand-text)] sm:hidden">{list.length}</span>}
+                  </span>
+                  {list.slice(0, 2).map((entry) => {
+                    const tone = entry.event ? stateOf(AGENDA_STATES, entry.event.status)[1] : entry.order?.status === "COMPLETED" ? "success" : "neutral";
+                    return (
+                      <span key={entry.key} className={`hidden items-center gap-1 truncate rounded px-1.5 py-0.5 text-[11.5px] sm:flex ${EVENT_TONE[tone]} ${entry.event?.status === "CANCELLED" ? "line-through" : ""}`}>
+                        {colored && entry.person && <i aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: colorOf(entry.person.id) }} />}
+                        <span className="tabular-nums">{hour(entry.at)}</span>
+                        <span className="app-text truncate">{entry.event?.title ?? `${entry.order?.code} · ${entry.order?.title}`}</span>
+                      </span>
+                    );
+                  })}
+                  {list.length > 2 && <span className="app-muted hidden text-[11.5px] sm:block">+{list.length - 2} más</span>}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
 
       {form && (
         <AgendaFormModal
           event={form.event}
+          day={form.day}
+          person={person}
           options={options}
           toast={toast}
           onClose={() => setForm(null)}
@@ -295,14 +451,27 @@ function AgendaEventModal({
 
 /** Alta o edición de un evento. Si la persona ya tiene algo a esa hora, avisa antes de guardar. */
 function AgendaFormModal({
-  event, options, onClose, onSaved, toast,
-}: { event?: AgendaEvent; options: AgendaOptions | null; onClose: () => void; onSaved: () => void; toast: Toast }) {
+  event, day, person, options, onClose, onSaved, toast,
+}: {
+  event?: AgendaEvent;
+  /** Día elegido en la semana: el evento se propone ese día a las 9:00. */
+  day?: Date;
+  /** Persona del filtro: se propone como responsable. */
+  person?: string;
+  options: AgendaOptions | null;
+  onClose: () => void;
+  onSaved: () => void;
+  toast: Toast;
+}) {
   const [title, setTitle] = useState(event?.title ?? "");
   const [type, setType] = useState<string>(event?.event_type ?? "MEETING");
-  // Como el prototipo: propone mañana a esta hora.
-  const [start, setStart] = useState(() => toLocalInput(event?.starts_at ?? new Date(Math.ceil((Date.now() + DAY_MS) / 1_800_000) * 1_800_000)));
+  // Desde un día de la semana, ese día a las 9:00; si no, como el prototipo: mañana a esta hora.
+  const [start, setStart] = useState(() => toLocalInput(
+    event?.starts_at
+      ?? (day ? new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9) : new Date(Math.ceil((Date.now() + DAY_MS) / 1_800_000) * 1_800_000)),
+  ));
   const [end, setEnd] = useState(event ? toLocalInput(event.ends_at) : "");
-  const [assignee, setAssignee] = useState(event?.assignee?.id ?? "");
+  const [assignee, setAssignee] = useState(event?.assignee?.id ?? person ?? "");
   const [customer, setCustomer] = useState(event?.customer?.id ?? "");
   const [location, setLocation] = useState(event?.location ?? "");
   const [notes, setNotes] = useState(event?.notes ?? "");

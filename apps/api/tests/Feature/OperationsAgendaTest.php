@@ -153,6 +153,17 @@ class OperationsAgendaTest extends TestCase
             'contracted_service_id' => $contracted, 'title' => 'Otra', 'assigned_user_id' => $technician->id, 'scheduled_start' => $this->at(4, 11),
         ])->assertStatus(422)->assertJsonPath('errors.scheduled_start.0', 'El técnico ya tiene un evento de agenda en ese horario: "Inventario".');
 
+        // La agenda de una sola persona: sus eventos y sus órdenes, nada de los demás.
+        $range = http_build_query(['from' => now()->startOfDay()->toIso8601String(), 'to' => now()->addDays(8)->startOfDay()->toIso8601String()]);
+        $his = $this->getJson("/api/v1/agenda?{$range}&user={$technician->id}")->assertOk();
+        $this->assertNotContains('Reunión de avance', array_column(array_filter($his->json('data'), fn ($row) => $row['assignee']['id'] !== $technician->id), 'title'));
+        $this->assertSame([$technician->id], array_values(array_unique($his->json('data.*.assignee.id'))));
+        $this->assertSame([$order['code']], $his->json('work_orders.*.code'));
+        $mine = $this->getJson("/api/v1/agenda?{$range}&user={$admin->id}")->assertOk();
+        $this->assertSame([$admin->id], array_values(array_unique($mine->json('data.*.assignee.id'))));
+        $this->assertSame([], $mine->json('work_orders'));
+        $this->getJson("/api/v1/agenda?{$range}&user=nadie")->assertStatus(422);
+
         // La semana trae también las órdenes de trabajo programadas (no las canceladas).
         $week = $this->week(5, 8);
         $this->assertEquals([[$order['code'], 'ASSIGNED', 'Tito Técnico']], array_map(fn ($row) => [$row['code'], $row['status'], $row['assignee']['name']], $week->json('work_orders')));
