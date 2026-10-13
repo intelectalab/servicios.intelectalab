@@ -55,6 +55,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | Pantalla Auditoría (Control): movimientos de la empresa con buscar, filtrar, ordenar, detalle con antes y después, y exportar con su permiso | [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md) |
 | 2026-10-08 | El menú lateral recuerda qué grupos están abiertos y cerrados al recargar | [cambios/2026-10-08_menu-recuerda-grupos.md](cambios/2026-10-08_menu-recuerda-grupos.md) |
 | 2026-10-09 | CRM: Actividades (con alcance), Campañas (miembros con consentimiento, resultados dentro del alcance) y Puntuación automática de leads | [cambios/2026-10-09_crm-actividades-campanas-puntuacion.md](cambios/2026-10-09_crm-actividades-campanas-puntuacion.md) |
+| 2026-10-12 | Carga de las pantallas del CRM: el listado primero y las lecturas repetidas compartidas | [cambios/2026-10-12_carga-de-pantallas-crm.md](cambios/2026-10-12_carga-de-pantallas-crm.md) |
 
 ## Cómo se escribe cada entrada
 

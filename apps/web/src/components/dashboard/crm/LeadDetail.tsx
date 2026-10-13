@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Filter as Funnel, Pencil } from "lucide-react";
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { setFlash, shortDate, stateOf } from "@/lib/commercial";
 import { LEAD_OPEN, LEAD_STATES, crmHistoryLabel, dateTime, firstError, leadName } from "@/lib/crm";
 import {
@@ -57,7 +57,7 @@ export default function LeadDetail() {
   // Las fuentes solo hacen falta para editar.
   useEffect(() => {
     let cancelled = false;
-    apiFetch<LeadOptions>("/v1/crm/leads/options").then((next) => { if (!cancelled) setOptions({ sources: next.sources, campaigns: next.campaigns ?? [] }); }).catch(() => undefined);
+    apiFetchLater<LeadOptions>("/v1/crm/leads/options").then((next) => { if (!cancelled) setOptions({ sources: next.sources, campaigns: next.campaigns ?? [] }); }).catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
 

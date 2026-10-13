@@ -3,7 +3,7 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { Check, Lock, Plus } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchLater } from "@/lib/api";
 import { ACTIVITY_TYPES, activityBucket, activityTypeLabel, dateTime, fieldErrors, firstError, toLocalInput } from "@/lib/crm";
 import { useAccess } from "@/lib/access-context";
 import { Btn, Card, Chip, Field, FormGrid, INPUT, Modal, SearchSelect, deniedText, type SelectOption } from "@/components/ui/proto";
@@ -238,7 +238,7 @@ export function ActivitiesCard({ relation, toast, onChanged }: { relation: Activ
   useEffect(() => {
     if (accessLoading || denied) return;
     let cancelled = false;
-    apiFetch<PaginatedResponse<Activity>>(`/v1/crm/activities?${relation.type}_id=${relation.id}&per_page=100`)
+    apiFetchLater<PaginatedResponse<Activity>>(`/v1/crm/activities?${relation.type}_id=${relation.id}&per_page=100`)
       .then((page) => { if (!cancelled) { setRows(page.data); setFailed(false); } })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };

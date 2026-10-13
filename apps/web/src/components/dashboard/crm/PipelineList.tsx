@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Check, Filter as Funnel, Plus, Target, TrendingUp } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchLater } from "@/lib/api";
 import { customerName, excelTone, money, setFlash, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { OPPORTUNITY_STATES, compactMoney, firstError, relativeDay, weighted, type ViewMode } from "@/lib/crm";
 import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
@@ -141,13 +141,9 @@ export default function PipelineList() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([apiFetch<OpportunitySummary>("/v1/crm/opportunities/summary"), apiFetch<OpportunityOptions>("/v1/crm/opportunities/options")])
-      .then(([nextSummary, nextOptions]) => {
-        if (cancelled) return;
-        setSummary(nextSummary);
-        setOptions(nextOptions);
-      })
-      .catch(() => undefined);
+    // Las etapas van primero: el tablero las necesita para dibujar sus columnas. Los indicadores, al final.
+    apiFetch<OpportunityOptions>("/v1/crm/opportunities/options").then((next) => { if (!cancelled) setOptions(next); }).catch(() => undefined);
+    apiFetchLater<OpportunitySummary>("/v1/crm/opportunities/summary").then((next) => { if (!cancelled) setSummary(next); }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [reload]);
 

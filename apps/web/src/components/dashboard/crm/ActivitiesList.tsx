@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AlertCircle, CalendarDays, Check, Clock, Plus } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchLater } from "@/lib/api";
 import { ACTIVITY_TYPES, activityBucket, activityTypeLabel, dateTime, todayRange, type ViewMode } from "@/lib/crm";
 import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import { useAccess } from "@/lib/access-context";
@@ -100,7 +100,7 @@ export default function ActivitiesList() {
     // "Hoy" es el día de quien mira: se le dice a la API dónde empieza y dónde termina.
     const [start, end] = todayRange();
     const params = new URLSearchParams({ day_start: start.toISOString(), day_end: end.toISOString() });
-    apiFetch<ActivitySummary>(`/v1/crm/activities/summary?${params}`)
+    apiFetchLater<ActivitySummary>(`/v1/crm/activities/summary?${params}`)
       .then((next) => { if (!cancelled) setSummary(next); })
       .catch(() => undefined);
     return () => { cancelled = true; };

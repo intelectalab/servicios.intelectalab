@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Coins, FileText, Plus, Receipt, TrendingUp } from "lucide-react";
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { isoDateFromNow, shortDate } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
@@ -107,7 +107,7 @@ export default function ExchangeRates() {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<ExchangeRateSummary>("/v1/exchange-rates/summary")
+    apiFetchLater<ExchangeRateSummary>("/v1/exchange-rates/summary")
       .then((response) => { if (!cancelled) setSummary(response); })
       .catch(() => { /* los indicadores quedan en blanco; el historial avisa si la API falla */ });
     return () => { cancelled = true; };

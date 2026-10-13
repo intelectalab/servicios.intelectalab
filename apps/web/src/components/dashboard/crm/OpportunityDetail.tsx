@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { AlertCircle, ArrowLeft, Check, FileText, Pencil, Users } from "lucide-react";
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { QUOTATION_STATES, customerName, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { OPPORTUNITY_STATES, crmHistoryLabel, dateTime, firstError } from "@/lib/crm";
 import { useAccess } from "@/lib/access-context";
@@ -73,7 +73,7 @@ export default function OpportunityDetail() {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<OpportunityOptions>("/v1/crm/opportunities/options").then((data) => { if (!cancelled) setOptions(data); }).catch(() => undefined);
+    apiFetchLater<OpportunityOptions>("/v1/crm/opportunities/options").then((data) => { if (!cancelled) setOptions(data); }).catch(() => undefined);
     const flash = takeFlash();
     if (flash) toast(flash);
     return () => { cancelled = true; };

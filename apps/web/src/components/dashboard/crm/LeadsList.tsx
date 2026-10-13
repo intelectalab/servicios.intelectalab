@@ -4,7 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Bell, Check, Filter as Funnel, Plus, Target } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchLater } from "@/lib/api";
 import { excelTone, setFlash, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { LEAD_OPEN, LEAD_STATES, firstError, leadName, relativeDay, type ViewMode } from "@/lib/crm";
 import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
@@ -178,13 +178,9 @@ export default function LeadsList() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([apiFetch<LeadSummary>("/v1/crm/leads/summary"), apiFetch<LeadOptions>("/v1/crm/leads/options")])
-      .then(([nextSummary, nextOptions]) => {
-        if (cancelled) return;
-        setSummary(nextSummary);
-        setOptions(nextOptions);
-      })
-      .catch(() => undefined);
+    // Después del listado, y cada uno por su cuenta: los indicadores no esperan a las listas de los filtros.
+    apiFetchLater<LeadSummary>("/v1/crm/leads/summary").then((next) => { if (!cancelled) setSummary(next); }).catch(() => undefined);
+    apiFetchLater<LeadOptions>("/v1/crm/leads/options").then((next) => { if (!cancelled) setOptions(next); }).catch(() => undefined);
     return () => { cancelled = true; };
   }, [reload]);
 

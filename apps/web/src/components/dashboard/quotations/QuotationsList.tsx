@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Clock, FileText, Plus, X } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchLater } from "@/lib/api";
 import { QUOTATION_STATES, customerDocument, customerName, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
@@ -132,7 +132,7 @@ export default function QuotationsList() {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<QuotationSummary>("/v1/quotations/summary")
+    apiFetchLater<QuotationSummary>("/v1/quotations/summary")
       .then((response) => { if (!cancelled) setSummary(response); })
       .catch(() => { /* los indicadores quedan en blanco; el listado avisa si la API falla */ });
     return () => { cancelled = true; };

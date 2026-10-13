@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Coins, Filter as Funnel, Plus, Send, Users } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchLater } from "@/lib/api";
 import { excelTone, money, setFlash, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CAMPAIGN_OPEN, CAMPAIGN_STATES, compactMoney, firstError, type ViewMode } from "@/lib/crm";
 import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
@@ -144,7 +144,7 @@ export default function CampaignsList() {
 
   useEffect(() => {
     let cancelled = false;
-    apiFetch<CampaignSummary>("/v1/crm/campaigns/summary")
+    apiFetchLater<CampaignSummary>("/v1/crm/campaigns/summary")
       .then((next) => { if (!cancelled) setSummary(next); })
       .catch(() => undefined);
     return () => { cancelled = true; };

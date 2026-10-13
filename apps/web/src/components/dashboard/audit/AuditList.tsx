@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ExternalLink, Lock } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, apiFetchLater } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
 import { exportCsv, exportXlsx, fetchAllPages, recordExport, type ExportColumn } from "@/lib/export-table";
 import {
@@ -202,7 +202,7 @@ export default function AuditList() {
   useEffect(() => {
     if (accessLoading || denied) return;
     let cancelled = false;
-    apiFetch<AuditOptions>("/v1/audit/options")
+    apiFetchLater<AuditOptions>("/v1/audit/options")
       .then((next) => { if (!cancelled) setOptions(next); })
       .catch(() => undefined);
     return () => { cancelled = true; };
