@@ -123,7 +123,10 @@ const HISTORY_LABELS: Record<string, string> = {
   "invoice.credit_note": "Nota de crédito emitida",
   "invoice.correct": "Corregido con nota de crédito",
   "invoice.discard": "Borrador descartado",
-  "invoice.fiscal_retry": "Reintento de envío a SUNAT",
+  "invoice.fiscal_retry": "Envío a SUNAT solicitado",
+  "invoice.fiscal_accepted": "Aceptado por SUNAT",
+  "invoice.fiscal_rejected": "Rechazado por SUNAT",
+  "invoice.fiscal_pending": "Recibido por el proveedor",
   "payment.create": "Cobro registrado",
   "payment.register": "Cobro registrado",
   "payment.allocate": "Aplicado a cuentas por cobrar",
@@ -166,8 +169,8 @@ export async function downloadInvoicePdf(invoice: InvoiceDetail) {
     ],
     notes: [
       ...(invoice.reason ? [["Motivo", invoice.reason] as [string, string]] : []),
-      // Sin proveedor de facturación electrónica, este documento no es el comprobante electrónico de SUNAT.
-      ["Aviso", "Documento interno. No es la representación impresa de un comprobante electrónico: no fue enviado a SUNAT."],
+      // Mientras SUNAT no lo haya aceptado, este documento no es el comprobante electrónico.
+      ...(invoice.fiscal_status === "ACCEPTED" ? [] : [["Aviso", "Documento interno. No es la representación impresa de un comprobante electrónico: no fue aceptado por SUNAT."] as [string, string]]),
     ],
     signatures: (companyName) => [companyName],
   });

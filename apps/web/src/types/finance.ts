@@ -69,6 +69,8 @@ export interface ReceivableMovement {
 export interface InvoiceDetail extends Invoice {
   reason: string | null;
   fiscal_response: string | null;
+  /** Proveedor de facturación electrónica de la empresa; sin él nada se envía a SUNAT. */
+  fiscal_provider: { connected: boolean; name: string | null };
   issued_at: string | null;
   items: { id: string; description: string; quantity: number; unit_price: number; tax_rate: number; line_total: number; billable_event_id: string | null }[];
   contract: { id: string; contract_number: string } | null;

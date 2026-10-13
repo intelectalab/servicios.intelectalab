@@ -114,6 +114,10 @@ export default function InvoiceDetail() {
   const history = invoice.history ?? [];
   const visited = history.flatMap((entry) => (entry.metadata.to ? [entry.metadata.to] : [])).concat("DRAFT");
   const label = `${typeLabel(invoice.invoice_type)} ${invoice.invoice_number ?? "(borrador)"}`;
+  const provider = invoice.fiscal_provider;
+  // Se envía (o reenvía) lo emitido que SUNAT aún no aceptó; sin proveedor solo queda el rechazado, que avisa al pulsar.
+  const canSend = (status === "ISSUED" || status === "CORRECTED") && Boolean(invoice.invoice_number)
+    && (invoice.fiscal_status === "REJECTED" || (provider.connected && invoice.fiscal_status !== "ACCEPTED"));
   // Serie de contingencia: las que empiezan con cero.
   const contingency = Boolean(invoice.series?.startsWith("0"));
 
@@ -138,8 +142,10 @@ export default function InvoiceDetail() {
             {status === "ISSUED" && invoice.invoice_type !== "CREDIT_NOTE" && (
               <Btn variant="danger-ghost" onClick={() => setCrediting(true)} permission="billing.approve" disabled={busy}>Emitir nota de crédito</Btn>
             )}
-            {status === "ISSUED" && invoice.fiscal_status === "REJECTED" && (
-              <Btn variant="secondary" onClick={() => act("fiscal-retry", null, "Reenvío programado")} permission="billing.approve" disabled={busy}>Reintentar envío SUNAT</Btn>
+            {canSend && (
+              <Btn variant="secondary" onClick={() => act("fiscal-retry", null, "Envío a SUNAT solicitado")} permission="billing.approve" disabled={busy}>
+                {invoice.fiscal_status === "NOT_SENT" ? "Enviar a SUNAT" : "Reintentar envío SUNAT"}
+              </Btn>
             )}
             <Btn variant="secondary" onClick={downloadPdf} disabled={printing}>
               <FileText size={16} />
@@ -218,7 +224,7 @@ export default function InvoiceDetail() {
                   rows={[
                     ["Estado SUNAT", <Badge key="fiscal" tone={stateOf(FISCAL_STATES, invoice.fiscal_status)[1]}>{stateOf(FISCAL_STATES, invoice.fiscal_status)[0]}</Badge>],
                     ["Respuesta", invoice.fiscal_response ?? (invoice.fiscal_status === "PENDING" ? "Esperando la respuesta del proveedor…" : "—")],
-                    ["Proveedor", <span key="provider" className="app-muted">Sin proveedor conectado</span>],
+                    ["Proveedor", provider.connected ? provider.name : <span key="provider" className="app-muted">Sin proveedor conectado</span>],
                     ["Serie", <span key="series" className="inline-flex items-center gap-1.5">{invoice.series ?? "—"}{contingency && <Chip tone="warning">Contingencia</Chip>}</span>],
                   ]}
                 />
@@ -345,7 +351,11 @@ export default function InvoiceDetail() {
         >
           <p className="text-[15px]">{label} · {money(invoice.total, currency)}</p>
           <p className="app-muted mt-2">Se asigna serie y correlativo y se crea la cuenta por cobrar. Después no se puede editar.</p>
-          <Notice tone="warn">No hay un proveedor de facturación electrónica conectado: el comprobante queda emitido en el sistema y <strong className="font-semibold">sin enviar a SUNAT</strong>.</Notice>
+          {provider.connected ? (
+            <p className="app-muted mt-2">Al emitirlo se envía a SUNAT por {provider.name}.</p>
+          ) : (
+            <Notice tone="warn">No hay un proveedor de facturación electrónica conectado: el comprobante queda emitido en el sistema y <strong className="font-semibold">sin enviar a SUNAT</strong>.</Notice>
+          )}
           {currency === "USD" && <p className="app-muted">Se emite con el tipo de cambio de venta vigente.</p>}
         </Modal>
       )}

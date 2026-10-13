@@ -305,6 +305,110 @@ class FinanceTest extends TestCase
         $this->getJson('/api/v1/receivables/summary')->assertOk()->assertJsonPath('open_count', 0)->assertJsonPath('missing_rate', false);
     }
 
+    // ------------------------------------------------------------------ Proveedor de facturación electrónica
+
+    /** Conecta a la empresa un proveedor de prueba que responde lo que se le indique. */
+    private function connectProvider(): void
+    {
+        config(['fiscal.providers' => ['fake' => FakeFiscalProvider::class]]);
+        FakeFiscalProvider::$sent = [];
+        FakeFiscalProvider::$answer = 'accept';
+        DB::table('fiscal_configurations')->insert([
+            'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'country_code' => 'PE', 'provider_code' => 'fake',
+            'tax_identifier' => '20123456789', 'environment' => 'BETA',
+        ]);
+    }
+
+    public function test_with_a_provider_connected_the_invoice_goes_out_after_issuing_and_keeps_the_answer(): void
+    {
+        $this->makeTenant(self::MODULES);
+        $this->as($this->makeUser('Finanzas', self::FINANCE));
+        $customer = $this->makeCustomer('Minera Los Andes SAC');
+        DB::table('companies')->where('tenant_id', $this->tenantId)->update(['tax_identifier' => '20123456789']);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now()->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
+        $this->connectProvider();
+
+        // Un borrador no sale; emitido, sí, y con los datos que SUNAT pide.
+        $draft = $this->draft([$this->event($customer, 1000, ['currency' => 'USD'])['id']]);
+        $this->assertCount(0, FakeFiscalProvider::$sent);
+        $this->postJson("/api/v1/invoices/{$draft['id']}/issue")->assertOk()->assertJsonPath('fiscal_provider.name', 'Proveedor de prueba');
+        $this->assertCount(1, FakeFiscalProvider::$sent);
+        $sent = FakeFiscalProvider::$sent[0];
+        $this->assertSame(['01', 'F001', 1, 'F001-00000001', 'USD', '6', 'Minera Los Andes SAC', '20123456789'], [
+            $sent['type_code'], $sent['series'], $sent['number'], $sent['full_number'], $sent['currency'],
+            $sent['customer']['document_type_code'], $sent['customer']['name'], $sent['issuer']['tax_identifier'],
+        ]);
+        // En dólares viaja el tipo de cambio de venta del día de emisión.
+        $this->assertEquals([3.75, 1000, 180, 1180, 1000], [$sent['exchange_rate'], $sent['totals']['taxable'], $sent['totals']['tax'], $sent['totals']['total'], $sent['lines'][0]['unit_value']]);
+        $this->assertNull($sent['corrects']);
+
+        $accepted = $this->getJson("/api/v1/invoices/{$draft['id']}")->assertOk()->json();
+        $this->assertSame(['ACCEPTED', 'Aceptado por SUNAT.'], [$accepted['fiscal_status'], $accepted['fiscal_response']]);
+        $document = DB::table('fiscal_documents')->where('invoice_id', $draft['id'])->first();
+        $this->assertSame(['ACCEPTED', 'F001', '0', str_repeat('a', 64)], [$document->status, $document->series, $document->sunat_status, $document->xml_hash]);
+        $this->assertNotNull($document->accepted_at);
+        // Aceptado, no se reenvía.
+        $this->postJson("/api/v1/invoices/{$draft['id']}/fiscal-retry")->assertStatus(422);
+        $this->assertCount(1, FakeFiscalProvider::$sent);
+
+        // Rechazado por SUNAT: queda con su motivo y se reintenta. El comprobante sigue emitido.
+        FakeFiscalProvider::$answer = 'reject';
+        $second = $this->issued($customer, 50);
+        $rejected = $this->getJson("/api/v1/invoices/{$second['id']}")->assertOk()->json();
+        $this->assertSame(['ISSUED', 'REJECTED', 'RUC del receptor no válido'], [$rejected['status'], $rejected['fiscal_status'], $rejected['fiscal_response']]);
+        $this->getJson('/api/v1/invoices?tab=REJECTED')->assertOk()->assertJsonPath('total', 1);
+        FakeFiscalProvider::$answer = 'accept';
+        $this->postJson("/api/v1/invoices/{$second['id']}/fiscal-retry")->assertOk();
+        $this->getJson("/api/v1/invoices/{$second['id']}")->assertOk()->assertJsonPath('fiscal_status', 'ACCEPTED');
+        $this->assertSame(1, DB::table('fiscal_documents')->where('invoice_id', $second['id'])->count());
+
+        // El proveedor no responde: la emisión no se pierde; queda para reintentar.
+        FakeFiscalProvider::$answer = 'fail';
+        $third = $this->issued($customer, 70);
+        $failed = $this->getJson("/api/v1/invoices/{$third['id']}")->assertOk()->json();
+        $this->assertSame(['ISSUED', 'F001-00000003', 'REJECTED'], [$failed['status'], $failed['invoice_number'], $failed['fiscal_status']]);
+        $this->assertStringContainsString('No se pudo comunicar', $failed['fiscal_response']);
+        $this->assertSame('OPEN', $failed['receivable']['status']);
+
+        // La nota de crédito también sale, en positivo y diciendo qué corrige.
+        FakeFiscalProvider::$answer = 'accept';
+        $note = $this->postJson("/api/v1/invoices/{$second['id']}/credit-note", ['reason' => 'Servicio no prestado'])->assertCreated()->json();
+        $last = end(FakeFiscalProvider::$sent);
+        $this->assertSame(['07', 'FC01-00000001', 'F001-00000002', 'Servicio no prestado', '01'], [
+            $last['type_code'], $last['full_number'], $last['corrects']['full_number'], $last['corrects']['reason'], $last['corrects']['type_code'],
+        ]);
+        $this->assertEquals([50, 9, 59], [$last['totals']['taxable'], $last['totals']['tax'], $last['totals']['total']]);
+        $this->getJson("/api/v1/invoices/{$note['id']}")->assertOk()->assertJsonPath('fiscal_status', 'ACCEPTED');
+
+        foreach (['invoice.fiscal_accepted', 'invoice.fiscal_rejected', 'invoice.fiscal_retry'] as $action) {
+            $this->assertTrue(DB::table('audit_logs')->where('tenant_id', $this->tenantId)->where('action', $action)->exists(), $action);
+            $this->assertNotSame($action, AuditCatalog::actionLabel($action));
+        }
+    }
+
+    public function test_without_a_provider_nothing_is_sent_and_one_connected_later_can_send_what_was_issued(): void
+    {
+        $this->makeTenant(self::MODULES);
+        $this->as($this->makeUser('Finanzas', self::FINANCE));
+        $customer = $this->makeCustomer();
+
+        $issued = $this->issued($customer, 100);
+        $this->assertSame(['NOT_SENT', false, null], [$issued['fiscal_status'], $issued['fiscal_provider']['connected'], $issued['fiscal_provider']['name']]);
+        $this->postJson("/api/v1/invoices/{$issued['id']}/fiscal-retry")->assertStatus(422)->assertJsonValidationErrors('status');
+        $this->assertSame(0, DB::table('fiscal_documents')->where('tenant_id', $this->tenantId)->count());
+
+        // La empresa conecta su proveedor después: lo ya emitido se puede enviar.
+        config(['fiscal.providers' => ['fake' => FakeFiscalProvider::class]]);
+        FakeFiscalProvider::$sent = [];
+        FakeFiscalProvider::$answer = 'accept';
+        DB::table('fiscal_configurations')->where('tenant_id', $this->tenantId)->update(['provider_code' => 'fake']);
+        $this->postJson("/api/v1/invoices/{$issued['id']}/fiscal-retry")->assertOk();
+        $this->getJson("/api/v1/invoices/{$issued['id']}")->assertOk()->assertJsonPath('fiscal_status', 'ACCEPTED')->assertJsonPath('fiscal_provider.connected', true);
+        // Quien no emite tampoco envía.
+        $this->as($this->makeUser('Asistente', self::CLERK));
+        $this->postJson("/api/v1/invoices/{$issued['id']}/fiscal-retry")->assertStatus(403);
+    }
+
     // ------------------------------------------------------------------ Cobros y cuentas por cobrar
 
     public function test_payment_is_applied_to_the_oldest_receivables_and_the_balance_follows(): void
@@ -628,5 +732,30 @@ class FinanceTest extends TestCase
         $this->postJson('/api/v1/invoices/from-events', ['event_ids' => [DB::table('billable_events')->where('tenant_id', $firstTenant)->value('id') ?? (string) Str::uuid()], 'type' => 'INVOICE'])->assertStatus(422);
         // La numeración es por empresa: empieza de nuevo.
         $this->assertSame('F001-00000001', $this->issued($this->makeCustomer(), 10)['invoice_number']);
+    }
+}
+
+/** Proveedor de facturación electrónica de mentira: guarda lo que recibe y responde lo que se le pida. */
+class FakeFiscalProvider implements \App\Modules\Finance\Fiscal\FiscalProvider
+{
+    public static array $sent = [];
+
+    /** accept, reject o fail (no logra comunicarse). */
+    public static string $answer = 'accept';
+
+    public function name(): string
+    {
+        return 'Proveedor de prueba';
+    }
+
+    public function send(array $document, array $settings): \App\Modules\Finance\Fiscal\FiscalResult
+    {
+        self::$sent[] = $document;
+
+        return match (self::$answer) {
+            'reject' => \App\Modules\Finance\Fiscal\FiscalResult::rejected('RUC del receptor no válido', '2800'),
+            'fail' => throw new \RuntimeException('Tiempo de espera agotado'),
+            default => \App\Modules\Finance\Fiscal\FiscalResult::accepted(code: '0', hash: str_repeat('a', 64), cdr: 'R-'.$document['full_number']),
+        };
     }
 }

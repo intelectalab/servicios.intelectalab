@@ -3,6 +3,7 @@
 namespace App\Modules\Finance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Finance\Fiscal\FiscalGateway;
 use App\Modules\Finance\Models\BillableEvent;
 use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Finance\Models\Invoice;
@@ -227,6 +228,8 @@ class InvoiceController extends Controller
 
             $this->openReceivable($request, $invoice);
             $this->audit($request, $invoice, 'invoice.issue', ['from' => 'DRAFT', 'to' => 'ISSUED', 'note' => $invoice->invoice_number]);
+            // Con proveedor conectado queda "En envío" y sale hacia SUNAT al cerrar esta operación.
+            FiscalGateway::queue($invoice, $request->user()->id);
         });
 
         return response()->json($this->detail($invoice, $request));
@@ -315,6 +318,7 @@ class InvoiceController extends Controller
 
             $this->audit($request, $note, 'invoice.credit_note', ['to' => 'ISSUED', 'note' => "{$reason} (corrige {$invoice->invoice_number})"]);
             $this->audit($request, $invoice, 'invoice.correct', ['from' => 'ISSUED', 'to' => 'CORRECTED', 'note' => "{$note->invoice_number}: {$reason}"]);
+            FiscalGateway::queue($note, $request->user()->id);
 
             return $note;
         });
@@ -322,16 +326,21 @@ class InvoiceController extends Controller
         return response()->json($this->detail($note, $request), 201);
     }
 
-    /** Reintenta el envío a SUNAT de un comprobante rechazado. Sin proveedor conectado, ninguno llega a ese estado. */
+    /**
+     * Envía (o reintenta enviar) a SUNAT un comprobante ya emitido: uno rechazado, uno que quedó
+     * "En envío" sin respuesta, o uno emitido antes de conectar el proveedor. Uno aceptado no se reenvía.
+     */
     public function fiscalRetry(string $invoice, Request $request)
     {
         $invoice = $this->find($invoice);
-        if ($invoice->status !== 'ISSUED' || $invoice->fiscal_status !== 'REJECTED') {
-            throw ValidationException::withMessages(['status' => ['Solo se reintenta un comprobante emitido que SUNAT rechazó.']]);
+        if (! in_array($invoice->status, ['ISSUED', 'CORRECTED'], true) || ! $invoice->number || $invoice->fiscal_status === 'ACCEPTED') {
+            throw ValidationException::withMessages(['status' => ['Solo se envía a SUNAT un comprobante emitido que aún no fue aceptado.']]);
         }
 
         DB::transaction(function () use ($request, $invoice) {
-            $invoice->update(['fiscal_status' => 'PENDING', 'fiscal_response' => null]);
+            if (! FiscalGateway::queue($invoice, $request->user()->id)) {
+                throw ValidationException::withMessages(['status' => ['No hay un proveedor de facturación electrónica conectado.']]);
+            }
             $this->audit($request, $invoice, 'invoice.fiscal_retry');
         });
 
@@ -456,6 +465,7 @@ class InvoiceController extends Controller
             ...$this->row($invoice),
             'reason' => $invoice->reason,
             'fiscal_response' => $invoice->fiscal_response,
+            'fiscal_provider' => FiscalGateway::summary($invoice->tenant_id),
             'issued_at' => $invoice->issued_at?->toIso8601String(),
             'items' => $invoice->items->map(fn (InvoiceItem $item) => [
                 'id' => $item->id,
