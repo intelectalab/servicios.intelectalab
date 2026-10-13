@@ -62,6 +62,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-13 | Ficha del proyecto como el prototipo: cinco indicadores y pestañas (Tareas, Horas, Costos, Entregables, Resumen y estados); margen de sus tablas y archivo real del entregable ("Subir documento" con versiones) | [cambios/2026-10-13_proyecto-ficha-con-pestanas.md](cambios/2026-10-13_proyecto-ficha-con-pestanas.md) |
 | 2026-10-13 | Operaciones: Agenda semanal (eventos, órdenes de trabajo programadas, aviso de cruces, alcance por rol); vista de mes y filtro por persona | [cambios/2026-10-13_operaciones-agenda.md](cambios/2026-10-13_operaciones-agenda.md) |
 | 2026-10-13 | Operaciones: App del técnico (visitas del día, mapa y ruta, checklist, fotos de evidencia, trabajo sin conexión con sincronización; instalable en el teléfono) | [cambios/2026-10-13_operaciones-app-del-tecnico.md](cambios/2026-10-13_operaciones-app-del-tecnico.md) |
+| 2026-10-13 | Finanzas y CxC, primera parte: Por facturar (eventos facturables), Comprobantes (emisión, nota de crédito, PDF), Cuentas por cobrar (antigüedad, movimientos) y Cobros (aplicar, conciliar, reembolsar); permiso propio para el tipo de cambio | [cambios/2026-10-13_finanzas-facturacion-cxc-y-cobros.md](cambios/2026-10-13_finanzas-facturacion-cxc-y-cobros.md) |
 
 ## Cómo se escribe cada entrada
 

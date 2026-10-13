@@ -13,6 +13,7 @@ class AuditCatalog
 {
     /** entity_type => nombre visible. */
     public const ENTITIES = [
+        'BillableEvent' => 'Evento facturable',
         'Branch' => 'Sede',
         'Checklist' => 'Checklist',
         'Contact' => 'Dato de contacto',
@@ -113,6 +114,16 @@ class AuditCatalog
         'project.deliverable.approve' => 'Entregable aprobado',
         'project.deliverable.return' => 'Entregable devuelto',
         'project.deliverable.deliver' => 'Entregable entregado al cliente',
+        'billable_event.cancel' => 'Evento facturable anulado',
+        'invoice.create' => 'Comprobante en borrador generado',
+        'invoice.discard' => 'Borrador de comprobante descartado',
+        'invoice.credit_note' => 'Nota de crédito emitida',
+        'invoice.correct' => 'Comprobante corregido con nota de crédito',
+        'invoice.fiscal_retry' => 'Reintento de envío a SUNAT',
+        'payment.create' => 'Cobro registrado',
+        'payment.allocate' => 'Cobro aplicado a cuentas por cobrar',
+        'payment.reconcile' => 'Cobro conciliado',
+        'payment.refund' => 'Reembolso de cobro',
         'portal_request.quote' => 'Solicitud cotizada',
         'portal_request.take' => 'Solicitud tomada',
         'document.download_url_generated' => 'Enlace de descarga generado',

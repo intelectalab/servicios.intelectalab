@@ -466,7 +466,7 @@ export default function ActorDetail() {
         </>
       )}
       {tab === "operaciones" && <Listing title="Órdenes de trabajo" permission="work_orders.view" cols={WORK_ORDER_COLUMNS} rows={actor.work_orders} onRowClick={(row) => router.push(`/work-orders/${row.id}`)} />}
-      {tab === "finanzas" && <Listing title="Comprobantes" permission="billing.view" cols={INVOICE_COLUMNS} rows={actor.invoices} />}
+      {tab === "finanzas" && <Listing title="Comprobantes" permission="billing.view" cols={INVOICE_COLUMNS} rows={actor.invoices} onRowClick={(row) => router.push(`/invoices/${row.id}`)} />}
       {tab === "soporte" && <Listing title="Tickets" permission="support.view" cols={TICKET_COLUMNS} rows={actor.tickets} />}
       {tab === "documentos" && <Listing title="Documentos vinculados" cols={DOCUMENT_COLUMNS} rows={actor.documents} />}
       {tab === "crm" && (

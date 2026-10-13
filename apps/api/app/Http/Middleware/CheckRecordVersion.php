@@ -5,6 +5,9 @@ namespace App\Http\Middleware;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\CrmLead;
 use App\Modules\Crm\Models\CrmOpportunity;
+use App\Modules\Finance\Models\BillableEvent;
+use App\Modules\Finance\Models\Invoice;
+use App\Modules\Finance\Models\Payment;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\AgendaEvent;
 use App\Modules\Operations\Models\CostEntry;
@@ -54,6 +57,9 @@ class CheckRecordVersion
         'timeEntry' => 'time_entries',
         'costEntry' => 'cost_entries',
         'agendaEvent' => 'agenda_events',
+        'billableEvent' => 'billable_events',
+        'invoice' => 'invoices',
+        'payment' => 'payments',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -71,6 +77,9 @@ class CheckRecordVersion
         'time_entries' => TimeEntry::class,
         'cost_entries' => CostEntry::class,
         'agenda_events' => AgendaEvent::class,
+        'billable_events' => BillableEvent::class,
+        'invoices' => Invoice::class,
+        'payments' => Payment::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

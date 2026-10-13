@@ -541,7 +541,7 @@ class ComercialTest extends TestCase
 
     public function test_quotation_in_dollars_needs_and_keeps_the_exchange_rate(): void
     {
-        [$user, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'billing.view', 'billing.manage']);
+        [$user, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'fiscal.view', 'fiscal.manage']);
         $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
         Sanctum::actingAs($user);
         $serviceId = $this->makeActiveService($this->makeCategory(), 'SRV-100', 375);

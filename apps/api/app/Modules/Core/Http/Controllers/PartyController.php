@@ -14,6 +14,8 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
 use App\Modules\Crm\Models\CrmLead;
+use App\Modules\Finance\Models\Invoice;
+use App\Modules\Finance\Models\Receivable;
 use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Contract;
@@ -533,7 +535,8 @@ class PartyController extends Controller
             ->when(! $can($permission), fn ($query) => $query->whereRaw('false'))
             ->toBase();
 
-        $receivables = $ofCustomer('receivables', 'billing.view')->where('balance_amount', '>', 0)->where('status', '<>', 'PAID');
+        // Saldo del cliente: por su modelo, las cuentas por cobrar que el rol alcanza.
+        $receivables = fn () => $ofCustomerInScope(Receivable::class, 'receivables.view')->whereIn('status', Receivable::OPEN);
 
         return [
             ...$this->summary($party),
@@ -565,10 +568,10 @@ class PartyController extends Controller
                     ])
                     ->all()
                 : [],
-            'finance' => $customerId && $can('billing.view') ? [
-                'outstanding' => (float) (clone $receivables)->sum('balance_amount'),
-                'overdue' => (float) (clone $receivables)->where('due_date', '<', now()->toDateString())->sum('balance_amount'),
-                'open_documents' => (clone $receivables)->count(),
+            'finance' => $customerId && $can('receivables.view') ? [
+                'outstanding' => (float) $receivables()->sum('balance_amount'),
+                'overdue' => (float) $receivables()->where('due_date', '<', now()->toDateString())->sum('balance_amount'),
+                'open_documents' => $receivables()->count(),
             ] : null,
             'quotations' => $ofCustomerInScope(Quotation::class, 'quotations.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'quotation_number', 'created_at', 'total', 'currency', 'status']),
@@ -579,7 +582,8 @@ class PartyController extends Controller
                 ->leftJoin('users', 'users.id', '=', 'work_orders.assigned_user_id')
                 ->orderByDesc('work_orders.created_at')->limit(100)
                 ->get(['work_orders.id', 'work_orders.code', 'work_orders.title as description', 'work_orders.scheduled_start', 'work_orders.status', 'users.name as technician']),
-            'invoices' => $ofCustomer('invoices', 'billing.view')->orderByDesc('created_at')->limit(100)
+            // Por su modelo, para respetar el alcance del rol. Un borrador descartado no es un comprobante del cliente.
+            'invoices' => $ofCustomerInScope(Invoice::class, 'billing.view')->where('status', '<>', 'CANCELLED')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'invoice_number', 'issue_date', 'total', 'currency', 'status']),
             'tickets' => $ofCustomer('support_tickets', 'support.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'ticket_number', 'subject', 'priority', 'status']),

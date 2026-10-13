@@ -26,9 +26,11 @@ use App\Modules\Operations\Http\Controllers\ChecklistController;
 use App\Modules\Operations\Http\Controllers\TimeEntryController;
 use App\Modules\Operations\Http\Controllers\ResourceController;
 use App\Modules\Documents\Http\Controllers\DocumentController;
+use App\Modules\Finance\Http\Controllers\BillableEventController;
 use App\Modules\Finance\Http\Controllers\ExchangeRateController;
 use App\Modules\Finance\Http\Controllers\InvoiceController;
 use App\Modules\Finance\Http\Controllers\PaymentController;
+use App\Modules\Finance\Http\Controllers\ReceivableController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
@@ -444,25 +446,58 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware('permission:documents.manage')->post('/documents', [DocumentController::class, 'store']);
 
-        // Facturacion (interna, sin SUNAT todavia)
+        // Finanzas: eventos facturables y comprobantes (sin envío a SUNAT todavía)
         Route::middleware('permission:billing.view')->group(function () {
+            Route::get('/billable-events', [BillableEventController::class, 'index']);
+            Route::get('/billable-events/options', [BillableEventController::class, 'options']);
             Route::get('/invoices', [InvoiceController::class, 'index']);
+            Route::get('/invoices/summary', [InvoiceController::class, 'summary']);
             Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
         });
-        Route::middleware('permission:billing.manage')->post('/invoices', [InvoiceController::class, 'store']);
+        Route::middleware('permission:billing.create')->group(function () {
+            Route::post('/billable-events', [BillableEventController::class, 'store']);
+            Route::post('/invoices/from-events', [InvoiceController::class, 'fromEvents']);
+        });
+        Route::middleware('permission:billing.manage')->group(function () {
+            Route::post('/billable-events/{billableEvent}/cancel', [BillableEventController::class, 'cancel']);
+            Route::post('/invoices/{invoice}/discard', [InvoiceController::class, 'discard']);
+        });
+        // Emitir y corregir es de quien responde por la facturación, no de quien prepara el borrador.
+        Route::middleware('permission:billing.approve')->group(function () {
+            Route::post('/invoices/{invoice}/issue', [InvoiceController::class, 'issue']);
+            Route::post('/invoices/{invoice}/credit-note', [InvoiceController::class, 'creditNote']);
+            Route::post('/invoices/{invoice}/fiscal-retry', [InvoiceController::class, 'fiscalRetry']);
+        });
 
         // Monedas y tipo de cambio. El vigente lo lee también quien cotiza en dólares.
         Route::get('/exchange-rates/current', [ExchangeRateController::class, 'current']);
-        Route::middleware('permission:billing.view')->group(function () {
+        Route::middleware('permission:fiscal.view')->group(function () {
             Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
             Route::get('/exchange-rates/summary', [ExchangeRateController::class, 'summary']);
         });
-        Route::middleware('permission:billing.manage')->post('/exchange-rates', [ExchangeRateController::class, 'store']);
+        Route::middleware('permission:fiscal.manage')->post('/exchange-rates', [ExchangeRateController::class, 'store']);
 
-        // Cuentas por cobrar y pagos
-        Route::middleware('permission:billing.view')->get('/receivables', [PaymentController::class, 'receivables']);
-        Route::middleware('permission:billing.view')->get('/payments', [PaymentController::class, 'index']);
-        Route::middleware('permission:billing.manage')->post('/payments', [PaymentController::class, 'store']);
+        // Cuentas por cobrar
+        Route::middleware('permission:receivables.view')->group(function () {
+            Route::get('/receivables', [ReceivableController::class, 'index']);
+            Route::get('/receivables/summary', [ReceivableController::class, 'summary']);
+            Route::get('/receivables/{receivable}', [ReceivableController::class, 'show']);
+        });
+
+        // Cobros
+        Route::middleware('permission:payments.view')->group(function () {
+            Route::get('/payments', [PaymentController::class, 'index']);
+            Route::get('/payments/options', [PaymentController::class, 'options']);
+            Route::get('/payments/refunds', [PaymentController::class, 'refunds']);
+            Route::get('/payments/{payment}', [PaymentController::class, 'show']);
+        });
+        Route::middleware('permission:payments.create')->post('/payments', [PaymentController::class, 'store']);
+        Route::middleware('permission:payments.manage')->post('/payments/{payment}/allocate', [PaymentController::class, 'allocate']);
+        // Conciliar y reembolsar es de quien supervisa la caja, no de quien registra el cobro.
+        Route::middleware('permission:payments.approve')->group(function () {
+            Route::post('/payments/{payment}/reconcile', [PaymentController::class, 'reconcile']);
+            Route::post('/payments/{payment}/refund', [PaymentController::class, 'refund']);
+        });
 
         // Soporte
         Route::middleware('permission:support.view')->group(function () {

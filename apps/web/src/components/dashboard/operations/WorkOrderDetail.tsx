@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, Check, Clock, FileText, MessageSquareText, Pencil, Upload, Users } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
-import { customerName, stateOf, takeFlash } from "@/lib/commercial";
+import { customerName, money, stateOf, takeFlash } from "@/lib/commercial";
 import { dateTime, firstError } from "@/lib/crm";
+import { EVENT_STATES } from "@/lib/finance";
 import {
   BILLING_NOTES, CHECKABLE, CHECKLIST_STATES, WORK_ORDER_MOVES, WORK_ORDER_OPEN, WORK_ORDER_STATES,
   downloadWorkOrderPdf, operationsHistoryLabel, scheduledText, type WorkOrderMove,
@@ -371,7 +372,15 @@ export default function WorkOrderDetail() {
                     order.started_at ? ["Inicio de ejecución", dateTime(order.started_at)] : null,
                     order.completed_at ? ["Completada", dateTime(order.completed_at)] : null,
                     ["Horas registradas", `${order.hours.toFixed(1)} h`],
-                    ["Evento facturable", <span key="billable" className="app-muted">Ninguno</span>],
+                    [
+                      "Evento facturable",
+                      order.billable_event ? (
+                        <span key="billable" className="inline-flex flex-wrap items-center gap-1.5">
+                          <Badge tone={stateOf(EVENT_STATES, order.billable_event.status)[1]}>{stateOf(EVENT_STATES, order.billable_event.status)[0]}</Badge>
+                          {money(order.billable_event.amount, order.billable_event.currency)}
+                        </span>
+                      ) : <span key="billable" className="app-muted">Ninguno</span>,
+                    ],
                     ["Creada por", order.creator?.name ?? "—"],
                   ]}
                 />

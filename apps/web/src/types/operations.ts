@@ -78,6 +78,8 @@ export interface WorkOrderDetail extends WorkOrder {
   checklist_items: ChecklistItem[];
   checklist_review: { by: string | null; at: string; note: string | null } | null;
   hours: number;
+  /** Lo que la orden dejó por facturar al completarse (servicios que se cobran por evento). */
+  billable_event?: { id: string; status: string; amount: number; currency: string } | null;
   customer_contact?: { address: string | null };
   history: HistoryEntry[];
 }

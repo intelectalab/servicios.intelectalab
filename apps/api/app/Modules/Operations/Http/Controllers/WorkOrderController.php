@@ -10,6 +10,7 @@ use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Operations\Models\WorkOrderChecklistItem;
 use App\Modules\Documents\Support\DocumentStore;
+use App\Modules\Finance\Support\Billing;
 use App\Modules\Operations\Support\AgendaClash;
 use App\Modules\Operations\Support\Technicians;
 use App\Services\AuditHistory;
@@ -561,6 +562,10 @@ class WorkOrderController extends Controller
                 'note' => $order->checklist_review_note,
             ] : null,
             'hours' => (float) DB::table('time_entries')->where('work_order_id', $order->id)->sum('hours'),
+            // Es un dato de la orden: quien la ve sabe si ya dejó algo por facturar.
+            'billable_event' => ($event = DB::table('billable_events')->where('source_type', 'WORK_ORDER')->where('source_id', $order->id)->first(['id', 'status', 'amount', 'currency']))
+                ? ['id' => $event->id, 'status' => $event->status, 'amount' => (float) $event->amount, 'currency' => $event->currency]
+                : null,
             'customer_contact' => ['address' => $address],
             'history' => AuditHistory::for('WorkOrder', $order->id),
         ];
@@ -723,6 +728,11 @@ class WorkOrderController extends Controller
                 ...($to === 'COMPLETED' ? ['completed_at' => now()] : []),
             ]);
             $this->audit($request, $order, $action, array_filter(['from' => $previous, 'to' => $to, 'note' => $reason]));
+
+            // Un servicio que se cobra por evento deja lo ejecutado listo para facturar.
+            if ($to === 'COMPLETED') {
+                Billing::eventFromWorkOrder($order, $request);
+            }
         });
 
         return response()->json($this->detail($order));

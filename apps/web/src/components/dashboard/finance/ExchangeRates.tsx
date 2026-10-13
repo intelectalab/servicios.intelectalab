@@ -157,7 +157,7 @@ export default function ExchangeRates() {
       <PageHead
         title="Monedas y tipo de cambio"
         actions={
-          <Btn variant="secondary" onClick={() => setModal(true)} permission="billing.manage">
+          <Btn variant="secondary" onClick={() => setModal(true)} permission="fiscal.manage">
             <Plus size={16} />
             <span>Registrar tipo de cambio</span>
           </Btn>

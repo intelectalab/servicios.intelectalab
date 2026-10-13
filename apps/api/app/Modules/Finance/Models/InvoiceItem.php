@@ -14,8 +14,8 @@ class InvoiceItem extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'tenant_id', 'invoice_id', 'service_id', 'description',
-        'quantity', 'unit_price', 'tax_rate', 'tax_amount', 'line_total',
+        'tenant_id', 'invoice_id', 'service_id', 'position', 'description', 'quantity', 'unit_price',
+        'tax_rate', 'tax_amount', 'line_total', 'billable_event_id',
     ];
 
     protected $casts = [

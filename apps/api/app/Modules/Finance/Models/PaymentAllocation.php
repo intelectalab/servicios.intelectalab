@@ -5,6 +5,7 @@ namespace App\Modules\Finance\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
+/** Parte de un cobro aplicada a una cuenta por cobrar. */
 class PaymentAllocation extends Model
 {
     protected $table = 'payment_allocations';
@@ -13,9 +14,9 @@ class PaymentAllocation extends Model
     public $incrementing = false;
     public $timestamps = false;
 
-    protected $fillable = ['tenant_id', 'payment_id', 'receivable_id', 'amount'];
+    protected $fillable = ['tenant_id', 'payment_id', 'receivable_id', 'amount', 'fx_difference_pen'];
 
-    protected $casts = ['amount' => 'decimal:4'];
+    protected $casts = ['amount' => 'decimal:4', 'fx_difference_pen' => 'decimal:4', 'created_at' => 'datetime'];
 
     protected static function boot()
     {

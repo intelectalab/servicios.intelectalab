@@ -55,7 +55,7 @@ function trackVersions(path: string, method: string, data: unknown) {
 // Un alta lleva una clave (`Idempotency-Key`). Si el mismo envío sale dos veces en pocos
 // segundos (doble clic, reintento), usa la misma clave y la API lo registra una sola vez.
 
-const CREATE_PATH = new RegExp(`^/v1/(?:crm/)?(?:[a-z-]+|[a-z-]+/${UUID}/(?:versions|contract|order|orders|prices|roles|opportunity|convert|members|tasks|deliverables))$`, "i");
+const CREATE_PATH = new RegExp(`^/v1/(?:crm/)?(?:[a-z-]+|invoices/from-events|[a-z-]+/${UUID}/(?:versions|contract|order|orders|prices|roles|opportunity|convert|members|tasks|deliverables|credit-note|refund))$`, "i");
 const REPEAT_WINDOW_MS = 10_000;
 const recentSends = new Map<string, { key: string; at: number }>();
 

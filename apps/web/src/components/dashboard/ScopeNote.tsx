@@ -64,8 +64,25 @@ const AGENDA_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza tus eventos y los de tus sedes.",
 };
 
+// Un evento facturable o un comprobante es de quien vendió lo que se factura y de quien lo preparó.
+const BILLING_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza lo que preparaste tú y lo que se factura de tus contratos.",
+  TEAM: "Tu rol alcanza lo tuyo y lo de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza lo tuyo y lo de tus sedes.",
+};
+
+// Una cuenta por cobrar es de quien vendió lo facturado.
+const RECEIVABLE_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza las cuentas por cobrar de lo que vendiste.",
+  TEAM: "Tu rol alcanza tus cuentas por cobrar y las de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus cuentas por cobrar y las de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "billing" ? BILLING_HINTS
+    : resource === "receivables" ? RECEIVABLE_HINTS
+    : resource === "payments" ? ENTRY_HINTS
     : resource === "agenda" ? AGENDA_HINTS
     : resource === "projects" ? PROJECT_HINTS
     : resource === "time_entries" || resource === "cost_entries" ? ENTRY_HINTS

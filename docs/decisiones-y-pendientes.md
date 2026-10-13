@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría y Operaciones completo salvo la pantalla de plantillas de checklist).
+Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría, Operaciones completo salvo la pantalla de plantillas de checklist y la primera parte de Finanzas: Por facturar, Comprobantes, Cuentas por cobrar y Cobros).
 
 ## Decisiones tomadas
 
@@ -75,6 +75,18 @@ Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría y Operaciones 
 - **App del técnico** (2026-10-13, [cambios/2026-10-13_operaciones-app-del-tecnico.md](cambios/2026-10-13_operaciones-app-del-tecnico.md)): aplicación web instalable dentro de este proyecto (`/campo`), no una app de tienda. Conserva todo lo del prototipo. Sin conexión, los cambios se guardan en el teléfono y se sincronizan a mano, en orden, por las rutas normales de la orden de trabajo; decide el estado de la orden, no que otra persona la haya editado; lo rechazado queda en el historial de la orden. La ubicación de la visita son coordenadas escritas en la orden; la ruta se ordena en línea recta; el mapa es real (Leaflet con OpenStreetMap) y, sin conexión o si no carga, se muestra el esquemático del prototipo con un aviso. La foto de evidencia es un documento del ítem y lo marca como hecho. Sin permisos nuevos (`work_orders.view` para abrirla).
 - En un listado con tablero, pulsar la vista que ya está activa no hace nada (antes vaciaba la lista).
 
+### Finanzas y CxC (2026-10-13)
+- Primera parte ([cambios/2026-10-13_finanzas-facturacion-cxc-y-cobros.md](cambios/2026-10-13_finanzas-facturacion-cxc-y-cobros.md)): Por facturar, Comprobantes, Cuentas por cobrar y Cobros. Faltan Recurrencia, Facturación electrónica y Bancos y caja.
+- **Evento facturable:** lo que ya se puede cobrar. Nace al completar una orden de trabajo de un servicio "Por evento" (uno por orden) o a mano. Un evento no se factura dos veces.
+- **Comprobante:** nace en borrador desde eventos por facturar del mismo cliente y moneda; la factura exige RUC. Al emitirse recibe serie y correlativo (`F001`, `B001`), fija los datos del cliente y crea su cuenta por cobrar. **Emitido, no se modifica**: se corrige con una nota de crédito por el total (`FC01`, `BC01`), que no se emite mientras tenga cobros aplicados. Un borrador se descarta y sus eventos vuelven a quedar por facturar.
+- **Nada se envía a SUNAT** mientras no haya proveedor de facturación electrónica: el comprobante queda "Sin enviar" y el sistema lo dice. No se simula.
+- **Cuenta por cobrar:** su saldo es la suma de sus movimientos y lo lleva la base; "vencida" se calcula por la fecha, no es un estado.
+- **Cobro:** se aplica a cuentas del mismo cliente y moneda, la que vence antes primero; lo que sobra es anticipo. Se concilia una vez. Un reembolso revierte aplicaciones si hace falta y nunca borra el cobro.
+- Comprobantes, cuentas por cobrar, cobros, reembolsos, eventos y movimientos **no se borran** (la aplicación no tiene ese permiso en la base).
+- Permisos por recurso: `billing.*` (Ver, Crear, Gestionar, Aprobar, Exportar), `receivables.*` (Ver, Gestionar, Exportar), `payments.*` (Ver, Crear, Gestionar, Aprobar, Exportar). **Emitir y corregir es `billing.approve`; conciliar y reembolsar, `payments.approve`.** El tipo de cambio tiene permiso propio (`fiscal.view`, `fiscal.manage`), separado de facturación.
+- Alcance en tres recursos nuevos (Facturación, Cuentas por cobrar, Cobros). Un evento o comprobante es "propio" de quien vendió el contrato y de quien lo preparó; una cuenta por cobrar, de quien vendió; un cobro, de quien lo registró. La vista del cliente lee comprobantes y saldo por sus modelos.
+- En dólares, el comprobante guarda el tipo de cambio de venta del día de emisión y el cobro el de su fecha; la diferencia queda guardada, sin asiento contable.
+
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
 - Permisos `audit.view` y `audit.export`, sin módulo del plan. Como en el prototipo, los tienen Administrador y Gerencia.
@@ -148,6 +160,7 @@ Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría y Operaciones 
 
 ## Pendientes
 
+- Finanzas: Recurrencia (y que cada ciclo deje su evento facturable); Facturación electrónica (proveedor OSE/PSE, series editables, contingencia, bajas, detracciones y retenciones, XML y CDR); Bancos y caja (cuentas de destino y conciliación real); recordatorios de cobranza (con Notificaciones); eventos por horas aprobadas y por hitos; nota de crédito parcial; editar el vencimiento de un borrador; pago en línea; asiento de la diferencia de cambio (con Contabilidad).
 - Operaciones: en la App del técnico, abrirla sin señal desde cero, borrar lo guardado en el teléfono al cerrar sesión, registrar dónde estaba el técnico y ubicación en el cliente; rejilla por horas y arrastrar para reprogramar en Agenda; pantalla de plantillas de checklist (hoy solo por la API); antivirus para los archivos adjuntos y pantalla Documentos; facturar por horas (con Finanzas); avisos de horas y costos por aprobar (con Notificaciones); retirar las rutas antiguas `/tasks`; evidencias con archivo (con Documentos); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte); que suspender o terminar un contrato arrastre sus servicios contratados.
 - CRM: solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.

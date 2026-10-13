@@ -37,6 +37,10 @@ class ListExport
         'api/v1/projects' => 'projects',
         'api/v1/time-entries' => 'time_entries',
         'api/v1/cost-entries' => 'cost_entries',
+        'api/v1/billable-events' => 'billing',
+        'api/v1/invoices' => 'billing',
+        'api/v1/receivables' => 'receivables',
+        'api/v1/payments' => 'payments',
         'api/v1/users' => 'users',
         'api/v1/audit' => 'audit',
     ];
@@ -63,7 +67,7 @@ class ListExport
     public static function record(Request $request)
     {
         $data = $request->validate([
-            'resource' => ['required', 'in:'.implode(',', self::RESOURCES)],
+            'resource' => ['required', 'in:'.implode(',', array_unique(self::RESOURCES))],
             'format' => ['required', 'in:xlsx,csv'],
             'rows' => ['required', 'integer', 'min:0'],
             'selection' => ['sometimes', 'boolean'],

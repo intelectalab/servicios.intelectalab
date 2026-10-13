@@ -38,6 +38,9 @@ class AccessScope
         'time_entries' => 'Horas',
         'cost_entries' => 'Costos',
         'agenda' => 'Agenda',
+        'billing' => 'Facturación',
+        'receivables' => 'Cuentas por cobrar',
+        'payments' => 'Cobros',
     ];
 
     /** De menor a mayor alcance. */
@@ -128,6 +131,12 @@ class AccessScope
             'cost_entries' => $query->whereIn("{$table}.created_by", $owners),
             // Un evento de agenda es propio de su responsable y de quien lo agendó.
             'agenda' => $query->whereIn("{$table}.assigned_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
+            // Un evento facturable o un comprobante es propio de quien vendió lo que se factura y de quien lo preparó.
+            'billing' => $query->whereIn("{$table}.owner_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
+            // Una cuenta por cobrar es propia de quien vendió lo facturado.
+            'receivables' => $query->whereIn("{$table}.owner_user_id", $owners),
+            // Un cobro, de quien lo registró.
+            'payments' => $query->whereIn("{$table}.created_by", $owners),
         };
     }
 

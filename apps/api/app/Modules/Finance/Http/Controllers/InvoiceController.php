@@ -3,130 +3,500 @@
 namespace App\Modules\Finance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
-use App\Modules\Finance\Http\Requests\StoreInvoiceRequest;
+use App\Modules\Finance\Models\BillableEvent;
+use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Finance\Models\Invoice;
 use App\Modules\Finance\Models\InvoiceItem;
+use App\Modules\Finance\Models\Payment;
 use App\Modules\Finance\Models\Receivable;
-use App\Modules\Services\Models\Contract;
+use App\Modules\Finance\Models\ReceivableMovement;
+use App\Modules\Finance\Support\Billing;
+use App\Services\AuditHistory;
 use App\Services\AuditLogger;
-use App\Services\SequentialNumberGenerator;
+use App\Services\ColumnFilters;
+use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Comprobantes: nacen en borrador desde eventos facturables del mismo cliente y moneda; al
+ * emitirse reciben serie y correlativo, crean su cuenta por cobrar y ya no se modifican. Uno
+ * emitido se corrige con una nota de crédito, nunca editándolo.
+ *
+ * No hay proveedor de facturación electrónica conectado: el comprobante se emite en el sistema
+ * y queda "Sin enviar" ante SUNAT.
+ */
 class InvoiceController extends Controller
 {
+    private const MAX_EVENTS = 100;
+
+    private const WITH = ['customer.party.person', 'customer.party.organization'];
+
+    /** Pestañas del listado: clave => condición. */
+    private const TABS = ['DRAFT', 'ISSUED', 'CORRECTED'];
+
     public function index(Request $request)
     {
-        $query = Invoice::query()
-            ->when($request->filled('status'), fn ($q) => $q->where('status', $request->query('status')))
-            ->when($request->filled('customer_id'), fn ($q) => $q->where('customer_id', $request->query('customer_id')));
+        $search = trim((string) $request->query('search', ''));
+        $tab = (string) $request->query('tab', '');
 
-        return response()->json($query->paginate($request->integer('per_page', 20)));
+        $query = Invoice::query()->with(self::WITH)
+            ->when(in_array($tab, self::TABS, true), fn ($q) => $q->where('invoices.status', $tab))
+            ->when($tab === 'REJECTED', fn ($q) => $q->where('invoices.fiscal_status', 'REJECTED'))
+            ->when(isset(Invoice::TYPES[$request->query('type')]), fn ($q) => $q->where('invoices.invoice_type', $request->query('type')))
+            ->when(Str::isUuid((string) $request->query('customer_id')), fn ($q) => $q->where('invoices.customer_id', $request->query('customer_id')))
+            ->when($search !== '', function ($q) use ($search) {
+                // Por número o cliente.
+                $like = '%'.addcslashes($search, '%_\\').'%';
+                $q->where(fn ($w) => $w
+                    ->where('invoices.invoice_number', 'ILIKE', $like)
+                    ->orWhereRaw(ListSort::customerName('invoices').' ILIKE ?', [$like]));
+            });
+
+        ColumnFilters::apply($query, $request, [
+            'invoice' => ColumnFilters::text('invoices.invoice_number'),
+            'customer' => ColumnFilters::text("concat_ws(' ', ".ListSort::customerName('invoices').', invoices.customer_tax_id)'),
+            'issue' => ColumnFilters::date('invoices.issue_date'),
+            'total' => ColumnFilters::number('invoices.total'),
+        ]);
+
+        ListSort::apply($query, $request, [
+            'invoice' => 'invoices.invoice_number',
+            'customer' => 'lower('.ListSort::customerName('invoices').')',
+            'issue' => 'invoices.issue_date',
+            'total' => 'invoices.total',
+            'fiscal' => ListSort::labels('invoices.fiscal_status', Invoice::FISCAL),
+            'status' => ListSort::labels('invoices.status', Invoice::STATES),
+        ], fn ($q) => $q->orderByDesc('invoices.created_at')->orderByDesc('invoices.id'), 'invoices.id');
+
+        $page = $query->paginate(min(max($request->integer('per_page', 20), 1), 200));
+        $page->getCollection()->transform(fn (Invoice $invoice) => $this->row($invoice));
+
+        return response()->json($page);
     }
 
-    public function show(string $invoice)
+    /** Conteos de las pestañas del listado, sobre lo que la persona alcanza. */
+    public function summary()
     {
-        $invoice = Invoice::with('items')->findOrFail($invoice);
+        $counts = Invoice::query()->selectRaw("count(*) AS total,
+            count(*) FILTER (WHERE status = 'DRAFT') AS draft,
+            count(*) FILTER (WHERE status = 'ISSUED') AS issued,
+            count(*) FILTER (WHERE fiscal_status = 'REJECTED') AS rejected,
+            count(*) FILTER (WHERE status = 'CORRECTED') AS corrected")->toBase()->first();
 
-        return response()->json($invoice);
+        return response()->json([
+            'ALL' => (int) $counts->total, 'DRAFT' => (int) $counts->draft, 'ISSUED' => (int) $counts->issued,
+            'REJECTED' => (int) $counts->rejected, 'CORRECTED' => (int) $counts->corrected,
+        ]);
+    }
+
+    public function show(string $invoice, Request $request)
+    {
+        return response()->json($this->detail($this->find($invoice), $request));
     }
 
     /**
-     * Emite una factura interna a partir de un contrato activo, y genera
-     * automáticamente su cuenta por cobrar en la misma transacción.
-     *
-     * NOTA: no incluye integración real con SUNAT (fiscal_document_id
-     * queda null). Eso es un pendiente a definir con el equipo, igual
-     * que Outbox y el escaneo de antivirus.
+     * Borrador a partir de eventos facturables pendientes, todos del mismo cliente y moneda. Los
+     * eventos quedan facturados en el mismo paso: dos personas no facturan el mismo evento.
      */
-    public function store(StoreInvoiceRequest $request)
+    public function fromEvents(Request $request)
     {
         $tenantId = $request->attributes->get('tenant_id');
-        $contract = Contract::findOrFail($request->contract_id);
+        $data = $request->validate([
+            'event_ids' => ['required', 'array', 'min:1', 'max:'.self::MAX_EVENTS],
+            'event_ids.*' => ['uuid', 'distinct'],
+            'type' => ['required', 'in:INVOICE,RECEIPT'],
+        ], [
+            'event_ids.required' => 'Selecciona al menos un evento facturable.',
+            'event_ids.max' => 'Un comprobante admite como mucho '.self::MAX_EVENTS.' eventos.',
+        ]);
 
-        if ($contract->status !== 'ACTIVE') {
-            throw ValidationException::withMessages([
-                'contract_id' => ["Solo se puede facturar un contrato activo. Estado actual: {$contract->status}."],
-            ]);
-        }
+        $invoice = DB::transaction(function () use ($request, $tenantId, $data) {
+            // Por su modelo: un evento fuera del alcance de la persona "no existe". Se bloquean hasta terminar.
+            // Las líneas salen en el orden en que se eligieron.
+            $order = array_flip($data['event_ids']);
+            $events = BillableEvent::query()->whereIn('id', $data['event_ids'])->lockForUpdate()->get()
+                ->sortBy(fn (BillableEvent $event) => $order[$event->id])->values();
 
-        $invoice = DB::transaction(function () use ($request, $tenantId, $contract) {
-            $invoiceNumber = SequentialNumberGenerator::next($tenantId, 'invoices', 'invoice_number', 'FAC');
+            if ($events->count() !== count($data['event_ids'])) {
+                throw ValidationException::withMessages(['event_ids' => ['Alguno de los eventos seleccionados ya no existe.']]);
+            }
+            if ($events->contains(fn (BillableEvent $event) => $event->status !== 'PENDING')) {
+                throw ValidationException::withMessages(['event_ids' => ['Alguno de los eventos ya fue facturado o anulado: un evento no se factura dos veces.']]);
+            }
+            if ($events->pluck('customer_id')->unique()->count() > 1) {
+                throw ValidationException::withMessages(['event_ids' => ['Todos los eventos deben ser del mismo cliente.']]);
+            }
+            if ($events->pluck('currency')->unique()->count() > 1) {
+                throw ValidationException::withMessages(['event_ids' => ['Todos los eventos deben estar en la misma moneda (soles o dólares).']]);
+            }
 
-            $subtotal = 0;
-            $taxTotal = 0;
+            $first = $events->first();
+            $customer = \App\Modules\Core\Models\Customer::with('party.person', 'party.organization')->where('tenant_id', $tenantId)->findOrFail($first->customer_id);
+            $identity = Billing::identity($customer);
+            $this->assertFiscalData($data['type'], $identity);
 
-            $itemsData = collect($request->items)->map(function ($item) use (&$subtotal, &$taxTotal) {
-                $quantity = (float) $item['quantity'];
-                $unitPrice = (float) $item['unit_price'];
-                $taxRate = (float) ($item['tax_rate'] ?? 0);
-
-                $lineBase = $quantity * $unitPrice;
-                $taxAmount = round($lineBase * ($taxRate / 100), 4);
-                $lineTotal = round($lineBase + $taxAmount, 4);
-
-                $subtotal += $lineBase;
-                $taxTotal += $taxAmount;
-
-                return [
-                    'service_id' => $item['service_id'] ?? null,
-                    'description' => $item['description'],
-                    'quantity' => $quantity,
-                    'unit_price' => $unitPrice,
-                    'tax_rate' => $taxRate,
-                    'tax_amount' => $taxAmount,
-                    'line_total' => $lineTotal,
-                ];
-            });
-
-            $total = round($subtotal + $taxTotal, 4);
+            $subtotal = round((float) $events->sum(fn (BillableEvent $event) => (float) $event->base), 2);
+            $total = round((float) $events->sum(fn (BillableEvent $event) => (float) $event->amount), 2);
+            $contracts = $events->pluck('contract_id')->unique();
 
             $invoice = Invoice::create([
                 'tenant_id' => $tenantId,
-                'customer_id' => $contract->customer_id,
-                'contract_id' => $contract->id,
-                'invoice_number' => $invoiceNumber,
-                'invoice_type' => 'INVOICE',
-                'status' => 'ISSUED',
-                'currency' => $contract->currency,
-                'issue_date' => now()->toDateString(),
-                'due_date' => $request->due_date,
-                'subtotal' => round($subtotal, 4),
-                'tax_total' => round($taxTotal, 4),
+                'customer_id' => $customer->id,
+                'contract_id' => $contracts->count() === 1 ? $contracts->first() : null,
+                'invoice_type' => $data['type'],
+                'series' => Billing::seriesFor($data['type']),
+                'status' => 'DRAFT',
+                'currency' => $first->currency,
+                'due_date' => now()->addDays((int) ($customer->payment_terms_days ?: Billing::DEFAULT_TERMS_DAYS))->toDateString(),
+                'subtotal' => $subtotal,
+                'tax_total' => round($total - $subtotal, 2),
                 'total' => $total,
-                'balance_due' => $total,
+                'balance_due' => 0,
+                'fiscal_status' => 'NOT_SENT',
+                'customer_tax_id' => $identity['tax_id'],
+                'customer_name' => $identity['name'],
+                'owner_user_id' => $first->owner_user_id ?? $request->user()->id,
+                'created_by' => $request->user()->id,
+                // El comprobante es de la sede de lo que factura; si no tiene, de la de quien lo prepara.
+                ...($first->branch_id ? ['branch_id' => $first->branch_id] : []),
             ]);
 
-            foreach ($itemsData as $itemData) {
-                $itemData['tenant_id'] = $tenantId;
-                $itemData['invoice_id'] = $invoice->id;
-                InvoiceItem::create($itemData);
+            foreach ($events->values() as $position => $event) {
+                InvoiceItem::create([
+                    'tenant_id' => $tenantId,
+                    'invoice_id' => $invoice->id,
+                    'position' => $position + 1,
+                    'description' => $event->description,
+                    'quantity' => 1,
+                    'unit_price' => $event->base,
+                    'tax_rate' => Billing::TAX_RATE,
+                    'tax_amount' => round((float) $event->amount - (float) $event->base, 2),
+                    'line_total' => $event->amount,
+                    'billable_event_id' => $event->id,
+                ]);
+                $event->update(['status' => 'INVOICED', 'invoice_id' => $invoice->id]);
             }
 
-            // Generar automáticamente la cuenta por cobrar.
-            Receivable::create([
-                'tenant_id' => $tenantId,
-                'customer_id' => $contract->customer_id,
-                'invoice_id' => $invoice->id,
-                'original_amount' => $total,
-                'balance_amount' => $total,
-                'due_date' => $request->due_date,
-                'status' => 'OPEN',
-            ]);
-
-            AuditLogger::log(
-                tenantId: $tenantId,
-                userId: $request->user()->id,
-                action: 'invoice.issue',
-                entityType: 'Invoice',
-                entityId: $invoice->id,
-                metadata: ['invoice_number' => $invoiceNumber, 'total' => (string) $total],
-            );
+            $this->audit($request, $invoice, 'invoice.create', ['to' => 'DRAFT', 'events' => $events->count(), 'total' => $total]);
 
             return $invoice;
         });
 
-        return response()->json($invoice->load('items'), 201);
+        return response()->json($this->detail($invoice, $request), 201);
+    }
+
+    /**
+     * Emite el borrador: serie y correlativo sin repetir, fecha de emisión, datos del cliente a
+     * ese momento y su cuenta por cobrar. Después ya no se modifica.
+     */
+    public function issue(string $invoice, Request $request)
+    {
+        $invoice = $this->find($invoice);
+        $this->assertStatus($invoice, ['DRAFT'], 'emitir');
+        $tenantId = $request->attributes->get('tenant_id');
+
+        $invoice->load(self::WITH);
+        $identity = Billing::identity($invoice->customer);
+        $this->assertFiscalData($invoice->invoice_type, $identity);
+
+        $rate = null;
+        if ($invoice->currency === 'USD') {
+            $rate = ExchangeRate::current('USD')?->sell;
+            if (! $rate) {
+                throw ValidationException::withMessages(['currency' => ['Registra el tipo de cambio antes de emitir un comprobante en dólares.']]);
+            }
+        }
+
+        DB::transaction(function () use ($request, $invoice, $tenantId, $identity, $rate) {
+            $number = Billing::nextNumber($tenantId, $invoice->invoice_type, $invoice->series);
+            $invoice->update([
+                'number' => $number,
+                'invoice_number' => Billing::formatNumber($invoice->series, $number),
+                'issue_date' => now()->toDateString(),
+                'issued_at' => now(),
+                'status' => 'ISSUED',
+                'exchange_rate' => $rate,
+                'fiscal_status' => 'NOT_SENT',
+                'fiscal_response' => Billing::NOT_SENT_NOTE,
+                'customer_tax_id' => $identity['tax_id'],
+                'customer_name' => $identity['name'],
+            ]);
+
+            $this->openReceivable($request, $invoice);
+            $this->audit($request, $invoice, 'invoice.issue', ['from' => 'DRAFT', 'to' => 'ISSUED', 'note' => $invoice->invoice_number]);
+        });
+
+        return response()->json($this->detail($invoice, $request));
+    }
+
+    /**
+     * Nota de crédito por el total: corrige un comprobante emitido sin tocarlo. El original queda
+     * "Corregido" y su cuenta por cobrar, anulada. Si ya tiene cobros aplicados, primero se
+     * reembolsan o se llevan a otra cuenta: una cuenta anulada no retiene dinero del cliente.
+     */
+    public function creditNote(string $invoice, Request $request)
+    {
+        $invoice = $this->find($invoice);
+        if ($invoice->status !== 'ISSUED' || $invoice->invoice_type === 'CREDIT_NOTE') {
+            throw ValidationException::withMessages(['status' => ['Solo un comprobante emitido admite nota de crédito.']]);
+        }
+        $reason = trim($request->validate(
+            ['reason' => ['required', 'string', 'max:1000']],
+            ['reason.required' => 'Indica el motivo de la nota de crédito.'],
+        )['reason']);
+        $tenantId = $request->attributes->get('tenant_id');
+
+        $note = DB::transaction(function () use ($request, $invoice, $tenantId, $reason) {
+            // Sin importar el alcance de quien corrige: la cuenta es del comprobante.
+            $receivable = Receivable::ignoringAccessScope()->where('invoice_id', $invoice->id)->lockForUpdate()->first();
+            if ($receivable && (float) $receivable->balance_amount < (float) $receivable->original_amount) {
+                throw ValidationException::withMessages([
+                    'status' => ['El comprobante tiene cobros aplicados. Reembolsa esos cobros antes de emitir la nota de crédito.'],
+                ]);
+            }
+
+            $series = Billing::seriesFor('CREDIT_NOTE', $invoice);
+            $note = Invoice::create([
+                'tenant_id' => $tenantId,
+                'customer_id' => $invoice->customer_id,
+                'contract_id' => $invoice->contract_id,
+                'invoice_type' => 'CREDIT_NOTE',
+                'series' => $series,
+                'status' => 'DRAFT',
+                'currency' => $invoice->currency,
+                'exchange_rate' => $invoice->exchange_rate,
+                'due_date' => now()->toDateString(),
+                'subtotal' => -1 * (float) $invoice->subtotal,
+                'tax_total' => -1 * (float) $invoice->tax_total,
+                'total' => -1 * (float) $invoice->total,
+                'balance_due' => 0,
+                'fiscal_status' => 'NOT_SENT',
+                'customer_tax_id' => $invoice->customer_tax_id,
+                'customer_name' => $invoice->customer_name,
+                'related_invoice_id' => $invoice->id,
+                'reason' => $reason,
+                'owner_user_id' => $invoice->owner_user_id,
+                'created_by' => $request->user()->id,
+                'branch_id' => $invoice->branch_id,
+            ]);
+            InvoiceItem::create([
+                'tenant_id' => $tenantId,
+                'invoice_id' => $note->id,
+                'position' => 1,
+                'description' => Str::limit("Anulación de {$invoice->invoice_number} · {$reason}", 1000, ''),
+                'quantity' => 1,
+                'unit_price' => -1 * (float) $invoice->subtotal,
+                'tax_rate' => Billing::TAX_RATE,
+                'tax_amount' => -1 * (float) $invoice->tax_total,
+                'line_total' => -1 * (float) $invoice->total,
+            ]);
+
+            $number = Billing::nextNumber($tenantId, 'CREDIT_NOTE', $series);
+            $note->update([
+                'number' => $number,
+                'invoice_number' => Billing::formatNumber($series, $number),
+                'issue_date' => now()->toDateString(),
+                'issued_at' => now(),
+                'status' => 'ISSUED',
+                'fiscal_response' => Billing::NOT_SENT_NOTE,
+            ]);
+
+            $invoice->update(['status' => 'CORRECTED']);
+            if ($receivable && (float) $receivable->balance_amount > 0) {
+                // El saldo y el estado de la cuenta los actualiza la base con este movimiento.
+                ReceivableMovement::create([
+                    'tenant_id' => $tenantId, 'receivable_id' => $receivable->id, 'movement_type' => 'CREDIT_NOTE',
+                    'amount' => -1 * (float) $receivable->balance_amount, 'reference' => $note->invoice_number, 'created_by' => $request->user()->id,
+                ]);
+            }
+
+            $this->audit($request, $note, 'invoice.credit_note', ['to' => 'ISSUED', 'note' => "{$reason} (corrige {$invoice->invoice_number})"]);
+            $this->audit($request, $invoice, 'invoice.correct', ['from' => 'ISSUED', 'to' => 'CORRECTED', 'note' => "{$note->invoice_number}: {$reason}"]);
+
+            return $note;
+        });
+
+        return response()->json($this->detail($note, $request), 201);
+    }
+
+    /** Reintenta el envío a SUNAT de un comprobante rechazado. Sin proveedor conectado, ninguno llega a ese estado. */
+    public function fiscalRetry(string $invoice, Request $request)
+    {
+        $invoice = $this->find($invoice);
+        if ($invoice->status !== 'ISSUED' || $invoice->fiscal_status !== 'REJECTED') {
+            throw ValidationException::withMessages(['status' => ['Solo se reintenta un comprobante emitido que SUNAT rechazó.']]);
+        }
+
+        DB::transaction(function () use ($request, $invoice) {
+            $invoice->update(['fiscal_status' => 'PENDING', 'fiscal_response' => null]);
+            $this->audit($request, $invoice, 'invoice.fiscal_retry');
+        });
+
+        return response()->json($this->detail($invoice, $request));
+    }
+
+    /** Descarta un borrador: no llegó a emitirse, así que sus eventos vuelven a quedar por facturar. */
+    public function discard(string $invoice, Request $request)
+    {
+        $invoice = $this->find($invoice);
+        $this->assertStatus($invoice, ['DRAFT'], 'descartar');
+
+        DB::transaction(function () use ($request, $invoice) {
+            $released = BillableEvent::ignoringAccessScope()->where('invoice_id', $invoice->id)->where('status', 'INVOICED')
+                ->update(['status' => 'PENDING', 'invoice_id' => null]);
+            $invoice->update(['status' => 'CANCELLED']);
+            $this->audit($request, $invoice, 'invoice.discard', ['from' => 'DRAFT', 'to' => 'CANCELLED', 'events' => $released]);
+        });
+
+        return response()->json($this->detail($invoice, $request));
+    }
+
+    private function find(string $invoice): Invoice
+    {
+        abort_unless(Str::isUuid($invoice), 404);
+
+        return Invoice::findOrFail($invoice);
+    }
+
+    private function assertStatus(Invoice $invoice, array $allowed, string $verb): void
+    {
+        if (! in_array($invoice->status, $allowed, true)) {
+            throw ValidationException::withMessages([
+                'status' => ["No se puede {$verb} un comprobante ".mb_strtolower(Invoice::STATES[$invoice->status] ?? $invoice->status).'.'],
+            ]);
+        }
+    }
+
+    /** Una factura exige el RUC del cliente; sin él corresponde boleta. */
+    private function assertFiscalData(string $type, array $identity): void
+    {
+        if ($type === 'INVOICE' && ! $identity['has_ruc']) {
+            throw ValidationException::withMessages([
+                'type' => ['La factura requiere el RUC del cliente. Emite boleta o completa sus datos en Clientes y actores.'],
+            ]);
+        }
+    }
+
+    /** Cuenta por cobrar del comprobante emitido. Nace en cero: su cargo la lleva al importe (lo hace la base). */
+    private function openReceivable(Request $request, Invoice $invoice): void
+    {
+        $receivable = Receivable::create([
+            'tenant_id' => $invoice->tenant_id,
+            'customer_id' => $invoice->customer_id,
+            'invoice_id' => $invoice->id,
+            'original_amount' => $invoice->total,
+            'balance_amount' => 0,
+            'currency' => $invoice->currency,
+            'due_date' => $invoice->due_date,
+            'status' => 'OPEN',
+            'owner_user_id' => $invoice->owner_user_id,
+            'branch_id' => $invoice->branch_id,
+        ]);
+        ReceivableMovement::create([
+            'tenant_id' => $invoice->tenant_id, 'receivable_id' => $receivable->id, 'movement_type' => 'CHARGE',
+            'amount' => $invoice->total, 'reference' => $invoice->invoice_number, 'created_by' => $request->user()->id,
+        ]);
+    }
+
+    private function row(Invoice $invoice): array
+    {
+        // En borrador se muestran los datos vigentes del cliente; emitido, los que quedaron en el comprobante
+        // (los comprobantes anteriores a esta pantalla no los guardaron).
+        $identity = $invoice->status === 'DRAFT' || ! $invoice->customer_name ? Billing::identity($invoice->customer) : null;
+
+        return [
+            'id' => $invoice->id,
+            'invoice_number' => $invoice->invoice_number,
+            'invoice_type' => $invoice->invoice_type,
+            'series' => $invoice->series,
+            'customer' => $invoice->customer,
+            'customer_name' => $identity['name'] ?? $invoice->customer_name,
+            'customer_tax_id' => $identity ? $identity['tax_id'] : $invoice->customer_tax_id,
+            'issue_date' => $invoice->issue_date?->toDateString(),
+            'due_date' => $invoice->due_date?->toDateString(),
+            'currency' => $invoice->currency,
+            'exchange_rate' => $invoice->exchange_rate !== null ? (float) $invoice->exchange_rate : null,
+            'subtotal' => (float) $invoice->subtotal,
+            'tax_total' => (float) $invoice->tax_total,
+            'total' => (float) $invoice->total,
+            'balance_due' => (float) $invoice->balance_due,
+            'status' => $invoice->status,
+            'fiscal_status' => $invoice->fiscal_status,
+            'created_at' => $invoice->created_at?->toIso8601String(),
+            'lock_version' => (int) $invoice->lock_version,
+        ];
+    }
+
+    private function detail(Invoice $invoice, Request $request): array
+    {
+        $invoice = Invoice::query()
+            ->with([...self::WITH, 'items', 'contract:id,contract_number', 'related:id,invoice_number', 'creditNote:id,invoice_number,related_invoice_id'])
+            ->findOrFail($invoice->id);
+
+        // La cuenta por cobrar es un dato del comprobante: quien lo ve, ve su saldo y sus movimientos.
+        $receivable = Receivable::ignoringAccessScope()->with('movements')->where('invoice_id', $invoice->id)->first();
+
+        // Por su modelo: solo los cobros que la persona alcanza (y solo con permiso de verlos).
+        $payments = $receivable && \App\Http\Middleware\CheckPermission::granted($request, 'payments.view')
+            ? Payment::query()
+                ->join('payment_allocations', 'payment_allocations.payment_id', '=', 'payments.id')
+                ->where('payment_allocations.receivable_id', $receivable->id)
+                ->orderBy('payments.paid_at')
+                ->get(['payments.id', 'payments.payment_number', 'payments.payment_method', 'payments.paid_at', 'payment_allocations.amount as applied'])
+                ->map(fn ($payment) => [
+                    'id' => $payment->id, 'payment_number' => $payment->payment_number, 'payment_method' => $payment->payment_method,
+                    'paid_at' => $payment->paid_at?->toIso8601String(), 'applied' => (float) $payment->applied,
+                ])->values()
+            : [];
+
+        return [
+            ...$this->row($invoice),
+            'reason' => $invoice->reason,
+            'fiscal_response' => $invoice->fiscal_response,
+            'issued_at' => $invoice->issued_at?->toIso8601String(),
+            'items' => $invoice->items->map(fn (InvoiceItem $item) => [
+                'id' => $item->id,
+                'description' => $item->description,
+                'quantity' => (float) $item->quantity,
+                'unit_price' => (float) $item->unit_price,
+                'tax_rate' => (float) $item->tax_rate,
+                'line_total' => (float) $item->line_total,
+                'billable_event_id' => $item->billable_event_id,
+            ])->values(),
+            // null si el contrato queda fuera del alcance de quien mira.
+            'contract' => $invoice->contract ? ['id' => $invoice->contract->id, 'contract_number' => $invoice->contract->contract_number] : null,
+            'related' => $invoice->related ? ['id' => $invoice->related->id, 'invoice_number' => $invoice->related->invoice_number] : null,
+            'credit_note' => $invoice->creditNote ? ['id' => $invoice->creditNote->id, 'invoice_number' => $invoice->creditNote->invoice_number] : null,
+            'receivable' => $receivable ? [
+                'id' => $receivable->id,
+                'due_date' => $receivable->due_date?->toDateString(),
+                'original_amount' => (float) $receivable->original_amount,
+                'balance_amount' => (float) $receivable->balance_amount,
+                'currency' => $receivable->currency,
+                'status' => $receivable->status,
+                'overdue' => in_array($receivable->status, Receivable::OPEN, true) && $receivable->due_date?->isBefore(today()),
+                'movements' => $receivable->movements->map(fn (ReceivableMovement $movement) => [
+                    'id' => $movement->id, 'movement_type' => $movement->movement_type, 'amount' => (float) $movement->amount,
+                    'reference' => $movement->reference, 'at' => $movement->created_at?->toIso8601String(),
+                ])->values(),
+            ] : null,
+            'payments' => $payments,
+            'history' => AuditHistory::for('Invoice', $invoice->id),
+        ];
+    }
+
+    private function audit(Request $request, Invoice $invoice, string $action, array $metadata = []): void
+    {
+        AuditLogger::log(
+            tenantId: $request->attributes->get('tenant_id'),
+            userId: $request->user()->id,
+            action: $action,
+            entityType: 'Invoice',
+            entityId: $invoice->id,
+            metadata: $metadata,
+        );
     }
 }
