@@ -5,6 +5,8 @@ namespace App\Http\Middleware;
 use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\CrmLead;
 use App\Modules\Crm\Models\CrmOpportunity;
+use App\Modules\Operations\Models\ContractedService;
+use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Modules\Services\Models\Contract;
 use App\Modules\Services\Models\Order;
@@ -42,6 +44,8 @@ class CheckRecordVersion
         'opportunity' => 'crm_opportunities',
         'activity' => 'crm_activities',
         'campaign' => 'crm_campaigns',
+        'contractedService' => 'contracted_services',
+        'workOrder' => 'work_orders',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -53,6 +57,8 @@ class CheckRecordVersion
         'crm_leads' => CrmLead::class,
         'crm_opportunities' => CrmOpportunity::class,
         'crm_activities' => CrmActivity::class,
+        'contracted_services' => ContractedService::class,
+        'work_orders' => WorkOrder::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

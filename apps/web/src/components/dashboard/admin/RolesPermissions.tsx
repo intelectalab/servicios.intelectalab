@@ -56,6 +56,8 @@ const RESOURCES: Record<string, string> = {
   activities: "Actividades",
   campaigns: "Campañas",
   scoring: "Puntuación de leads",
+  contracted_services: "Servicios contratados",
+  work_orders: "Órdenes de trabajo",
   operations: "Operaciones",
   documents: "Documentos",
   billing: "Facturación y cobros",

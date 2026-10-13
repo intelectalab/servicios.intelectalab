@@ -493,13 +493,13 @@ class AccessScopeTest extends TestCase
 
         Sanctum::actingAs($admin);
         $list = $this->getJson('/api/v1/roles')->assertOk()->json();
-        $this->assertSame(['quotations', 'contracts', 'orders', 'portal', 'leads', 'opportunities', 'activities'], collect($list['scope_resources'])->pluck('code')->all());
+        $this->assertSame(['quotations', 'contracts', 'orders', 'portal', 'leads', 'opportunities', 'activities', 'contracted_services', 'work_orders'], collect($list['scope_resources'])->pluck('code')->all());
         $this->assertSame('TENANT', collect($list['roles'])->firstWhere('id', $salesId)['scopes']['quotations']);
 
         // Un rol nuevo nace alcanzando solo lo propio.
         $newRole = $this->postJson('/api/v1/roles', ['name' => 'Preventa'])->assertCreated()->json('id');
         $this->assertSame(
-            ['activities' => 'OWN', 'contracts' => 'OWN', 'leads' => 'OWN', 'opportunities' => 'OWN', 'orders' => 'OWN', 'portal' => 'OWN', 'quotations' => 'OWN'],
+            ['activities' => 'OWN', 'contracted_services' => 'OWN', 'contracts' => 'OWN', 'leads' => 'OWN', 'opportunities' => 'OWN', 'orders' => 'OWN', 'portal' => 'OWN', 'quotations' => 'OWN', 'work_orders' => 'OWN'],
             DB::table('role_scopes')->where('role_id', $newRole)->orderBy('resource')->pluck('scope', 'resource')->all(),
         );
 

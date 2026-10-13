@@ -15,6 +15,7 @@ use App\Modules\Services\Http\Controllers\ServiceCategoryController;
 use App\Modules\Services\Http\Controllers\QuotationController;
 use App\Modules\Services\Http\Controllers\ContractController;
 use App\Modules\Services\Http\Controllers\OrderController;
+use App\Modules\Operations\Http\Controllers\ContractedServiceController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
 use App\Modules\Operations\Http\Controllers\TaskController;
 use App\Modules\Operations\Http\Controllers\ChecklistController;
@@ -300,16 +301,40 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware('permission:operations.manage')->post('/checklists', [ChecklistController::class, 'store']);
 
+        // Servicios contratados
+        Route::middleware('permission:contracted_services.view')->group(function () {
+            Route::get('/contracted-services', [ContractedServiceController::class, 'index']);
+            Route::get('/contracted-services/{contractedService}', [ContractedServiceController::class, 'show']);
+        });
+        Route::middleware('permission:contracted_services.manage')->group(function () {
+            Route::post('/contracted-services/{contractedService}/activate', [ContractedServiceController::class, 'activate']);
+            Route::post('/contracted-services/{contractedService}/suspend', [ContractedServiceController::class, 'suspend']);
+            Route::post('/contracted-services/{contractedService}/reactivate', [ContractedServiceController::class, 'reactivate']);
+            Route::post('/contracted-services/{contractedService}/complete', [ContractedServiceController::class, 'complete']);
+            Route::post('/contracted-services/{contractedService}/cancel', [ContractedServiceController::class, 'cancel']);
+        });
+
         // Órdenes de trabajo
-        Route::middleware('permission:operations.view')->group(function () {
+        Route::middleware('permission:work_orders.view')->group(function () {
             Route::get('/work-orders', [WorkOrderController::class, 'index']);
+            Route::get('/work-orders/options', [WorkOrderController::class, 'options']);
             Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show']);
         });
-        Route::middleware('permission:operations.manage')->group(function () {
-            Route::post('/work-orders', [WorkOrderController::class, 'store']);
-            Route::post('/work-orders/{workOrder}/assign', [WorkOrderController::class, 'assign']);
+        Route::middleware('permission:work_orders.create')->post('/work-orders', [WorkOrderController::class, 'store']);
+        Route::middleware('permission:work_orders.manage')->group(function () {
+            Route::put('/work-orders/{workOrder}', [WorkOrderController::class, 'update']);
             Route::post('/work-orders/{workOrder}/start', [WorkOrderController::class, 'start']);
+            Route::post('/work-orders/{workOrder}/block', [WorkOrderController::class, 'block']);
+            Route::post('/work-orders/{workOrder}/unblock', [WorkOrderController::class, 'unblock']);
             Route::post('/work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete']);
+            Route::post('/work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel']);
+            Route::patch('/work-orders/{workOrder}/checklist-items/{item}', [WorkOrderController::class, 'checkItem']);
+        });
+        // Asignar el técnico y revisar el checklist son de quien supervisa, no de quien ejecuta.
+        Route::middleware('permission:work_orders.approve')->group(function () {
+            Route::post('/work-orders/{workOrder}/assign', [WorkOrderController::class, 'assign']);
+            Route::post('/work-orders/{workOrder}/checklist/approve', [WorkOrderController::class, 'approveChecklist']);
+            Route::post('/work-orders/{workOrder}/checklist/return', [WorkOrderController::class, 'returnChecklist']);
         });
 
         // Tareas

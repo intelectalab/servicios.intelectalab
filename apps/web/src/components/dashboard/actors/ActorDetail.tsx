@@ -8,6 +8,7 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES } from "@/lib/contracts";
 import { LEAD_STATES, OPPORTUNITY_STATES } from "@/lib/crm";
+import { WORK_ORDER_STATES } from "@/lib/operations";
 import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, phoneText, rolesText } from "@/lib/actors";
 import {
   Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useDenied, useToasts,
@@ -43,7 +44,7 @@ const WORK_ORDER_COLUMNS: Column<Row<"work_orders">>[] = [
   { label: "OT", render: (row) => <><strong className="font-semibold">{row.code}</strong><small className="app-muted block text-xs">{row.description}</small></> },
   { label: "Programada", render: (row) => shortDate(row.scheduled_start) },
   { label: "Técnico", render: (row) => row.technician ?? "—" },
-  { label: "Estado", render: (row) => raw(row.status) },
+  { label: "Estado", render: (row) => <Badge tone={stateOf(WORK_ORDER_STATES, row.status)[1]}>{stateOf(WORK_ORDER_STATES, row.status)[0]}</Badge> },
 ];
 
 const INVOICE_COLUMNS: Column<Row<"invoices">>[] = [
@@ -464,7 +465,7 @@ export default function ActorDetail() {
           <Listing title="Contratos" permission="contracts.view" cols={CONTRACT_COLUMNS} rows={actor.contracts} onRowClick={(row) => router.push(`/contracts/${row.id}`)} />
         </>
       )}
-      {tab === "operaciones" && <Listing title="Órdenes de trabajo" permission="operations.view" cols={WORK_ORDER_COLUMNS} rows={actor.work_orders} />}
+      {tab === "operaciones" && <Listing title="Órdenes de trabajo" permission="work_orders.view" cols={WORK_ORDER_COLUMNS} rows={actor.work_orders} onRowClick={(row) => router.push(`/work-orders/${row.id}`)} />}
       {tab === "finanzas" && <Listing title="Comprobantes" permission="billing.view" cols={INVOICE_COLUMNS} rows={actor.invoices} />}
       {tab === "soporte" && <Listing title="Tickets" permission="support.view" cols={TICKET_COLUMNS} rows={actor.tickets} />}
       {tab === "documentos" && <Listing title="Documentos vinculados" cols={DOCUMENT_COLUMNS} rows={actor.documents} />}

@@ -15,6 +15,7 @@ use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
 use App\Modules\Crm\Models\CrmLead;
 use App\Modules\Crm\Models\CrmOpportunity;
+use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Contract;
 use App\Modules\Services\Models\Quotation;
 use App\Services\AuditHistory;
@@ -573,10 +574,11 @@ class PartyController extends Controller
                 ->get(['id', 'quotation_number', 'created_at', 'total', 'currency', 'status']),
             'contracts' => $ofCustomerInScope(Contract::class, 'contracts.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'contract_number', 'start_date', 'end_date', 'total_value', 'currency', 'status']),
-            'work_orders' => $ofCustomer('work_orders', 'operations.view')
+            // Por su modelo, para respetar el alcance del rol.
+            'work_orders' => $ofCustomerInScope(WorkOrder::class, 'work_orders.view')
                 ->leftJoin('users', 'users.id', '=', 'work_orders.assigned_user_id')
                 ->orderByDesc('work_orders.created_at')->limit(100)
-                ->get(['work_orders.id', 'work_orders.code', 'work_orders.description', 'work_orders.scheduled_start', 'work_orders.status', 'users.name as technician']),
+                ->get(['work_orders.id', 'work_orders.code', 'work_orders.title as description', 'work_orders.scheduled_start', 'work_orders.status', 'users.name as technician']),
             'invoices' => $ofCustomer('invoices', 'billing.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'invoice_number', 'issue_date', 'total', 'currency', 'status']),
             'tickets' => $ofCustomer('support_tickets', 'support.view')->orderByDesc('created_at')->limit(100)

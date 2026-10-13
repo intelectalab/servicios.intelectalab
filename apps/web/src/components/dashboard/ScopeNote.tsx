@@ -29,8 +29,24 @@ const ACTIVITY_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza tus actividades y las de tus sedes.",
 };
 
+// Un servicio contratado es de su responsable y de quien vendió su contrato.
+const CONTRACTED_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los servicios contratados de los que eres responsable y los de tus contratos.",
+  TEAM: "Tu rol alcanza tus servicios contratados y los de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus servicios contratados y los de tus sedes.",
+};
+
+// Una orden de trabajo es del técnico que la tiene asignada y de quien la creó.
+const WORK_ORDER_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza las órdenes de trabajo que tienes asignadas y las que creaste.",
+  TEAM: "Tu rol alcanza tus órdenes de trabajo y las de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus órdenes de trabajo y las de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "contracted_services" ? CONTRACTED_HINTS
+    : resource === "work_orders" ? WORK_ORDER_HINTS
     : resource === "activities" ? ACTIVITY_HINTS
     : resource === "leads" || resource === "opportunities" ? CRM_HINTS : HINTS;
 

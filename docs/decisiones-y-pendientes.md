@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-09 (con el CRM completo y la pantalla Auditoría).
+Estado al 2026-10-12 (con el CRM completo, la pantalla Auditoría y la primera parte de Operaciones).
 
 ## Decisiones tomadas
 
@@ -22,7 +22,7 @@ Estado al 2026-10-09 (con el CRM completo y la pantalla Auditoría).
 
 ### Alcance en los permisos (2026-10-08)
 - Un rol define qué puede hacer (permisos) y qué registros alcanza (alcance): **Propios, Equipo, Sede o Toda la empresa**. Se elige por rol y por recurso en Roles y permisos. Detalle en [cambios/2026-10-08_alcance-en-permisos.md](cambios/2026-10-08_alcance-en-permisos.md).
-- Aplica a Cotizaciones, Contratos, Órdenes, Solicitudes del portal y, desde que existe el CRM, Leads, Oportunidades y Actividades. En los demás recursos, quien tiene el permiso ve toda la empresa.
+- Aplica a Cotizaciones, Contratos, Órdenes, Solicitudes del portal, Leads, Oportunidades, Actividades y, desde el 2026-10-12, Servicios contratados y Órdenes de trabajo. En los demás recursos, quien tiene el permiso ve toda la empresa.
 - Fuera de alcance = "no existe" (404), igual que un registro de otra empresa.
 - Reparto: Ventas, lo propio (la bandeja de solicitudes, completa); Gerencia y Administrador, toda la empresa. El Administrador no se recorta.
 - Rol nuevo o sin alcance definido: solo lo propio. Sin equipo o sin sede asignados, el alcance se queda en lo propio. Un documento sin sede no se abre a todas las sedes.
@@ -48,6 +48,20 @@ Estado al 2026-10-09 (con el CRM completo y la pantalla Auditoría).
 - **Campañas** (2026-10-09): quien las ve, ve todas; sus miembros y resultados se cuentan sobre los leads y oportunidades que el rol alcanza. Cancelar pide motivo. El consentimiento se registra por miembro y la campaña decide si lo exige (por defecto, sí). Excluir no borra. Un lead conserva su primera campaña como campaña de origen.
 - **Puntuación de leads** (2026-10-09): criterios fijos (los del prototipo, en `App\Modules\Crm\Support\LeadScoring`); cada empresa cambia solo los puntos (−50 a 50). Se recalcula al crear o editar el lead, al registrarle una actividad, al asociarlo o excluirlo de una campaña y al guardar las reglas. Recalcular no cuenta como una edición del lead. Cambiar las reglas es un permiso propio (`scoring.manage`): en el prototipo lo tenía Ventas con "editar leads"; aquí solo el Administrador.
 - Permisos nuevos del módulo CRM: `activities.*` y `campaigns.*` (Ver, Gestionar, Exportar) y `scoring.manage`. Reparto del prototipo: Gerencia ve actividades y ve y exporta campañas; Ventas gestiona sus actividades y ve campañas.
+
+### Operaciones (2026-10-12)
+- Se construye por partes, en el orden del kit. Hecho: Servicios contratados y Órdenes de trabajo ([cambios/2026-10-12_operaciones-servicios-contratados-y-ot.md](cambios/2026-10-12_operaciones-servicios-contratados-y-ot.md)). Faltan Proyectos, Horas y costos, Agenda y App del técnico.
+- Permisos por recurso: `contracted_services.*` (Ver, Gestionar, Exportar) y `work_orders.*` (Ver, Crear, Gestionar, Aprobar, Exportar). Los dos cuelgan del módulo Órdenes de trabajo del plan. El `operations.*` anterior queda para tareas, horas, recursos y plantillas, que aún no tienen pantalla.
+- **Asignar el técnico y revisar el checklist** es `work_orders.approve`, aparte de ejecutar (`work_orders.manage`): el técnico ejecuta, no se reasigna ni se aprueba. Asignar al crear la orden pide ese mismo permiso.
+- **Técnico** no es un rol fijo: se puede asignar una orden a cualquier persona con acceso vigente cuyo rol tenga `work_orders.manage`.
+- Alcance: una orden de trabajo es "propia" de quien la tiene asignada y de quien la creó; un servicio contratado, de su responsable y de quien vendió su contrato. El servicio hereda responsable y sede del contrato; la orden, la sede de su servicio.
+- Una orden de trabajo nace siempre de un servicio contratado activo (más adelante, también de un ticket). No se crea con un cliente suelto.
+- El técnico no recibe dos órdenes que se crucen: asignar, crear con técnico y mover la fecha validan su agenda contra sus órdenes asignadas o en ejecución de toda la empresa; una orden sin hora de fin ocupa dos horas. El choque bloquea.
+- El checklist de una orden es una copia de la plantilla elegida al crearla. Completar la orden exige sus ítems obligatorios. Con ellos marcados queda Completado y se aprueba o se devuelve (con motivo); aprobado, no cambia. **Quien ejecuta la orden no aprueba su checklist**, salvo que la empresa desactive la segregación de funciones (el mismo ajuste de las cotizaciones).
+- Un servicio contratado solo se activa o reactiva con su contrato vigente, y no se completa ni se cancela con órdenes de trabajo abiertas. Activar uno recurrente crea su instancia recurrente una sola vez; la instancia sigue al servicio.
+- Lo que la base garantiza: motivo en suspender, bloquear y cancelar; técnico en una orden asignada o en ejecución; una instancia recurrente por servicio; los ítems de un checklist no se borran.
+- La ficha del servicio contratado es una ventana sobre el listado; la de la orden, una página con tarjetas movibles.
+- Quien no puede abrir la pantalla de inicio (Clientes y actores) va a la primera pantalla del menú que su rol sí abre.
 
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
@@ -120,6 +134,7 @@ Estado al 2026-10-09 (con el CRM completo y la pantalla Auditoría).
 
 ## Pendientes
 
+- Operaciones: Proyectos, Horas y costos, Agenda y App del técnico; pantalla de plantillas de checklist (hoy solo por la API); evidencias con archivo (con Documentos); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte); que suspender o terminar un contrato arrastre sus servicios contratados.
 - CRM: solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.

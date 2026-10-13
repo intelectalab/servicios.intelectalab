@@ -220,7 +220,11 @@ class ContractController extends Controller
                     'tenant_id' => $tenantId,
                     'customer_id' => $contract->customer_id,
                     'contract_id' => $contract->id,
+                    'contract_item_id' => $item->id,
                     'service_id' => $item->service_id,
+                    // Responsable y sede: los del contrato (de ellos depende quién lo alcanza).
+                    'owner_user_id' => $contract->created_by,
+                    'branch_id' => $contract->branch_id,
                     'status' => 'PENDING',
                     'start_date' => $contract->start_date,
                     'end_date' => $contract->end_date,

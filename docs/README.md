@@ -56,6 +56,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-08 | El menú lateral recuerda qué grupos están abiertos y cerrados al recargar | [cambios/2026-10-08_menu-recuerda-grupos.md](cambios/2026-10-08_menu-recuerda-grupos.md) |
 | 2026-10-09 | CRM: Actividades (con alcance), Campañas (miembros con consentimiento, resultados dentro del alcance) y Puntuación automática de leads | [cambios/2026-10-09_crm-actividades-campanas-puntuacion.md](cambios/2026-10-09_crm-actividades-campanas-puntuacion.md) |
 | 2026-10-12 | Carga de las pantallas del CRM: el listado primero y las lecturas repetidas compartidas | [cambios/2026-10-12_carga-de-pantallas-crm.md](cambios/2026-10-12_carga-de-pantallas-crm.md) |
+| 2026-10-12 | Operaciones, primera parte: Servicios contratados y Órdenes de trabajo (tablero, ficha, checklist, asignación sin choques de agenda, alcance por rol) | [cambios/2026-10-12_operaciones-servicios-contratados-y-ot.md](cambios/2026-10-12_operaciones-servicios-contratados-y-ot.md) |
 
 ## Cómo se escribe cada entrada
 

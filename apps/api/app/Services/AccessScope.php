@@ -32,6 +32,8 @@ class AccessScope
         'leads' => 'Leads',
         'opportunities' => 'Oportunidades',
         'activities' => 'Actividades',
+        'contracted_services' => 'Servicios contratados',
+        'work_orders' => 'Órdenes de trabajo',
     ];
 
     /** De menor a mayor alcance. */
@@ -108,6 +110,12 @@ class AccessScope
             'activities' => $query->whereIn("{$table}.owner_user_id", $owners)
                 ->orWhereIn("{$table}.lead_id", fn ($sub) => $sub->select('id')->from('crm_leads')->whereIn('owner_user_id', $owners))
                 ->orWhereIn("{$table}.opportunity_id", fn ($sub) => $sub->select('id')->from('crm_opportunities')->whereIn('owner_user_id', $owners)),
+            // Un servicio contratado es propio de su responsable y de quien vendió su contrato.
+            'contracted_services' => $query->whereIn("{$table}.owner_user_id", $owners)
+                ->orWhereIn("{$table}.contract_id", fn ($sub) => $sub->select('id')->from('contracts')
+                    ->where(fn ($own) => $own->whereIn('created_by', $owners)->orWhereIn('quotation_id', $fromQuotation))),
+            // Una orden de trabajo es propia del técnico que la tiene asignada y de quien la creó.
+            'work_orders' => $query->whereIn("{$table}.assigned_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
         };
     }
 

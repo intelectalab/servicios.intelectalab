@@ -25,7 +25,7 @@ class ModuleCatalogSeeder extends Seeder
         ['SERVICIOS', 'Servicios', 'Catálogo y motor de servicios', 'CORE', false, ['services']],
         ['COTIZACIONES', 'Cotizaciones', 'Propuestas comerciales', 'CORE', false, ['quotations']],
         ['CONTRATOS', 'Contratos', 'Gestión contractual', 'CORE', false, ['contracts', 'orders']],
-        ['ORDENES_TRABAJO', 'Órdenes de trabajo', 'Operación y ejecución', 'CORE', false, ['operations']],
+        ['ORDENES_TRABAJO', 'Órdenes de trabajo', 'Operación y ejecución', 'CORE', false, ['operations', 'work_orders', 'contracted_services']],
         ['PROYECTOS', 'Proyectos', 'Planificación de proyectos', 'CORE', false, []],
         ['TAREAS', 'Tareas', 'Actividades y seguimiento', 'CORE', false, ['operations']],
         ['CHECKLISTS', 'Checklists', 'Listas de verificación', 'CORE', false, ['operations']],

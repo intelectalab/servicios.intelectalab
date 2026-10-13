@@ -39,8 +39,8 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/orders", label: "Órdenes", module: "CONTRATOS", requiredPermission: "orders.view", icon: Package, superModule: "Comercial" },
   { href: "/portal-requests", label: "Solicitudes del portal", module: "COTIZACIONES", requiredPermission: "portal.view", icon: Globe, superModule: "Comercial" },
 
-  { label: "Servicios contratados", icon: Layers, superModule: "Operaciones", soon: true },
-  { label: "Órdenes de trabajo", icon: Wrench, superModule: "Operaciones", soon: true },
+  { href: "/contracted-services", label: "Servicios contratados", module: "ORDENES_TRABAJO", requiredPermission: "contracted_services.view", icon: Layers, superModule: "Operaciones" },
+  { href: "/work-orders", label: "Órdenes de trabajo", module: "ORDENES_TRABAJO", requiredPermission: "work_orders.view", icon: Wrench, superModule: "Operaciones" },
   { label: "Proyectos", icon: SquareKanban, superModule: "Operaciones", soon: true },
   { label: "Horas y costos", icon: Clock, superModule: "Operaciones", soon: true },
   { label: "Agenda", icon: Calendar, superModule: "Operaciones", soon: true },
@@ -102,6 +102,9 @@ const GROUP_ICONS = {
 
 const SIDEBAR_STATE_KEY = "erp-sidebar-open";
 
+// Pantalla a la que se llega al iniciar sesión (la misma de proxy.ts) y el permiso que pide.
+const HOME = { href: "/actors", permission: "core.view" };
+
 type AccessResponse = {
   modules: string[];
   permissions: string[];
@@ -123,6 +126,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [tenantName, setTenantName] = useState<string | undefined>(undefined);
   const [roleName, setRoleName] = useState<string | undefined>(undefined);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
+  const [accessLoaded, setAccessLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -161,6 +165,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           setScopes(access.scopes ?? {});
           setTenantName(access.tenant?.name);
           setRoleName(access.roles[0]);
+          setAccessLoaded(true);
         }
       } catch (err) {
         console.error("Error al cargar datos de sesión", err);
@@ -194,6 +199,16 @@ export default function AppShell({ children }: { children: ReactNode }) {
     // Sin "module" la pantalla es de administración de la empresa: no depende del plan.
     item.soon ? item : { ...item, locked: item.module !== undefined && !modules.includes(item.module) },
   ).filter((item) => item.soon || item.locked || permissions.includes(item.requiredPermission));
+
+  // Un rol que no abre la pantalla de inicio (p. ej. un técnico, sin Clientes y actores) no se
+  // queda ante un listado que no carga: va a la primera pantalla que sí puede abrir.
+  const firstScreen = menuWithLockState.find((item) => !item.soon && !item.locked);
+  const homeDenied = accessLoaded && pathname === HOME.href && !permissions.includes(HOME.permission);
+  const fallback = firstScreen && !firstScreen.soon ? firstScreen.href : "/profile";
+
+  useEffect(() => {
+    if (homeDenied) router.replace(fallback);
+  }, [homeDenied, fallback, router]);
 
   // El rol real llega con /me/access; mientras tanto se muestra uno genérico.
   const sessionUser = currentUser ? { ...currentUser, role: roleName ?? currentUser.role } : null;
@@ -265,7 +280,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">
-          <AccessProvider value={{ permissions, scopes, loading: permissionsLoading }}>{children}</AccessProvider>
+          <AccessProvider value={{ permissions, scopes, loading: permissionsLoading }}>{homeDenied ? null : children}</AccessProvider>
         </main>
       </div>
     </div>
