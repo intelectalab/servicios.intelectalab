@@ -1,6 +1,12 @@
 @import "tailwindcss";
 
 :root {
+  /* Barra lateral: el azul del logo; en oscuro baja de tono y el azul vivo queda para lo activo. */
+  --side-bg: linear-gradient(180deg, #1B8FC9 0%, #1679AB 22%, #0F5A82 100%);
+  --side-flyout: linear-gradient(180deg, #1679AB 0%, #0F5A82 100%);
+  --side-active: rgb(255 255 255 / 0.16);
+  --side-group-active: rgb(255 255 255 / 0.20);
+  --side-ring: #1679AB;
   --background: #eaf4f8;
   --foreground: #171717;
   --app-surface: #ffffff;
@@ -55,6 +61,11 @@
 }
 
 [data-theme="dark"] {
+  --side-bg: linear-gradient(180deg, #14658F 0%, #0F4C6E 22%, #0A344D 100%);
+  --side-flyout: linear-gradient(180deg, #0F4C6E 0%, #0A344D 100%);
+  --side-active: rgb(27 143 201 / 0.62);
+  --side-group-active: rgb(27 143 201 / 0.42);
+  --side-ring: #0F4C6E;
   --background: #111b22;
   --foreground: #f4fbfd;
   --app-surface: #182b35;

@@ -52,10 +52,11 @@ type SidebarProps = {
 
 /**
  * Colores de la barra: el azul del logo (#1B8FC9) oscureciéndose hacia abajo,
- * con texto e indicadores en blanco. Igual en tema claro y oscuro.
+ * con texto e indicadores en blanco. En tema oscuro baja de tono y el azul vivo
+ * queda para lo activo (variables --side-… de globals.css).
  */
 // Ojo: aquí no se usan clases "bg-white…": globals.css las repinta en tema oscuro.
-const SIDEBAR_BACKGROUND = "linear-gradient(180deg, #1B8FC9 0%, #1679AB 22%, #0F5A82 100%)";
+const SIDEBAR_BACKGROUND = "var(--side-bg)";
 
 // Grupos del menú que la persona dejó plegados (true) o desplegados (false). Se recuerda en su
 // navegador; todas las barras abiertas (escritorio, teléfono, otra pestaña) leen lo mismo.
@@ -225,7 +226,7 @@ export default function Sidebar({
             {initials(user.name)}
             <span
               title="Sesión activa"
-              className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#1679AB] bg-[#3DDC84]"
+              className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[color:var(--side-ring)] bg-[#3DDC84]"
             />
           </span>
           <div className="min-w-0">
@@ -289,7 +290,7 @@ export default function Sidebar({
                   aria-haspopup="menu"
                   aria-expanded={open}
                   className={`relative flex h-10 w-full cursor-pointer items-center justify-center rounded-lg transition-colors ${
-                    hasActive || open ? "bg-[rgb(255_255_255/0.20)] text-white" : "text-white/85 hover:bg-[rgb(255_255_255/0.10)] hover:text-white"
+                    hasActive || open ? "bg-[var(--side-group-active)] text-white" : "text-white/85 hover:bg-[rgb(255_255_255/0.10)] hover:text-white"
                   }`}
                 >
                   {hasActive && <span className="absolute inset-y-1.5 left-0 w-[3px] rounded-r bg-[#fff]" />}
@@ -350,7 +351,7 @@ export default function Sidebar({
                           aria-current={active ? "page" : undefined}
                           className={`relative flex items-center gap-2 py-2 pl-[52px] pr-[18px] text-[12.8px] transition-colors ${
                             active
-                              ? "bg-[rgb(255_255_255/0.16)] font-semibold text-white"
+                              ? "bg-[var(--side-active)] font-semibold text-white"
                               : locked
                               ? "text-white/60 hover:text-white"
                               : "text-white/80 hover:text-white"
@@ -386,7 +387,7 @@ export default function Sidebar({
           role="menu"
           aria-label={openFlyout.group}
           className={`${poppins.className} fixed z-50 flex max-h-[80vh] w-[236px] flex-col overflow-hidden rounded-[10px] text-white shadow-[0_14px_34px_rgba(8,25,55,.35)]`}
-          style={{ left: openFlyout.left, top: openFlyout.top, bottom: openFlyout.bottom, background: "linear-gradient(180deg, #1679AB 0%, #0F5A82 100%)" }}
+          style={{ left: openFlyout.left, top: openFlyout.top, bottom: openFlyout.bottom, background: "var(--side-flyout)" }}
         >
           <div className="px-4 pb-1.5 pt-3 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-white/60">{openFlyout.group}</div>
           <div className="min-h-0 flex-1 overflow-y-auto pb-1.5 [scrollbar-color:rgba(255,255,255,.2)_transparent] [scrollbar-width:thin]">
@@ -425,7 +426,7 @@ export default function Sidebar({
                   aria-current={active ? "page" : undefined}
                   className={`relative flex items-center gap-2 px-4 py-2 text-[12.8px] transition-colors ${
                     active
-                      ? "bg-[rgb(255_255_255/0.16)] font-semibold text-white"
+                      ? "bg-[var(--side-active)] font-semibold text-white"
                       : locked
                       ? "text-white/60 hover:bg-[rgb(255_255_255/0.07)] hover:text-white"
                       : "text-white/85 hover:bg-[rgb(255_255_255/0.07)] hover:text-white"
@@ -516,7 +517,7 @@ export default function Sidebar({
             compact ? "h-10 justify-center rounded-lg" : "gap-3 px-[22px] py-2"
           } ${
             isActive(profileHref)
-              ? "bg-[rgb(255_255_255/0.16)] text-white"
+              ? "bg-[var(--side-active)] text-white"
               : "text-white/85 hover:bg-[rgb(255_255_255/0.07)]"
           }`}
         >

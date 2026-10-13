@@ -79,6 +79,8 @@ Estado al 2026-10-12 (con el CRM completo, la pantalla Auditoría y la primera p
 - "Servicios" pasó a llamarse "Catálogo de servicios", como en el prototipo (2026-10-05).
 - Módulo fuera del plan → candado "Plan". Módulo en el plan pero sin permiso → oculto. Los datos vienen de `GET /v1/me/access`.
 
+- En modo oscuro la barra baja de tono (mismo azul, más profundo) y la pantalla activa se pinta con el azul vivo del logo; en claro no cambia. Sus colores son las variables `--side-…` de `globals.css` (2026-10-12).
+
 ### Módulos y permisos
 - Solo CLIENTES, PROVEEDORES y EMPLEADOS son obligatorios (`is_core`) y comparten el permiso `core`. El resto sigue al plan.
 - La relación módulo → permisos vive en `module_catalog.permission_prefixes`.
