@@ -57,8 +57,16 @@ const ENTRY_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza lo que registraste tú y lo de tus sedes.",
 };
 
+// Un evento de agenda es de su responsable y de quien lo agendó.
+const AGENDA_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los eventos que tienes a tu cargo y los que agendaste.",
+  TEAM: "Tu rol alcanza tus eventos y los de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus eventos y los de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "agenda" ? AGENDA_HINTS
     : resource === "projects" ? PROJECT_HINTS
     : resource === "time_entries" || resource === "cost_entries" ? ENTRY_HINTS
     : resource === "contracted_services" ? CONTRACTED_HINTS

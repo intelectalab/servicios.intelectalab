@@ -63,6 +63,7 @@ const RESOURCES: Record<string, string> = {
   deliverables: "Entregables",
   time_entries: "Horas",
   cost_entries: "Costos",
+  agenda: "Agenda",
   operations: "Operaciones",
   documents: "Documentos",
   billing: "Facturación y cobros",

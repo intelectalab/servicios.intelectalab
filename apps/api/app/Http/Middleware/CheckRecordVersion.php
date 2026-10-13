@@ -6,6 +6,7 @@ use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\CrmLead;
 use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Operations\Models\ContractedService;
+use App\Modules\Operations\Models\AgendaEvent;
 use App\Modules\Operations\Models\CostEntry;
 use App\Modules\Operations\Models\Project;
 use App\Modules\Operations\Models\TimeEntry;
@@ -52,6 +53,7 @@ class CheckRecordVersion
         'project' => 'projects',
         'timeEntry' => 'time_entries',
         'costEntry' => 'cost_entries',
+        'agendaEvent' => 'agenda_events',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -68,6 +70,7 @@ class CheckRecordVersion
         'projects' => Project::class,
         'time_entries' => TimeEntry::class,
         'cost_entries' => CostEntry::class,
+        'agenda_events' => AgendaEvent::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

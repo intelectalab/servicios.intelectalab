@@ -221,3 +221,47 @@ export interface CostEntry {
   own: boolean;
   lock_version: number;
 }
+
+export type AgendaEventType = "MEETING" | "VISIT" | "MAINTENANCE" | "SESSION";
+export type AgendaEventStatus = "SCHEDULED" | "DONE" | "CANCELLED";
+
+export interface AgendaEvent {
+  id: string;
+  title: string;
+  event_type: AgendaEventType;
+  status: AgendaEventStatus;
+  starts_at: string;
+  ends_at: string;
+  assignee: { id: string; name: string } | null;
+  customer: { id: string; name: string | null } | null;
+  location: string | null;
+  notes: string | null;
+  cancel_reason: string | null;
+  /** El evento está a cargo de quien mira. */
+  own: boolean;
+  lock_version: number;
+}
+
+/** Orden de trabajo programada, tal como la muestra la agenda. */
+export interface AgendaWorkOrder {
+  id: string;
+  code: string;
+  title: string;
+  status: WorkOrderStatus;
+  starts_at: string;
+  ends_at: string;
+  assignee: { id: string; name: string } | null;
+  customer: string | null;
+}
+
+export interface AgendaWeek {
+  data: AgendaEvent[];
+  /** null si quien mira no puede ver órdenes de trabajo. */
+  work_orders: AgendaWorkOrder[] | null;
+}
+
+export interface AgendaOptions {
+  people: { id: string; name: string }[];
+  /** null si quien mira no puede ver clientes. */
+  customers: { id: string; name: string }[] | null;
+}

@@ -9,6 +9,7 @@ use App\Modules\Operations\Models\Checklist;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Operations\Models\WorkOrderChecklistItem;
+use App\Modules\Operations\Support\AgendaClash;
 use App\Modules\Operations\Support\Technicians;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
@@ -579,6 +580,13 @@ class WorkOrderController extends Controller
 
             throw ValidationException::withMessages([
                 'scheduled_start' => ["El técnico ya tiene otra orden de trabajo en ese horario{$which}."],
+            ]);
+        }
+
+        // También ocupan su horario los eventos que tiene programados en la agenda.
+        if ($event = AgendaClash::event($userId, $start, $end)) {
+            throw ValidationException::withMessages([
+                'scheduled_start' => ["El técnico ya tiene un evento de agenda en ese horario: {$event}."],
             ]);
         }
     }

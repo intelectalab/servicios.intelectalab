@@ -4,7 +4,7 @@ import { dateTime } from "@/lib/crm";
 import { downloadDocumentPdf } from "@/lib/document-pdf";
 import type { BillingMode, HistoryEntry } from "@/types/commercial";
 import type {
-  ChecklistStatus, ContractedService, ContractedServiceStatus, DeliverableStatus, EntryStatus, ProjectStatus, TaskStatus,
+  AgendaEventStatus, AgendaEventType, ChecklistStatus, ContractedService, ContractedServiceStatus, DeliverableStatus, EntryStatus, ProjectStatus, TaskStatus,
   WorkOrder, WorkOrderDetail, WorkOrderPriority, WorkOrderStatus,
 } from "@/types/operations";
 
@@ -205,6 +205,19 @@ export const ENTRY_STATES: [EntryStatus, string, Tone][] = [
   ["SUBMITTED", "Enviado", "info"],
   ["APPROVED", "Aprobado", "success"],
   ["REJECTED", "Rechazado", "danger"],
+];
+
+export const AGENDA_TYPES: [AgendaEventType, string, Tone][] = [
+  ["MEETING", "Reunión", "info"],
+  ["VISIT", "Visita", "info"],
+  ["MAINTENANCE", "Mantenimiento", "info"],
+  ["SESSION", "Sesión", "info"],
+];
+
+export const AGENDA_STATES: [AgendaEventStatus, string, Tone][] = [
+  ["SCHEDULED", "Programado", "info"],
+  ["DONE", "Realizado", "success"],
+  ["CANCELLED", "Cancelado", "muted"],
 ];
 
 /** Categorías de un documento, las del prototipo (la API admite solo estas). */

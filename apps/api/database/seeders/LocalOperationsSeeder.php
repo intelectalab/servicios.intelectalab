@@ -18,7 +18,7 @@ class LocalOperationsSeeder extends Seeder
 {
     private const TENANT_CODE = 'tenant-a';
 
-    private const MODULES = ['ORDENES_TRABAJO', 'PROYECTOS', 'TIMESHEETS'];
+    private const MODULES = ['ORDENES_TRABAJO', 'PROYECTOS', 'TIMESHEETS', 'AGENDA'];
 
     // Contraseñas de prueba, solo para la base local. Solo se usan al crear la cuenta:
     // si después se cambian desde la aplicación, el seeder no las pisa.
@@ -41,9 +41,10 @@ class LocalOperationsSeeder extends Seeder
                 'time_entries.view', 'time_entries.create', 'time_entries.approve',
                 'cost_entries.view', 'cost_entries.create', 'cost_entries.approve',
                 'deliverables.view', 'deliverables.manage', 'deliverables.approve',
+                'agenda.view', 'agenda.create', 'agenda.manage',
             ],
             'BRANCH',
-            ['contracts', 'orders', 'contracted_services', 'work_orders', 'projects', 'time_entries', 'cost_entries'],
+            ['contracts', 'orders', 'contracted_services', 'work_orders', 'projects', 'time_entries', 'cost_entries', 'agenda'],
         ],
         // Técnico: ejecuta las órdenes de trabajo que tiene asignadas.
         'TECNICO' => [
@@ -53,9 +54,10 @@ class LocalOperationsSeeder extends Seeder
                 'services.view', 'work_orders.view', 'work_orders.manage',
                 'projects.view', 'tasks.manage', 'time_entries.view', 'time_entries.create',
                 'cost_entries.view', 'cost_entries.create', 'deliverables.view', 'deliverables.manage',
+                'agenda.view',
             ],
             'OWN',
-            ['work_orders', 'projects', 'time_entries', 'cost_entries'],
+            ['work_orders', 'projects', 'time_entries', 'cost_entries', 'agenda'],
         ],
     ];
 

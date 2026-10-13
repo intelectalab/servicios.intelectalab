@@ -37,6 +37,7 @@ class AccessScope
         'projects' => 'Proyectos',
         'time_entries' => 'Horas',
         'cost_entries' => 'Costos',
+        'agenda' => 'Agenda',
     ];
 
     /** De menor a mayor alcance. */
@@ -125,6 +126,8 @@ class AccessScope
             // Las horas son de quien las trabajó; un costo, de quien lo registró.
             'time_entries' => $query->whereIn("{$table}.user_id", $owners),
             'cost_entries' => $query->whereIn("{$table}.created_by", $owners),
+            // Un evento de agenda es propio de su responsable y de quien lo agendó.
+            'agenda' => $query->whereIn("{$table}.assigned_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
         };
     }
 

@@ -17,6 +17,7 @@ use App\Modules\Services\Http\Controllers\ContractController;
 use App\Modules\Services\Http\Controllers\OrderController;
 use App\Modules\Operations\Http\Controllers\ContractedServiceController;
 use App\Modules\Operations\Http\Controllers\CostEntryController;
+use App\Modules\Operations\Http\Controllers\AgendaController;
 use App\Modules\Operations\Http\Controllers\ProjectController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
 use App\Modules\Operations\Http\Controllers\TaskController;
@@ -386,6 +387,19 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:deliverables.approve')->group(function () {
             Route::post('/projects/{project}/deliverables/{deliverable}/approve', [ProjectController::class, 'approveDeliverable']);
             Route::post('/projects/{project}/deliverables/{deliverable}/return', [ProjectController::class, 'returnDeliverable']);
+        });
+
+        // Agenda
+        Route::middleware('permission:agenda.view')->group(function () {
+            Route::get('/agenda', [AgendaController::class, 'index']);
+            Route::get('/agenda/options', [AgendaController::class, 'options']);
+            Route::get('/agenda/{agendaEvent}', [AgendaController::class, 'show']);
+        });
+        Route::middleware('permission:agenda.create')->post('/agenda', [AgendaController::class, 'store']);
+        Route::middleware('permission:agenda.manage')->group(function () {
+            Route::put('/agenda/{agendaEvent}', [AgendaController::class, 'update']);
+            Route::post('/agenda/{agendaEvent}/done', [AgendaController::class, 'done']);
+            Route::post('/agenda/{agendaEvent}/cancel', [AgendaController::class, 'cancel']);
         });
 
         // Registro de horas
