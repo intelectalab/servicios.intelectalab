@@ -43,6 +43,8 @@ type ListProps = {
   version?: number;
   /** Algo cambió (aprobar, rechazar): quien la usa refresca lo que dependa de ello. */
   onChanged?: () => void;
+  /** Cuántos registros hay en total (para el contador de una pestaña). */
+  onTotal?: (total: number) => void;
   toast: Toast;
   empty: string;
 };
@@ -52,7 +54,7 @@ type ListProps = {
  * filtrar por columna y exportar van por la API, sobre todo el listado.
  */
 function EntriesList<T extends { id: string; status: string }>({
-  fixed, tableId, full = false, version = 0, onChanged, toast, empty,
+  fixed, tableId, full = false, version = 0, onChanged, onTotal, toast, empty,
   path, resource, columns, exportColumns, exportName, exportTitle, searchPlaceholder, describe, selfNote,
 }: ListProps & {
   path: string;
@@ -117,6 +119,7 @@ function EntriesList<T extends { id: string; status: string }>({
         if (!cancelled) {
           setData(response);
           setError("");
+          onTotal?.(response.total);
         }
       } catch (err) {
         if (!cancelled) setError(err instanceof ApiError && err.status === 403 ? "denied" : "No se pudo cargar el listado.");
@@ -294,6 +297,18 @@ const TIME_COLUMNS: Column<TimeEntry>[] = [
   { label: "Estado", sortKey: "status", filter: { top: "Estado" }, render: (entry) => <StatusCell status={entry.status} reason={entry.reject_reason} /> },
 ];
 
+// Dentro de la ficha de un proyecto el contexto es siempre ese proyecto: se muestra la tarea, como en el prototipo.
+const TIME_TASK: Column<TimeEntry> = {
+  label: "Tarea",
+  render: (entry) => (
+    <div className="max-w-[280px]">
+      <span>{entry.task ?? "—"}</span>
+      {entry.description && <small className="app-muted block text-xs">{entry.description}</small>}
+    </div>
+  ),
+};
+const PROJECT_TIME_COLUMNS = TIME_COLUMNS.map((column) => (column.label === "Contexto" ? TIME_TASK : column));
+
 const TIME_EXPORT: ExportColumn<TimeEntry>[] = [
   { label: "Persona", value: (entry) => entry.user?.name ?? "", width: 26 },
   { label: "Proyecto u orden", value: (entry) => entryContext(entry), width: 40 },
@@ -315,7 +330,7 @@ export function TimeEntriesList(props: ListProps) {
       {...props}
       path="/v1/time-entries"
       resource="time_entries"
-      columns={TIME_COLUMNS}
+      columns={props.fixed.project_id ? PROJECT_TIME_COLUMNS : TIME_COLUMNS}
       exportColumns={TIME_EXPORT}
       exportName="horas"
       exportTitle="Horas"
@@ -344,6 +359,8 @@ const COST_COLUMNS: Column<CostEntry>[] = [
   { label: "Estado", sortKey: "status", filter: { top: "Estado" }, render: (cost) => <StatusCell status={cost.status} reason={cost.reject_reason} /> },
 ];
 
+const PROJECT_COST_COLUMNS = COST_COLUMNS.filter((column) => column.label !== "Proyecto");
+
 const COST_EXPORT: ExportColumn<CostEntry>[] = [
   { label: "Descripción", value: (cost) => cost.description, width: 38 },
   { label: "Categoría", value: (cost) => cost.category, width: 18 },
@@ -364,7 +381,7 @@ export function CostEntriesList(props: ListProps) {
       {...props}
       path="/v1/cost-entries"
       resource="cost_entries"
-      columns={COST_COLUMNS}
+      columns={props.fixed.project_id ? PROJECT_COST_COLUMNS : COST_COLUMNS}
       exportColumns={COST_EXPORT}
       exportName="costos"
       exportTitle="Costos"

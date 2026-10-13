@@ -12,7 +12,7 @@ class Document extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $fillable = ['tenant_id', 'document_type', 'title', 'status', 'classification', 'created_by'];
+    protected $fillable = ['tenant_id', 'document_type', 'title', 'status', 'classification', 'visibility', 'created_by'];
 
     protected static function boot()
     {

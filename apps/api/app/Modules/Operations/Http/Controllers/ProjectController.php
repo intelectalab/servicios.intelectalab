@@ -4,6 +4,7 @@ namespace App\Modules\Operations\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Http\Middleware\CheckPermission;
+use App\Modules\Documents\Support\DocumentStore;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\Deliverable;
 use App\Modules\Operations\Models\Project;
@@ -17,6 +18,7 @@ use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -340,6 +342,10 @@ class ProjectController extends Controller
         $deliverable = $this->deliverable($project, $deliverable);
         $this->assertDeliverable($deliverable, ['DRAFT', 'RETURNED'], 'editar');
         $data = $this->deliverableData($request);
+        // Con un archivo adjunto, el documento solo cambia subiendo otra versión.
+        if ($deliverable->document_id) {
+            unset($data['document_ref']);
+        }
 
         DB::transaction(function () use ($request, $project, $deliverable, $data) {
             $deliverable->update($data);
@@ -347,6 +353,58 @@ class ProjectController extends Controller
         });
 
         return response()->json($this->detail($project, $request));
+    }
+
+    /**
+     * Adjunta el archivo del entregable. Si ya tenía uno, queda como versión nueva del mismo
+     * documento: las versiones anteriores no se destruyen.
+     */
+    public function attachDeliverableDocument(string $project, string $deliverable, Request $request)
+    {
+        $project = $this->find($project);
+        $this->assertOpen($project, 'cambiar los entregables de');
+        $deliverable = $this->deliverable($project, $deliverable);
+        $this->assertDeliverable($deliverable, ['DRAFT', 'RETURNED'], 'cambiar el documento de');
+
+        $data = $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'category' => ['nullable', Rule::in(DocumentStore::CATEGORIES)],
+            'visibility' => ['nullable', Rule::in(DocumentStore::VISIBILITIES)],
+            'sha256' => ['nullable', 'regex:/^[0-9a-fA-F]{64}$/'],
+            'file' => DocumentStore::fileRules(),
+        ], ['title.required' => 'El título es obligatorio.', ...DocumentStore::fileMessages()]);
+
+        $version = DocumentStore::store(
+            $project->tenant_id, $request->user()->id, $request->file('file'),
+            ['title' => trim($data['title']), 'category' => $data['category'] ?? 'Entregable', 'visibility' => $data['visibility'] ?? 'INTERNAL'],
+            $deliverable->document, $data['sha256'] ?? null,
+        );
+
+        DB::transaction(function () use ($request, $project, $deliverable, $version) {
+            DocumentStore::link($version->document, 'Deliverable', $deliverable->id);
+            $deliverable->update(['document_id' => $version->document_id, 'document_ref' => $version->fileObject->original_name]);
+            $this->audit($request, $project, 'project.deliverable.attach', [
+                'deliverable_id' => $deliverable->id, 'document_id' => $version->document_id,
+                'note' => "{$deliverable->name}: {$version->fileObject->original_name} (v{$version->version})",
+            ]);
+        });
+
+        return response()->json($this->detail($project, $request), 201);
+    }
+
+    /** Enlace temporal para descargar el archivo del entregable. */
+    public function deliverableDocumentUrl(string $project, string $deliverable, Request $request)
+    {
+        $project = $this->find($project);
+        $deliverable = $this->deliverable($project, $deliverable);
+        $url = $deliverable->document ? DocumentStore::downloadUrl($deliverable->document) : null;
+        abort_unless($url, 404);
+
+        $this->audit($request, $project, 'project.deliverable.download', [
+            'deliverable_id' => $deliverable->id, 'document_id' => $deliverable->document_id, 'note' => "{$deliverable->name}: {$deliverable->document_ref}",
+        ]);
+
+        return response()->json(['url' => $url, 'expires_in_minutes' => 5]);
     }
 
     /** Pasa a revisión. Exige el documento del entregable. */
@@ -521,12 +579,13 @@ class ProjectController extends Controller
             ]),
             // Los entregables se entregan solo con su permiso; sin él la ficha muestra el candado.
             'deliverables' => CheckPermission::granted($request, 'deliverables.view')
-                ? $project->deliverables()->orderBy('created_at')->get()->map(fn (Deliverable $deliverable) => [
+                ? $project->deliverables()->with('document.latestVersion.fileObject')->orderBy('created_at')->get()->map(fn (Deliverable $deliverable) => [
                     'id' => $deliverable->id,
                     'name' => $deliverable->name,
                     'status' => $deliverable->status,
                     'due_date' => $deliverable->due_date?->toDateString(),
                     'document_ref' => $deliverable->document_ref,
+                    'document' => $this->documentOf($deliverable),
                     'review_note' => $deliverable->review_note,
                     'delivered_at' => $deliverable->delivered_at?->toIso8601String(),
                 ])
@@ -602,6 +661,28 @@ class ProjectController extends Controller
             'estimate_hours' => $data['estimate_hours'] ?? 0,
             'due_at' => $data['due_at'] ?? null,
             'required_check' => trim((string) ($data['required_check'] ?? '')) ?: null,
+        ];
+    }
+
+    /** Archivo adjunto del entregable, con lo que la ficha muestra de su última versión. */
+    private function documentOf(Deliverable $deliverable): ?array
+    {
+        $document = $deliverable->document;
+        $version = $document?->latestVersion;
+        if (! $document || ! $version?->fileObject) {
+            return null;
+        }
+
+        return [
+            'id' => $document->id,
+            'title' => $document->title,
+            'category' => $document->document_type,
+            'visibility' => $document->visibility,
+            'version' => (int) $version->version,
+            'file_name' => $version->fileObject->original_name,
+            'size_bytes' => (int) $version->fileObject->size_bytes,
+            'sha256' => trim((string) $version->fileObject->sha256),
+            'antivirus_status' => $version->fileObject->antivirus_status,
         ];
     }
 

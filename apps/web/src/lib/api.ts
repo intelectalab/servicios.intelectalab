@@ -125,7 +125,8 @@ async function send<T>(path: string, options: RequestInit, method: string): Prom
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      // Un archivo viaja como formulario: el navegador pone su propio tipo de contenido.
+      ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       Accept: "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(version !== undefined ? { "If-Match": String(version) } : {}),

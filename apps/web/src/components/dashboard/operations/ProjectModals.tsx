@@ -279,9 +279,12 @@ export function DeliverableFormModal({
         <Field label="Vence" error={errors.due_date}>
           <input className={INPUT} type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </Field>
-        <Field label="Documento" error={errors.document_ref} hint="Enlace o referencia del archivo. Hace falta para enviarlo a revisión.">
-          <input className={INPUT} value={document} onChange={(e) => setDocument(e.target.value)} maxLength={1000} placeholder="https://…" />
-        </Field>
+        {/* El archivo se adjunta desde la tabla ("Adjuntar"); aquí solo se edita el enlace de los entregables que ya lo tenían. */}
+        {deliverable?.document_ref && !deliverable.document && (
+          <Field label="Documento (enlace)" error={errors.document_ref} hint="Enlace o referencia escrita. Para subir el archivo usa Adjuntar archivo.">
+            <input className={INPUT} value={document} onChange={(e) => setDocument(e.target.value)} maxLength={1000} placeholder="https://…" />
+          </Field>
+        )}
       </div>
     </Modal>
   );

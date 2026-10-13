@@ -20,10 +20,16 @@ class Deliverable extends Model
 
     protected $fillable = [
         'tenant_id', 'project_id', 'work_order_id', 'task_id', 'name', 'description', 'status', 'due_date', 'accepted_at',
-        'document_ref', 'review_note', 'created_by', 'reviewed_by', 'reviewed_at', 'delivered_at',
+        'document_ref', 'document_id', 'review_note', 'created_by', 'reviewed_by', 'reviewed_at', 'delivered_at',
     ];
 
     protected $casts = ['due_date' => 'date', 'accepted_at' => 'datetime', 'reviewed_at' => 'datetime', 'delivered_at' => 'datetime'];
+
+    /** Archivo adjunto (documento con versiones); los entregables anteriores solo tienen `document_ref`. */
+    public function document()
+    {
+        return $this->belongsTo(\App\Modules\Documents\Models\Document::class, 'document_id');
+    }
 
     protected static function boot()
     {

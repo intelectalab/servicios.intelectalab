@@ -376,9 +376,13 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:deliverables.manage')->group(function () {
             Route::post('/projects/{project}/deliverables', [ProjectController::class, 'storeDeliverable']);
             Route::put('/projects/{project}/deliverables/{deliverable}', [ProjectController::class, 'updateDeliverable']);
+            Route::post('/projects/{project}/deliverables/{deliverable}/document', [ProjectController::class, 'attachDeliverableDocument']);
             Route::post('/projects/{project}/deliverables/{deliverable}/submit', [ProjectController::class, 'submitDeliverable']);
             Route::post('/projects/{project}/deliverables/{deliverable}/deliver', [ProjectController::class, 'deliverDeliverable']);
         });
+        // Descargar el archivo de un entregable: quien puede verlos, dentro de los proyectos que alcanza.
+        Route::middleware('permission:deliverables.view')
+            ->get('/projects/{project}/deliverables/{deliverable}/document-url', [ProjectController::class, 'deliverableDocumentUrl']);
         Route::middleware('permission:deliverables.approve')->group(function () {
             Route::post('/projects/{project}/deliverables/{deliverable}/approve', [ProjectController::class, 'approveDeliverable']);
             Route::post('/projects/{project}/deliverables/{deliverable}/return', [ProjectController::class, 'returnDeliverable']);

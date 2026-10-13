@@ -99,6 +99,8 @@ class AuditCatalog
         'project.task.uncheck' => 'Control de tarea desmarcado',
         'project.deliverable.create' => 'Entregable creado',
         'project.deliverable.update' => 'Entregable editado',
+        'project.deliverable.attach' => 'Documento del entregable adjuntado',
+        'project.deliverable.download' => 'Documento del entregable descargado',
         'project.deliverable.submit' => 'Entregable enviado a revisión',
         'project.deliverable.approve' => 'Entregable aprobado',
         'project.deliverable.return' => 'Entregable devuelto',

@@ -23,7 +23,7 @@ const DOT: Record<Tone, string> = {
 export type KanbanColumn = { id: string; label: string; tone: Tone; sub?: ReactNode };
 
 export function Kanban<T>({
-  columns, cards, cardKey, columnOf, renderCard, canDrag, onDrop, loading = false, refreshing = false,
+  columns, cards, cardKey, columnOf, renderCard, canDrag, onDrop, loading = false, refreshing = false, narrow = false,
 }: {
   columns: KanbanColumn[];
   cards: T[];
@@ -37,13 +37,15 @@ export function Kanban<T>({
   loading?: boolean;
   /** Hay una carga en curso con tarjetas ya a la vista: se atenúan hasta que llegue la respuesta. */
   refreshing?: boolean;
+  /** Columnas algo más angostas: un tablero de cuatro entra sin barra horizontal en un portátil. */
+  narrow?: boolean;
 }) {
   const [dragging, setDragging] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
 
   return (
     <div
-      className={`mb-3 grid auto-cols-[86%] grid-flow-col gap-3 overflow-x-auto pb-2 [scroll-snap-type:x_proximity] sm:auto-cols-[minmax(250px,1fr)] ${refreshing ? "opacity-60" : ""}`}
+      className={`mb-3 grid auto-cols-[86%] grid-flow-col gap-3 overflow-x-auto pb-2 [scroll-snap-type:x_proximity] ${narrow ? "sm:auto-cols-[minmax(220px,1fr)]" : "sm:auto-cols-[minmax(250px,1fr)]"} ${refreshing ? "opacity-60" : ""}`}
       aria-busy={loading || refreshing}
     >
       {columns.map((column) => {

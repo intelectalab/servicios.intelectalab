@@ -69,6 +69,8 @@ Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría y Operaciones 
 - **Costos:** siempre de un proyecto. Quien lo registró no lo aprueba, salvo que la empresa desactive la segregación de funciones.
 - Alcance: un proyecto es "propio" de quien lo lleva, de quien lo creó y de quien tiene una tarea suya; las horas, de quien las trabajó; un costo, de quien lo registró.
 - Módulos del plan: proyectos, tareas y entregables en Proyectos; horas y costos en Timesheets.
+- **Ficha del proyecto** (2026-10-13, [cambios/2026-10-13_proyecto-ficha-con-pestanas.md](cambios/2026-10-13_proyecto-ficha-con-pestanas.md)): sigue la forma del prototipo, con cinco indicadores y pestañas a todo el ancho; las tarjetas movibles quedan solo dentro de "Resumen y estados". El listado conserva tablero y tabla. Regla general: la disposición del prototipo manda y las reglas propias (tarjetas movibles, tabla) se aplican encima sin cambiarla.
+- **Archivo del entregable** (2026-10-13): el documento de un entregable es un archivo subido, con versiones que no se destruyen; lo guarda `App\Modules\Documents\Support\DocumentStore` (lista cerrada de tipos, huella comprobada, carpeta por empresa, descarga con enlace temporal). Adjuntar pide `deliverables.manage` y descargar `deliverables.view`, no los permisos de Documentos. Sin antivirus conectado, el archivo queda "sin analizar" y así se muestra. Todo archivo nuevo que se adjunte a un registro debe pasar por esa pieza.
 - En un listado con tablero, pulsar la vista que ya está activa no hace nada (antes vaciaba la lista).
 
 ### Auditoría (2026-10-08)
@@ -144,7 +146,7 @@ Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría y Operaciones 
 
 ## Pendientes
 
-- Operaciones: Agenda y App del técnico; pantalla de plantillas de checklist (hoy solo por la API); archivo del entregable (con Documentos); facturar por horas (con Finanzas); avisos de horas y costos por aprobar (con Notificaciones); retirar las rutas antiguas `/tasks`; evidencias con archivo (con Documentos); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte); que suspender o terminar un contrato arrastre sus servicios contratados.
+- Operaciones: Agenda y App del técnico; pantalla de plantillas de checklist (hoy solo por la API); antivirus para los archivos adjuntos y pantalla Documentos; facturar por horas (con Finanzas); avisos de horas y costos por aprobar (con Notificaciones); retirar las rutas antiguas `/tasks`; evidencias con archivo (con Documentos); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte); que suspender o terminar un contrato arrastre sus servicios contratados.
 - CRM: solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.

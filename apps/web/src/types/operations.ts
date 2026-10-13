@@ -140,9 +140,24 @@ export interface Deliverable {
   name: string;
   status: DeliverableStatus;
   due_date: string | null;
+  /** Nombre del archivo adjunto o, en los entregables anteriores, el enlace escrito. */
   document_ref: string | null;
+  /** Archivo adjunto (última versión); null si no tiene o solo lleva un enlace. */
+  document: DeliverableDocument | null;
   review_note: string | null;
   delivered_at: string | null;
+}
+
+export interface DeliverableDocument {
+  id: string;
+  title: string;
+  category: string;
+  visibility: "INTERNAL" | "PORTAL";
+  version: number;
+  file_name: string;
+  size_bytes: number;
+  sha256: string;
+  antivirus_status: "PENDING" | "CLEAN" | "INFECTED" | "FAILED";
 }
 
 export interface ProjectDetail extends Project {

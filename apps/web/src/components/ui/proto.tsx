@@ -44,8 +44,8 @@ export function PageHead({
 }
 
 export function Card({
-  title, children, flush = false, className = "",
-}: { title?: ReactNode; children: ReactNode; flush?: boolean; className?: string }) {
+  title, children, flush = false, className = "", actions,
+}: { title?: ReactNode; children: ReactNode; flush?: boolean; className?: string; actions?: ReactNode }) {
   // Dentro de un SortableBoard la tarjeta lleva un asa para moverla.
   const drag = useCardDrag();
   return (
@@ -57,6 +57,7 @@ export function Card({
       {title && (
         <div className="flex items-start justify-between gap-2 px-5 pt-4">
           <h2 className="min-w-0 text-[15px] font-semibold">{title}</h2>
+          {actions && <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">{actions}</div>}
           {drag && (
             <button
               type="button"
@@ -312,17 +313,18 @@ const KPI_TONES: Record<KpiTone, [string, string]> = {
   danger: ["border-l-[#E5484D]", "bg-[var(--p-danger-soft)] text-[#E5484D]"],
 };
 
-export function Kpis({ children }: { children: ReactNode }) {
-  return <div className="mb-4 grid grid-cols-[repeat(auto-fit,minmax(210px,1fr))] gap-3">{children}</div>;
+/** `row`: la fila compacta de las fichas del prototipo (indicadores sin ícono, todos en una línea). */
+export function Kpis({ children, row = false }: { children: ReactNode; row?: boolean }) {
+  return <div className={`mb-4 grid gap-3 ${row ? "grid-cols-[repeat(auto-fit,minmax(150px,1fr))]" : "grid-cols-[repeat(auto-fit,minmax(210px,1fr))]"}`}>{children}</div>;
 }
 
 export function Kpi({
   label, value, sub, icon, tone = "brand",
-}: { label: string; value: ReactNode; sub?: ReactNode; icon: ReactNode; tone?: KpiTone }) {
+}: { label: string; value: ReactNode; sub?: ReactNode; icon?: ReactNode; tone?: KpiTone }) {
   const [border, iconTone] = KPI_TONES[tone];
   return (
     <div className={`app-surface flex min-w-0 items-center gap-2.5 rounded-xl border-l-4 p-4 ${border} ${SHADOW}`}>
-      <span className={`grid h-[46px] w-[46px] shrink-0 place-items-center rounded-xl ${iconTone}`}>{icon}</span>
+      {icon && <span className={`grid h-[46px] w-[46px] shrink-0 place-items-center rounded-xl ${iconTone}`}>{icon}</span>}
       <div className="grid min-w-0 flex-1 gap-0.5">
         <span className="app-muted text-[10.5px] font-semibold uppercase tracking-[.04em]">{label}</span>
         <span className="text-[21px] font-semibold leading-[1.15] tabular-nums sm:text-2xl">{value}</span>

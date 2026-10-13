@@ -5,7 +5,9 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Services\AuditCatalog;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\Feature\Concerns\OperationsFixtures;
 use Tests\TestCase;
@@ -256,6 +258,85 @@ class OperationsProjectsTest extends TestCase
         $this->as($this->makeUser('Técnico', self::TECHNICIAN));
         $at($draft, 'approve')->assertStatus(403);
         $at($draft, 'return', ['reason' => 'x'])->assertStatus(403);
+    }
+
+    public function test_deliverable_document_is_an_uploaded_file_with_versions(): void
+    {
+        Storage::fake('documents');
+        $tenantId = $this->makeTenant();
+        $admin = $this->makeUser('Admin', self::ADMIN);
+        $id = $this->running($admin)['id'];
+        $one = fn ($response) => $response->json('deliverables.0');
+        $did = $one($this->postJson("/api/v1/projects/{$id}/deliverables", ['name' => 'Informe final'])->assertCreated())['id'];
+        $url = "/api/v1/projects/{$id}/deliverables/{$did}/document";
+        $pdf = fn (string $name = 'informe.pdf', string $content = '%PDF-1.4 informe') => UploadedFile::fake()->createWithContent($name, $content);
+
+        // Un programa con nombre de PDF: se mira el contenido, no solo la extensión.
+        $path = tempnam(sys_get_temp_dir(), 'doc');
+        file_put_contents($path, "<?php echo 'hola'; ?>\n");
+        $disguised = new UploadedFile($path, 'pagina.pdf', null, null, true);
+
+        // Título y archivo obligatorios; solo archivos de trabajo; la huella debe coincidir con lo recibido.
+        $this->post($url, [], ['Accept' => 'application/json'])->assertStatus(422)->assertJsonValidationErrors(['title', 'file']);
+        $this->post($url, ['title' => 'Informe', 'file' => $pdf('instalador.exe', 'MZ')], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('file');
+        $this->post($url, ['title' => 'Informe', 'file' => $disguised], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('file');
+        $this->post($url, ['title' => 'Informe', 'category' => 'Inventada', 'file' => $pdf()], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('category');
+        $this->post($url, ['title' => 'Informe', 'sha256' => str_repeat('a', 64), 'file' => $pdf()], ['Accept' => 'application/json'])
+            ->assertStatus(422)->assertJsonValidationErrors('file');
+        $this->assertSame([], Storage::disk('documents')->allFiles());
+        $this->assertSame(0, DB::table('documents')->where('tenant_id', $tenantId)->count());
+
+        $sha = hash('sha256', '%PDF-1.4 informe');
+        $attached = $one($this->post($url, ['title' => 'Informe final v1', 'visibility' => 'PORTAL', 'sha256' => $sha, 'file' => $pdf()], ['Accept' => 'application/json'])->assertCreated());
+        $this->assertEquals('informe.pdf', $attached['document_ref']);
+        $this->assertEquals(
+            ['Informe final v1', 'Entregable', 'PORTAL', 1, 'informe.pdf', $sha, 'PENDING'],
+            [$attached['document']['title'], $attached['document']['category'], $attached['document']['visibility'], $attached['document']['version'],
+                $attached['document']['file_name'], $attached['document']['sha256'], $attached['document']['antivirus_status']],
+        );
+        $documentId = $attached['document']['id'];
+        $this->assertDatabaseHas('document_links', ['document_id' => $documentId, 'entity_type' => 'Deliverable', 'entity_id' => $did]);
+        $files = Storage::disk('documents')->allFiles();
+        $this->assertCount(1, $files);
+        // El archivo queda en la carpeta de su empresa y su ruta no usa el nombre que traía.
+        $this->assertStringStartsWith("tenants/{$tenantId}/documents/", $files[0]);
+        $this->assertStringNotContainsString('informe', $files[0]);
+
+        // Otra subida es una versión nueva del mismo documento; la anterior no se destruye.
+        $second = $one($this->post($url, ['title' => 'Informe final v2', 'file' => $pdf('informe-v2.pdf', '%PDF-1.4 dos')], ['Accept' => 'application/json'])->assertCreated());
+        $this->assertEquals([$documentId, 2, 'informe-v2.pdf', 'INTERNAL'], [$second['document']['id'], $second['document']['version'], $second['document_ref'], $second['document']['visibility']]);
+        $this->assertSame(2, DB::table('document_versions')->where('document_id', $documentId)->count());
+        $this->assertCount(2, Storage::disk('documents')->allFiles());
+        $this->assertDatabaseRejects(fn () => DB::table('document_versions')->where('document_id', $documentId)->delete());
+
+        // Con archivo adjunto, editar el entregable no cambia su documento.
+        $edited = $one($this->putJson("/api/v1/projects/{$id}/deliverables/{$did}", ['name' => 'Informe final', 'document_ref' => 'otro'])->assertOk());
+        $this->assertEquals('informe-v2.pdf', $edited['document_ref']);
+
+        // Descargar: enlace temporal, con registro; el archivo ya vale como documento para enviar a revisión.
+        $this->getJson("{$url}-url")->assertOk()->assertJsonStructure(['url', 'expires_in_minutes']);
+        $this->assertDatabaseHas('audit_logs', ['entity_id' => $id, 'action' => 'project.deliverable.attach']);
+        $this->assertDatabaseHas('audit_logs', ['entity_id' => $id, 'action' => 'project.deliverable.download']);
+        $this->postJson("/api/v1/projects/{$id}/deliverables/{$did}/submit")->assertOk();
+        $this->post($url, ['title' => 'Tarde', 'file' => $pdf()], ['Accept' => 'application/json'])->assertStatus(422);
+
+        // Un entregable sin archivo no tiene qué descargar.
+        $plain = $this->postJson("/api/v1/projects/{$id}/deliverables", ['name' => 'Manual'])->assertCreated()->json('deliverables.1.id');
+        $this->getJson("/api/v1/projects/{$id}/deliverables/{$plain}/document-url")->assertStatus(404);
+
+        // Adjuntar pide gestionar entregables; descargar, verlos; y siempre dentro de los proyectos que se alcanzan.
+        $plainUrl = "/api/v1/projects/{$id}/deliverables/{$plain}/document";
+        $this->as($this->makeUser('Gerencia', self::MANAGEMENT));
+        $this->post($plainUrl, ['title' => 'X', 'file' => $pdf()], ['Accept' => 'application/json'])->assertStatus(403);
+        $this->getJson("{$url}-url")->assertOk();
+        $this->as($this->makeUser('Solo proyectos', ['projects.view']));
+        $this->getJson("{$url}-url")->assertStatus(403);
+        $this->as($this->makeUser('Técnico ajeno', self::TECHNICIAN, 'OWN'));
+        $this->post($plainUrl, ['title' => 'X', 'file' => $pdf()], ['Accept' => 'application/json'])->assertStatus(404);
+        $this->getJson("{$url}-url")->assertStatus(404);
     }
 
     // ------------------------------------------------------------------ Horas y costos

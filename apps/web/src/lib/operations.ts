@@ -207,6 +207,16 @@ export const ENTRY_STATES: [EntryStatus, string, Tone][] = [
   ["REJECTED", "Rechazado", "danger"],
 ];
 
+/** Categorías de un documento, las del prototipo (la API admite solo estas). */
+export const DOCUMENT_CATEGORIES = ["Contrato", "Entregable", "Evidencia", "Proyecto", "Cliente", "Proveedor", "Servidor", "Dominio", "Hosting", "Cloud", "Otros"];
+
+/** Tamaño de un archivo en texto: "850 KB", "2.4 MB". */
+export function fileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export const COST_CATEGORIES = ["Proveedor", "Licencias", "Infraestructura", "Materiales", "Personal externo"];
 
 export const projectPeriod = (project: { start_date: string | null; end_date: string | null }) =>
