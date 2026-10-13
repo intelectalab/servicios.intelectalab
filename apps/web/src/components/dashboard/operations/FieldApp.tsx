@@ -429,6 +429,8 @@ function VisitCard({
   // El botón general del prototipo: adjunta al ítem que pide foto o evidencia (o al primero).
   const evidenceItem = items.find((item) => /fotogr|foto|evid/i.test(item.label)) ?? items[0];
 
+  // Los campos de archivo van ocultos (sr-only) dentro de su etiqueta, que debe ser `relative`:
+  // si no, quedan colocados respecto de la página y le añaden un desplazamiento vacío al final.
   const pickPhoto = (itemId: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -476,7 +478,7 @@ function VisitCard({
                 </label>
                 <label
                   title="Tomar foto de evidencia"
-                  className={`grid w-11 shrink-0 cursor-pointer place-items-center rounded-lg border border-[color:var(--app-border)] text-[color:var(--p-brand-text)] hover:bg-[var(--p-brand-soft)] ${busy || approved ? "pointer-events-none opacity-50" : ""}`}
+                  className={`relative grid w-11 shrink-0 cursor-pointer place-items-center rounded-lg border border-[color:var(--app-border)] text-[color:var(--p-brand-text)] hover:bg-[var(--p-brand-soft)] ${busy || approved ? "pointer-events-none opacity-50" : ""}`}
                 >
                   <Camera size={18} aria-hidden="true" />
                   <span className="sr-only">Tomar foto de evidencia de {item.label}</span>
@@ -486,7 +488,7 @@ function VisitCard({
             ))}
           </ul>
           {evidenceItem && (
-            <label className={`mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1B8FC9] p-2 text-[13px] text-[color:var(--p-brand-text)] ${busy || approved ? "pointer-events-none opacity-50" : ""}`}>
+            <label className={`relative mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1B8FC9] p-2 text-[13px] text-[color:var(--p-brand-text)] ${busy || approved ? "pointer-events-none opacity-50" : ""}`}>
               <Upload size={16} aria-hidden="true" />
               <span>Adjuntar foto de evidencia</span>
               <input type="file" accept="image/*" className="sr-only" disabled={busy || approved} onChange={pickPhoto(evidenceItem.id)} />

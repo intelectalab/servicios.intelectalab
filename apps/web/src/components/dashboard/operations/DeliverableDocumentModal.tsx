@@ -168,7 +168,7 @@ export function DeliverableDocumentModal({
           setDragging(false);
           pick(event.dataTransfer.files?.[0]);
         }}
-        className={`mt-3 grid cursor-pointer place-items-center gap-1 rounded-xl border-[1.5px] border-dashed p-[18px] text-center transition-colors ${
+        className={`relative mt-3 grid cursor-pointer place-items-center gap-1 rounded-xl border-[1.5px] border-dashed p-[18px] text-center transition-colors ${
           dragging ? "border-[#1B8FC9] bg-[var(--p-brand-soft)]" : errors.file ? "border-[color:var(--p-danger-text)]" : "border-[color:var(--app-border)] hover:border-[#1B8FC9]"
         }`}
       >
