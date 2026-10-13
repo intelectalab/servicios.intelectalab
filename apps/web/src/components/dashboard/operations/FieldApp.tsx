@@ -13,6 +13,7 @@ import {
 } from "@/lib/field-queue";
 import { Badge, Btn, Card, Chip, Filters, LoadError, PageHead, Screen, useToasts } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
+import { FieldMap } from "@/components/dashboard/operations/FieldMap";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import { TimeEntryFormModal } from "@/components/dashboard/operations/ProjectModals";
 import type { FieldOrder, FieldRoute, TimeEntryOptions } from "@/types/operations";
@@ -29,7 +30,7 @@ function directions(order: FieldOrder): string | null {
   return target ? `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(target)}` : null;
 }
 
-/** Mapa esquemático de las visitas ubicadas, numeradas en el orden sugerido y unidas por la ruta. */
+/** Mapa esquemático (sin internet): las visitas ubicadas, numeradas en el orden sugerido y unidas por la ruta. */
 function RouteMap({ orders, statusOf }: { orders: FieldOrder[]; statusOf: (order: FieldOrder) => string }) {
   const points = orders.map((order, index) => ({ order, index })).filter(({ order }) => order.latitude !== null && order.longitude !== null);
   if (!points.length) {
@@ -290,7 +291,13 @@ export default function FieldApp() {
             </div>
           )}
 
-          <RouteMap orders={orders} statusOf={statusOf} />
+          <FieldMap
+            offline={offline}
+            points={orders.flatMap((order, index) => (order.latitude !== null && order.longitude !== null
+              ? [{ id: order.id, number: index + 1, latitude: order.latitude, longitude: order.longitude, title: order.title, active: statusOf(order) === "IN_PROGRESS" }]
+              : []))}
+            fallback={<RouteMap orders={orders} statusOf={statusOf} />}
+          />
 
           <div className="grid gap-2.5 px-3 pb-4 pt-2.5">
             {!route ? (
@@ -350,7 +357,7 @@ export default function FieldApp() {
                   ))}
                 </ol>
                 <p className="app-muted mt-2 text-xs">
-                  Desde la primera visita programada, siempre la más cercana. El mapa es esquemático: usa «Cómo llegar» para abrir la navegación del teléfono.
+                  Desde la primera visita programada, siempre la más cercana. La ruta va en línea recta, sin calles ni tráfico: usa «Cómo llegar» para abrir la navegación del teléfono.
                 </p>
               </>
             ) : (

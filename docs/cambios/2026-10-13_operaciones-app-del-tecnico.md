@@ -18,7 +18,7 @@ Es una pantalla más del sistema, pensada para teléfono. En escritorio se ve de
 | Cabecera con el técnico y "N visita(s) pendientes" | Igual |
 | Botón "Simular sin conexión" / "Volver a conectar" | "Trabajar sin conexión" / "Volver a conectar" (además se activa solo si se cae la señal) |
 | Barra "N cambio(s) guardados en el teléfono" con **Sincronizar** | Igual |
-| Mapa esquemático con las visitas numeradas y la ruta | Igual, con la ubicación de cada orden |
+| Mapa esquemático con las visitas numeradas y la ruta | Mapa real de calles con las visitas numeradas y la ruta; el esquemático queda de respaldo sin conexión |
 | Tarjeta por visita: número, título, cliente y lugar, fecha y número de OT, estado | Igual |
 | "N cambio(s) sin sincronizar" en la tarjeta | Igual |
 | Checklist con casillas y asterisco en los obligatorios (con la visita en ejecución) | Igual |
@@ -48,7 +48,7 @@ Es una pantalla más del sistema, pensada para teléfono. En escritorio se ve de
 
 - La orden de trabajo tiene un campo nuevo, **Coordenadas (opcional)**: latitud y longitud como las copia Google Maps ("-12.0464, -77.0428"). En la ficha de la orden se ven como "Ubicación", con enlace al mapa.
 - La **ruta sugerida** parte de la primera visita programada y sigue siempre con la más cercana (en línea recta); las visitas sin coordenadas van al final. Lo calcula la API.
-- El mapa es esquemático, como el del prototipo: no usa un proveedor de mapas.
+- El mapa es real (ver "Ajuste posterior: mapa real" al final); sin conexión se ve el esquemático del prototipo.
 
 ### Foto de evidencia
 
@@ -163,7 +163,30 @@ En el navegador (`app.localhost:3000`):
 - **Abrir la app sin señal desde cero** (que cargue aunque el teléfono no tenga red al tocar el icono). Hoy la app debe estar ya abierta. Hace falta guardar la propia aplicación en el teléfono; lo dejé fuera porque en desarrollo interfiere con tus recargas y conviene hacerlo con el dominio real.
 - **Borrar lo guardado en el teléfono al cerrar sesión** (la ruta ya no se muestra a otra sesión, pero la cola de cambios de esa persona sigue ahí hasta sincronizar).
 - **Guardar dónde estaba el técnico** al iniciar y al completar la visita.
-- **Ubicación en el cliente** (para no escribir coordenadas en cada orden) y un proveedor de mapas real, si algún cliente lo pide.
+- **Ubicación en el cliente** (para no escribir coordenadas en cada orden) y rutas por calles con tráfico, si algún cliente lo pide.
 - **Antivirus** para las fotos (el mismo pendiente de los archivos de entregables).
 - Avisar al técnico cuando le asignan una visita: llega con Notificaciones.
 - Pantalla de **plantillas de checklist**.
+
+## Ajuste posterior: mapa real
+
+Preguntaste si en el celular el mapa se vería como un mapa de verdad. No: era un dibujo. Te propuse OpenStreetMap con Leaflet (gratis, sin cuenta ni clave) y respondiste: "sip, si no hay conexión carga nomás el mapa esquemático con un aviso".
+
+- Con conexión, la app muestra un **mapa real de calles** (OpenStreetMap) con las visitas numeradas, la ruta punteada, zoom y arrastre.
+- **Sin conexión** se ve el mapa esquemático con el aviso "Sin conexión: se muestra el mapa esquemático."
+- Si hay conexión pero las imágenes del mapa no llegan, también se ve el esquemático, con "No se pudo cargar el mapa" y **Reintentar**.
+- La ruta sigue en línea recta entre visitas; la navegación por calles sale por "Cómo llegar".
+
+Qué se cambió: `components/dashboard/operations/FieldMap.tsx` (nuevo), `FieldApp.tsx` y la librería `leaflet` en `apps/web/package.json`.
+
+Decisiones:
+
+1. **Librería nueva: Leaflet**, con las imágenes del mapa servidas por OpenStreetMap (lo aprobaste antes de construirlo).
+2. **El mapa no cambia con el modo oscuro:** las imágenes de OpenStreetMap son claras.
+3. **La rueda del ratón no hace zoom** sobre el mapa, para no atrapar el desplazamiento de la página; se usa el "+/−" o los dedos.
+
+Probado en el navegador con el Técnico: carga el mapa de Lima con sus dos visitas y la ruta; "Trabajar sin conexión" pasa al esquemático con su aviso; cortando por código las imágenes del mapa aparece el otro aviso y "Reintentar" lo recupera; una ventana (bloquear) queda por encima del mapa; claro, oscuro y 375 px sin desborde. `tsc` y `eslint` sin errores; las 159 pruebas siguen pasando (la API no cambió).
+
+No se probó en un teléfono real (zoom con los dedos).
+
+**A tener en cuenta para producción:** los servidores públicos de OpenStreetMap son para uso moderado. Con muchos técnicos a la vez conviene contratar un proveedor de imágenes de mapa (hay varios compatibles; se cambia una dirección en `FieldMap.tsx`).
