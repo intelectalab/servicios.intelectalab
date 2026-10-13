@@ -44,7 +44,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/projects", label: "Proyectos", module: "PROYECTOS", requiredPermission: "projects.view", icon: SquareKanban, superModule: "Operaciones" },
   { href: "/timesheets", label: "Horas y costos", module: "TIMESHEETS", requiredPermission: "time_entries.view", icon: Clock, superModule: "Operaciones" },
   { href: "/agenda", label: "Agenda", module: "AGENDA", requiredPermission: "agenda.view", icon: Calendar, superModule: "Operaciones" },
-  { label: "App del técnico", icon: Smartphone, superModule: "Operaciones", soon: true },
+  { href: "/campo", module: "ORDENES_TRABAJO", requiredPermission: "work_orders.view", label: "App del técnico", icon: Smartphone, superModule: "Operaciones" },
 
   { label: "Por facturar", icon: Zap, superModule: "Finanzas", soon: true },
   { label: "Comprobantes", icon: Receipt, superModule: "Finanzas", soon: true },

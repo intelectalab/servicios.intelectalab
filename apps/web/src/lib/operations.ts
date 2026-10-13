@@ -100,6 +100,9 @@ const HISTORY_LABELS: Record<string, string> = {
   "work_order.checklist.uncheck": "Ítem desmarcado",
   "work_order.checklist.approve": "Checklist aprobado",
   "work_order.checklist.return": "Checklist devuelto",
+  "work_order.checklist.evidence": "Foto de evidencia adjuntada",
+  "work_order.checklist.evidence_download": "Foto de evidencia descargada",
+  "work_order.sync_rejected": "Cambio sin conexión rechazado",
 };
 
 export const operationsHistoryLabel = (entry: HistoryEntry) => HISTORY_LABELS[entry.action] ?? entry.action;

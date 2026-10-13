@@ -52,6 +52,8 @@ class WorkOrder extends Model
         'started_at',
         'completed_at',
         'location',
+        'latitude',
+        'longitude',
         'description',
         'assigned_user_id',
         'blocked_reason',

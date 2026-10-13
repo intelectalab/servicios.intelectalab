@@ -18,6 +18,7 @@ use App\Modules\Services\Http\Controllers\OrderController;
 use App\Modules\Operations\Http\Controllers\ContractedServiceController;
 use App\Modules\Operations\Http\Controllers\CostEntryController;
 use App\Modules\Operations\Http\Controllers\AgendaController;
+use App\Modules\Operations\Http\Controllers\FieldController;
 use App\Modules\Operations\Http\Controllers\ProjectController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
 use App\Modules\Operations\Http\Controllers\TaskController;
@@ -322,6 +323,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/work-orders', [WorkOrderController::class, 'index']);
             Route::get('/work-orders/options', [WorkOrderController::class, 'options']);
             Route::get('/work-orders/{workOrder}', [WorkOrderController::class, 'show']);
+            Route::get('/work-orders/{workOrder}/checklist-items/{item}/evidence-url', [WorkOrderController::class, 'evidenceUrl']);
+            // App del técnico: las visitas pendientes de una persona, en el orden sugerido.
+            Route::get('/field/route', [FieldController::class, 'route']);
         });
         Route::middleware('permission:work_orders.create')->post('/work-orders', [WorkOrderController::class, 'store']);
         Route::middleware('permission:work_orders.manage')->group(function () {
@@ -332,6 +336,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/work-orders/{workOrder}/complete', [WorkOrderController::class, 'complete']);
             Route::post('/work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel']);
             Route::patch('/work-orders/{workOrder}/checklist-items/{item}', [WorkOrderController::class, 'checkItem']);
+            Route::post('/work-orders/{workOrder}/checklist-items/{item}/evidence', [WorkOrderController::class, 'attachEvidence']);
+            // App del técnico: deja en el historial los cambios sin conexión que no se pudieron aplicar.
+            Route::post('/field/sync-log', [FieldController::class, 'syncLog']);
         });
         // Asignar el técnico y revisar el checklist son de quien supervisa, no de quien ejecuta.
         Route::middleware('permission:work_orders.approve')->group(function () {

@@ -41,6 +41,9 @@ export interface WorkOrder {
   scheduled_start: string | null;
   scheduled_end: string | null;
   location: string | null;
+  /** Ubicación de la visita, para el mapa y la ruta del técnico. */
+  latitude: number | null;
+  longitude: number | null;
   customer: Customer | null;
   assignee: { id: string; name: string } | null;
   checklist: { name: string; status: ChecklistStatus; total: number; done: number; required_pending: number } | null;
@@ -59,6 +62,8 @@ export interface ChecklistItem {
   done_by: string | null;
   done_at: string | null;
   evidence_note: string | null;
+  /** Foto de evidencia del ítem; null si no tiene. */
+  evidence: { file_name: string; size_bytes: number; version: number } | null;
 }
 
 export interface WorkOrderDetail extends WorkOrder {
@@ -264,4 +269,32 @@ export interface AgendaOptions {
   people: { id: string; name: string }[];
   /** null si quien mira no puede ver clientes. */
   customers: { id: string; name: string }[] | null;
+}
+
+/** Visita pendiente de un técnico, tal como la muestra su app. */
+export interface FieldOrder {
+  id: string;
+  code: string;
+  title: string;
+  status: WorkOrderStatus;
+  priority: WorkOrderPriority;
+  scheduled_start: string | null;
+  location: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  customer: string | null;
+  blocked_reason: string | null;
+  checklist_status: ChecklistStatus | null;
+  checklist_items: { id: string; label: string; required: boolean; done: boolean; evidence: { file_name: string; size_bytes: number; version: number } | null }[];
+  lock_version: number;
+}
+
+export interface FieldRoute {
+  /** Quien mira (sus cambios sin conexión se guardan a su nombre). */
+  viewer_id: string;
+  technician: { id: string; name: string | null };
+  /** Técnicos cuya app puede ver quien mira; vacío si solo alcanza lo propio. */
+  technicians: { id: string; name: string }[];
+  /** En el orden sugerido de recorrido. */
+  orders: FieldOrder[];
 }

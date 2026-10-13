@@ -61,6 +61,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-13 | Operaciones, segunda parte: Proyectos (tareas, entregables, margen) y Horas y costos (sin solapes, nadie aprueba las suyas); arreglo del cambio de vista en los listados con tablero | [cambios/2026-10-13_operaciones-proyectos-horas-y-costos.md](cambios/2026-10-13_operaciones-proyectos-horas-y-costos.md) |
 | 2026-10-13 | Ficha del proyecto como el prototipo: cinco indicadores y pestañas (Tareas, Horas, Costos, Entregables, Resumen y estados); margen de sus tablas y archivo real del entregable ("Subir documento" con versiones) | [cambios/2026-10-13_proyecto-ficha-con-pestanas.md](cambios/2026-10-13_proyecto-ficha-con-pestanas.md) |
 | 2026-10-13 | Operaciones: Agenda semanal (eventos, órdenes de trabajo programadas, aviso de cruces, alcance por rol); vista de mes y filtro por persona | [cambios/2026-10-13_operaciones-agenda.md](cambios/2026-10-13_operaciones-agenda.md) |
+| 2026-10-13 | Operaciones: App del técnico (visitas del día, mapa y ruta, checklist, fotos de evidencia, trabajo sin conexión con sincronización; instalable en el teléfono) | [cambios/2026-10-13_operaciones-app-del-tecnico.md](cambios/2026-10-13_operaciones-app-del-tecnico.md) |
 
 ## Cómo se escribe cada entrada
 

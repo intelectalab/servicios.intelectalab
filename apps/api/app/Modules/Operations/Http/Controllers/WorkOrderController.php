@@ -9,6 +9,7 @@ use App\Modules\Operations\Models\Checklist;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Operations\Models\WorkOrderChecklistItem;
+use App\Modules\Documents\Support\DocumentStore;
 use App\Modules\Operations\Support\AgendaClash;
 use App\Modules\Operations\Support\Technicians;
 use App\Services\AuditHistory;
@@ -158,6 +159,8 @@ class WorkOrderController extends Controller
                 'scheduled_start' => $start,
                 'scheduled_end' => $end,
                 'location' => $this->text($data['location'] ?? null),
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
                 'description' => $this->text($data['description'] ?? null),
                 'created_by' => $request->user()->id,
                 'checklist_id' => $template?->id,
@@ -203,7 +206,7 @@ class WorkOrderController extends Controller
         }
 
         DB::transaction(function () use ($request, $order, $data, $start, $end) {
-            $fields = ['title', 'priority', 'scheduled_start', 'scheduled_end', 'location', 'description'];
+            $fields = ['title', 'priority', 'scheduled_start', 'scheduled_end', 'location', 'latitude', 'longitude', 'description'];
             $before = $order->only($fields);
             $order->update([
                 'title' => trim($data['title']),
@@ -211,6 +214,8 @@ class WorkOrderController extends Controller
                 'scheduled_start' => $start,
                 'scheduled_end' => $end,
                 'location' => $this->text($data['location'] ?? null),
+                'latitude' => $data['latitude'] ?? null,
+                'longitude' => $data['longitude'] ?? null,
                 'description' => $this->text($data['description'] ?? null),
             ]);
 
@@ -349,6 +354,69 @@ class WorkOrderController extends Controller
     }
 
     /** Aprueba el checklist completado. Quien ejecuta la orden no aprueba su propio checklist. */
+    /**
+     * Foto de evidencia de un ítem del checklist: sube la imagen, la deja como documento del
+     * ítem (otra foto es una versión nueva) y lo marca como hecho.
+     */
+    public function attachEvidence(string $workOrder, string $item, Request $request)
+    {
+        $order = $this->find($workOrder);
+        abort_unless(Str::isUuid($item), 404);
+        $row = $order->checklistItems()->whereKey($item)->firstOrFail();
+
+        $data = $request->validate([
+            'file' => ['required', 'file', 'image', 'max:'.DocumentStore::MAX_KB],
+            'sha256' => ['nullable', 'regex:/^[0-9a-fA-F]{64}$/'],
+        ], [...DocumentStore::fileMessages(), 'file.image' => 'La evidencia debe ser una foto (JPG, PNG o WebP).']);
+
+        if (! in_array($order->status, self::CHECKABLE, true)) {
+            throw ValidationException::withMessages([
+                'status' => [$order->status === 'PLANNED' ? 'Asigna la orden para marcar su checklist.' : 'El checklist de una orden cerrada ya no se cambia.'],
+            ]);
+        }
+        if ($order->checklist_status === 'APPROVED') {
+            throw ValidationException::withMessages(['checklist' => ['El checklist ya fue aprobado.']]);
+        }
+
+        $version = DocumentStore::store(
+            $order->tenant_id, $request->user()->id, $request->file('file'),
+            ['title' => Str::limit("{$order->code} · {$row->label}", 250, ''), 'category' => 'Evidencia', 'visibility' => 'INTERNAL'],
+            $row->evidence, $data['sha256'] ?? null,
+        );
+
+        DB::transaction(function () use ($request, $order, $row, $version) {
+            DocumentStore::link($version->document, 'WorkOrderChecklistItem', $row->id);
+            $row->update([
+                'done' => true,
+                'done_by' => $request->user()->id,
+                'done_at' => now(),
+                'evidence_document_id' => $version->document_id,
+                'evidence_note' => 'Foto: '.$version->fileObject->original_name,
+            ]);
+            $order->update(['checklist_status' => $this->checklistStatus($order)]);
+
+            $this->audit($request, $order, 'work_order.checklist.evidence', [
+                'document_id' => $version->document_id, 'note' => "{$row->label}: {$version->fileObject->original_name}",
+            ]);
+        });
+
+        return response()->json($this->detail($order), 201);
+    }
+
+    /** Enlace temporal para ver la foto de evidencia de un ítem. */
+    public function evidenceUrl(string $workOrder, string $item, Request $request)
+    {
+        $order = $this->find($workOrder);
+        abort_unless(Str::isUuid($item), 404);
+        $row = $order->checklistItems()->whereKey($item)->firstOrFail();
+        $url = $row->evidence ? DocumentStore::downloadUrl($row->evidence) : null;
+        abort_unless($url, 404);
+
+        $this->audit($request, $order, 'work_order.checklist.evidence_download', ['document_id' => $row->evidence_document_id, 'note' => $row->label]);
+
+        return response()->json(['url' => $url, 'expires_in_minutes' => 5]);
+    }
+
     public function approveChecklist(string $workOrder, Request $request)
     {
         $order = $this->find($workOrder);
@@ -428,6 +496,8 @@ class WorkOrderController extends Controller
             'scheduled_start' => $order->scheduled_start?->toIso8601String(),
             'scheduled_end' => $order->scheduled_end?->toIso8601String(),
             'location' => $order->location,
+            'latitude' => $order->latitude !== null ? (float) $order->latitude : null,
+            'longitude' => $order->longitude !== null ? (float) $order->longitude : null,
             'customer' => $order->customer,
             'assignee' => $order->assignee ? ['id' => $order->assignee->id, 'name' => $order->assignee->name] : null,
             'checklist' => $order->checklist_status ? [
@@ -453,6 +523,7 @@ class WorkOrderController extends Controller
                 'contractedService:id,status',
                 'creator:id,name',
                 'checklistItems.doneBy:id,name',
+                'checklistItems.evidence.latestVersion.fileObject',
             )
             ->findOrFail($order->id);
 
@@ -482,6 +553,7 @@ class WorkOrderController extends Controller
                 'done_by' => $item->doneBy?->name,
                 'done_at' => $item->done_at?->toIso8601String(),
                 'evidence_note' => $item->evidence_note,
+                'evidence' => $item->evidenceSummary(),
             ])->values(),
             'checklist_review' => $order->checklist_reviewed_at ? [
                 'by' => $this->userName($order->checklist_reviewed_by),
@@ -502,6 +574,9 @@ class WorkOrderController extends Controller
             'scheduled_start' => ['nullable', 'date'],
             'scheduled_end' => ['nullable', 'date', 'after_or_equal:scheduled_start'],
             'location' => ['nullable', 'string', 'max:255'],
+            // Ubicación de la visita, para el mapa y la ruta del técnico: van las dos o ninguna.
+            'latitude' => ['nullable', 'numeric', 'between:-90,90', 'required_with:longitude'],
+            'longitude' => ['nullable', 'numeric', 'between:-180,180', 'required_with:latitude'],
             'description' => ['nullable', 'string', 'max:5000'],
         ];
     }

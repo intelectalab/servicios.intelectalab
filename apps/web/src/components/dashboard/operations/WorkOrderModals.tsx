@@ -47,6 +47,7 @@ export function WorkOrderFormModal({
   const [technician, setTechnician] = useState("");
   const [template, setTemplate] = useState("");
   const [location, setLocation] = useState(order?.location ?? "");
+  const [coordinates, setCoordinates] = useState(order && order.latitude !== null && order.longitude !== null ? `${order.latitude}, ${order.longitude}` : "");
   const [description, setDescription] = useState(order?.description ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -56,6 +57,12 @@ export function WorkOrderFormModal({
     if (!order && !serviceId) found.contracted_service_id = "Elige el servicio contratado.";
     if (!title.trim()) found.title = "El título es obligatorio.";
     if (start && end && end < start) found.scheduled_end = "El fin no puede ser anterior al inicio.";
+    // "‑12.0464, ‑77.0428", como las copia Google Maps.
+    const parts = coordinates.trim() ? coordinates.split(/[,;\s]+/).filter(Boolean).map(Number) : [];
+    const [latitude, longitude] = parts.length === 2 ? parts : [null, null];
+    if (coordinates.trim() && (parts.length !== 2 || parts.some(Number.isNaN) || Math.abs(parts[0]) > 90 || Math.abs(parts[1]) > 180)) {
+      found.latitude = "Escribe latitud y longitud separadas por coma: -12.0464, -77.0428";
+    }
     setErrors(found);
     if (Object.keys(found).length) return;
 
@@ -69,6 +76,8 @@ export function WorkOrderFormModal({
           scheduled_start: toIso(start),
           scheduled_end: start ? toIso(end) : null,
           location: location.trim() || null,
+          latitude,
+          longitude,
           description: description.trim() || null,
           ...(order ? {} : {
             contracted_service_id: serviceId,
@@ -135,6 +144,9 @@ export function WorkOrderFormModal({
         </Field>
         <Field label="Lugar" error={errors.location}>
           <input className={INPUT} value={location} onChange={(e) => setLocation(e.target.value)} maxLength={255} placeholder="Sede del cliente" />
+        </Field>
+        <Field label="Coordenadas (opcional)" span={3} error={errors.latitude ?? errors.longitude} hint="Latitud y longitud, como las copia Google Maps. Sirven para el mapa y la ruta de la App del técnico.">
+          <input className={INPUT} value={coordinates} onChange={(e) => setCoordinates(e.target.value)} maxLength={40} inputMode="text" placeholder="-12.0464, -77.0428" />
         </Field>
         {!order && (
           <>

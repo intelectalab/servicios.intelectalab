@@ -75,6 +75,16 @@ export default function WorkOrderDetail() {
   }, []);
 
   /** Ejecuta una acción sobre la orden y refresca la ficha con lo que devuelve la API. */
+  /** Abre la foto de evidencia de un ítem con un enlace temporal que da la API. */
+  async function viewEvidence(itemId: string) {
+    try {
+      const { url } = await apiFetch<{ url: string }>(`/v1/work-orders/${id}/checklist-items/${itemId}/evidence-url`);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      toast(firstError(err, "No se pudo abrir la foto."), "danger");
+    }
+  }
+
   async function act(path: string, method: "POST" | "PATCH", body: unknown, done: string): Promise<boolean> {
     setBusy(true);
     try {
@@ -261,7 +271,11 @@ export default function WorkOrderDetail() {
                           <div className="min-w-0 flex-1">
                             <span className={item.done ? "app-muted line-through" : ""}>{item.label}</span>
                             {item.required && <em className="ml-1 not-italic text-[color:var(--p-danger-text)]" title="Obligatorio">*</em>}
-                            {item.evidence_note && <span className="ml-2"><Chip>{item.evidence_note}</Chip></span>}
+                            {item.evidence ? (
+                              <button type="button" onClick={() => viewEvidence(item.id)} title="Ver la foto de evidencia" className={`${LINK} ml-2 cursor-pointer text-[12.5px]`}>
+                                Foto: {item.evidence.file_name}
+                              </button>
+                            ) : item.evidence_note && <span className="ml-2"><Chip>{item.evidence_note}</Chip></span>}
                             {item.done && item.done_at && (
                               <small className="app-muted block text-xs">{item.done_by ?? "—"} · {dateTime(item.done_at)}</small>
                             )}
@@ -346,6 +360,12 @@ export default function WorkOrderDetail() {
                     ["Programada", scheduledText(order.scheduled_start)],
                     order.scheduled_end ? ["Fin programado", dateTime(order.scheduled_end)] : null,
                     ["Lugar", order.location || "—"],
+                    order.latitude !== null && order.longitude !== null ? [
+                      "Ubicación",
+                      <a key="coordinates" href={`https://www.google.com/maps/search/?api=1&query=${order.latitude},${order.longitude}`} target="_blank" rel="noopener noreferrer" className={LINK}>
+                        {order.latitude}, {order.longitude}
+                      </a>,
+                    ] : null,
                     ["Prioridad", <PriorityChip key="priority" priority={order.priority} />],
                     order.description ? ["Descripción", <span key="description" className="whitespace-pre-line">{order.description}</span>] : null,
                     order.started_at ? ["Inicio de ejecución", dateTime(order.started_at)] : null,
