@@ -4,7 +4,8 @@ import { dateTime } from "@/lib/crm";
 import { downloadDocumentPdf } from "@/lib/document-pdf";
 import type { BillingMode, HistoryEntry } from "@/types/commercial";
 import type {
-  ChecklistStatus, ContractedService, ContractedServiceStatus, WorkOrder, WorkOrderDetail, WorkOrderPriority, WorkOrderStatus,
+  ChecklistStatus, ContractedService, ContractedServiceStatus, DeliverableStatus, EntryStatus, ProjectStatus, TaskStatus,
+  WorkOrder, WorkOrderDetail, WorkOrderPriority, WorkOrderStatus,
 } from "@/types/operations";
 
 export const CONTRACTED_STATES: [ContractedServiceStatus, string, Tone][] = [
@@ -149,3 +150,91 @@ export async function downloadWorkOrderPdf(order: WorkOrderDetail) {
     signatures: (companyName) => ["Conformidad del cliente", `Técnico · ${companyName}`],
   });
 }
+
+// ------------------------------------------------------------------ Proyectos, horas y costos
+
+export const PROJECT_STATES: [ProjectStatus, string, Tone][] = [
+  ["DRAFT", "Borrador", "neutral"],
+  ["PLANNED", "Planificado", "info"],
+  ["IN_PROGRESS", "En ejecución", "accent"],
+  ["ON_HOLD", "En pausa", "warning"],
+  ["COMPLETED", "Completado", "success"],
+  ["CANCELLED", "Cancelado", "muted"],
+];
+
+/** Estados en los que el proyecto sigue vivo: se edita y cambian sus tareas y entregables. */
+export const PROJECT_OPEN: ProjectStatus[] = ["DRAFT", "PLANNED", "IN_PROGRESS", "ON_HOLD"];
+
+export type ProjectMove = { path: string; to: ProjectStatus; from: ProjectStatus[]; label: string; done: string; reason?: string; permission: string };
+
+/** Cambios de estado de un proyecto. Cerrarlo es de quien supervisa (`projects.approve`). */
+export const PROJECT_MOVES: ProjectMove[] = [
+  { path: "plan", to: "PLANNED", from: ["DRAFT"], label: "Planificar", done: "Proyecto planificado", permission: "projects.manage" },
+  { path: "start", to: "IN_PROGRESS", from: ["PLANNED"], label: "Iniciar", done: "Proyecto iniciado", permission: "projects.manage" },
+  { path: "resume", to: "IN_PROGRESS", from: ["ON_HOLD"], label: "Reanudar", done: "Proyecto reanudado", permission: "projects.manage" },
+  { path: "complete", to: "COMPLETED", from: ["IN_PROGRESS"], label: "Cerrar proyecto", done: "Proyecto cerrado", permission: "projects.approve" },
+  { path: "hold", to: "ON_HOLD", from: ["IN_PROGRESS"], label: "Pausar", done: "Proyecto en pausa", reason: "Motivo de la pausa", permission: "projects.manage" },
+  { path: "cancel", to: "CANCELLED", from: ["DRAFT", "PLANNED", "ON_HOLD"], label: "Cancelar", done: "Proyecto cancelado", reason: "Motivo de cancelación", permission: "projects.manage" },
+];
+
+export const TASK_STATES: [TaskStatus, string, Tone][] = [
+  ["TODO", "Por hacer", "neutral"],
+  ["IN_PROGRESS", "En curso", "accent"],
+  ["BLOCKED", "Bloqueada", "warning"],
+  ["DONE", "Hecha", "success"],
+  ["CANCELLED", "Cancelada", "muted"],
+];
+
+/** Cambios de estado de una tarea: destino → estados de origen (los mismos que comprueba la API). */
+export const TASK_MOVES: Record<Exclude<TaskStatus, "TODO">, TaskStatus[]> = {
+  IN_PROGRESS: ["TODO", "BLOCKED"],
+  BLOCKED: ["IN_PROGRESS"],
+  DONE: ["IN_PROGRESS"],
+  CANCELLED: ["TODO", "IN_PROGRESS", "BLOCKED"],
+};
+
+export const DELIVERABLE_STATES: [DeliverableStatus, string, Tone][] = [
+  ["DRAFT", "En preparación", "neutral"],
+  ["IN_REVIEW", "En revisión", "info"],
+  ["RETURNED", "Devuelto", "warning"],
+  ["APPROVED", "Aprobado", "success"],
+  ["DELIVERED", "Entregado", "success"],
+];
+
+export const ENTRY_STATES: [EntryStatus, string, Tone][] = [
+  ["SUBMITTED", "Enviado", "info"],
+  ["APPROVED", "Aprobado", "success"],
+  ["REJECTED", "Rechazado", "danger"],
+];
+
+export const COST_CATEGORIES = ["Proveedor", "Licencias", "Infraestructura", "Materiales", "Personal externo"];
+
+export const projectPeriod = (project: { start_date: string | null; end_date: string | null }) =>
+  project.start_date || project.end_date ? `${shortDate(project.start_date)} → ${shortDate(project.end_date)}` : "Sin fechas";
+
+export const hoursText = (hours: number) => `${hours.toLocaleString("es-PE", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} h`;
+
+/** Proyecto u orden de trabajo donde se trabajaron unas horas. */
+export function entryContext(entry: { project: { code: string; name: string } | null; work_order: { code: string; title: string } | null }) {
+  if (entry.project) return `${entry.project.code} · ${entry.project.name}`;
+  return entry.work_order ? `${entry.work_order.code} · ${entry.work_order.title}` : "—";
+}
+
+// Cómo se lee en el historial del proyecto cada movimiento que no cambia su estado.
+const PROJECT_HISTORY_LABELS: Record<string, string> = {
+  "project.create": "Proyecto creado",
+  "project.update": "Datos editados",
+  "project.task.create": "Tarea creada",
+  "project.task.update": "Tarea editada",
+  "project.task.move": "Tarea movida",
+  "project.task.check": "Control marcado",
+  "project.task.uncheck": "Control desmarcado",
+  "project.deliverable.create": "Entregable creado",
+  "project.deliverable.update": "Entregable editado",
+  "project.deliverable.submit": "Entregable a revisión",
+  "project.deliverable.approve": "Entregable aprobado",
+  "project.deliverable.return": "Entregable devuelto",
+  "project.deliverable.deliver": "Entregable entregado",
+};
+
+export const projectHistoryLabel = (entry: HistoryEntry) => PROJECT_HISTORY_LABELS[entry.action] ?? entry.action;

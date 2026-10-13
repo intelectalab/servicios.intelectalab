@@ -7,6 +7,12 @@ use Illuminate\Support\Str;
 
 class Task extends Model
 {
+    /** Estado => texto visible. */
+    public const STATES = ['TODO' => 'Por hacer', 'IN_PROGRESS' => 'En curso', 'BLOCKED' => 'Bloqueada', 'DONE' => 'Hecha', 'CANCELLED' => 'Cancelada'];
+
+    /** Estados en los que la tarea está cerrada. */
+    public const CLOSED = ['DONE', 'CANCELLED'];
+
     protected $table = 'tasks';
 
     protected $keyType = 'string';
@@ -24,10 +30,17 @@ class Task extends Model
         'priority',
         'assigned_user_id',
         'due_at',
+        'estimate_hours',
+        'required_check',
+        'required_check_done',
+        'blocked_reason',
+        'created_by',
     ];
 
     protected $casts = [
         'due_at' => 'datetime',
+        'estimate_hours' => 'decimal:2',
+        'required_check_done' => 'boolean',
     ];
 
     protected static function boot()
@@ -39,6 +52,11 @@ class Task extends Model
                 $model->id = (string) Str::uuid();
             }
         });
+    }
+
+    public function assignee()
+    {
+        return $this->belongsTo(\App\Models\User::class, 'assigned_user_id');
     }
 
     public function taskChecklists()

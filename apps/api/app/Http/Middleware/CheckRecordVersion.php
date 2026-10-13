@@ -6,6 +6,9 @@ use App\Modules\Crm\Models\CrmActivity;
 use App\Modules\Crm\Models\CrmLead;
 use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Operations\Models\ContractedService;
+use App\Modules\Operations\Models\CostEntry;
+use App\Modules\Operations\Models\Project;
+use App\Modules\Operations\Models\TimeEntry;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Modules\Services\Models\Contract;
@@ -46,6 +49,9 @@ class CheckRecordVersion
         'campaign' => 'crm_campaigns',
         'contractedService' => 'contracted_services',
         'workOrder' => 'work_orders',
+        'project' => 'projects',
+        'timeEntry' => 'time_entries',
+        'costEntry' => 'cost_entries',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -59,6 +65,9 @@ class CheckRecordVersion
         'crm_activities' => CrmActivity::class,
         'contracted_services' => ContractedService::class,
         'work_orders' => WorkOrder::class,
+        'projects' => Project::class,
+        'time_entries' => TimeEntry::class,
+        'cost_entries' => CostEntry::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

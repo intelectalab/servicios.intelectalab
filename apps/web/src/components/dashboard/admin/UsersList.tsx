@@ -21,6 +21,7 @@ type CompanyUser = {
   branch: { id: string; name: string } | null;
   /** Sedes adicionales: amplían lo que la persona ve con el alcance "Sede". */
   extra_branches: { id: string; name: string }[];
+  hourly_cost?: number;
   team: { id: string; name: string } | null;
   employee_id: string | null;
   /** Entra con verificación en dos pasos (por su rol o porque se le exige). */
@@ -70,6 +71,7 @@ function UserModal({
   const [branchId, setBranchId] = useState(user?.branch?.id ?? "");
   const [extraBranchIds, setExtraBranchIds] = useState<string[]>(user?.extra_branches.map((branch) => branch.id) ?? []);
   const [teamId, setTeamId] = useState(user?.team?.id ?? "");
+  const [hourlyCost, setHourlyCost] = useState(user?.hourly_cost ? String(user.hourly_cost) : "");
   const [employeeId, setEmployeeId] = useState(user?.employee_id ?? "");
   const [mfa, setMfa] = useState(user?.mfa_enabled ?? false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -105,6 +107,7 @@ function UserModal({
           // La principal no se repite como adicional; sin principal no hay adicionales.
           extra_branch_ids: branchId ? extraBranchIds.filter((id) => id !== branchId) : [],
           team_id: teamId || null,
+          hourly_cost: hourlyCost === "" ? 0 : Number(hourlyCost),
           employee_id: employeeId || null,
           mfa,
         }),
@@ -187,6 +190,9 @@ function UserModal({
               />
             </Field>
           )}
+          <Field label="Costo por hora (S/)" error={errors.hourly_cost} hint="Lo toman sus horas al registrarse en Horas y costos.">
+            <input className={INPUT} type="number" min="0" step="0.01" inputMode="decimal" value={hourlyCost} onChange={(e) => setHourlyCost(e.target.value)} placeholder="0.00" />
+          </Field>
           <Field label="Empleado vinculado" span={2} error={errors.employee_id} hint="La cuenta de acceso y el empleado son registros distintos; aquí se enlazan.">
             <SearchSelect
               value={employeeId}

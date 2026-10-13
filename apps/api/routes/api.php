@@ -16,6 +16,8 @@ use App\Modules\Services\Http\Controllers\QuotationController;
 use App\Modules\Services\Http\Controllers\ContractController;
 use App\Modules\Services\Http\Controllers\OrderController;
 use App\Modules\Operations\Http\Controllers\ContractedServiceController;
+use App\Modules\Operations\Http\Controllers\CostEntryController;
+use App\Modules\Operations\Http\Controllers\ProjectController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
 use App\Modules\Operations\Http\Controllers\TaskController;
 use App\Modules\Operations\Http\Controllers\ChecklistController;
@@ -347,11 +349,59 @@ Route::prefix('v1')->group(function () {
             Route::patch('/tasks/{task}/checklist-items/{item}', [TaskController::class, 'completeChecklistItem']);
         });
 
+        // Proyectos, con sus tareas y entregables
+        Route::middleware('permission:projects.view')->group(function () {
+            Route::get('/projects', [ProjectController::class, 'index']);
+            Route::get('/projects/options', [ProjectController::class, 'options']);
+            Route::get('/projects/{project}', [ProjectController::class, 'show']);
+        });
+        Route::middleware('permission:projects.create')->post('/projects', [ProjectController::class, 'store']);
+        Route::middleware('permission:projects.manage')->group(function () {
+            Route::put('/projects/{project}', [ProjectController::class, 'update']);
+            Route::post('/projects/{project}/plan', [ProjectController::class, 'plan']);
+            Route::post('/projects/{project}/start', [ProjectController::class, 'start']);
+            Route::post('/projects/{project}/hold', [ProjectController::class, 'hold']);
+            Route::post('/projects/{project}/resume', [ProjectController::class, 'resume']);
+            Route::post('/projects/{project}/cancel', [ProjectController::class, 'cancel']);
+        });
+        // Trabajar las tareas es de quien ejecuta: no da para pausar el proyecto ni tocar su presupuesto.
+        Route::middleware('permission:tasks.manage')->group(function () {
+            Route::post('/projects/{project}/tasks', [ProjectController::class, 'storeTask']);
+            Route::put('/projects/{project}/tasks/{task}', [ProjectController::class, 'updateTask']);
+            Route::post('/projects/{project}/tasks/{task}/move', [ProjectController::class, 'moveTask']);
+            Route::patch('/projects/{project}/tasks/{task}/check', [ProjectController::class, 'checkTask']);
+        });
+        // Cerrar el proyecto es de quien supervisa.
+        Route::middleware('permission:projects.approve')->post('/projects/{project}/complete', [ProjectController::class, 'complete']);
+        Route::middleware('permission:deliverables.manage')->group(function () {
+            Route::post('/projects/{project}/deliverables', [ProjectController::class, 'storeDeliverable']);
+            Route::put('/projects/{project}/deliverables/{deliverable}', [ProjectController::class, 'updateDeliverable']);
+            Route::post('/projects/{project}/deliverables/{deliverable}/submit', [ProjectController::class, 'submitDeliverable']);
+            Route::post('/projects/{project}/deliverables/{deliverable}/deliver', [ProjectController::class, 'deliverDeliverable']);
+        });
+        Route::middleware('permission:deliverables.approve')->group(function () {
+            Route::post('/projects/{project}/deliverables/{deliverable}/approve', [ProjectController::class, 'approveDeliverable']);
+            Route::post('/projects/{project}/deliverables/{deliverable}/return', [ProjectController::class, 'returnDeliverable']);
+        });
+
         // Registro de horas
-        Route::middleware('permission:operations.view')->get('/time-entries', [TimeEntryController::class, 'index']);
-        Route::middleware('permission:operations.manage')->group(function () {
-            Route::post('/time-entries', [TimeEntryController::class, 'store']);
+        Route::middleware('permission:time_entries.view')->group(function () {
+            Route::get('/time-entries', [TimeEntryController::class, 'index']);
+            Route::get('/time-entries/summary', [TimeEntryController::class, 'summary']);
+            Route::get('/time-entries/options', [TimeEntryController::class, 'options']);
+        });
+        Route::middleware('permission:time_entries.create')->post('/time-entries', [TimeEntryController::class, 'store']);
+        Route::middleware('permission:time_entries.approve')->group(function () {
             Route::post('/time-entries/{timeEntry}/approve', [TimeEntryController::class, 'approve']);
+            Route::post('/time-entries/{timeEntry}/reject', [TimeEntryController::class, 'reject']);
+        });
+
+        // Costos directos
+        Route::middleware('permission:cost_entries.view')->get('/cost-entries', [CostEntryController::class, 'index']);
+        Route::middleware('permission:cost_entries.create')->post('/cost-entries', [CostEntryController::class, 'store']);
+        Route::middleware('permission:cost_entries.approve')->group(function () {
+            Route::post('/cost-entries/{costEntry}/approve', [CostEntryController::class, 'approve']);
+            Route::post('/cost-entries/{costEntry}/reject', [CostEntryController::class, 'reject']);
         });
 
         // Recursos

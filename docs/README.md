@@ -58,6 +58,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-12 | Carga de las pantallas del CRM: el listado primero y las lecturas repetidas compartidas | [cambios/2026-10-12_carga-de-pantallas-crm.md](cambios/2026-10-12_carga-de-pantallas-crm.md) |
 | 2026-10-12 | Operaciones, primera parte: Servicios contratados y Órdenes de trabajo (tablero, ficha, checklist, asignación sin choques de agenda, alcance por rol) | [cambios/2026-10-12_operaciones-servicios-contratados-y-ot.md](cambios/2026-10-12_operaciones-servicios-contratados-y-ot.md) |
 | 2026-10-12 | La barra lateral baja de tono en modo oscuro; el azul vivo queda para la pantalla activa | [cambios/2026-10-12_barra-lateral-en-modo-oscuro.md](cambios/2026-10-12_barra-lateral-en-modo-oscuro.md) |
+| 2026-10-13 | Operaciones, segunda parte: Proyectos (tareas, entregables, margen) y Horas y costos (sin solapes, nadie aprueba las suyas); arreglo del cambio de vista en los listados con tablero | [cambios/2026-10-13_operaciones-proyectos-horas-y-costos.md](cambios/2026-10-13_operaciones-proyectos-horas-y-costos.md) |
 
 ## Cómo se escribe cada entrada
 

@@ -34,6 +34,9 @@ class AccessScope
         'activities' => 'Actividades',
         'contracted_services' => 'Servicios contratados',
         'work_orders' => 'Órdenes de trabajo',
+        'projects' => 'Proyectos',
+        'time_entries' => 'Horas',
+        'cost_entries' => 'Costos',
     ];
 
     /** De menor a mayor alcance. */
@@ -116,6 +119,12 @@ class AccessScope
                     ->where(fn ($own) => $own->whereIn('created_by', $owners)->orWhereIn('quotation_id', $fromQuotation))),
             // Una orden de trabajo es propia del técnico que la tiene asignada y de quien la creó.
             'work_orders' => $query->whereIn("{$table}.assigned_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
+            // Un proyecto es propio de quien lo lleva, de quien lo creó y de quien tiene una tarea suya asignada.
+            'projects' => $query->whereIn("{$table}.manager_user_id", $owners)->orWhereIn("{$table}.created_by", $owners)
+                ->orWhereIn("{$table}.id", fn ($sub) => $sub->select('project_id')->from('tasks')->whereNotNull('project_id')->whereIn('assigned_user_id', $owners)),
+            // Las horas son de quien las trabajó; un costo, de quien lo registró.
+            'time_entries' => $query->whereIn("{$table}.user_id", $owners),
+            'cost_entries' => $query->whereIn("{$table}.created_by", $owners),
         };
     }
 

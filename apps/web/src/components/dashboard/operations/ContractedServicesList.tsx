@@ -17,9 +17,10 @@ import {
 import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
+import { ProjectFormModal } from "@/components/dashboard/operations/ProjectModals";
 import { WorkOrderFormModal } from "@/components/dashboard/operations/WorkOrderModals";
 import type { PaginatedResponse } from "@/types/customer";
-import type { ContractedService, ContractedServiceDetail, WorkOrderOptions } from "@/types/operations";
+import type { ContractedService, ContractedServiceDetail, ProjectOptions, WorkOrderOptions } from "@/types/operations";
 
 type Move = (typeof CONTRACTED_MOVES)[number];
 type Toast = (text: string, tone?: "success" | "danger" | "warning", detail?: string) => void;
@@ -84,6 +85,8 @@ export default function ContractedServicesList() {
   const [reasoning, setReasoning] = useState<{ service: ContractedService; move: Move } | null>(null);
   const [ordering, setOrdering] = useState<ContractedService | null>(null);
   const [options, setOptions] = useState<WorkOrderOptions | null>(null);
+  const [planning, setPlanning] = useState<ContractedService | null>(null);
+  const [projectOptions, setProjectOptions] = useState<ProjectOptions | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -149,7 +152,13 @@ export default function ContractedServicesList() {
     }
   }
 
-  const notYet = () => toast("Los proyectos aún no están disponibles: llegarán con la pantalla Proyectos.", "warning");
+  /** Abre "Nuevo proyecto" con el servicio ya elegido; las listas del formulario se piden al abrirlo. */
+  function newProject(service: ContractedService) {
+    setPlanning(service);
+    if (!projectOptions) {
+      apiFetch<ProjectOptions>("/v1/projects/options").then(setProjectOptions).catch(() => setProjectOptions({ people: [], contracted_services: [] }));
+    }
+  }
 
   const columns: Column<ContractedService>[] = [
     {
@@ -204,8 +213,7 @@ export default function ContractedServicesList() {
                 <Plus size={13} />
                 <span>Nueva OT</span>
               </Btn>
-              {/* Aún sin función: depende de la pantalla Proyectos. */}
-              <Btn size="sm" variant="ghost" onClick={notYet}>Nuevo proyecto</Btn>
+              <Btn size="sm" variant="ghost" onClick={() => newProject(service)} permission="projects.create">Nuevo proyecto</Btn>
             </>
           )}
         </div>
@@ -303,7 +311,7 @@ export default function ContractedServicesList() {
           onClose={() => setOpenId(null)}
           onMove={start}
           onNewOrder={newOrder}
-          onNewProject={notYet}
+          onNewProject={newProject}
         />
       )}
       {reasoning && (
@@ -330,6 +338,20 @@ export default function ContractedServicesList() {
           }}
         />
       )}
+      {planning && (
+        <ProjectFormModal
+          options={projectOptions}
+          contractedServiceId={planning.id}
+          defaultName={[planning.service?.name, customerName(planning.customer)].filter(Boolean).join(" — ")}
+          // El aviso de "creado" se da en la ficha a la que se navega; aquí solo los errores.
+          toast={((text, tone, detail) => { if (tone && tone !== "success") toast(text, tone, detail); }) as Toast}
+          onClose={() => setPlanning(null)}
+          onSaved={(project) => {
+            setFlash("Proyecto creado");
+            router.push(`/projects/${project.id}`);
+          }}
+        />
+      )}
       {toasts}
     </Screen>
   );
@@ -345,7 +367,7 @@ function ContractedServiceModal({
   onClose: () => void;
   onMove: (service: ContractedService, move: Move) => void;
   onNewOrder: (service: ContractedService) => void;
-  onNewProject: () => void;
+  onNewProject: (service: ContractedService) => void;
 }) {
   const [service, setService] = useState<ContractedServiceDetail | null>(null);
   const [error, setError] = useState("");
@@ -398,7 +420,7 @@ function ContractedServiceModal({
                     <Plus size={15} />
                     <span>Nueva OT</span>
                   </Btn>
-                  <Btn variant="ghost" onClick={onNewProject}>Nuevo proyecto</Btn>
+                  <Btn variant="ghost" onClick={() => onNewProject(service)} permission="projects.create">Nuevo proyecto</Btn>
                 </>
               )}
               {!moves.length && <p className="app-muted text-[12.5px]">Sin transiciones disponibles desde este estado.</p>}

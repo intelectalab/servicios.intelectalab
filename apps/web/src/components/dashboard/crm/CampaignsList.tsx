@@ -176,6 +176,8 @@ export default function CampaignsList() {
   }, [board, page, perPage, search, status, columnFilters.param, sort, reload]);
 
   function changeView(mode: ViewMode) {
+    // Pulsar la vista que ya está activa no cambia nada (si se vaciara la lista, nadie la volvería a pedir).
+    if (mode === view) return;
     setData(null);
     setPage(1);
     setView(mode);

@@ -210,6 +210,8 @@ export default function LeadsList() {
   }, [board, page, perPage, search, status, sourceId, ownerId, columnFilters.param, sort, reload]);
 
   function changeView(mode: ViewMode) {
+    // Pulsar la vista que ya está activa no cambia nada (si se vaciara la lista, nadie la volvería a pedir).
+    if (mode === view) return;
     setData(null);
     setPage(1);
     setView(mode);

@@ -83,3 +83,126 @@ export interface WorkOrderOptions {
   templates: { id: string; name: string; items: number }[];
   contracted_services: { id: string; service: string | null; customer: string | null }[];
 }
+
+export type ProjectStatus = "DRAFT" | "PLANNED" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "BLOCKED" | "DONE" | "CANCELLED";
+export type DeliverableStatus = "DRAFT" | "IN_REVIEW" | "RETURNED" | "APPROVED" | "DELIVERED";
+export type EntryStatus = "SUBMITTED" | "APPROVED" | "REJECTED";
+
+export interface ProjectMetrics {
+  progress: number;
+  tasks: number;
+  done: number;
+  hours: number;
+  pending_hours: number;
+  labor_cost: number;
+  other_cost: number;
+  cost: number;
+  margin: number;
+  margin_pct: number;
+}
+
+export interface Project {
+  id: string;
+  code: string;
+  name: string;
+  status: ProjectStatus;
+  start_date: string | null;
+  end_date: string | null;
+  customer: Customer | null;
+  manager: { id: string; name: string } | null;
+  budget_revenue: number;
+  budget_cost: number;
+  budget_hours: number;
+  metrics: ProjectMetrics;
+  hold_reason: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  lock_version: number;
+}
+
+export interface ProjectTask {
+  id: string;
+  title: string;
+  description: string | null;
+  status: TaskStatus;
+  priority: WorkOrderPriority;
+  estimate_hours: number;
+  due_at: string | null;
+  assignee: { id: string; name: string } | null;
+  required_check: string | null;
+  required_check_done: boolean;
+  blocked_reason: string | null;
+}
+
+export interface Deliverable {
+  id: string;
+  name: string;
+  status: DeliverableStatus;
+  due_date: string | null;
+  document_ref: string | null;
+  review_note: string | null;
+  delivered_at: string | null;
+}
+
+export interface ProjectDetail extends Project {
+  /** null si el contrato queda fuera del alcance de quien mira. */
+  contract: { id: string; contract_number: string } | null;
+  tasks: ProjectTask[];
+  /** null si el rol no tiene permiso de ver entregables. */
+  deliverables: Deliverable[] | null;
+  history: HistoryEntry[];
+}
+
+export interface ProjectOptions {
+  people: { id: string; name: string }[];
+  contracted_services: { id: string; service: string | null; customer: string | null }[];
+}
+
+export interface TimeEntry {
+  id: string;
+  user: { id: string; name: string } | null;
+  /** Son las horas de quien mira: no las puede aprobar. */
+  own: boolean;
+  project: { id: string; code: string; name: string } | null;
+  work_order: { id: string; code: string; title: string } | null;
+  task: string | null;
+  started_at: string;
+  ended_at: string;
+  hours: number;
+  billable: boolean;
+  cost: number;
+  status: EntryStatus;
+  description: string | null;
+  reject_reason: string | null;
+  lock_version: number;
+}
+
+export interface TimeEntryOptions {
+  projects: { id: string; code: string; name: string; tasks: { id: string; title: string }[] }[];
+  work_orders: { id: string; code: string; title: string }[];
+}
+
+export interface TimeSummary {
+  mine: number;
+  week_hours: number;
+  to_approve: number;
+  /** null si el rol no ve costos. */
+  costs_to_approve: number | null;
+}
+
+export interface CostEntry {
+  id: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unit_cost: number;
+  total: number;
+  incurred_at: string | null;
+  status: EntryStatus;
+  reject_reason: string | null;
+  project: { id: string; code: string; name: string } | null;
+  creator: { id: string; name: string } | null;
+  own: boolean;
+  lock_version: number;
+}

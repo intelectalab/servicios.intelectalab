@@ -17,9 +17,10 @@ import {
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
+import { TimeEntryFormModal } from "@/components/dashboard/operations/ProjectModals";
 import { AssignWorkOrderModal, WorkOrderFormModal } from "@/components/dashboard/operations/WorkOrderModals";
 import { PriorityChip } from "@/components/dashboard/operations/WorkOrdersList";
-import type { ChecklistItem, WorkOrderDetail as WorkOrder, WorkOrderOptions } from "@/types/operations";
+import type { ChecklistItem, TimeEntryOptions, WorkOrderDetail as WorkOrder, WorkOrderOptions } from "@/types/operations";
 
 const LINK = "text-[color:var(--p-brand-text)] hover:underline";
 
@@ -42,6 +43,8 @@ export default function WorkOrderDetail() {
   const [reasoning, setReasoning] = useState<Reasoned | null>(null);
   const [noting, setNoting] = useState<ChecklistItem | null>(null);
   const [note, setNote] = useState("");
+  const [logging, setLogging] = useState(false);
+  const [timeOptions, setTimeOptions] = useState<TimeEntryOptions | null>(null);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -96,6 +99,11 @@ export default function WorkOrderDetail() {
       return;
     }
     setReasoning({ path: transition.path, title: `${transition.label} orden`, label: transition.reason, confirm: transition.label, done: transition.done });
+  }
+
+  function openLogging() {
+    setLogging(true);
+    if (!timeOptions) apiFetch<TimeEntryOptions>("/v1/time-entries/options").then(setTimeOptions).catch(() => setTimeOptions({ projects: [], work_orders: [] }));
   }
 
   async function downloadPdf() {
@@ -174,8 +182,7 @@ export default function WorkOrderDetail() {
               <Pencil size={16} />
               <span>Editar</span>
             </Btn>
-            {/* Aún sin función: depende de la pantalla Horas y costos. */}
-            <Btn variant="ghost" onClick={() => toast("Registrar horas aún no está disponible: llegará con Horas y costos.", "warning")}>
+            <Btn variant="ghost" onClick={openLogging} permission="time_entries.create" disabled={status === "CANCELLED"} title={status === "CANCELLED" ? "OT cancelada" : undefined}>
               <Clock size={16} />
               <span>Registrar horas</span>
             </Btn>
@@ -402,6 +409,19 @@ export default function WorkOrderDetail() {
           onSaved={(updated) => {
             setOrder(updated);
             setAssigning(false);
+          }}
+        />
+      )}
+      {logging && (
+        <TimeEntryFormModal
+          options={timeOptions}
+          workOrderId={order.id}
+          toast={toast}
+          onClose={() => setLogging(false)}
+          onSaved={() => {
+            setLogging(false);
+            // Las horas registradas suman en el detalle de la orden.
+            setReload((n) => n + 1);
           }}
         />
       )}

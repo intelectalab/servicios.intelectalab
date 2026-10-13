@@ -26,7 +26,7 @@ class ModuleCatalogSeeder extends Seeder
         ['COTIZACIONES', 'Cotizaciones', 'Propuestas comerciales', 'CORE', false, ['quotations']],
         ['CONTRATOS', 'Contratos', 'Gestión contractual', 'CORE', false, ['contracts', 'orders']],
         ['ORDENES_TRABAJO', 'Órdenes de trabajo', 'Operación y ejecución', 'CORE', false, ['operations', 'work_orders', 'contracted_services']],
-        ['PROYECTOS', 'Proyectos', 'Planificación de proyectos', 'CORE', false, []],
+        ['PROYECTOS', 'Proyectos', 'Planificación de proyectos', 'CORE', false, ['projects', 'tasks', 'deliverables', 'contracted_services']],
         ['TAREAS', 'Tareas', 'Actividades y seguimiento', 'CORE', false, ['operations']],
         ['CHECKLISTS', 'Checklists', 'Listas de verificación', 'CORE', false, ['operations']],
         ['AGENDA', 'Agenda', 'Citas y programación', 'CORE', false, []],
@@ -45,7 +45,7 @@ class ModuleCatalogSeeder extends Seeder
         ['TICKETS', 'Tickets', 'Gestión de tickets de soporte', 'SOPORTE_ATENCION_CLIENTE', false, ['support']],
 
         // Operaciones y servicio
-        ['TIMESHEETS', 'Timesheets', 'Horas trabajadas', 'OPERACIONES_SERVICIO', false, ['operations']],
+        ['TIMESHEETS', 'Timesheets', 'Horas trabajadas', 'OPERACIONES_SERVICIO', false, ['operations', 'time_entries', 'cost_entries']],
 
         // CRM — opcional
         ['CRM', 'CRM', 'Leads, oportunidades y pipeline', 'CRM', false, ['leads', 'opportunities', 'activities', 'campaigns', 'scoring']],

@@ -59,7 +59,7 @@ class UserController extends Controller
             ->get([
                 'users.id', 'users.name', 'users.email', 'users.mfa_enabled', 'users.last_login_at',
                 'tenant_users.status', 'tenant_users.default_branch_id', 'branches.name as branch_name',
-                'tenant_users.team_id', 'teams.name as team_name',
+                'tenant_users.team_id', 'teams.name as team_name', 'tenant_users.hourly_cost',
             ])
             ->map(function ($user) use ($roles, $employees, $extraBranches) {
                 $role = ($roles[$user->id] ?? collect())->first();
@@ -73,6 +73,7 @@ class UserController extends Controller
                     'role' => $role ? ['id' => $role->id, 'name' => $role->name, 'is_admin' => $isAdmin] : null,
                     'branch' => $user->default_branch_id ? ['id' => $user->default_branch_id, 'name' => $user->branch_name] : null,
                     'team' => $user->team_id ? ['id' => $user->team_id, 'name' => $user->team_name] : null,
+                    'hourly_cost' => (float) $user->hourly_cost,
                     // Sedes adicionales: amplían lo que la persona ve con el alcance "Sede".
                     'extra_branches' => ($extraBranches[$user->id] ?? collect())->map(fn ($branch) => ['id' => $branch->id, 'name' => $branch->name])->values(),
                     'employee_id' => $employees->firstWhere('user_id', $user->id)['id'] ?? null,
@@ -121,6 +122,7 @@ class UserController extends Controller
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'user_id' => $user->id,
                 'default_branch_id' => $data['branch_id'] ?? null,
                 'team_id' => $data['team_id'] ?? null,
+                'hourly_cost' => $data['hourly_cost'] ?? 0,
                 'status' => 'ACTIVE', 'created_at' => now(), 'updated_at' => now(),
             ]);
             DB::table('user_roles')->insert([
@@ -179,6 +181,8 @@ class UserController extends Controller
             DB::table('tenant_users')->where('id', $member->id)->update([
                 'default_branch_id' => $data['branch_id'] ?? null,
                 'team_id' => $data['team_id'] ?? null,
+                // Sin indicarlo se conserva el que tenía.
+                ...(array_key_exists('hourly_cost', $data) ? ['hourly_cost' => $data['hourly_cost'] ?? 0] : []),
                 'updated_at' => now(),
             ]);
 
@@ -270,6 +274,8 @@ class UserController extends Controller
             'extra_branch_ids' => ['sometimes', 'array', 'max:50'],
             'extra_branch_ids.*' => ['uuid'],
             'team_id' => ['nullable', 'uuid'],
+            // Costo por hora de la persona: lo toman sus horas al registrarse (Horas y costos).
+            'hourly_cost' => ['sometimes', 'nullable', 'numeric', 'min:0', 'max:999999'],
             'employee_id' => ['nullable', 'uuid'],
             'mfa' => ['nullable', 'boolean'],
         ], [

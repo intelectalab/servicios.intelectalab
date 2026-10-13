@@ -5,27 +5,30 @@ namespace App\Modules\Operations\Support;
 use Illuminate\Support\Facades\DB;
 
 /**
- * A quién se le puede asignar una orden de trabajo: personas con acceso vigente a la empresa
- * cuyo rol permite ejecutarlas (`work_orders.manage`). No hay un rol "técnico" fijo: lo decide
- * la matriz de permisos de cada empresa.
+ * A quién se le puede asignar trabajo: personas con acceso vigente a la empresa cuyo rol tiene
+ * el permiso que ese trabajo pide. No hay un rol "técnico" fijo: lo decide la matriz de permisos
+ * de cada empresa.
+ *
+ *   - una orden de trabajo: quien puede ejecutarlas (`work_orders.manage`);
+ *   - un proyecto o una de sus tareas: quien puede verlos (`projects.view`).
  */
 class Technicians
 {
     private const PERMISSION = 'work_orders.manage';
 
     /** @return array<int, array{id: string, name: string}> */
-    public static function list(string $tenantId): array
+    public static function list(string $tenantId, string $permission = self::PERMISSION): array
     {
-        return self::query($tenantId)->orderBy('users.name')->limit(500)->get(['users.id', 'users.name'])
+        return self::query($tenantId, $permission)->orderBy('users.name')->limit(500)->get(['users.id', 'users.name'])
             ->map(fn ($user) => ['id' => $user->id, 'name' => $user->name])->all();
     }
 
-    public static function includes(string $tenantId, string $userId): bool
+    public static function includes(string $tenantId, string $userId, string $permission = self::PERMISSION): bool
     {
-        return self::query($tenantId)->where('users.id', $userId)->exists();
+        return self::query($tenantId, $permission)->where('users.id', $userId)->exists();
     }
 
-    private static function query(string $tenantId)
+    private static function query(string $tenantId, string $permission)
     {
         return DB::table('users')
             ->join('tenant_users', 'tenant_users.user_id', '=', 'users.id')
@@ -38,6 +41,6 @@ class Technicians
                 ->join('permissions', 'permissions.id', '=', 'role_permissions.permission_id')
                 ->whereColumn('user_roles.user_id', 'users.id')
                 ->where('user_roles.tenant_id', $tenantId)
-                ->where('permissions.code', self::PERMISSION));
+                ->where('permissions.code', $permission));
     }
 }

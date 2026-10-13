@@ -43,8 +43,24 @@ const WORK_ORDER_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza tus órdenes de trabajo y las de tus sedes.",
 };
 
+// Un proyecto es de quien lo lleva, de quien lo creó y de quien tiene una tarea suya.
+const PROJECT_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los proyectos que llevas, los que creaste y aquellos donde tienes una tarea.",
+  TEAM: "Tu rol alcanza tus proyectos y los de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus proyectos y los de tus sedes.",
+};
+
+// Las horas son de quien las trabajó; un costo, de quien lo registró.
+const ENTRY_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza solo lo que registraste tú.",
+  TEAM: "Tu rol alcanza lo que registraste tú y lo de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza lo que registraste tú y lo de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "projects" ? PROJECT_HINTS
+    : resource === "time_entries" || resource === "cost_entries" ? ENTRY_HINTS
     : resource === "contracted_services" ? CONTRACTED_HINTS
     : resource === "work_orders" ? WORK_ORDER_HINTS
     : resource === "activities" ? ACTIVITY_HINTS
