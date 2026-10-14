@@ -553,6 +553,8 @@ Route::prefix('v1')->group(function () {
             Route::get('/bank-movements', [TreasuryController::class, 'movements']);
             Route::get('/bank-statements', [TreasuryController::class, 'reconciliation']);
             Route::get('/cash-expenses', [TreasuryController::class, 'cashExpenses']);
+            Route::get('/cash-expenses/options', [TreasuryController::class, 'cashExpenseOptions']);
+            Route::get('/bank-statements/{statement}/file-url', [TreasuryController::class, 'statementFile']);
             Route::get('/cash-counts', [TreasuryController::class, 'cashCounts']);
         });
         Route::middleware('permission:treasury.create')->group(function () {

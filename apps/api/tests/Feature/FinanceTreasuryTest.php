@@ -6,6 +6,7 @@ use App\Services\AuditCatalog;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\Feature\Concerns\OperationsFixtures;
 use Tests\TestCase;
@@ -26,6 +27,23 @@ class FinanceTreasuryTest extends TestCase
         'treasury.view', 'treasury.create', 'treasury.manage', 'treasury.export',
         'payments.view', 'payments.create', 'payments.manage', 'payments.approve',
     ];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // El archivo de cada extracto se guarda en Documentos: en las pruebas, en un disco de mentira.
+        Storage::fake('documents');
+        Storage::disk('documents')->buildTemporaryUrlsUsing(fn (string $path) => "https://archivos.test/{$path}");
+    }
+
+    /** Centro de costo activo de la empresa de la prueba. */
+    private function center(string $code = 'CC-VTA', bool $active = true): string
+    {
+        $id = (string) Str::uuid();
+        DB::table('cost_centers')->insert(['id' => $id, 'tenant_id' => $this->tenantId, 'code' => $code, 'name' => 'Ventas', 'active' => $active]);
+
+        return $id;
+    }
 
     private function account(array $data = []): array
     {
@@ -318,15 +336,26 @@ class FinanceTreasuryTest extends TestCase
         $this->as($this->makeUser('Tesorería', self::TREASURY));
         $bank = $this->account();
         $cash = $this->cash();
-        $spend = fn (array $data) => $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'Taxi a cliente', 'amount' => 40, ...$data]);
+        $center = $this->center();
+        $spend = fn (array $data) => $this->postJson('/api/v1/cash-expenses', [
+            'account_id' => $cash['id'], 'description' => 'Taxi a cliente', 'amount' => 40, 'cost_center_id' => $center, 'expense_account' => '6311', ...$data,
+        ]);
 
-        $this->postJson('/api/v1/cash-expenses', [])->assertStatus(422)->assertJsonValidationErrors(['account_id', 'description', 'amount']);
+        $this->postJson('/api/v1/cash-expenses', [])->assertStatus(422)->assertJsonValidationErrors(['account_id', 'description', 'amount', 'cost_center_id', 'expense_account']);
+        // Centro de costo y cuenta de gasto del plan, obligatorios.
+        $spend(['expense_account' => '1041'])->assertStatus(422)->assertJsonValidationErrors('expense_account');
+        $spend(['expense_account' => 'Movilidad'])->assertStatus(422)->assertJsonValidationErrors('expense_account');
+        $spend(['cost_center_id' => $this->center('CC-OFF', false)])->assertStatus(422)->assertJsonValidationErrors('cost_center_id');
+        $spend(['cost_center_id' => (string) Str::uuid()])->assertStatus(422)->assertJsonValidationErrors('cost_center_id');
+        $listOptions = $this->getJson('/api/v1/cash-expenses/options')->assertOk()->json();
+        $this->assertSame(['CC-VTA'], array_column($listOptions['cost_centers'], 'code'));
+        $this->assertContains('6311', array_column($listOptions['expense_accounts'], 'code'));
         $spend(['account_id' => $bank['id']])->assertStatus(422)->assertJsonValidationErrors('account_id');
         // Tope por comprobante: 350 si la caja no define el suyo.
         $spend(['amount' => 350.01])->assertStatus(422)->assertJsonValidationErrors('amount');
         $spend(['expense_date' => now()->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('expense_date');
 
-        $first = $spend(['receipt' => 'Boleta B001-123', 'cost_center' => 'Ventas', 'expense_account' => 'Movilidad'])->assertCreated()->json();
+        $first = $spend(['receipt' => 'Boleta B001-123'])->assertCreated()->json();
         $this->assertMatchesRegularExpression('/^CCH-\d{4}-0001$/', $first['expense_number']);
         $spend(['amount' => 350, 'description' => 'Útiles'])->assertCreated();
         $this->assertEquals(110, $this->balanceOf($cash['id']));
@@ -334,7 +363,17 @@ class FinanceTreasuryTest extends TestCase
         $spend(['amount' => 110.01])->assertStatus(422)->assertJsonValidationErrors('amount');
 
         $list = $this->getJson("/api/v1/cash-expenses?account_id={$cash['id']}&sort=amount&dir=asc")->assertOk()->assertJsonPath('total', 2)->json('data');
-        $this->assertSame(['Taxi a cliente', 'Boleta B001-123', 'Ventas', 'Movilidad'], [$list[0]['description'], $list[0]['receipt'], $list[0]['cost_center'], $list[0]['expense_account']]);
+        $this->assertSame(['Taxi a cliente', 'Boleta B001-123', 'CC-VTA · Ventas', '6311 · Transporte de carga y movilidad'], [$list[0]['description'], $list[0]['receipt'], $list[0]['cost_center'], $list[0]['expense_account']]);
+        // Su asiento va a esa cuenta y a ese centro de costo.
+        $line = DB::table('acc_journal_lines as l')->join('acc_journal_entries as e', 'e.id', '=', 'l.entry_id')->where('e.source_id', $first['id'])->where('l.debit', '>', 0)->first(['l.account_code', 'l.cost_center_id']);
+        $this->assertSame(['6311', $center], [$line->account_code, $line->cost_center_id]);
+        // La base exige centro y cuenta del plan en todo gasto nuevo.
+        $this->assertDatabaseRejects(fn () => DB::table('cash_expenses')->insert([
+            'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'expense_number' => 'X-1', 'expense_date' => now()->toDateString(), 'description' => 'Sin centro', 'amount' => 1, 'expense_account' => '6311',
+        ]));
+        $this->assertDatabaseRejects(fn () => DB::table('cash_expenses')->insert([
+            'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'expense_number' => 'X-2', 'expense_date' => now()->toDateString(), 'description' => 'Cuenta inventada', 'amount' => 1, 'cost_center_id' => $center, 'expense_account' => 'Movilidad',
+        ]));
         $this->getJson("/api/v1/cash-expenses?account_id={$cash['id']}&search=utiles")->assertOk()->assertJsonPath('total', 0);
         $this->getJson("/api/v1/cash-expenses?account_id={$cash['id']}&search=Útiles")->assertOk()->assertJsonPath('total', 1);
         $movement = DB::table('bank_movements')->where('ref_type', 'CASH_EXPENSE')->where('ref_id', $first['id'])->first();
@@ -353,6 +392,59 @@ class FinanceTreasuryTest extends TestCase
         $this->assertDatabaseRejects(fn () => DB::table('cash_expenses')->where('id', $first['id'])->delete());
         $this->assertDatabaseRejects(fn () => DB::table('cash_counts')->where('id', $count['id'])->update(['counted' => 110]));
         $this->assertDatabaseRejects(fn () => DB::table('cash_counts')->where('id', $count['id'])->delete());
+    }
+
+    public function test_statements_keep_their_file_and_history_and_transfers_are_guarded_by_the_database(): void
+    {
+        $this->makeTenant(self::MODULES);
+        $this->as($this->makeUser('Tesorería', self::TREASURY));
+        $bank = $this->account();
+        $dollars = $this->account(['name' => 'BCP Dólares', 'currency' => 'USD', 'opening_balance' => 100]);
+        $other = $this->account(['name' => 'BBVA Soles', 'opening_balance' => 0]);
+        $day = now()->format('d/m/Y');
+
+        $first = $this->import($bank['id'], [[$day, 'ITF', '-1.00', '']], 'octubre.csv')->assertCreated()->json('statement_id');
+        $this->travel(1)->minutes();
+        $second = $this->import($bank['id'], [[$day, 'COMISION', '-25.00', '77']], 'octubre-2.csv')->assertCreated()->json('statement_id');
+        // Repetido entero: ni se importa ni se guarda su archivo.
+        $files = DB::table('documents')->where('tenant_id', $this->tenantId)->count();
+        $this->import($bank['id'], [[$day, 'ITF', '-1.00', '']], 'otra-vez.csv')->assertStatus(422)->assertJsonValidationErrors('file');
+        $this->assertSame($files, DB::table('documents')->where('tenant_id', $this->tenantId)->count());
+
+        // El archivo queda en Documentos, enlazado al extracto, y se descarga con un enlace temporal.
+        $document = DB::table('bank_statements')->where('id', $first)->value('document_id');
+        $this->assertNotNull($document);
+        $this->assertTrue(DB::table('document_links')->where('document_id', $document)->where('entity_type', 'BankStatement')->where('entity_id', $first)->exists());
+        $this->assertStringStartsWith('https://archivos.test/tenants/', $this->getJson("/api/v1/bank-statements/{$first}/file-url")->assertOk()->json('url'));
+        $this->getJson('/api/v1/bank-statements/'.Str::uuid().'/file-url')->assertNotFound();
+
+        // Historial: el último por defecto, y cualquiera a pedido.
+        $latest = $this->getJson("/api/v1/bank-statements?account_id={$bank['id']}")->assertOk()->json();
+        $this->assertSame([$second, 2, ['octubre-2.csv', 'octubre.csv']], [$latest['statement']['id'], $latest['statements_count'], array_column($latest['statements'], 'file_name')]);
+        $this->assertTrue($latest['statement']['has_file']);
+        $older = $this->getJson("/api/v1/bank-statements?account_id={$bank['id']}&statement_id={$first}")->assertOk()->json('statement');
+        $this->assertSame(['octubre.csv', 'ITF'], [$older['file_name'], $older['lines'][0]['description']]);
+
+        // Transferencias: un registro propio; la base exige misma moneda, saldo y que los movimientos le correspondan.
+        $this->postJson('/api/v1/bank-transfers', ['from_account_id' => $bank['id'], 'to_account_id' => $other['id'], 'amount' => 300, 'reference' => 'TRF-1'])->assertCreated();
+        $transfer = DB::table('bank_transfers')->where('reference', 'TRF-1')->first();
+        $this->assertEquals([$bank['id'], $other['id'], 300, 'PEN', 'TRANSFER'], [$transfer->from_account_id, $transfer->to_account_id, $transfer->amount, $transfer->currency, $transfer->kind]);
+        $this->assertSame(2, DB::table('bank_movements')->where('ref_type', 'TRANSFER')->where('ref_id', $transfer->id)->count());
+        $insert = fn (array $data) => DB::table('bank_transfers')->insert([
+            'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'from_account_id' => $bank['id'], 'to_account_id' => $other['id'],
+            'amount' => 10, 'currency' => 'PEN', 'transfer_date' => now()->toDateString(), ...$data,
+        ]);
+        $this->assertDatabaseRejects(fn () => $insert(['to_account_id' => $dollars['id']]));
+        $this->assertDatabaseRejects(fn () => $insert(['amount' => 999999]));
+        $this->assertDatabaseRejects(fn () => $insert(['to_account_id' => $bank['id']]));
+        $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->insert([
+            'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now()->toDateString(), 'description' => 'Sin transferencia', 'amount' => -5, 'ref_type' => 'TRANSFER', 'ref_id' => (string) Str::uuid(),
+        ]));
+        $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->insert([
+            'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now()->toDateString(), 'description' => 'Otra vez', 'amount' => -300, 'ref_type' => 'TRANSFER', 'ref_id' => $transfer->id,
+        ]));
+        $this->assertDatabaseRejects(fn () => DB::table('bank_transfers')->where('id', $transfer->id)->update(['amount' => 1]));
+        $this->assertDatabaseRejects(fn () => DB::table('bank_transfers')->where('id', $transfer->id)->delete());
     }
 
     public function test_movements_carry_a_running_balance_over_the_whole_account(): void
@@ -408,7 +500,7 @@ class FinanceTreasuryTest extends TestCase
         $this->postJson('/api/v1/exports', ['resource' => 'treasury', 'format' => 'xlsx', 'rows' => 1])->assertOk();
 
         $this->as($operator);
-        $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'Taxi', 'amount' => 10])->assertCreated();
+        $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'Taxi', 'amount' => 10, 'cost_center_id' => $this->center(), 'expense_account' => '6311'])->assertCreated();
         $this->postJson('/api/v1/bank-transfers', ['from_account_id' => $bank['id'], 'to_account_id' => $cash['id'], 'amount' => 10])->assertCreated();
         // Operar no es crear cuentas ni conciliar a mano, ni exportar.
         $this->postJson('/api/v1/bank-accounts', ['name' => 'X', 'account_type' => 'CASH', 'currency' => 'PEN'])->assertStatus(403);
@@ -441,7 +533,7 @@ class FinanceTreasuryTest extends TestCase
         $this->getJson("/api/v1/cash-expenses?account_id={$cash['id']}")->assertStatus(404);
         $this->putJson("/api/v1/bank-accounts/{$bank['id']}", ['name' => 'Mía', 'account_number' => '1'])->assertStatus(404);
         $this->postJson('/api/v1/bank-transfers', ['from_account_id' => $own['id'], 'to_account_id' => $bank['id'], 'amount' => 1])->assertStatus(422)->assertJsonValidationErrors('to_account_id');
-        $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'X', 'amount' => 1])->assertStatus(422)->assertJsonValidationErrors('account_id');
+        $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'X', 'amount' => 1, 'cost_center_id' => $this->center(), 'expense_account' => '6311'])->assertStatus(422)->assertJsonValidationErrors('account_id');
         $this->upload($bank['id'], "fecha;monto\n01/10/2026;1")->assertStatus(404);
         $this->postJson("/api/v1/bank-statement-lines/{$lineId}/resolve", ['kind' => 'IGNORE'])->assertStatus(404);
         $this->postJson('/api/v1/payments', ['customer_id' => $customer, 'amount' => 10, 'currency' => 'PEN', 'payment_method' => 'TRANSFERENCIA', 'reference' => 'X', 'financial_account_id' => $bank['id']])

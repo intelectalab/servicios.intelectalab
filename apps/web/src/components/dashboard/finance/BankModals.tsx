@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api";
 import { isoDateFromNow, money } from "@/lib/commercial";
 import { fieldErrors, firstError } from "@/lib/crm";
@@ -229,13 +229,23 @@ export function CashExpenseModal({ cash, onClose, onDone }: { cash: BankAccount;
   const [expenseAccount, setExpenseAccount] = useState("");
   const [receipt, setReceipt] = useState("");
   const [date, setDate] = useState(isoDateFromNow(0));
+  // Centros de costo activos y cuentas de gasto del plan de cuentas.
+  const [options, setOptions] = useState<{ cost_centers: { id: string; code: string; name: string }[]; expense_accounts: { code: string; name: string }[] } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<NonNullable<typeof options>>("/v1/cash-expenses/options")
+      .then((next) => { if (!cancelled) setOptions(next); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   const { errors, error, saving, submit } = useSubmit(async () => {
     const saved = await apiFetch<{ expense_number: string }>("/v1/cash-expenses", {
       method: "POST",
       body: JSON.stringify({
         account_id: cash.id, description: description.trim(), amount: Number(amount), expense_date: date,
-        receipt: receipt.trim() || null, cost_center: costCenter.trim() || null, expense_account: expenseAccount.trim() || null,
+        receipt: receipt.trim() || null, cost_center_id: costCenter || null, expense_account: expenseAccount || null,
       }),
     });
     onDone(saved.expense_number);
@@ -244,7 +254,7 @@ export function CashExpenseModal({ cash, onClose, onDone }: { cash: BankAccount;
   return (
     <FormModal
       title="Gasto de caja chica" formId="cash-expense-form" onClose={onClose} submitLabel="Registrar" saving={saving} permission="treasury.create"
-      error={errors.description || errors.amount || errors.expense_date ? "" : error}
+      error={errors.description || errors.amount || errors.expense_date || errors.cost_center_id || errors.expense_account ? "" : error}
     >
       <form id="cash-expense-form" onSubmit={submit}>
         <FormGrid>
@@ -254,12 +264,22 @@ export function CashExpenseModal({ cash, onClose, onDone }: { cash: BankAccount;
           <Field label={`Monto (${cash.currency === "USD" ? "US$" : "S/"})`} required error={errors.amount} hint={`Tope ${money(cash.expense_limit, cash.currency)} por comprobante`}>
             <input className={INPUT} type="number" min="0.01" max={cash.expense_limit} step="0.01" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required />
           </Field>
-          <Field label="Centro de costo">
-            <input className={INPUT} value={costCenter} onChange={(e) => setCostCenter(e.target.value)} maxLength={100} />
-          </Field>
-          <Field label="Cuenta de gasto">
-            <input className={INPUT} value={expenseAccount} onChange={(e) => setExpenseAccount(e.target.value)} maxLength={100} />
-          </Field>
+          <div className="flex min-w-0 flex-col gap-[5px]">
+            <span className="text-[12.5px] font-medium">Centro de costo <em className="not-italic text-[color:var(--p-danger-text)]">*</em></span>
+            <PickSelect
+              className={INPUT} ariaLabel="Centro de costo" searchable disabled={!options} value={costCenter} onChange={setCostCenter}
+              options={[["", options ? "Selecciona…" : "Cargando…"], ...(options?.cost_centers ?? []).map((c): [string, string] => [c.id, `${c.code} · ${c.name}`])]}
+            />
+            {errors.cost_center_id && <small className="text-xs text-[color:var(--p-danger-text)]">{errors.cost_center_id}</small>}
+          </div>
+          <div className="flex min-w-0 flex-col gap-[5px]">
+            <span className="text-[12.5px] font-medium">Cuenta de gasto <em className="not-italic text-[color:var(--p-danger-text)]">*</em></span>
+            <PickSelect
+              className={INPUT} ariaLabel="Cuenta de gasto" searchable disabled={!options} value={expenseAccount} onChange={setExpenseAccount}
+              options={[["", options ? "Selecciona…" : "Cargando…"], ...(options?.expense_accounts ?? []).map((a): [string, string] => [a.code, `${a.code} · ${a.name}`])]}
+            />
+            {errors.expense_account && <small className="text-xs text-[color:var(--p-danger-text)]">{errors.expense_account}</small>}
+          </div>
           <Field label="Comprobante">
             <input className={INPUT} value={receipt} onChange={(e) => setReceipt(e.target.value)} maxLength={150} placeholder="Boleta B001-123 / Ticket" />
           </Field>

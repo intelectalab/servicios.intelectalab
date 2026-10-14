@@ -343,11 +343,16 @@ export interface Reconciliation {
   pending_amount: number;
   pending: BankMovement[];
   statements_count: number;
+  /** Extractos importados en la cuenta, del más reciente al más antiguo. */
+  statements: { id: string; file_name: string; lines_count: number; imported_at: string }[];
   statement: {
     id: string;
     file_name: string;
     imported_at: string;
     imported_by: string | null;
+    /** Se guardó el archivo tal como se importó (los extractos anteriores a esto no lo tienen). */
+    has_file: boolean;
+    duplicates_count: number;
     resolved_pct: number;
     unmatched: number;
     lines: StatementLine[];

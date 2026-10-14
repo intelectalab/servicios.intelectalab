@@ -230,10 +230,11 @@ class Posting
         }
         $code = preg_match('/^\s*(\d{2,10})/', (string) $expense->expense_account, $match) ? $match[1] : null;
         $expenseAccount = Chart::postable($tenantId, $code, ['EXPENSE']) ? $code : self::CASH_EXPENSE_ACCOUNT;
+        // Los gastos nuevos traen su centro enlazado; en los antiguos (texto libre) se busca por código.
         $centerCode = trim(explode('·', (string) $expense->cost_center)[0]);
-        $center = $centerCode !== ''
+        $center = $expense->cost_center_id ?? ($centerCode !== ''
             ? DB::table('cost_centers')->where('tenant_id', $tenantId)->whereRaw('upper(code) = upper(?)', [$centerCode])->value('id')
-            : null;
+            : null);
         $cash = FinancialAccount::where('tenant_id', $tenantId)->find($expense->account_id);
         $amount = round((float) $expense->amount, 2);
 

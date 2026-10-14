@@ -4,7 +4,11 @@ namespace App\Modules\Finance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Posting;
+use App\Modules\Accounting\Support\Chart;
+use App\Modules\Documents\Models\Document;
+use App\Modules\Documents\Support\DocumentStore;
 use App\Modules\Finance\Models\ExchangeRate;
+use App\Modules\Purchasing\Support\Purchasing;
 use App\Modules\Finance\Models\FinancialAccount;
 use App\Modules\Finance\Models\Payment;
 use App\Modules\Finance\Support\StatementRows;
@@ -223,7 +227,11 @@ class TreasuryController extends Controller
 
         $pending = DB::table('bank_movements')->where('account_id', $account->id)->where('reconciled', false)->where('ref_type', '<>', 'OPENING');
         $pendingRows = $pending->clone()->orderBy('movement_date')->orderBy('created_at')->limit(300)->get();
-        $statement = DB::table('bank_statements')->where('account_id', $account->id)->orderByDesc('created_at')->first();
+        // El extracto elegido o, si no se elige, el último importado.
+        $statements = DB::table('bank_statements')->where('account_id', $account->id);
+        $statement = Str::isUuid((string) $request->query('statement_id'))
+            ? $statements->clone()->where('id', $request->query('statement_id'))->first()
+            : $statements->clone()->orderByDesc('created_at')->first();
         $lines = $statement
             ? DB::table('bank_statement_lines as l')->leftJoin('bank_movements as m', 'm.id', '=', 'l.movement_id')
                 ->where('l.statement_id', $statement->id)->orderBy('l.position')->limit(self::MAX_STATEMENT_LINES)
@@ -237,12 +245,17 @@ class TreasuryController extends Controller
             'pending_count' => $pending->clone()->count(),
             'pending_amount' => round((float) $pending->clone()->sum('amount'), 2),
             'pending' => $pendingRows->map(fn ($movement) => $this->movementRow($movement))->values(),
-            'statements_count' => DB::table('bank_statements')->where('account_id', $account->id)->count(),
+            'statements_count' => $statements->clone()->count(),
+            // Historial de extractos de la cuenta, del más reciente al más antiguo.
+            'statements' => $statements->clone()->orderByDesc('created_at')->limit(200)->get(['id', 'file_name', 'lines_count', 'created_at'])
+                ->map(fn ($row) => ['id' => $row->id, 'file_name' => $row->file_name, 'lines_count' => (int) $row->lines_count, 'imported_at' => Carbon::parse($row->created_at)->toIso8601String()])->values(),
             'statement' => $statement ? [
                 'id' => $statement->id,
                 'file_name' => $statement->file_name,
                 'imported_at' => Carbon::parse($statement->created_at)->toIso8601String(),
                 'imported_by' => $statement->imported_by ? DB::table('users')->where('id', $statement->imported_by)->value('name') : null,
+                'has_file' => (bool) $statement->document_id,
+                'duplicates_count' => (int) $statement->duplicates_count,
                 'resolved_pct' => $lines->count() ? (int) round($resolved / $lines->count() * 100) : 0,
                 'unmatched' => $lines->count() - $resolved,
                 'lines' => $lines->map(fn ($line) => [
@@ -325,8 +338,17 @@ class TreasuryController extends Controller
         }
         $fileName = Str::limit(trim((string) $file->getClientOriginalName()) ?: 'extracto', 255, '');
         $sha = hash_file('sha256', $file->getRealPath());
+        // Si todas sus líneas ya se importaron, ni siquiera se guarda el archivo.
+        $fingerprints = array_values(array_unique(array_column($parsed['lines'], 'fingerprint')));
+        if (DB::table('bank_statement_lines')->where('account_id', $account->id)->whereIn('fingerprint', $fingerprints)->count() >= count($fingerprints)) {
+            throw ValidationException::withMessages(['file' => ['Todas las líneas de este extracto ya se habían importado en esta cuenta.']]);
+        }
+        // El archivo se guarda como documento (tipos permitidos, huella, carpeta de la empresa), antes de la operación.
+        $version = DocumentStore::store($account->tenant_id, $request->user()->id, $file, [
+            'title' => Str::limit("Extracto {$account->name} · {$fileName}", 250, ''), 'category' => 'Extracto bancario', 'visibility' => 'INTERNAL',
+        ]);
 
-        $result = DB::transaction(function () use ($request, $account, $parsed, $fileName, $sha) {
+        $result = DB::transaction(function () use ($request, $account, $parsed, $fileName, $sha, $version) {
             // La cuenta se bloquea: dos importaciones a la vez no concilian el mismo movimiento.
             Treasury::lock($account->tenant_id, $account->id);
 
@@ -342,8 +364,9 @@ class TreasuryController extends Controller
             DB::table('bank_statements')->insert([
                 'id' => $statementId, 'tenant_id' => $account->tenant_id, 'account_id' => $account->id,
                 'file_name' => $fileName, 'file_sha256' => $sha, 'lines_count' => count($fresh), 'duplicates_count' => $duplicates,
-                'imported_by' => $request->user()->id, 'created_at' => now(),
+                'imported_by' => $request->user()->id, 'created_at' => now(), 'document_id' => $version->document_id,
             ]);
+            DocumentStore::link($version->document, 'BankStatement', $statementId);
 
             $pool = DB::table('bank_movements')->where('account_id', $account->id)->where('reconciled', false)->where('ref_type', '<>', 'OPENING')
                 ->orderBy('movement_date')->orderBy('created_at')->lockForUpdate()->get()->keyBy('id');
@@ -477,10 +500,38 @@ class TreasuryController extends Controller
         $page->getCollection()->transform(fn ($expense) => [
             'id' => $expense->id, 'expense_number' => $expense->expense_number, 'expense_date' => $expense->expense_date,
             'description' => $expense->description, 'receipt' => $expense->receipt, 'cost_center' => $expense->cost_center,
-            'expense_account' => $expense->expense_account, 'amount' => (float) $expense->amount,
+            // Las cuentas del plan se muestran con su nombre; los gastos antiguos, con su texto.
+            'expense_account' => preg_match('/^\d{2,10}$/', (string) $expense->expense_account) ? Chart::label($expense->tenant_id, $expense->expense_account) : $expense->expense_account,
+            'amount' => (float) $expense->amount,
         ]);
 
         return response()->json($page);
+    }
+
+    /** Listas del gasto de caja chica: centros de costo activos y cuentas de gasto del plan. */
+    public function cashExpenseOptions(Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+
+        return response()->json([
+            'cost_centers' => Purchasing::costCenters($tenantId),
+            'expense_accounts' => Purchasing::expenseAccounts($tenantId),
+        ]);
+    }
+
+    /** Enlace temporal para descargar el archivo del extracto tal como se importó. */
+    public function statementFile(string $statement, Request $request)
+    {
+        abort_unless(Str::isUuid($statement), 404);
+        $row = DB::table('bank_statements')->where('tenant_id', $request->attributes->get('tenant_id'))->where('id', $statement)->first(['id', 'document_id']);
+        abort_unless((bool) $row, 404);
+        $document = $row->document_id ? Document::find($row->document_id) : null;
+        $url = $document ? DocumentStore::downloadUrl($document) : null;
+        if (! $url) {
+            throw ValidationException::withMessages(['file' => ['Este extracto se importó antes de que se guardaran los archivos.']]);
+        }
+
+        return response()->json(['url' => $url]);
     }
 
     /** Gasto de caja chica: sale de la caja, con tope por comprobante y sin dejarla en negativo. */
@@ -492,17 +543,24 @@ class TreasuryController extends Controller
             'amount' => ['required', 'numeric', 'gt:0'],
             'expense_date' => ['nullable', 'date', 'before_or_equal:today'],
             'receipt' => ['nullable', 'string', 'max:150'],
-            'cost_center' => ['nullable', 'string', 'max:100'],
-            'expense_account' => ['nullable', 'string', 'max:100'],
+            'cost_center_id' => ['required', 'uuid'],
+            'expense_account' => ['required', 'string', 'max:20', Purchasing::expenseAccountRule($request->attributes->get('tenant_id'))],
         ], [
             'account_id.required' => 'Selecciona la caja.',
+            'cost_center_id.required' => 'Selecciona el centro de costo.',
+            'expense_account.required' => 'Selecciona la cuenta de gasto.',
             'description.required' => 'Indica el concepto.',
             'amount.required' => 'Indica el monto.',
             'amount.gt' => 'El monto debe ser mayor a cero.',
             'expense_date.before_or_equal' => 'La fecha no puede ser futura.',
         ]);
 
-        $expense = DB::transaction(function () use ($request, $data) {
+        $center = DB::table('cost_centers')->where('tenant_id', $request->attributes->get('tenant_id'))->where('id', $data['cost_center_id'])->where('active', true)->first(['id', 'code', 'name']);
+        if (! $center) {
+            throw ValidationException::withMessages(['cost_center_id' => ['El centro de costo indicado no existe o está inactivo.']]);
+        }
+
+        $expense = DB::transaction(function () use ($request, $data, $center) {
             $cash = $this->lockCash($request, $data['account_id']);
             $amount = round((float) $data['amount'], 2);
             if ($amount > $cash->expenseLimit() + 0.001) {
@@ -520,8 +578,10 @@ class TreasuryController extends Controller
             DB::table('cash_expenses')->insert([
                 'id' => $id, 'tenant_id' => $cash->tenant_id, 'account_id' => $cash->id, 'expense_number' => $number, 'expense_date' => $date,
                 'description' => trim($data['description']), 'amount' => $amount,
-                'receipt' => $this->blankToNull($data['receipt'] ?? null), 'cost_center' => $this->blankToNull($data['cost_center'] ?? null),
-                'expense_account' => $this->blankToNull($data['expense_account'] ?? null),
+                'receipt' => $this->blankToNull($data['receipt'] ?? null),
+                // El código y nombre quedan escritos como se veían al registrar; el centro, enlazado.
+                'cost_center_id' => $center->id, 'cost_center' => Str::limit("{$center->code} · {$center->name}", 100, ''),
+                'expense_account' => $data['expense_account'],
                 'created_by' => $request->user()->id, 'created_at' => now(),
             ]);
             Treasury::move($cash, -1 * $amount, 'CASH_EXPENSE', 'Caja chica · '.trim($data['description']), ['date' => $date, 'ref_id' => $id, 'user_id' => $request->user()->id]);
@@ -675,6 +735,12 @@ class TreasuryController extends Controller
         }
 
         $transferId = (string) Str::uuid();
+        // El registro de la transferencia: la base comprueba moneda, cuentas activas y saldo de origen.
+        DB::table('bank_transfers')->insert([
+            'id' => $transferId, 'tenant_id' => $tenantId, 'from_account_id' => $from->id, 'to_account_id' => $to->id, 'amount' => $amount,
+            'currency' => $from->currency, 'reference' => $reference, 'transfer_date' => Carbon::parse($date ?? now())->toDateString(),
+            'kind' => $action === 'treasury.refill' ? 'REFILL' : 'TRANSFER', 'created_by' => $request->user()->id,
+        ]);
         $common = ['date' => $date ?? now(), 'ref_id' => $transferId, 'op_number' => $reference, 'user_id' => $request->user()->id];
         Treasury::move($from, -1 * $amount, 'TRANSFER', "Transferencia a {$to->name}", $common);
         Treasury::move($to, $amount, 'TRANSFER', "Transferencia desde {$from->name}", $common);

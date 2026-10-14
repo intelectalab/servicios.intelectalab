@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeftRight, Coins, Download, Plus, TriangleAlert, Upload, Wallet } from "lucide-react";
 import { apiFetch, apiFetchLater } from "@/lib/api";
-import { money, shortDate, stateOf } from "@/lib/commercial";
+import { excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { dateTime, firstError } from "@/lib/crm";
 import { ACCOUNT_KINDS, LINE_STATES, MOVEMENT_ORIGINS, originLabel } from "@/lib/finance";
 import { useAccess } from "@/lib/access-context";
@@ -213,6 +213,16 @@ function MovementsTab({
 
 // ---------------------------------------------------------------------------- Conciliación
 
+const LINE_EXPORT: ExportColumn<StatementLine>[] = [
+  { label: "Fecha", value: (line) => shortDate(line.date), width: 14, kind: "center" },
+  { label: "Descripción del banco", value: (line) => line.description ?? "", width: 44 },
+  { label: "N.º de operación", value: (line) => line.op_number ?? "", width: 18, kind: "center" },
+  { label: "Monto", value: (line) => line.amount, width: 15, kind: "number" },
+  { label: "Estado", value: (line) => stateOf(LINE_STATES, line.status)[0], width: 16, kind: "status", tone: (line) => excelTone(stateOf(LINE_STATES, line.status)[1]) },
+  { label: "Regla", value: (line) => line.rule ?? "", width: 26 },
+  { label: "Movimiento en libros", value: (line) => line.movement_description ?? "", width: 44 },
+];
+
 const PENDING_EXPORT: ExportColumn<BankMovement>[] = [
   { label: "Fecha", value: (movement) => shortDate(movement.date), width: 14, kind: "center" },
   { label: "Descripción", value: (movement) => movement.description, width: 46 },
@@ -274,6 +284,38 @@ function ReconcileTab({
   const [retry, setRetry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Extracto elegido del historial; vale solo para esa cuenta y hasta la próxima importación.
+  const [picked, setPicked] = useState<{ account: string; version: number; id: string } | null>(null);
+  const statementId = picked && picked.account === accountId && picked.version === version ? picked.id : "";
+
+  /** Exporta las líneas del extracto que se está viendo. */
+  async function exportLines(format: "xlsx" | "csv") {
+    const shown = data?.statement;
+    if (!shown) return;
+    setExporting(true);
+    try {
+      await recordExport("treasury", format, shown.lines.length, false);
+      const base = shown.file_name.toLowerCase().replace(/\.[a-z0-9]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      const name = base.startsWith("extracto") ? base : `extracto-${base}`;
+      if (format === "xlsx") await exportXlsx(name, `Extracto ${shown.file_name}`, LINE_EXPORT, shown.lines);
+      else exportCsv(name, LINE_EXPORT, shown.lines);
+      toast(`${shown.lines.length} ${shown.lines.length === 1 ? "fila exportada" : "filas exportadas"}`);
+    } catch {
+      toast("No se pudo exportar el extracto.", "danger");
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  /** Descarga el archivo del extracto tal como se importó (enlace temporal). */
+  async function downloadFile(id: string) {
+    try {
+      const { url } = await apiFetch<{ url: string }>(`/v1/bank-statements/${id}/file-url`);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      toast(firstError(err, "No se pudo descargar el archivo."), "danger");
+    }
+  }
 
   /** Exporta todos los movimientos en libros sin conciliar de la cuenta (no solo los que la tarjeta muestra). */
   async function exportPending(format: "xlsx" | "csv") {
@@ -297,7 +339,7 @@ function ReconcileTab({
   useEffect(() => {
     if (!accountId) return;
     let cancelled = false;
-    apiFetch<Reconciliation>(`/v1/bank-statements?account_id=${accountId}`)
+    apiFetch<Reconciliation>(`/v1/bank-statements?account_id=${accountId}${statementId ? `&statement_id=${statementId}` : ""}`)
       .then((next) => {
         if (cancelled) return;
         setData(next);
@@ -305,7 +347,7 @@ function ReconcileTab({
       })
       .catch(() => { if (!cancelled) setError("No se pudo cargar la conciliación."); });
     return () => { cancelled = true; };
-  }, [accountId, version, retry]);
+  }, [accountId, version, retry, statementId]);
 
   async function act(line: StatementLine, path: "match" | "resolve", body: unknown, done: string) {
     setBusy(true);
@@ -370,6 +412,26 @@ function ReconcileTab({
 
           {statement && (
             <Card title={`Extracto ${statement.file_name}`}>
+              {/* Historial y archivo en su propia fila: en teléfono no desbordan la cabecera de la tarjeta. */}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {current.statements.length > 1 && (
+                    <div className="w-full sm:w-[320px]">
+                      <PickSelect
+                        className={`${INPUT} min-h-8 py-1 text-xs`} ariaLabel="Ver otro extracto" searchable={current.statements.length > 8} value={statement.id}
+                        onChange={(id) => setPicked({ account: accountId, version, id })}
+                        options={current.statements.map((item): [string, string] => [item.id, `${item.file_name} · ${dateTime(item.imported_at)} · ${item.lines_count} ${item.lines_count === 1 ? "línea" : "líneas"}`])}
+                      />
+                    </div>
+                  )}
+                  <Btn
+                    size="sm" variant="ghost" permission="treasury.view" disabled={!statement.has_file}
+                    title={statement.has_file ? "Descargar el archivo tal como se importó" : "Este extracto se importó antes de que se guardaran los archivos"}
+                    onClick={() => downloadFile(statement.id)}
+                  >
+                    <Download size={14} />
+                    <span>Descargar archivo</span>
+                  </Btn>
+              </div>
               <div className="proto-tbl-wrap -mx-1 overflow-x-auto">
                 <table className={TABLE}>
                   <thead>
@@ -436,6 +498,9 @@ function ReconcileTab({
               ) : (
                 <p className="mt-2 text-xs text-[color:var(--p-success-text)]">Todas las líneas del extracto están resueltas.</p>
               )}
+              <div className="mt-3 flex">
+                <ExportButtons permission="treasury.export" total={statement.lines.length} busy={exporting} onExport={exportLines} />
+              </div>
             </Card>
           )}
 

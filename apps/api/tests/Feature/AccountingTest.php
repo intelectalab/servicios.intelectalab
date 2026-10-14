@@ -199,13 +199,13 @@ class AccountingTest extends TestCase
         $this->postJson("/api/v1/supplier-invoices/{$fee['id']}/approve")->assertOk();
         $this->assertEquals(['6343' => [2000, 0], '4212' => [0, 1840], '40172' => [0, 160]], $this->lines('SUPPLIER_INVOICE', $fee['id']));
 
-        // Caja chica: la cuenta y el centro de costo escritos en el gasto se toman del plan.
+        // Caja chica: la cuenta y el centro de costo del gasto (del plan) van a su asiento.
         $cash = $this->postJson('/api/v1/bank-accounts', ['name' => 'Caja chica', 'account_type' => 'CASH', 'currency' => 'PEN', 'opening_balance' => 300, 'fund_amount' => 300])->assertCreated()->json();
-        $expense = $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'Taxi', 'amount' => 25, 'cost_center' => 'CC-OPS', 'expense_account' => '6311 · Transporte'])->assertCreated()->json();
+        $expense = $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'Taxi', 'amount' => 25, 'cost_center_id' => $center['id'], 'expense_account' => '6311'])->assertCreated()->json();
         $this->assertEquals(['6311' => [25, 0], '1011' => [0, 25]], $this->lines('CASH_EXPENSE', $expense['id']));
         $this->assertSame($center['id'], DB::table('acc_journal_lines')->where('account_code', '6311')->value('cost_center_id'));
-        $other = $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'Útiles', 'amount' => 10, 'expense_account' => 'útiles'])->assertCreated()->json();
-        $this->assertArrayHasKey(Posting::CASH_EXPENSE_ACCOUNT, $this->lines('CASH_EXPENSE', $other['id']));
+        $other = $this->postJson('/api/v1/cash-expenses', ['account_id' => $cash['id'], 'description' => 'Útiles', 'amount' => 10, 'cost_center_id' => $center['id'], 'expense_account' => '6563'])->assertCreated()->json();
+        $this->assertArrayHasKey('6563', $this->lines('CASH_EXPENSE', $other['id']));
 
         // Transferencia entre cuentas.
         $transfer = $this->postJson('/api/v1/bank-transfers', ['from_account_id' => $bank['id'], 'to_account_id' => $cash['id'], 'amount' => 35, 'reference' => 'REP-1'])->assertCreated();
