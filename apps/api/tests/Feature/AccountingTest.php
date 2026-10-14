@@ -145,6 +145,10 @@ class AccountingTest extends TestCase
 
         $statements = $this->getJson('/api/v1/financial-statements?from=2000-01')->assertOk()->json();
         $this->assertEquals([1000, 0, 1000], [$statements['kpis']['income'], $statements['kpis']['expenses'], $statements['kpis']['result']]);
+        // El gráfico sigue al rango (como mucho 24 meses) y trae el resultado de cada mes.
+        $this->assertCount(24, $statements['months']);
+        $this->assertEquals(['period' => now()->format('Y-m'), 'income' => 1000, 'expenses' => 0, 'result' => 1000], end($statements['months']));
+        $this->assertCount((int) now()->month, $this->getJson('/api/v1/financial-statements')->json('months'));
         $this->assertTrue($statements['balanced']);
         $this->assertAllEntriesPassTheDatabaseCheck();
     }

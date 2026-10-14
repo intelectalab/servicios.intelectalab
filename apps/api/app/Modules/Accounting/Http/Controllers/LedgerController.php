@@ -105,8 +105,10 @@ class LedgerController extends Controller
         $equity = $sum($all, $type('EQUITY'), -1);
         $accumulated = round($sum($all, $type('INCOME'), -1) - $sum($all, $type('EXPENSE')), 2);
 
-        // Ingresos y gastos de los últimos seis periodos hasta el final del rango.
-        $months = collect(range(5, 0))->map(fn (int $back) => Carbon::createFromFormat('Y-m-d', "{$to}-01")->subMonthsNoOverflow($back)->format('Y-m'));
+        // Ingresos y gastos de cada mes del rango (como mucho los últimos 24, para que el gráfico se lea).
+        $end = Carbon::createFromFormat('Y-m-d', "{$to}-01");
+        $span = min(24, Carbon::createFromFormat('Y-m-d', "{$from}-01")->diffInMonths($end) + 1);
+        $months = collect(range((int) $span - 1, 0))->map(fn (int $back) => $end->copy()->subMonthsNoOverflow($back)->format('Y-m'));
         $byMonth = DB::table('acc_journal_lines as l')
             ->join('acc_journal_entries as e', 'e.id', '=', 'l.entry_id')
             ->join('acc_accounts as a', fn ($join) => $join->on('a.tenant_id', '=', 'l.tenant_id')->on('a.code', '=', 'l.account_code'))
@@ -148,9 +150,9 @@ class LedgerController extends Controller
             'balanced' => abs($assets - ($liabilities + $equity + $accumulated)) < 1,
             'months' => $months->map(fn (string $period) => [
                 'period' => $period,
-                'income' => round((float) ($byMonth->first(fn ($row) => $row->period === $period && $row->account_type === 'INCOME')?->net ?? 0), 2),
-                'expenses' => round(-1 * (float) ($byMonth->first(fn ($row) => $row->period === $period && $row->account_type === 'EXPENSE')?->net ?? 0), 2),
-            ])->values(),
+                'income' => round((float) ($byMonth->first(fn ($row) => $row->period === $period && $row->account_type === 'INCOME')?->net ?? 0), 2) + 0.0,
+                'expenses' => round(-1 * (float) ($byMonth->first(fn ($row) => $row->period === $period && $row->account_type === 'EXPENSE')?->net ?? 0), 2) + 0.0,
+            ])->map(fn (array $month) => [...$month, 'result' => round($month['income'] - $month['expenses'], 2) + 0.0])->values(),
         ]);
     }
 

@@ -180,6 +180,28 @@ Indicadores cuadrados a mano:
 - Datos viejos de Tenant A: los cobros PAG-2026-0001…0004 no tienen cuenta en Bancos y caja (diferencia entre la 1041/1011 y Bancos y caja).
 - Si se escribe la dirección de una pantalla sin permiso, la pantalla abre y la API no entrega nada ("No se pudo cargar…"); pasa en todas las pantallas del sistema, no solo aquí.
 
+## Ajuste posterior: Mayor y balance (pedido por ti)
+
+- **Desde / Hasta**: antes ofrecían solo los meses que ya tenían asientos o estaban abiertos (por eso podían saltarse meses y no se entendía de dónde salían). Ahora son **todos los meses seguidos**, desde el primer mes con asientos hasta el mes en curso, con su nombre ("Desde agosto 2026"); "Desde" no ofrece meses posteriores a "Hasta" ni "Hasta" meses anteriores a "Desde".
+- **Exportar** del balance de comprobación va **arriba**, en la cabecera de la tarjeta, porque esa tabla no se pagina (excepción pedida solo para ella; el mayor de la cuenta, que sí se pagina, sigue con exportar al pie).
+- **Centro de costo** tiene buscador siempre.
+- Probado con Finanzas a 1366 px: meses de agosto a octubre 2026, "Hasta" sin agosto al elegir "Desde septiembre", buscador del centro de costo ("venta" → CC-VTA) y CSV exportado desde arriba.
+
+## Ajuste posterior: gráfico de Estados financieros con Recharts (pedido por ti)
+
+Preguntaste si los gráficos eran estáticos y pediste usar una librería de React para gráficos. Se usó **Recharts** (`recharts@3`, librería nueva aprobada por ti).
+
+- **Ingresos y gastos por mes** sigue el rango **Desde–Hasta** completo (antes, seis meses fijos hasta "Hasta"); con más de 24 meses muestra los últimos 24.
+- Al pasar el cursor (o tocar, en teléfono) un mes sale un recuadro con **ingresos, gastos y el resultado del mes**. La API entrega ahora `result` por mes.
+- Botón **Gráfico / Tabla** en la tarjeta: la tabla muestra los mismos datos y se exporta al pie.
+- Colores: dos azules del logo (`--p-chart-1` y `--p-chart-2` en `globals.css`, con valores para claro y oscuro), comprobados con el validador de paletas (distinguibles con daltonismo y con contraste suficiente sobre la tarjeta). El gris de antes "se leía apagado" según ese validador.
+- De paso: los ceros negativos ("S/ -0.00") en la serie mensual.
+- Probado con Finanzas a 1366 px (oscuro y claro) y a 375 px: meses de enero a octubre 2026, recuadro de octubre (ingresos 6,750.50; gastos 8,573.00; resultado (1,822.50)), vista Tabla con exportar. Prueba automática ampliada (24 meses como máximo, resultado por mes).
+
+## Ajuste posterior: meses de Desde / Hasta en Estados financieros (reportado por ti)
+
+En Estados financieros la lista empezaba en "2026-01", pero al elegir agosto ese mes desaparecía: la lista se armaba con los meses que tenían asientos más el mes elegido en ese momento, y enero solo estaba porque era el valor inicial. Ahora usa lo mismo que Mayor y balance (funciones comunes en `lib/accounting.ts`): todos los meses seguidos, con nombre, entre el mes más antiguo conocido (el primero con asientos o el rango con que abrió la pantalla: enero del año) y el mes en curso. Elegir un mes ya no quita otros de la lista. "Desde" no ofrece meses posteriores a "Hasta" ni "Hasta" anteriores a "Desde". Probado con Finanzas en las dos pantallas: tras elegir agosto, Estados financieros sigue ofreciendo de enero a octubre 2026 y Mayor y balance de agosto a octubre.
+
 ## Archivos
 
 - API: migración `2026_10_14_000100_accounting_journal_periods_and_budgets.php` (ya corrida); `app/Modules/Accounting/` (`Support/Chart`, `Ledger`, `Posting`, `Budgets`; `Models/CostCenter`; controladores `JournalController`, `LedgerController`, `ChartController`, `BudgetController`); orden `app/Console/Commands/PostPendingEntries.php`; ganchos en `InvoiceController`, `PaymentController`, `TreasuryController`, `FiscalGateway`, `SupplierInvoiceController`, `PayableController`; `PurchaseOrderController` (presupuesto), `Purchasing` (cuentas del plan), `CostCenterController`; `AccessScope`, `CheckRecordVersion`, `ListExport`, `AuditCatalog`; `routes/api.php`; prueba `tests/Feature/AccountingTest.php`.

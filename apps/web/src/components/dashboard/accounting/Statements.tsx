@@ -3,15 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChartColumn, Coins, Percent, TrendingUp } from "lucide-react";
 import { apiFetch, apiFetchLater } from "@/lib/api";
-import { money } from "@/lib/commercial";
-import { kfmt, monthTick, signedMoney } from "@/lib/accounting";
-import { Card, Filters, INPUT, Kpi, Kpis, LoadError, PageHead, Screen } from "@/components/ui/proto";
+import { kfmt, monthName, periodChoices, signedMoney } from "@/lib/accounting";
+import { Card, Filters, INPUT, Kpi, Kpis, LoadError, PageHead, Screen, useToasts } from "@/components/ui/proto";
+import { MonthChart } from "@/components/dashboard/accounting/MonthChart";
 import { PickSelect } from "@/components/ui/pick-select";
 import type { FinancialStatements, JournalOptions, StatementLine } from "@/types/accounting";
 
 function Pick({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: [string, string][] }) {
   return (
-    <div className="flex-[1_1_140px] sm:w-[170px] sm:flex-none">
+    <div className="flex-[1_1_140px] sm:w-[230px] sm:flex-none">
       <PickSelect className={`${INPUT} h-10`} ariaLabel={label} searchable={options.length > 10} value={value} onChange={onChange} options={options} />
     </div>
   );
@@ -30,55 +30,13 @@ function FinList({ lines }: { lines: StatementLine[] }) {
   );
 }
 
-/** Barras de ingresos y gastos por mes, como el del prototipo (azul del logo e ingresos; negro cálido y gastos). */
-function MonthBars({ months }: { months: FinancialStatements["months"] }) {
-  const h = 170;
-  const max = Math.max(1, ...months.flatMap((m) => [m.income, m.expenses]));
-  const step = Math.pow(10, Math.floor(Math.log10(max)));
-  const nice = Math.ceil(max / step) * step;
-  const W = Math.max(600, months.length * 110);
-  const padL = 60;
-  const padB = 24;
-  const iw = W - padL - 10;
-  const ih = h - padB - 12;
-  const gw = iw / Math.max(1, months.length);
-  const bw = Math.min(26, gw * 0.3);
-  const y = (v: number) => 12 + ih - (v / nice) * ih;
-
-  return (
-    <div className="overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${h}`} role="img" aria-label="Ingresos y gastos por mes" className="block h-auto w-full min-w-[280px]">
-        {[0, 0.5, 1].map((t) => (
-          <g key={t}>
-            <line x1={padL} x2={W - 10} y1={y(t * nice)} y2={y(t * nice)} stroke="var(--app-border)" strokeWidth={1} />
-            <text x={padL - 6} y={y(t * nice) + 3} textAnchor="end" fontSize="10.5" fill="var(--app-muted)">{kfmt(t * nice)}</text>
-          </g>
-        ))}
-        {months.map((month, index) => {
-          const cx = padL + gw * (index + 0.5);
-          const income = Math.max(0, month.income);
-          const expenses = Math.max(0, month.expenses);
-          return (
-            <g key={month.period}>
-              <rect x={cx - bw - 2} y={y(income)} width={bw} height={Math.max(0, ih + 12 - y(income))} rx={3} fill="var(--p-brand)">
-                <title>Ingresos {monthTick(month.period)}: {money(month.income)}</title>
-              </rect>
-              <rect x={cx + 2} y={y(expenses)} width={bw} height={Math.max(0, ih + 12 - y(expenses))} rx={3} fill="var(--p-neutral-text)">
-                <title>Gastos {monthTick(month.period)}: {money(month.expenses)}</title>
-              </rect>
-              <text x={cx} y={h - 6} textAnchor="middle" fontSize="10.5" fill="var(--app-muted)">{monthTick(month.period)}</text>
-            </g>
-          );
-        })}
-      </svg>
-    </div>
-  );
-}
-
 export default function Statements() {
+  const { toast, toasts } = useToasts();
   const [options, setOptions] = useState<JournalOptions | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // Rango con que abrió la pantalla (enero del año hasta el mes en curso): fija los extremos de la lista.
+  const [bounds, setBounds] = useState<[string, string] | null>(null);
   const [data, setData] = useState<FinancialStatements | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -98,6 +56,7 @@ export default function Statements() {
         setError("");
         setFrom((current) => current || next.from);
         setTo((current) => current || next.to);
+        setBounds((current) => current ?? [next.from, next.to]);
       } catch {
         if (!cancelled) setError("No se pudieron calcular los estados financieros.");
       } finally {
@@ -116,15 +75,16 @@ export default function Statements() {
     return () => { cancelled = true; };
   }, []);
 
-  const periods = useMemo(() => [...new Set([...(options?.periods ?? []), from, to].filter(Boolean))].sort(), [options, from, to]);
+  const periods = useMemo(() => periodChoices([...(options?.periods ?? []), ...(bounds ?? [])]), [options, bounds]);
 
   return (
     <Screen>
       <PageHead title="Estados financieros" />
 
       <Filters>
-        <Pick label="Desde" value={from} onChange={setFrom} options={periods.map((p): [string, string] => [p, `Desde ${p}`])} />
-        <Pick label="Hasta" value={to} onChange={setTo} options={[...periods].reverse().map((p): [string, string] => [p, `Hasta ${p}`])} />
+        {/* "Desde" no pasa de "Hasta" ni "Hasta" queda antes de "Desde". */}
+        <Pick label="Desde" value={from} onChange={setFrom} options={periods.filter((p) => !to || p <= to).map((p): [string, string] => [p, `Desde ${monthName(p)}`])} />
+        <Pick label="Hasta" value={to} onChange={setTo} options={[...periods].reverse().filter((p) => !from || p >= from).map((p): [string, string] => [p, `Hasta ${monthName(p)}`])} />
       </Filters>
 
       {error ? (
@@ -152,15 +112,10 @@ export default function Statements() {
             </Card>
           </div>
 
-          <Card title="Ingresos y gastos por mes">
-            <div className="app-muted mb-1.5 flex gap-4 text-[12.5px]">
-              <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-[3px] bg-[var(--p-brand)] align-[-1px]" />Ingresos</span>
-              <span><i className="mr-1.5 inline-block h-2.5 w-2.5 rounded-[3px] bg-[var(--p-neutral-text)] align-[-1px]" />Gastos</span>
-            </div>
-            <MonthBars months={data.months} />
-          </Card>
+          <MonthChart months={data.months} toast={toast} />
         </div>
       )}
+      {toasts}
     </Screen>
   );
 }

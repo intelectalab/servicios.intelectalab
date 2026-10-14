@@ -104,7 +104,7 @@ export interface FinancialStatements {
   income_statement: StatementLine[];
   balance_sheet: StatementLine[];
   balanced: boolean;
-  months: { period: string; income: number; expenses: number }[];
+  months: { period: string; income: number; expenses: number; result: number }[];
 }
 
 export interface AccountingAccount {

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch, apiFetchLater } from "@/lib/api";
 import { money, shortDate } from "@/lib/commercial";
-import { amountOrBlank } from "@/lib/accounting";
+import { amountOrBlank, monthName, periodChoices } from "@/lib/accounting";
 import { exportCsv, exportXlsx, fetchAllPages, recordExport, type ExportColumn } from "@/lib/export-table";
 import {
   Btn, Card, DataTable, ExportButtons, Filters, INPUT, LoadError, PAGE_SIZES, PageHead, Pager, Screen, useToasts, type Column,
@@ -39,10 +39,12 @@ const TD = "border-b border-[color:var(--app-border)] px-3.5 py-[11px] align-mid
 const NUM = "text-right tabular-nums whitespace-nowrap";
 
 /** Desplegable de la barra de filtros (el propio del sistema, no el del navegador). */
-function RangePick({ label, value, onChange, options, wide = false }: { label: string; value: string; onChange: (value: string) => void; options: [string, string][]; wide?: boolean }) {
+function RangePick({
+  label, value, onChange, options, wide = false, searchable,
+}: { label: string; value: string; onChange: (value: string) => void; options: [string, string][]; wide?: boolean; searchable?: boolean }) {
   return (
-    <div className={`flex-[1_1_140px] sm:flex-none ${wide ? "sm:w-[260px]" : "sm:w-[170px]"}`}>
-      <PickSelect className={`${INPUT} h-10`} ariaLabel={label} searchable={options.length > 10} value={value} onChange={onChange} options={options} />
+    <div className={`flex-[1_1_140px] sm:flex-none ${wide ? "sm:w-[280px]" : "sm:w-[230px]"}`}>
+      <PickSelect className={`${INPUT} h-10`} ariaLabel={label} searchable={searchable ?? options.length > 10} value={value} onChange={onChange} options={options} />
     </div>
   );
 }
@@ -52,6 +54,8 @@ export default function Ledger() {
   const [options, setOptions] = useState<JournalOptions | null>(null);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  // Rango con que abrió la pantalla (el que elige la API): fija los extremos de la lista de meses.
+  const [bounds, setBounds] = useState<[string, string] | null>(null);
   const [center, setCenter] = useState("");
   const [balance, setBalance] = useState<TrialBalance | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,6 +90,7 @@ export default function Ledger() {
         // La primera vez, el rango que eligió la API (desde el primer periodo hasta hoy).
         setFrom((current) => current || next.from);
         setTo((current) => current || next.to);
+        setBounds((current) => current ?? [next.from, next.to]);
       } catch {
         if (!cancelled) setError("No se pudo cargar el balance de comprobación.");
       } finally {
@@ -125,11 +130,8 @@ export default function Ledger() {
     return () => { cancelled = true; };
   }, [account, range, page, perPage, toast]);
 
-  // Periodos: los que tienen asientos y el rango vigente.
-  const periods = useMemo(() => {
-    const all = new Set([...(options?.periods ?? []), from, to].filter(Boolean));
-    return [...all].sort();
-  }, [options, from, to]);
+  // Meses elegibles: todos, sin saltos, desde el primer mes con asientos hasta el mes en curso.
+  const periods = useMemo(() => periodChoices([...(options?.periods ?? []), ...(bounds ?? [])]), [options, bounds]);
 
   async function exportBalance(format: "xlsx" | "csv") {
     if (!balance) return;
@@ -195,10 +197,11 @@ export default function Ledger() {
       <PageHead title="Mayor y balance de comprobación" />
 
       <Filters>
-        <RangePick label="Desde" value={from} onChange={(value) => { setFrom(value); setPage(1); }} options={periods.map((p): [string, string] => [p, `Desde ${p}`])} />
-        <RangePick label="Hasta" value={to} onChange={(value) => { setTo(value); setPage(1); }} options={[...periods].reverse().map((p): [string, string] => [p, `Hasta ${p}`])} />
+        {/* "Desde" no pasa de "Hasta" ni "Hasta" queda antes de "Desde". */}
+        <RangePick label="Desde" value={from} onChange={(value) => { setFrom(value); setPage(1); }} options={periods.filter((p) => !to || p <= to).map((p): [string, string] => [p, `Desde ${monthName(p)}`])} />
+        <RangePick label="Hasta" value={to} onChange={(value) => { setTo(value); setPage(1); }} options={[...periods].reverse().filter((p) => !from || p >= from).map((p): [string, string] => [p, `Hasta ${monthName(p)}`])} />
         <RangePick
-          label="Centro de costo" wide value={center} onChange={(value) => { setCenter(value); setPage(1); }}
+          label="Centro de costo" wide searchable value={center} onChange={(value) => { setCenter(value); setPage(1); }}
           options={[["", "Todos los centros de costo"], ...(options?.cost_centers ?? []).map((c): [string, string] => [c.id, `${c.code} · ${c.name}`])]}
         />
       </Filters>
@@ -220,7 +223,12 @@ export default function Ledger() {
         </Card>
       )}
 
-      <Card title="Balance de comprobación" flush>
+      {/* Como el balance no se pagina, sus botones de exportar van arriba (excepción pedida para esta tabla). */}
+      <Card
+        title="Balance de comprobación"
+        flush
+        actions={balance && !error ? <ExportButtons permission="accounting.export" total={balance.rows.length} busy={exporting} onExport={exportBalance} /> : undefined}
+      >
         {error ? <LoadError text={error} onRetry={() => setReload((n) => n + 1)} /> : !balance ? (
           <div className="m-5 h-32 animate-pulse rounded bg-[var(--app-surface-muted)]" aria-busy="true" />
         ) : (
@@ -273,9 +281,7 @@ export default function Ledger() {
                 {balance.balanced ? "El balance cuadra: sumas del debe y del haber iguales." : "Diferencia entre debe y haber: revisar."}
               </p>
             )}
-            <div className="mt-2 border-t border-[color:var(--app-border)] px-3.5 py-3">
-              <ExportButtons permission="accounting.export" total={balance.rows.length} busy={exporting} onExport={exportBalance} />
-            </div>
+            <div className="pb-4" />
           </>
         )}
       </Card>

@@ -58,6 +58,9 @@
   --p-toast-bg: #1C2533;
   --p-toast-line: transparent;
   --p-toast-shadow: 0 20px 50px rgba(8, 25, 55, .28);
+  /* Series de los gráficos (ingresos / gastos): dos azules del logo, validados para daltonismo y contraste. */
+  --p-chart-1: #1B8FC9;
+  --p-chart-2: #0B5C92;
 }
 
 [data-theme="dark"] {
@@ -116,6 +119,8 @@
   --p-toast-bg: #2C4C5B;
   --p-toast-line: #5A8194;
   --p-toast-shadow: 0 14px 36px rgba(0, 0, 0, .6);
+  --p-chart-1: #3A9FD5;
+  --p-chart-2: #1E6A9B;
 }
 
 @theme inline {
