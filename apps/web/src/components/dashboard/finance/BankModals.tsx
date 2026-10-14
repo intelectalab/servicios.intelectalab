@@ -2,12 +2,12 @@
 
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { apiFetch } from "@/lib/api";
-import { isoDateFromNow, money } from "@/lib/commercial";
+import { isoDateFromNow, money, shortDate } from "@/lib/commercial";
 import { fieldErrors, firstError } from "@/lib/crm";
 import { ACCOUNT_KINDS } from "@/lib/finance";
-import { Btn, Field, FormGrid, INPUT, Modal, Notice } from "@/components/ui/proto";
+import { Btn, Field, FormGrid, INPUT, Kv, Modal, Notice } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
-import type { AccountKind, BankAccount, Currency } from "@/types/finance";
+import type { AccountKind, BankAccount, CashExpense, Currency } from "@/types/finance";
 
 const accountOption = (account: BankAccount, withBalance = false): [string, string] => [
   account.id,
@@ -288,6 +288,79 @@ export function CashExpenseModal({ cash, onClose, onDone }: { cash: BankAccount;
           </Field>
         </FormGrid>
         <p className="app-muted mt-2 text-xs">Saldo de la caja: {money(cash.balance, cash.currency)}. Enviar dos veces no duplica el gasto.</p>
+      </form>
+    </FormModal>
+  );
+}
+
+/**
+ * Ficha de un gasto de caja chica, con "Corregir centro o cuenta": la corrección queda registrada
+ * (antes, después y motivo), el asiento se extorna y se rehace. El importe y la fecha no cambian.
+ */
+export function CashExpenseDetailModal({
+  expense, currency, onClose, onDone,
+}: { expense: CashExpense; currency: string; onClose: () => void; onDone: (entry: string | null) => void }) {
+  const [costCenter, setCostCenter] = useState(expense.cost_center_id ?? "");
+  const [expenseAccount, setExpenseAccount] = useState(expense.expense_account_code ?? "");
+  const [reason, setReason] = useState("");
+  const [options, setOptions] = useState<{ cost_centers: { id: string; code: string; name: string }[]; expense_accounts: { code: string; name: string }[] } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<NonNullable<typeof options>>("/v1/cash-expenses/options")
+      .then((next) => { if (!cancelled) setOptions(next); })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
+
+  const { errors, error, saving, submit } = useSubmit(async () => {
+    const saved = await apiFetch<{ entry: string | null }>(`/v1/cash-expenses/${expense.id}/reclassify`, {
+      method: "POST",
+      body: JSON.stringify({ cost_center_id: costCenter || null, expense_account: expenseAccount || null, reason: reason.trim() }),
+    });
+    onDone(saved.entry);
+  }, "No se pudo corregir el gasto.");
+
+  return (
+    <FormModal
+      title={`Gasto ${expense.expense_number}`} formId="cash-reclassify-form" onClose={onClose} submitLabel="Guardar corrección" saving={saving}
+      permission="treasury.manage" error={errors.cost_center_id || errors.expense_account || errors.reason ? "" : error}
+    >
+      <Kv
+        rows={[
+          ["Fecha", shortDate(expense.expense_date)],
+          ["Concepto", expense.description],
+          ["Comprobante", expense.receipt ?? "—"],
+          ["Monto", <strong key="amount" className="font-semibold tabular-nums">{money(expense.amount, currency)}</strong>],
+          ["Centro de costo", expense.cost_center ?? "—"],
+          ["Cuenta de gasto", expense.expense_account ?? "—"],
+          expense.corrections ? ["Correcciones", `${expense.corrections} (en el historial de Auditoría)`] : null,
+        ]}
+      />
+      <form id="cash-reclassify-form" onSubmit={submit} className="mt-2">
+        <h4 className="mb-1 text-[15px] font-semibold">Corregir centro o cuenta</h4>
+        <FormGrid>
+          <div className="flex min-w-0 flex-col gap-[5px] md:col-span-2">
+            <span className="text-[12.5px] font-medium">Centro de costo <em className="not-italic text-[color:var(--p-danger-text)]">*</em></span>
+            <PickSelect
+              className={INPUT} ariaLabel="Centro de costo" searchable disabled={!options} value={costCenter} onChange={setCostCenter}
+              options={[["", options ? "Selecciona…" : "Cargando…"], ...(options?.cost_centers ?? []).map((c): [string, string] => [c.id, `${c.code} · ${c.name}`])]}
+            />
+            {errors.cost_center_id && <small className="text-xs text-[color:var(--p-danger-text)]">{errors.cost_center_id}</small>}
+          </div>
+          <div className="flex min-w-0 flex-col gap-[5px]">
+            <span className="text-[12.5px] font-medium">Cuenta de gasto <em className="not-italic text-[color:var(--p-danger-text)]">*</em></span>
+            <PickSelect
+              className={INPUT} ariaLabel="Cuenta de gasto" searchable disabled={!options} value={expenseAccount} onChange={setExpenseAccount}
+              options={[["", options ? "Selecciona…" : "Cargando…"], ...(options?.expense_accounts ?? []).map((a): [string, string] => [a.code, `${a.code} · ${a.name}`])]}
+            />
+            {errors.expense_account && <small className="text-xs text-[color:var(--p-danger-text)]">{errors.expense_account}</small>}
+          </div>
+          <Field label="Motivo" required span={3} error={errors.reason}>
+            <input className={INPUT} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={1000} placeholder="Por qué se corrige" />
+          </Field>
+        </FormGrid>
+        <p className="app-muted mt-2 text-xs">El asiento del gasto se extorna y se contabiliza de nuevo con el centro y la cuenta correctos, en el periodo del gasto si sigue abierto (si no, hoy).</p>
       </form>
     </FormModal>
   );

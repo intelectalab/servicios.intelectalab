@@ -219,6 +219,29 @@ class BudgetController extends Controller
         return response()->json($this->budgetRow($this->findBudget($tenantId, $budget)));
     }
 
+    /**
+     * "Cerrar ejercicio" del prototipo: un presupuesto aprobado de un año que ya terminó queda
+     * cerrado (solo consulta). El asiento de cierre lo hace Contabilidad al cerrar el ejercicio.
+     */
+    public function close(string $budget, Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        $row = $this->findBudget($tenantId, $budget);
+        if ($row->status !== 'APPROVED') {
+            throw ValidationException::withMessages(['status' => ['Solo se cierra un presupuesto aprobado.']]);
+        }
+        if ((int) $row->fiscal_year >= (int) now()->year) {
+            throw ValidationException::withMessages(['status' => ["El ejercicio {$row->fiscal_year} aún no termina: su presupuesto se cierra a partir del 1 de enero de ".($row->fiscal_year + 1).'.']]);
+        }
+
+        DB::transaction(function () use ($request, $row) {
+            DB::table('budgets')->where('id', $row->id)->update(['status' => 'CLOSED']);
+            $this->audit($request, 'budget.close', 'Budget', $row->id, ['from' => 'APPROVED', 'to' => 'CLOSED', 'note' => $row->name]);
+        });
+
+        return response()->json($this->budgetRow($this->findBudget($tenantId, $budget)));
+    }
+
     /** Reabre para ajuste un presupuesto aprobado, con motivo. Mientras está en borrador, las órdenes de compra no se controlan contra él. */
     public function reopen(string $budget, Request $request)
     {

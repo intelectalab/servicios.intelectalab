@@ -8,6 +8,7 @@ use App\Modules\Accounting\Support\Ledger;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
+use App\Services\SpreadsheetImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,7 @@ class JournalController extends Controller
         $totals = DB::table('acc_journal_entries')->where('tenant_id', $tenantId)
             ->selectRaw('count(*) AS total')
             ->selectRaw('count(*) FILTER (WHERE period = ?) AS in_period', [$period])
-            ->selectRaw("count(*) FILTER (WHERE source_type NOT IN ('MANUAL')) AS automatic")
+            ->selectRaw("count(*) FILTER (WHERE source_type NOT IN ('MANUAL', 'IMPORT')) AS automatic")
             ->first();
         $sums = DB::table('acc_journal_lines')->where('tenant_id', $tenantId)->selectRaw('coalesce(sum(debit), 0) AS debit, coalesce(sum(credit), 0) AS credit')->first();
 
@@ -152,12 +153,181 @@ class JournalController extends Controller
         return response()->json($this->detail($tenantId, $id), 201);
     }
 
+    /** Columnas de la plantilla de importación: una fila por línea; las filas del mismo "asiento" forman uno. */
+    public const IMPORT_HEADERS = ['asiento', 'fecha', 'glosa', 'cuenta', 'debe', 'haber', 'centro_costo', 'detalle'];
+
+    private const IMPORT_ALIASES = [
+        'n_asiento' => 'asiento', 'nro_asiento' => 'asiento', 'numero' => 'asiento', 'grupo' => 'asiento',
+        'fecha_contable' => 'fecha', 'descripcion' => 'glosa', 'concepto' => 'glosa',
+        'codigo_de_cuenta' => 'cuenta', 'cuenta_contable' => 'cuenta', 'codigo' => 'cuenta',
+        'cargo' => 'debe', 'debito' => 'debe', 'abono' => 'haber', 'credito' => 'haber',
+        'centro' => 'centro_costo', 'centro_de_costo' => 'centro_costo', 'nota' => 'detalle',
+    ];
+
+    private const IMPORT_MAX_ROWS = 2000;
+
+    public function importTemplate(Request $request)
+    {
+        return SpreadsheetImport::template('plantilla_asientos.xlsx', ...self::importTemplateParts($request->attributes->get('tenant_id')));
+    }
+
+    /** Título, columnas, ejemplos, instrucciones, listas y anchos de la plantilla de asientos. */
+    public static function importTemplateParts(string $tenantId): array
+    {
+        Chart::ensure($tenantId);
+        $accounts = DB::table('acc_accounts')->where('tenant_id', $tenantId)->where('postable', true)->where('active', true)->orderBy('code')->pluck('code')->all();
+        $centers = DB::table('cost_centers')->where('tenant_id', $tenantId)->where('active', true)->orderBy('code')->limit(500)->pluck('code')->all();
+        $day = now()->startOfMonth()->addDays(min(4, now()->day - 1))->format('d/m/Y');
+        $center = $centers[0] ?? '';
+
+        return [
+            'Plantilla de asientos contables',
+            self::IMPORT_HEADERS,
+            [
+                ['1', $day, 'Aporte de capital de los socios', '1041', '10000.00', '', '', 'Depósito en cuenta corriente'],
+                ['1', $day, '', '5011', '', '10000.00', '', ''],
+                ['2', $day, 'Alquiler de oficina del mes', '6352', '1500.00', '', $center, ''],
+                ['2', $day, '', '1041', '', '1500.00', '', 'Transferencia al arrendador'],
+            ],
+            [
+                'Una fila por cada línea del asiento. Las filas con el mismo número en "asiento" forman un asiento, en el orden del archivo.',
+                'fecha y glosa basta con ponerlas en la primera fila de cada asiento. fecha: día/mes/año; su periodo debe estar abierto.',
+                'cuenta: el código de una cuenta de detalle (imputable) y activa de tu plan de cuentas.',
+                'Cada línea lleva un monto en debe o en haber (no en los dos), sin símbolo de moneda. El asiento debe cuadrar.',
+                'centro_costo: el código del centro de costo, si aplica. detalle: una nota para la línea.',
+                'Un asiento con algún error no entra; los demás sí. Reemplaza las filas de ejemplo por las tuyas antes de importar.',
+            ],
+            ['cuenta' => $accounts, 'centro_costo' => $centers],
+            [],
+            ['asiento' => 12, 'fecha' => 14, 'glosa' => 40, 'cuenta' => 14, 'debe' => 16, 'haber' => 16, 'centro_costo' => 16, 'detalle' => 36],
+        ];
+    }
+
+    /**
+     * Importa asientos desde Excel o CSV. Cada asiento se valida entero (cuadra, cuentas imputables,
+     * periodo abierto, centro que exista): el que tiene un error no entra y se avisa; los demás quedan
+     * contabilizados como importados, cada uno con su registro en auditoría.
+     */
+    public function import(Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        Chart::ensure($tenantId);
+        $request->validate(['file' => ['required', 'file', 'max:5120']], [
+            'file.required' => 'Selecciona el archivo con los asientos.',
+            'file.max' => 'El archivo supera los 5 MB: impórtalo por partes.',
+        ]);
+        [, $rows] = SpreadsheetImport::read($request->file('file'), self::IMPORT_ALIASES, ['asiento', 'cuenta']);
+        if (count($rows) > self::IMPORT_MAX_ROWS) {
+            throw ValidationException::withMessages(['file' => ['Un archivo admite como mucho '.self::IMPORT_MAX_ROWS.' líneas: impórtalo por partes.']]);
+        }
+
+        $number = fn (string $value) => $value === '' ? 0.0 : (is_numeric($clean = str_replace([' ', ','], ['', ''], $value)) ? round((float) $clean, 2) : null);
+        $groups = [];
+        $warnings = [];
+        foreach ($rows as $line => $row) {
+            $key = trim($row['asiento'] ?? '');
+            if ($key === '') {
+                $warnings[] = "Fila {$line}: falta el número de asiento.";
+
+                continue;
+            }
+            $groups[$key] ??= ['first' => $line, 'date' => '', 'description' => '', 'lines' => [], 'errors' => []];
+            $group = &$groups[$key];
+            if ($group['date'] === '' && trim($row['fecha'] ?? '') !== '') {
+                $group['date'] = SpreadsheetImport::date(trim($row['fecha']));
+            }
+            if ($group['description'] === '' && trim($row['glosa'] ?? '') !== '') {
+                $group['description'] = trim($row['glosa']);
+            }
+            $debit = $number(trim($row['debe'] ?? ''));
+            $credit = $number(trim($row['haber'] ?? ''));
+            $account = trim($row['cuenta'] ?? '');
+            if ($debit === null || $credit === null || $debit < 0 || $credit < 0) {
+                $group['errors'][] = "fila {$line}: el debe y el haber son montos positivos";
+            } elseif (($debit > 0) === ($credit > 0)) {
+                $group['errors'][] = "fila {$line}: la línea va al debe o al haber (uno de los dos)";
+            } elseif (! Chart::postable($tenantId, $account)) {
+                $group['errors'][] = "fila {$line}: la cuenta {$account} no es de detalle o no está activa";
+            }
+            $centerCode = trim($row['centro_costo'] ?? '');
+            $centerId = $centerCode === '' ? null
+                : DB::table('cost_centers')->where('tenant_id', $tenantId)->whereRaw('upper(code) = ?', [mb_strtoupper($centerCode)])->value('id');
+            if ($centerCode !== '' && ! $centerId) {
+                $group['errors'][] = "fila {$line}: no existe el centro de costo {$centerCode}";
+            }
+            $group['lines'][] = ['account' => $account, 'debit' => $debit ?? 0, 'credit' => $credit ?? 0, 'cost_center_id' => $centerId, 'note' => trim($row['detalle'] ?? '') ?: null];
+            unset($group);
+        }
+
+        $ready = [];
+        foreach ($groups as $key => $group) {
+            $label = "Asiento {$key} (fila {$group['first']})";
+            $errors = $group['errors'];
+            if (! preg_match('/^\d{4}-\d{2}-\d{2}$/', $group['date'])) {
+                $errors[] = 'falta la fecha o no se entiende (usa día/mes/año)';
+            } elseif (Ledger::isClosed($tenantId, substr($group['date'], 0, 7))) {
+                $errors[] = 'el periodo '.substr($group['date'], 0, 7).' está cerrado';
+            } elseif ($group['date'] > now()->toDateString()) {
+                $errors[] = 'la fecha no puede ser futura';
+            }
+            if ($group['description'] === '') {
+                $errors[] = 'falta la glosa';
+            }
+            if (count($group['lines']) < 2) {
+                $errors[] = 'necesita al menos dos líneas';
+            }
+            $debit = round(array_sum(array_column($group['lines'], 'debit')), 2);
+            $credit = round(array_sum(array_column($group['lines'], 'credit')), 2);
+            if (abs($debit - $credit) >= 0.005) {
+                $errors[] = 'no cuadra (debe '.number_format($debit, 2).' · haber '.number_format($credit, 2).')';
+            }
+            if ($errors) {
+                $warnings[] = "{$label}: ".implode('; ', array_unique($errors)).'. No se importó.';
+
+                continue;
+            }
+            $ready[] = [...$group, 'key' => $key, 'amount' => $debit];
+        }
+
+        if (! $ready) {
+            throw ValidationException::withMessages(['file' => ['No se importó ningún asiento.', ...$warnings]]);
+        }
+
+        $file = Str::limit((string) $request->file('file')->getClientOriginalName(), 120);
+        $numbers = DB::transaction(function () use ($request, $tenantId, $ready, $file) {
+            $numbers = [];
+            foreach ($ready as $group) {
+                $id = Ledger::post($tenantId, $group['date'], Str::limit($group['description'], 1000, ''), ['type' => 'IMPORT', 'number' => Str::limit($file, 100, '')], $group['lines'], $request->user()->id);
+                $number = DB::table('acc_journal_entries')->where('id', $id)->value('entry_number');
+                AuditLogger::log(
+                    tenantId: $tenantId, userId: $request->user()->id, action: 'journal.import', entityType: 'JournalEntry', entityId: $id,
+                    metadata: ['note' => "{$number} · {$group['description']} · desde {$file} (asiento {$group['key']})", 'amount' => $group['amount']],
+                );
+                $numbers[] = $number;
+            }
+
+            return $numbers;
+        });
+
+        $count = count($numbers);
+
+        return response()->json([
+            'imported' => $count,
+            'message' => ($count === 1 ? '1 asiento importado' : "{$count} asientos importados").': '.implode(', ', array_slice($numbers, 0, 5)).($count > 5 ? '…' : '').'.',
+            'warnings' => $warnings,
+        ]);
+    }
+
     /** Extorno: un asiento inverso en el periodo abierto; el original queda extornado. */
     public function reverse(string $entry, Request $request)
     {
         $tenantId = $request->attributes->get('tenant_id');
         $entry = $this->find($request, $entry);
         $reason = trim($request->validate(['reason' => ['required', 'string', 'max:1000']], ['reason.required' => 'Indica el motivo del extorno.'])['reason']);
+        // El asiento de cierre se deshace reabriendo el ejercicio, que también reabre diciembre.
+        if ($entry->source_type === 'YEAR_CLOSE') {
+            throw ValidationException::withMessages(['status' => ['El asiento de cierre no se extorna aquí: reabre el ejercicio en Plan de cuentas y periodos.']]);
+        }
 
         DB::transaction(function () use ($request, $tenantId, $entry, $reason) {
             $reversal = Ledger::reverse($tenantId, $entry->id, $reason, $request->user()->id);
@@ -254,7 +424,7 @@ class JournalController extends Controller
             ...$this->row($entry),
             'reason' => $entry->reason,
             'created_by' => $entry->created_by ? DB::table('users')->where('id', $entry->created_by)->value('name') : null,
-            'automatic' => $entry->created_by === null || ! in_array($entry->source_type, ['MANUAL', 'REVERSAL'], true),
+            'automatic' => $entry->created_by === null || ! in_array($entry->source_type, Ledger::BY_HAND, true),
             'reversed_by' => $reversal ? ['id' => $reversal->id, 'number' => $reversal->entry_number] : null,
             'reversal_of' => $original ? ['id' => $original->id, 'number' => $original->entry_number] : null,
             'lines' => $lines->map(fn ($line) => [

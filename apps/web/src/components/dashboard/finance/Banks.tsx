@@ -18,7 +18,7 @@ import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters 
 import { ImportModal } from "@/components/dashboard/ImportModal";
 import { getAuthToken } from "@/lib/auth";
 import {
-  AccountFormModal, CashCountModal, CashExpenseModal, RefillModal, TransferModal,
+  AccountFormModal, CashCountModal, CashExpenseDetailModal, CashExpenseModal, RefillModal, TransferModal,
 } from "@/components/dashboard/finance/BankModals";
 import type { PaginatedResponse } from "@/types/customer";
 import type { BankAccount, BankAccountsResponse, BankMovement, CashCount, CashExpense, Reconciliation, StatementLine, TreasurySummary } from "@/types/finance";
@@ -577,6 +577,7 @@ function CashTab({
   const [retry, setRetry] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [modal, setModal] = useState<"expense" | "count" | "refill" | null>(null);
+  const [openExpense, setOpenExpense] = useState<CashExpense | null>(null);
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(expenseKey);
 
   useEffect(() => {
@@ -724,6 +725,7 @@ function CashTab({
           <DataTable
             tableId="cash-expenses" sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
             cols={columns} rows={data?.data ?? []} rowKey={expenseKey} selection={selection} loading={loading && !data} empty="Aún no hay gastos de caja chica."
+            onRowClick={setOpenExpense}
           />
           {data && (
             <Pager
@@ -738,6 +740,12 @@ function CashTab({
       {/* Todo lo que entró y salió de esta caja (apertura, reposiciones, cobros en efectivo, gastos), con su exportación. */}
       <MovementsTab key={cashId} accounts={accounts} accountId={cashId} onAccount={() => undefined} version={version} toast={toast} fixed />
 
+      {openExpense && (
+        <CashExpenseDetailModal
+          expense={openExpense} currency={currency} onClose={() => setOpenExpense(null)}
+          onDone={(entry) => { setOpenExpense(null); toast("Gasto corregido", "success", entry ? `Nuevo asiento ${entry}` : undefined); onChanged(); }}
+        />
+      )}
       {modal === "expense" && <CashExpenseModal cash={cash} onClose={() => setModal(null)} onDone={(number) => { setModal(null); toast("Gasto registrado", "success", number); onChanged(); }} />}
       {modal === "count" && (
         <CashCountModal

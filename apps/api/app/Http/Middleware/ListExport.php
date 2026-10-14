@@ -34,6 +34,7 @@ class ListExport
         'api/v1/crm/campaigns' => 'campaigns',
         'api/v1/contracted-services' => 'contracted_services',
         'api/v1/work-orders' => 'work_orders',
+        'api/v1/checklists' => 'checklists',
         'api/v1/projects' => 'projects',
         'api/v1/time-entries' => 'time_entries',
         'api/v1/cost-entries' => 'cost_entries',

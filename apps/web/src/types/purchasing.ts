@@ -181,7 +181,7 @@ export interface Payable {
   status: PayableStatus;
 }
 
-export type PayableMovementType = "CHARGE" | "PAYMENT" | "DETRACTION" | "RETENTION_4TA";
+export type PayableMovementType = "CHARGE" | "PAYMENT" | "DETRACTION" | "RETENTION_4TA" | "PAYMENT_REVERSAL";
 
 export interface PayableDetail extends Payable {
   movements: { id: string; movement_type: PayableMovementType; amount: number; reference: string | null; at: string }[];
@@ -223,6 +223,17 @@ export interface SupplierPayment {
   detraction_number: string | null;
   status: "PAID" | "REVERSED";
   creator: string | null;
+  reversed_at: string | null;
+  reversal_reason: string | null;
+}
+
+/** Ficha del pago: a qué cuentas se aplicó, sus movimientos de banco o caja, su asiento e historial. */
+export interface SupplierPaymentDetail extends SupplierPayment {
+  reversed_by: string | null;
+  allocations: { payable_id: string; invoice_id: string; doc_number: string; description: string | null; amount: number; payable_status: PayableStatus; balance: number }[];
+  movements: { id: string; date: string; description: string; amount: number; type: string; account: string }[];
+  journal_entry: { id: string; number: string; status: "POSTED" | "REVERSED" } | null;
+  history: HistoryEntry[];
 }
 
 export interface SupplierPaymentOptions {

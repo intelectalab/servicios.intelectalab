@@ -208,7 +208,8 @@ class ContractedServiceController extends Controller
 
         DB::transaction(function () use ($request, $service, $to, $action, $reason) {
             $previous = $service->status;
-            $service->update(['status' => $to, 'status_reason' => $reason]);
+            // Cambiado a mano, deja de contar como suspendido por su contrato.
+            $service->update(['status' => $to, 'status_reason' => $reason, 'suspended_by_contract' => false]);
             $note = $this->syncRecurringInstance($service, $to) ?? $reason;
 
             AuditLogger::log(

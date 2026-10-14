@@ -45,12 +45,18 @@ export function WorkOrderFormModal({
   const [start, setStart] = useState(order ? (order.scheduled_start ? toLocalInput(order.scheduled_start) : "") : tomorrowMorning());
   const [end, setEnd] = useState(order?.scheduled_end ? toLocalInput(order.scheduled_end) : "");
   const [technician, setTechnician] = useState("");
-  const [template, setTemplate] = useState("");
+  // null: aún no se eligió y vale la plantilla asociada al servicio, si hay una.
+  const [chosenTemplate, setTemplate] = useState<string | null>(null);
   const [location, setLocation] = useState(order?.location ?? "");
   const [coordinates, setCoordinates] = useState(order && order.latitude !== null && order.longitude !== null ? `${order.latitude}, ${order.longitude}` : "");
   const [description, setDescription] = useState(order?.description ?? "");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+
+  // La plantilla asociada al servicio del catálogo se propone sola; se puede cambiar.
+  const catalogService = options?.contracted_services.find((service) => service.id === serviceId)?.service_id ?? null;
+  const suggested = catalogService ? options?.templates.find((item) => item.service_id === catalogService)?.id ?? null : null;
+  const template = chosenTemplate ?? suggested ?? "";
 
   async function save() {
     const found: Record<string, string> = {};
@@ -160,7 +166,10 @@ export function WorkOrderFormModal({
                 disabled={!canAssign || !options}
               />
             </Field>
-            <Field label="Plantilla de checklist" error={errors.checklist_id}>
+            <Field
+              label="Plantilla de checklist" error={errors.checklist_id}
+              hint={suggested && template === suggested ? "Propuesta por el servicio." : undefined}
+            >
               <PickSelect
                 className={INPUT} ariaLabel="Plantilla de checklist" value={template} onChange={setTemplate}
                 options={[["", "Sin checklist"], ...(options?.templates ?? []).map((item): [string, string] => [item.id, `${item.name} (${item.items})`])]}

@@ -37,6 +37,7 @@ class LocalOperationsSeeder extends Seeder
                 'core.view', 'services.view', 'contracts.view', 'orders.view', 'orders.manage',
                 'contracted_services.view', 'contracted_services.manage',
                 'work_orders.view', 'work_orders.create', 'work_orders.manage', 'work_orders.approve',
+                'checklists.view', 'checklists.manage',
                 'projects.view', 'projects.create', 'projects.manage', 'projects.approve', 'tasks.manage',
                 'time_entries.view', 'time_entries.create', 'time_entries.approve',
                 'cost_entries.view', 'cost_entries.create', 'cost_entries.approve',

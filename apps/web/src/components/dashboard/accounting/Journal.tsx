@@ -1,18 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, CheckCheck, Plus, Trash2, Zap } from "lucide-react";
+import { BookOpen, CalendarDays, CheckCheck, FileDown, Plus, Trash2, Upload, Zap } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { JOURNAL_STATES, amountOrBlank } from "@/lib/accounting";
 import { firstError } from "@/lib/crm";
 import { exportCsv, exportXlsx, fetchAllPages, recordExport, type ExportColumn } from "@/lib/export-table";
+import { downloadDocumentPdf, pdfAmount } from "@/lib/document-pdf";
 import {
   Badge, Btn, Card, Chip, DataTable, ExportButtons, Field, FilterSelect, Filters, INPUT, Kpi, Kpis, Kv, LoadError, Modal, Notice, PAGE_SIZES, PageHead,
   Pager, Screen, SearchInput, SelectionBar, applySort, useRowSelection, useToasts, type Column, type SortState,
 } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
+import { ImportModal } from "@/components/dashboard/ImportModal";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import type { PaginatedResponse } from "@/types/customer";
 import type { JournalEntry, JournalEntryDetail, JournalLine, JournalOptions, JournalSummary } from "@/types/accounting";
@@ -76,6 +78,7 @@ export default function Journal() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
 
   // Como el prototipo: el enlace de un asiento (desde un comprobante) llega con ?q= y lo busca.
@@ -187,10 +190,16 @@ export default function Journal() {
       <PageHead
         title="Libro diario"
         actions={
-          <Btn onClick={() => setCreating(true)} permission="accounting.create">
-            <Plus size={16} />
-            <span>Asiento manual</span>
-          </Btn>
+          <>
+            <Btn variant="secondary" onClick={() => setImporting(true)} permission="accounting.create">
+              <Upload size={15} />
+              <span>Importar</span>
+            </Btn>
+            <Btn onClick={() => setCreating(true)} permission="accounting.create">
+              <Plus size={16} />
+              <span>Asiento manual</span>
+            </Btn>
+          </>
         }
       />
 
@@ -259,6 +268,16 @@ export default function Journal() {
           }}
         />
       )}
+      {importing && (
+        <ImportModal
+          title="Importar asientos"
+          endpoint="/v1/journal-entries"
+          templateName="plantilla_asientos.xlsx"
+          hint="Una fila por línea; las filas con el mismo número de asiento forman uno. Cada asiento debe cuadrar y caer en un periodo abierto: el que tiene un error no entra y se avisa."
+          onClose={() => setImporting(false)}
+          onImported={() => setReload((n) => n + 1)}
+        />
+      )}
       {openId && <JournalEntryModal key={openId} id={openId} toast={toast} onClose={() => setOpenId(null)} onChanged={() => setReload((n) => n + 1)} onOpen={setOpenId} />}
       {toasts}
     </Screen>
@@ -274,6 +293,7 @@ export function JournalEntryModal({
   const [reversing, setReversing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -313,6 +333,42 @@ export function JournalEntryModal({
     }
   }
 
+  /** PDF del asiento, con la composición de los demás documentos: datos, líneas, totales y firmas. */
+  async function downloadPdf() {
+    if (!entry) return;
+    setPrinting(true);
+    try {
+      await downloadDocumentPdf({
+        file: `asiento-${entry.entry_number}`,
+        title: "ASIENTO CONTABLE",
+        number: entry.entry_number,
+        watermark: entry.status === "REVERSED" ? "EXTORNADO" : undefined,
+        left: [["Fecha", shortDate(entry.entry_date)], ["Periodo", entry.period], ["Glosa", entry.description]],
+        right: [
+          ["Origen", `${entry.source_label}${entry.source_number ? ` · ${entry.source_number}` : ""}`],
+          ["Registrado por", entry.created_by ?? "Sistema (asiento automático)"],
+          ["Estado", `${stateOf(JOURNAL_STATES, entry.status)[0]}${entry.reversed_by ? ` por ${entry.reversed_by.number}` : ""}${entry.reversal_of ? ` · extorno de ${entry.reversal_of.number}` : ""}`],
+        ],
+        head: ["#", "Cuenta", "Nombre de la cuenta", "Centro de costo / tercero", "Debe", "Haber"],
+        rows: entry.lines.map((line, index) => [
+          String(index + 1), line.account_code, line.note ? `${line.account_name} · ${line.note}` : line.account_name,
+          [line.cost_center, line.party].filter(Boolean).join(" · "), line.debit ? pdfAmount(line.debit) : "", line.credit ? pdfAmount(line.credit) : "",
+        ]),
+        numCols: [4, 5],
+        totals: [["Total debe", `S/ ${pdfAmount(debit)}`], ["Total haber", `S/ ${pdfAmount(credit)}`, true]],
+        notes: [
+          ...(entry.reason ? [["Motivo del extorno", entry.reason] as [string, string]] : []),
+          ["Moneda", "Soles (moneda funcional). Lo que estaba en dólares se llevó a soles con el tipo de cambio del documento."],
+        ],
+        signatures: () => ["Elaborado por", "Revisado por (contador)"],
+      });
+    } catch {
+      toast("No se pudo generar el PDF del asiento.", "danger");
+    } finally {
+      setPrinting(false);
+    }
+  }
+
   const debit = entry ? entry.lines.reduce((sum, line) => sum + line.debit, 0) : 0;
   const credit = entry ? entry.lines.reduce((sum, line) => sum + line.credit, 0) : 0;
   const jump = (target: { id: string; number: string }) => (
@@ -329,8 +385,16 @@ export function JournalEntryModal({
         title={entry ? `Asiento ${entry.entry_number}` : "Asiento"}
         size="lg"
         onClose={onClose}
-        footer={entry && entry.status === "POSTED" && entry.source_type !== "REVERSAL" ? (
-          <Btn variant="danger-ghost" permission="accounting.approve" onClick={() => setReversing(true)}>Extornar asiento</Btn>
+        footer={entry ? (
+          <>
+            <Btn variant="secondary" onClick={downloadPdf} disabled={printing}>
+              <FileDown size={15} />
+              <span>{printing ? "Generando…" : "Descargar PDF"}</span>
+            </Btn>
+            {entry.status === "POSTED" && entry.source_type !== "REVERSAL" && entry.source_type !== "YEAR_CLOSE" && (
+              <Btn variant="danger-ghost" permission="accounting.approve" onClick={() => setReversing(true)}>Extornar asiento</Btn>
+            )}
+          </>
         ) : undefined}
       >
         {error ? <LoadError text={error} onRetry={onClose} /> : !entry ? (
@@ -353,6 +417,9 @@ export function JournalEntryModal({
                 ],
                 entry.reversal_of ? ["Extorno de", jump(entry.reversal_of)] : null,
                 entry.reason ? ["Motivo del extorno", entry.reason] : null,
+                entry.source_type === "YEAR_CLOSE" && entry.status === "POSTED"
+                  ? ["Extorno", <span key="close" className="app-muted text-[12.5px]">El asiento de cierre se deshace reabriendo el ejercicio en Plan de cuentas y periodos.</span>]
+                  : null,
               ]}
             />
             <div className="mt-2 overflow-x-auto rounded-lg border border-[color:var(--app-border)]">

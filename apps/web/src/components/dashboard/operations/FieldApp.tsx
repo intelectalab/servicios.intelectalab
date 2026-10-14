@@ -426,8 +426,9 @@ function VisitCard({
   const doneCount = items.filter((item) => item.done).length;
   const approved = order.checklist_status === "APPROVED";
   const way = directions(order);
-  // El botón general del prototipo: adjunta al ítem que pide foto o evidencia (o al primero).
-  const evidenceItem = items.find((item) => /fotogr|foto|evid/i.test(item.label)) ?? items[0];
+  // El botón general del prototipo: adjunta al ítem que pide foto obligatoria, luego al que la menciona (o al primero).
+  const evidenceItem = items.find((item) => item.evidence_required && !item.photo)
+    ?? items.find((item) => /fotogr|foto|evid/i.test(item.label)) ?? items[0];
 
   // Los campos de archivo van ocultos (sr-only) dentro de su etiqueta, que debe ser `relative`:
   // si no, quedan colocados respecto de la página y le añaden un desplazamiento vacío al final.
@@ -467,13 +468,16 @@ function VisitCard({
               <li key={item.id} className="flex items-stretch gap-1">
                 <label className={`flex min-h-11 flex-1 cursor-pointer items-start gap-2 rounded-lg bg-[var(--app-surface-muted)] px-2 py-2.5 text-[13px] ${item.waiting ? "outline outline-1 outline-[color:var(--p-notice-line)]" : ""}`}>
                   <input
-                    type="checkbox" checked={item.done} disabled={busy || approved}
+                    type="checkbox" checked={item.done}
+                    // Con foto obligatoria, se marca al tomarla (botón de la cámara).
+                    disabled={busy || approved || (item.evidence_required && !item.photo && !item.done)}
                     onChange={(event) => onAct("check", { itemId: item.id, done: event.target.checked })}
-                    className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#1B8FC9]"
+                    className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#1B8FC9] disabled:cursor-not-allowed"
                   />
                   <span className="min-w-0 [overflow-wrap:anywhere]">
                     {item.label}{item.required && <em className="not-italic text-[color:var(--p-danger-text)]" title="Obligatorio"> *</em>}
-                    {item.photo && <small className="app-muted block text-xs">Foto: {item.photo}</small>}
+                    {item.photo ? <small className="app-muted block text-xs">Foto: {item.photo}</small>
+                      : item.evidence_required && <small className="block text-xs text-[color:var(--p-warning-text)]">Foto obligatoria: tómala con la cámara para marcarlo</small>}
                   </span>
                 </label>
                 <label

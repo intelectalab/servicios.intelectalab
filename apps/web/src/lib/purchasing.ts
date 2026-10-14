@@ -71,6 +71,7 @@ export const PAYABLE_MOVEMENTS: Record<PayableMovementType, string> = {
   PAYMENT: "Pago",
   DETRACTION: "Depósito de detracción",
   RETENTION_4TA: "Retención 4.ª categoría",
+  PAYMENT_REVERSAL: "Pago revertido",
 };
 
 export const SUPPLIER_PAYMENT_METHODS: Record<string, string> = { TRANSFERENCIA: "Transferencia", CHEQUE: "Cheque", EFECTIVO: "Efectivo" };
@@ -95,6 +96,9 @@ const HISTORY_LABELS: Record<string, string> = {
   "purchase_order.receive": "Recepción registrada",
   "supplier_invoice.create": "Comprobante registrado",
   "supplier_invoice.payment": "Pago aplicado",
+  "supplier_invoice.payment_reversed": "Pago revertido",
+  "supplier_payment.create": "Pago registrado",
+  "supplier_payment.reverse": "Pago revertido",
 };
 
 export const purchasingHistoryLabel = (entry: HistoryEntry) => HISTORY_LABELS[entry.action] ?? entry.action;

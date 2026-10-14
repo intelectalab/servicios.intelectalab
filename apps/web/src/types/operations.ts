@@ -58,6 +58,8 @@ export interface ChecklistItem {
   position: number;
   label: string;
   required: boolean;
+  /** Se da por hecho solo al adjuntar su foto. */
+  evidence_required: boolean;
   done: boolean;
   done_by: string | null;
   done_at: string | null;
@@ -87,8 +89,8 @@ export interface WorkOrderDetail extends WorkOrder {
 /** Listas de los filtros y del formulario de órdenes de trabajo. */
 export interface WorkOrderOptions {
   technicians: { id: string; name: string }[];
-  templates: { id: string; name: string; items: number }[];
-  contracted_services: { id: string; service: string | null; customer: string | null }[];
+  templates: { id: string; name: string; items: number; service_id: string | null }[];
+  contracted_services: { id: string; service: string | null; service_id: string | null; customer: string | null }[];
 }
 
 export type ProjectStatus = "DRAFT" | "PLANNED" | "IN_PROGRESS" | "ON_HOLD" | "COMPLETED" | "CANCELLED";
@@ -287,7 +289,7 @@ export interface FieldOrder {
   customer: string | null;
   blocked_reason: string | null;
   checklist_status: ChecklistStatus | null;
-  checklist_items: { id: string; label: string; required: boolean; done: boolean; evidence: { file_name: string; size_bytes: number; version: number } | null }[];
+  checklist_items: { id: string; label: string; required: boolean; evidence_required: boolean; done: boolean; evidence: { file_name: string; size_bytes: number; version: number } | null }[];
   lock_version: number;
 }
 
@@ -299,4 +301,50 @@ export interface FieldRoute {
   technicians: { id: string; name: string }[];
   /** En el orden sugerido de recorrido. */
   orders: FieldOrder[];
+}
+
+/** Plantilla de checklist, como la muestra el listado. */
+export interface ChecklistTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  /** Servicio del catálogo al que se asocia: se propone al crear su OT. */
+  service: { id: string; code: string; name: string } | null;
+  items_count: number;
+  required_count: number;
+  evidence_count: number;
+  /** Órdenes de trabajo (a tu alcance) que copiaron esta plantilla. */
+  work_orders_count: number;
+  creator: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  lock_version: number;
+}
+
+export interface ChecklistTemplateItem {
+  id: string;
+  position: number;
+  label: string;
+  required: boolean;
+  evidence_required: boolean;
+}
+
+export interface ChecklistTemplateDetail extends ChecklistTemplate {
+  items: ChecklistTemplateItem[];
+  open_work_orders: number;
+  history: HistoryEntry[];
+}
+
+export interface ChecklistTemplateSummary {
+  active: number;
+  inactive: number;
+  required_items: number;
+  with_evidence: number;
+  with_service: number;
+  open_work_orders: number;
+}
+
+export interface ChecklistTemplateOptions {
+  services: { id: string; code: string; name: string; active: boolean }[];
 }

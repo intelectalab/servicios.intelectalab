@@ -3,6 +3,8 @@
 namespace App\Modules\Services\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Operations\Models\ContractedService;
+use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Contract;
 use App\Modules\Services\Models\ContractItem;
 use App\Modules\Services\Models\Order;
@@ -397,25 +399,113 @@ class ContractController extends Controller
             )['reason'];
         }
 
+        // Terminado o vencido, el contrato cierra sus servicios: no con trabajo en curso, lo vea
+        // o no quien lo cierra.
+        if (in_array($to, ['TERMINATED', 'EXPIRED'], true)) {
+            $busy = DB::table('contracted_services as cs')
+                ->join('services', 'services.id', '=', 'cs.service_id')
+                ->where('cs.contract_id', $contract->id)
+                ->whereIn('cs.status', ['PENDING', 'ACTIVE', 'SUSPENDED'])
+                ->whereExists(fn ($open) => $open->from('work_orders')->whereColumn('work_orders.contracted_service_id', 'cs.id')->whereIn('work_orders.status', WorkOrder::OPEN))
+                ->orderBy('services.name')
+                ->pluck('services.name');
+            if ($busy->isNotEmpty()) {
+                throw ValidationException::withMessages([
+                    'status' => ["No se puede {$verb} el contrato: ".($busy->count() === 1 ? 'el servicio ' : 'los servicios ').$busy->join(', ', ' y ')
+                        .' '.($busy->count() === 1 ? 'tiene' : 'tienen').' órdenes de trabajo abiertas. Ciérralas o cancélalas primero.'],
+                ]);
+            }
+        }
+
         $previous = $contract->status;
-        DB::transaction(function () use ($contract, $to) {
+        $note = DB::transaction(function () use ($request, $contract, $to, $reason) {
             $contract->update(['status' => $to]);
 
-            // Las instancias recurrentes siguen al contrato: se suspenden con él,
-            // vuelven al reactivarlo y se cancelan si termina o vence.
-            $instances = DB::table('recurring_service_instances')
-                ->whereIn('contracted_service_id', DB::table('contracted_services')->where('contract_id', $contract->id)->select('id'));
-            if ($to === 'ACTIVE') {
-                $instances->where('status', 'SUSPENDED')->update(['status' => 'ACTIVE', 'suspended_at' => null, 'updated_at' => now()]);
-            } elseif ($to === 'SUSPENDED') {
-                $instances->where('status', 'ACTIVE')->update(['status' => 'SUSPENDED', 'suspended_at' => now(), 'updated_at' => now()]);
-            } else {
-                $instances->where('status', 'ACTIVE')->update(['status' => 'CANCELLED', 'updated_at' => now()]);
-            }
+            return $this->cascadeToServices($request, $contract, $to, $reason);
         });
-        $this->audit($request, $contract, $action, array_filter(['from' => $previous, 'to' => $to, 'note' => $reason]));
+        $this->audit($request, $contract, $action, array_filter(['from' => $previous, 'to' => $to, 'note' => collect([$reason, $note])->filter()->join(' · ')]));
 
         return response()->json($this->detail($contract));
+    }
+
+    /**
+     * Los servicios contratados siguen al contrato, y con ellos sus instancias recurrentes:
+     * se suspenden con él, vuelven al reactivarlo (solo los que se suspendieron con él) y se
+     * cierran si termina (cancelados) o vence (completados; los que no empezaron, cancelados).
+     * Cada servicio deja su propio movimiento en el historial. Devuelve la nota para el contrato.
+     */
+    private function cascadeToServices(Request $request, Contract $contract, string $to, ?string $reason): ?string
+    {
+        $from = match ($to) {
+            'SUSPENDED' => ['ACTIVE'],
+            'ACTIVE' => ['SUSPENDED'],
+            default => ['PENDING', 'ACTIVE', 'SUSPENDED'],
+        };
+        $services = ContractedService::ignoringAccessScope()
+            ->where('contract_id', $contract->id)
+            ->whereIn('status', $from)
+            ->when($to === 'ACTIVE', fn ($query) => $query->where('suspended_by_contract', true))
+            ->get();
+
+        $why = match ($to) {
+            'SUSPENDED' => "Contrato {$contract->contract_number} suspendido".($reason ? ": {$reason}" : ''),
+            'ACTIVE' => "Contrato {$contract->contract_number} reactivado",
+            'TERMINATED' => "Contrato {$contract->contract_number} terminado".($reason ? ": {$reason}" : ''),
+            default => "Contrato {$contract->contract_number} vencido",
+        };
+
+        foreach ($services as $service) {
+            $next = match ($to) {
+                'SUSPENDED' => 'SUSPENDED',
+                'ACTIVE' => 'ACTIVE',
+                'EXPIRED' => $service->status === 'PENDING' ? 'CANCELLED' : 'COMPLETED',
+                default => 'CANCELLED',
+            };
+            $previous = $service->status;
+            // Quien tenga la ficha del servicio abierta verá que cambió (409) en vez de pisarlo.
+            DB::table('contracted_services')->where('id', $service->id)->update([
+                'status' => $next,
+                'status_reason' => in_array($next, ['SUSPENDED', 'CANCELLED'], true) ? $why : null,
+                'suspended_by_contract' => $next === 'SUSPENDED',
+                'lock_version' => DB::raw('lock_version + 1'),
+                'updated_at' => now(),
+            ]);
+
+            $instances = DB::table('recurring_service_instances')->where('contracted_service_id', $service->id);
+            if ($next === 'SUSPENDED') {
+                $instances->where('status', 'ACTIVE')->update(['status' => 'SUSPENDED', 'suspended_at' => now(), 'updated_at' => now()]);
+            } elseif ($next === 'ACTIVE') {
+                $instances->where('status', 'SUSPENDED')->update(['status' => 'ACTIVE', 'suspended_at' => null, 'updated_at' => now()]);
+            } else {
+                $instances->whereIn('status', ['ACTIVE', 'SUSPENDED'])->update(['status' => 'CANCELLED', 'updated_at' => now()]);
+            }
+
+            AuditLogger::log(
+                tenantId: $request->attributes->get('tenant_id'),
+                userId: $request->user()->id,
+                action: match ($next) {
+                    'SUSPENDED' => 'contracted_service.suspend',
+                    'ACTIVE' => 'contracted_service.reactivate',
+                    'COMPLETED' => 'contracted_service.complete',
+                    default => 'contracted_service.cancel',
+                },
+                entityType: 'ContractedService',
+                entityId: $service->id,
+                metadata: ['from' => $previous, 'to' => $next, 'note' => $why],
+            );
+        }
+
+        $count = $services->count();
+        if ($count === 0) {
+            return null;
+        }
+        $verb = match ($to) {
+            'SUSPENDED' => $count === 1 ? 'suspendido' : 'suspendidos',
+            'ACTIVE' => $count === 1 ? 'reactivado' : 'reactivados',
+            default => $count === 1 ? 'cerrado' : 'cerrados',
+        };
+
+        return "{$count} ".($count === 1 ? 'servicio contratado' : 'servicios contratados')." {$verb} con el contrato";
     }
 
     private function audit(Request $request, Contract $contract, string $action, array $metadata = []): void

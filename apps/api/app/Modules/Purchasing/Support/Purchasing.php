@@ -34,7 +34,7 @@ class Purchasing
 
     public const DEFAULT_EXPENSE_ACCOUNT = '6392';
 
-    /** Diferencia máxima, en porcentaje, entre lo facturado y lo recibido de una orden de compra. */
+    /** Diferencia máxima por defecto, en porcentaje, entre lo facturado y lo recibido de una orden de compra (cada empresa la ajusta). */
     public const MATCH_TOLERANCE = 2;
 
     /** Retención de 4.ª categoría de un recibo por honorarios: porcentaje y monto desde el que aplica (soles). */
@@ -208,8 +208,14 @@ class Purchasing
         $shown = number_format($difference, 1, '.', '');
         $receivedShown = rtrim(rtrim(number_format($received, 2, '.', ''), '0'), '.');
 
-        return abs($difference) <= self::MATCH_TOLERANCE
+        // Se lee una vez por petición (un listado calcula el cruce de cada fila).
+        $attributes = request()->attributes;
+        $tolerance = $attributes->get('purchasing.match_tolerance')
+            ?? tap(\App\Modules\Core\Http\Controllers\TenantSettingsController::settings($order->tenant_id)['match_tolerance'], fn ($value) => $attributes->set('purchasing.match_tolerance', $value));
+        $toleranceShown = rtrim(rtrim(number_format($tolerance, 1, '.', ''), '0'), '.');
+
+        return abs($difference) <= $tolerance + 0.0001
             ? ['ok' => true, 'tone' => 'success', 'label' => "OC {$order->order_number} · recibido {$receivedShown} % · diferencia {$shown} %"]
-            : ['ok' => false, 'tone' => 'danger', 'label' => "Diferencia {$shown} % con la OC {$order->order_number} (tolerancia ".self::MATCH_TOLERANCE.' %)'];
+            : ['ok' => false, 'tone' => 'danger', 'label' => "Diferencia {$shown} % con la OC {$order->order_number} (tolerancia {$toleranceShown} %)"];
     }
 }

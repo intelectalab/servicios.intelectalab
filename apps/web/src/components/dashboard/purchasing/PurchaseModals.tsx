@@ -15,7 +15,7 @@ import { PickSelect } from "@/components/ui/pick-select";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import type { Currency } from "@/types/finance";
 import type {
-  CostCenter, Payable, PurchaseOptions, PurchaseOrderDetail, SupplierDocType, SupplierInvoiceDetail, SupplierInvoiceOptions, SupplierPayment, SupplierPaymentOptions,
+  CostCenter, Payable, PurchaseOptions, PurchaseOrderDetail, SupplierDocType, SupplierInvoiceDetail, SupplierInvoiceOptions, SupplierPayment, SupplierPaymentDetail, SupplierPaymentOptions,
 } from "@/types/purchasing";
 
 const LINK = "text-[color:var(--p-brand-text)] hover:underline";
@@ -738,7 +738,7 @@ export function PaySuppliersModal({ payables, onClose, onPaid }: { payables: Pay
       footer={
         <>
           <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-          <Btn type="submit" form="supplier-payment-form" disabled={saving || !options} permission="payables.approve">{saving ? "Registrando…" : "Registrar pago"}</Btn>
+          <Btn type="submit" form="supplier-payment-form" disabled={saving || !options} permission="payables.pay">{saving ? "Registrando…" : "Registrar pago"}</Btn>
         </>
       }
     >
@@ -798,5 +798,168 @@ export function PaySuppliersModal({ payables, onClose, onPaid }: { payables: Pay
         <p className="app-muted mt-2 text-xs">Enviar dos veces no duplica el pago. El dinero sale de la cuenta elegida y queda como movimiento en Bancos y caja.</p>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Ficha de un pago a proveedor: a qué comprobantes se aplicó, sus movimientos de banco o caja, su
+ * asiento e historial, y "Revertir pago" (con motivo). Un pago con depósito de detracción no se revierte.
+ */
+export function SupplierPaymentModal({
+  id, toast, onClose, onChanged, onInvoice,
+}: {
+  id: string;
+  toast: (text: string, tone?: "success" | "danger" | "warning", detail?: string) => void;
+  onClose: () => void;
+  onChanged: () => void;
+  onInvoice: (invoiceId: string) => void;
+}) {
+  const { can } = useAccess();
+  const [payment, setPayment] = useState<SupplierPaymentDetail | null>(null);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<SupplierPaymentDetail>(`/v1/supplier-payments/${id}`)
+      .then((next) => { if (!cancelled) { setPayment(next); setError(""); } })
+      .catch((err) => { if (!cancelled) setError(err instanceof ApiError && err.status === 404 ? "El pago no existe." : "No se pudo cargar el pago."); });
+    return () => { cancelled = true; };
+  }, [id, retry]);
+
+  async function reverse(reason: string) {
+    setBusy(true);
+    try {
+      const next = await apiFetch<SupplierPaymentDetail>(`/v1/supplier-payments/${id}/reverse`, { method: "POST", body: JSON.stringify({ reason }) });
+      setPayment(next);
+      setAsking(false);
+      toast("Pago revertido", "success", next.payment_number);
+      onChanged();
+    } catch (err) {
+      toast(firstError(err, "No se pudo revertir el pago."), "danger");
+      setRetry((n) => n + 1);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const currency = payment?.currency ?? "PEN";
+  const withDetraction = (payment?.detraction_amount ?? 0) > 0;
+  const TH = "app-muted border-b border-[color:var(--app-border)] px-2.5 py-2 text-left text-[10.5px] font-semibold uppercase tracking-[.06em]";
+  const TD = "border-b border-[color:var(--app-border)] px-2.5 py-2 align-top";
+
+  return (
+    <>
+      <Modal
+        title={payment ? `Pago ${payment.payment_number}` : "Pago a proveedor"} size="lg" onClose={asking ? keepOpen : onClose}
+        footer={
+          <>
+            <Btn variant="ghost" onClick={onClose}>Cerrar</Btn>
+            {payment?.status === "PAID" && (
+              <Btn
+                variant="danger-ghost" permission="payables.pay" disabled={busy || withDetraction} onClick={() => setAsking(true)}
+                title={withDetraction ? `Incluye el depósito de la detracción (constancia ${payment.detraction_number}): no se revierte desde aquí.` : undefined}
+              >
+                Revertir pago
+              </Btn>
+            )}
+          </>
+        }
+      >
+        {error ? <LoadError text={error} onRetry={() => setRetry((n) => n + 1)} /> : !payment ? SKELETON : (
+          <div className="grid gap-4">
+            {payment.status === "REVERSED" && (
+              <Notice tone="warn">
+                <strong className="font-semibold">Revertido</strong>{payment.reversed_by ? ` por ${payment.reversed_by}` : ""}{payment.reversed_at ? ` · ${dateTime(payment.reversed_at)}` : ""}: {payment.reversal_reason}
+              </Notice>
+            )}
+            <Kv
+              rows={[
+                ["Proveedor", payment.supplier.name ?? "—"],
+                ["Fecha", shortDate(payment.paid_at)],
+                ["Medio", `${SUPPLIER_PAYMENT_METHODS[payment.payment_method] ?? payment.payment_method}${payment.reference ? ` · ${payment.reference}` : ""}`],
+                ["Pagado desde", payment.account_name ?? "—"],
+                ["Neto pagado", <strong key="net" className="font-semibold tabular-nums">{money(payment.amount, currency)}</strong>],
+                withDetraction ? ["Detracción depositada", `${money(payment.detraction_amount)} · constancia ${payment.detraction_number ?? "—"}`] : null,
+                [
+                  "Asiento",
+                  payment.journal_entry ? (
+                    <span key="journal" className="inline-flex flex-wrap items-center gap-1.5">
+                      {can("accounting.view")
+                        ? <Link href={`/journal?q=${encodeURIComponent(payment.journal_entry.number)}`} className={`${LINK} tabular-nums`}>{payment.journal_entry.number}</Link>
+                        : <span className="tabular-nums">{payment.journal_entry.number}</span>}
+                      {payment.journal_entry.status === "REVERSED" && <Chip tone="muted">Extornado</Chip>}
+                    </span>
+                  ) : <span key="journal" className="app-muted text-[12.5px]">Sin asiento en el libro diario.</span>,
+                ],
+                ["Registró", payment.creator ?? "—"],
+              ]}
+            />
+
+            <section>
+              <h4 className="mb-1 text-[15px] font-semibold">Comprobantes pagados</h4>
+              <div className="overflow-x-auto rounded-lg border border-[color:var(--app-border)]">
+                <table className="proto-tbl w-full text-[13px]">
+                  <thead><tr><th className={TH}>Comprobante</th><th className={`${TH} text-right`}>Aplicado</th><th className={TH}>Cuenta por pagar</th></tr></thead>
+                  <tbody>
+                    {payment.allocations.map((allocation) => (
+                      <tr key={allocation.payable_id}>
+                        <td className={TD} data-label="Comprobante">
+                          <button type="button" className={`${LINK} cursor-pointer tabular-nums`} onClick={() => onInvoice(allocation.invoice_id)}>{allocation.doc_number}</button>
+                          {allocation.description && <small className="app-muted block text-xs">{allocation.description}</small>}
+                        </td>
+                        <td className={`${TD} text-right tabular-nums`} data-label="Aplicado">{money(allocation.amount, currency)}</td>
+                        <td className={TD} data-label="Cuenta por pagar">
+                          <Badge tone={stateOf(PAYABLE_STATES, allocation.payable_status)[1]}>{stateOf(PAYABLE_STATES, allocation.payable_status)[0]}</Badge>
+                          <small className="app-muted block text-xs">saldo {money(allocation.balance, currency)}</small>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section>
+              <h4 className="mb-1 text-[15px] font-semibold">Movimientos de banco o caja</h4>
+              <ul className="grid">
+                {payment.movements.map((movement) => (
+                  <li key={movement.id} className="flex flex-wrap items-baseline gap-x-2 border-b border-[color:var(--app-border)] py-1.5 last:border-b-0">
+                    <span className="min-w-0 flex-1">{movement.type} · {movement.account}<small className="app-muted block text-xs">{movement.description}</small></span>
+                    <strong className={`font-semibold tabular-nums ${movement.amount > 0 ? "text-[color:var(--p-success-text)]" : ""}`}>{money(movement.amount, currency)}</strong>
+                    <small className="app-muted w-full text-xs">{shortDate(movement.date)}</small>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section>
+              <h4 className="text-[15px] font-semibold">Historial</h4>
+              <Timeline
+                items={payment.history.map((entry, index) => ({
+                  key: `${entry.at}-${index}`,
+                  head: <span className="font-medium">{purchasingHistoryLabel(entry)}</span>,
+                  meta: `${entry.user ?? "Sistema"} · ${dateTime(entry.at)}`,
+                  note: entry.metadata.note,
+                }))}
+              />
+            </section>
+          </div>
+        )}
+      </Modal>
+      {asking && payment && (
+        <ReasonModal
+          title={`Revertir pago ${payment.payment_number}`}
+          text={`Cada comprobante recupera lo pagado, ${money(payment.amount, currency)} vuelve a ${payment.account_name ?? "la cuenta de origen"} y el asiento se extorna. El pago queda como revertido.`}
+          label="Motivo"
+          confirmLabel="Revertir"
+          busy={busy}
+          onClose={() => setAsking(false)}
+          onConfirm={reverse}
+        />
+      )}
+    </>
   );
 }

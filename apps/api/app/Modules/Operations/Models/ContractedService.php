@@ -29,7 +29,7 @@ class ContractedService extends Model
 
     protected $fillable = [
         'tenant_id', 'customer_id', 'contract_id', 'contract_item_id', 'service_id', 'status', 'status_reason',
-        'start_date', 'end_date', 'quantity', 'price', 'recurring', 'owner_user_id', 'branch_id',
+        'start_date', 'end_date', 'quantity', 'price', 'recurring', 'owner_user_id', 'branch_id', 'suspended_by_contract',
     ];
 
     protected $casts = [

@@ -56,6 +56,7 @@ class CheckRecordVersion
         'campaign' => 'crm_campaigns',
         'contractedService' => 'contracted_services',
         'workOrder' => 'work_orders',
+        'checklist' => 'checklists',
         'project' => 'projects',
         'timeEntry' => 'time_entries',
         'costEntry' => 'cost_entries',

@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Chart;
+use App\Modules\Accounting\Support\Ledger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -81,7 +82,9 @@ class LedgerController extends Controller
         Chart::ensure($tenantId);
         [$from, $to] = $this->range($request, now()->format('Y').'-01');
 
-        $range = $this->sums($tenantId, $from, $to);
+        // El resultado se mide sin el asiento de cierre (que lleva ingresos y gastos a resultados acumulados);
+        // la situación financiera sí lo incluye.
+        $range = $this->sums($tenantId, $from, $to, null, true);
         $all = $this->sums($tenantId, '0000-00', $to);
         // Saldo con el signo de su naturaleza: deudor positivo en activo y gasto; acreedor positivo en lo demás.
         $sum = fn ($rows, callable $match, int $sign = 1) => round($rows->filter(fn ($row) => $match($row))->sum(fn ($row) => $sign * ((float) $row->debit - (float) $row->credit)), 2);
@@ -103,7 +106,18 @@ class LedgerController extends Controller
         $assets = $sum($all, $type('ASSET'));
         $liabilities = $sum($all, $type('LIABILITY'), -1);
         $equity = $sum($all, $type('EQUITY'), -1);
-        $accumulated = round($sum($all, $type('INCOME'), -1) - $sum($all, $type('EXPENSE')), 2);
+        // Resultados acumulados: lo que los cierres de ejercicio llevaron al patrimonio más los ingresos
+        // y gastos aún sin cerrar. Lo demás del patrimonio (aportes, aperturas) sigue en Capital.
+        $retained = round(-1 * (float) DB::table('acc_journal_lines as l')
+            ->join('acc_journal_entries as e', 'e.id', '=', 'l.entry_id')
+            ->join('acc_accounts as a', fn ($join) => $join->on('a.tenant_id', '=', 'l.tenant_id')->on('a.code', '=', 'l.account_code'))
+            ->where('l.tenant_id', $tenantId)->where('e.period', '<=', $to)->where('a.account_type', 'EQUITY')
+            ->where(fn ($q) => $q->where('e.source_type', 'YEAR_CLOSE')
+                ->orWhereExists(fn ($closing) => $closing->selectRaw('1')->from('acc_journal_entries as yc')
+                    ->whereColumn('yc.id', 'e.reversal_of')->where('yc.source_type', 'YEAR_CLOSE')))
+            ->sum(DB::raw('l.debit - l.credit')), 2);
+        $capital = round($equity - $retained, 2);
+        $accumulated = round($retained + $sum($all, $type('INCOME'), -1) - $sum($all, $type('EXPENSE')), 2);
 
         // Ingresos y gastos de cada mes del rango (como mucho los últimos 24, para que el gráfico se lea).
         $end = Carbon::createFromFormat('Y-m-d', "{$to}-01");
@@ -113,6 +127,7 @@ class LedgerController extends Controller
             ->join('acc_journal_entries as e', 'e.id', '=', 'l.entry_id')
             ->join('acc_accounts as a', fn ($join) => $join->on('a.tenant_id', '=', 'l.tenant_id')->on('a.code', '=', 'l.account_code'))
             ->where('l.tenant_id', $tenantId)->whereIn('e.period', $months->all())->whereIn('a.account_type', ['INCOME', 'EXPENSE'])
+            ->tap(fn ($q) => Ledger::withoutYearClose($q))
             ->groupBy('e.period', 'a.account_type')
             ->selectRaw('e.period, a.account_type, sum(l.credit - l.debit) AS net')->get();
 
@@ -143,11 +158,11 @@ class LedgerController extends Controller
                 ['label' => 'Cuentas por pagar comerciales (42)', 'value' => $sum($all, $starts('42'), -1)],
                 ['label' => 'Anticipos de clientes (122)', 'value' => $sum($all, fn ($row) => $row->code === '122', -1)],
                 ['label' => 'Total pasivo', 'value' => $liabilities, 'total' => true],
-                ['label' => 'Capital', 'value' => $equity],
+                ['label' => 'Capital', 'value' => $capital],
                 ['label' => 'Resultados acumulados', 'value' => $accumulated],
-                ['label' => 'Pasivo + patrimonio', 'value' => round($liabilities + $equity + $accumulated, 2), 'total' => true],
+                ['label' => 'Pasivo + patrimonio', 'value' => round($liabilities + $capital + $accumulated, 2), 'total' => true],
             ]),
-            'balanced' => abs($assets - ($liabilities + $equity + $accumulated)) < 1,
+            'balanced' => abs($assets - ($liabilities + $capital + $accumulated)) < 1,
             'months' => $months->map(fn (string $period) => [
                 'period' => $period,
                 'income' => round((float) ($byMonth->first(fn ($row) => $row->period === $period && $row->account_type === 'INCOME')?->net ?? 0), 2) + 0.0,
@@ -157,13 +172,14 @@ class LedgerController extends Controller
     }
 
     /** Sumas del debe y el haber por cuenta imputable con movimientos en el rango. */
-    private function sums(string $tenantId, string $from, string $to, ?string $center = null)
+    private function sums(string $tenantId, string $from, string $to, ?string $center = null, bool $withoutYearClose = false)
     {
         return DB::table('acc_journal_lines as l')
             ->join('acc_journal_entries as e', 'e.id', '=', 'l.entry_id')
             ->join('acc_accounts as a', fn ($join) => $join->on('a.tenant_id', '=', 'l.tenant_id')->on('a.code', '=', 'l.account_code'))
             ->where('l.tenant_id', $tenantId)->where('e.period', '>=', $from)->where('e.period', '<=', $to)
             ->when($center, fn ($q) => $q->where('l.cost_center_id', $center))
+            ->when($withoutYearClose, fn ($q) => Ledger::withoutYearClose($q))
             ->groupBy('a.code', 'a.name', 'a.account_type')
             ->orderBy('a.code')
             ->selectRaw('a.code, a.name, a.account_type, sum(l.debit) AS debit, sum(l.credit) AS credit')

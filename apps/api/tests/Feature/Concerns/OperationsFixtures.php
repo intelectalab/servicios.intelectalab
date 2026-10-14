@@ -146,7 +146,9 @@ trait OperationsFixtures
     private function makeTemplate(): string
     {
         $id = (string) Str::uuid();
-        DB::table('checklists')->insert(['id' => $id, 'tenant_id' => $this->tenantId, 'name' => 'Checklist de instalación']);
+        // El nombre no se repite en la empresa: la segunda de una prueba lleva su número.
+        $taken = DB::table('checklists')->where('tenant_id', $this->tenantId)->count();
+        DB::table('checklists')->insert(['id' => $id, 'tenant_id' => $this->tenantId, 'name' => 'Checklist de instalación'.($taken ? ' '.($taken + 1) : '')]);
         foreach ([['Verificación inicial', true], ['Ejecución del servicio', true], ['Foto del equipo', false]] as $position => [$label, $required]) {
             DB::table('checklist_items')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'checklist_id' => $id,

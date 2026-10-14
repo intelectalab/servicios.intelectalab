@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { apiFetch } from "@/lib/api";
-import { excelTone, stateOf } from "@/lib/commercial";
+import { apiFetch, apiFetchLater } from "@/lib/api";
+import { excelTone, money, stateOf } from "@/lib/commercial";
 import { ACCOUNT_TYPES, PERIOD_STATES } from "@/lib/accounting";
-import { firstError } from "@/lib/crm";
+import { dateTime, firstError } from "@/lib/crm";
 import { exportCsv, exportXlsx, recordExport, type ExportColumn } from "@/lib/export-table";
 import {
   Badge, Btn, Card, Chip, ExportButtons, Field, FormGrid, INPUT, LoadError, Modal, Notice, PageHead, Screen, SearchInput, Tabs, useToasts,
 } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
-import type { AccountType, AccountingAccount, AccountingPeriod, PostingRule } from "@/types/accounting";
+import { JournalEntryModal } from "@/components/dashboard/accounting/Journal";
+import type { AccountType, AccountingAccount, AccountingPeriod, FiscalYear, PostingRule } from "@/types/accounting";
 
 type Tab = "PCGE" | "RULES" | "PER";
 type Toast = ReturnType<typeof useToasts>["toast"];
@@ -42,6 +43,18 @@ const PERIOD_EXPORT: ExportColumn<AccountingPeriod>[] = [
   { label: "Movimientos bancarios sin conciliar", value: (p) => p.unreconciled, width: 20, kind: "number" },
   { label: "Estado", value: (p) => stateOf(PERIOD_STATES, p.status)[0], width: 14, kind: "status", tone: (p) => excelTone(stateOf(PERIOD_STATES, p.status)[1]) },
   { label: "Cerró", value: (p) => p.closed_by ?? "", width: 24 },
+];
+
+const YEAR_STATES: ["OPEN" | "CLOSED", string, "success" | "muted"][] = [["OPEN", "Abierto", "success"], ["CLOSED", "Cerrado", "muted"]];
+
+const YEAR_EXPORT: ExportColumn<FiscalYear>[] = [
+  { label: "Ejercicio", value: (y) => y.year, width: 11, kind: "center" },
+  { label: "Periodos cerrados", value: (y) => `${y.closed_periods} de 12`, width: 18, kind: "center" },
+  { label: "Resultado", value: (y) => y.result, width: 16, kind: "money" },
+  { label: "Asiento de cierre", value: (y) => y.closing_entry?.number ?? "", width: 20, kind: "center" },
+  { label: "Estado", value: (y) => stateOf(YEAR_STATES, y.status)[0], width: 12, kind: "status", tone: (y) => excelTone(stateOf(YEAR_STATES, y.status)[1]) },
+  { label: "Cerró", value: (y) => y.closed_by ?? "", width: 24 },
+  { label: "Motivo de la reapertura", value: (y) => (y.status === "OPEN" ? y.reason ?? "" : ""), width: 36 },
 ];
 
 export default function ChartOfAccounts() {
@@ -281,6 +294,12 @@ function PeriodsTab({ toast }: { toast: Toast }) {
   const [reopening, setReopening] = useState<AccountingPeriod | null>(null);
   const [busy, setBusy] = useState(false);
   const exporter = useExport(toast);
+  const [years, setYears] = useState<FiscalYear[] | null>(null);
+  const [yearError, setYearError] = useState("");
+  const [closingYear, setClosingYear] = useState<FiscalYear | null>(null);
+  const [reopeningYear, setReopeningYear] = useState<FiscalYear | null>(null);
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
+  const yearExporter = useExport(toast);
 
   useEffect(() => {
     let cancelled = false;
@@ -289,6 +308,33 @@ function PeriodsTab({ toast }: { toast: Toast }) {
       .catch(() => { if (!cancelled) setError("No se pudieron cargar los periodos."); });
     return () => { cancelled = true; };
   }, [reload]);
+
+  // Los ejercicios, después de los periodos.
+  useEffect(() => {
+    let cancelled = false;
+    apiFetchLater<FiscalYear[]>("/v1/accounting-years")
+      .then((next) => { if (!cancelled) { setYears(next); setYearError(""); } })
+      .catch(() => { if (!cancelled) setYearError("No se pudieron cargar los ejercicios."); });
+    return () => { cancelled = true; };
+  }, [reload]);
+
+  async function changeYear(year: FiscalYear, action: "close" | "reopen", reason?: string) {
+    setBusy(true);
+    try {
+      const next = await apiFetch<FiscalYear>(`/v1/accounting-years/${year.year}/${action}`, { method: "POST", body: JSON.stringify(reason ? { reason } : {}) });
+      toast(action === "close" ? "Ejercicio cerrado" : "Ejercicio reabierto", "success", `${year.year}${next.closing_entry ? ` · ${next.closing_entry.number}` : ""}`);
+      setClosingYear(null);
+      setReopeningYear(null);
+      setReload((n) => n + 1);
+    } catch (err) {
+      toast(firstError(err, "No se pudo actualizar el ejercicio."), "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Solo el último ejercicio cerrado se reabre.
+  const lastClosed = years?.find((year) => year.status === "CLOSED")?.year;
 
   async function change(period: AccountingPeriod, action: "close" | "reopen", reason?: string) {
     setBusy(true);
@@ -355,6 +401,98 @@ function PeriodsTab({ toast }: { toast: Toast }) {
           </>
         )}
       </Card>
+      <Card title="Ejercicios" flush>
+        {yearError ? <LoadError text={yearError} onRetry={() => setReload((n) => n + 1)} /> : !years ? (
+          <div className="m-5 h-24 animate-pulse rounded bg-[var(--app-surface-muted)]" aria-busy="true" />
+        ) : (
+          <>
+            <div className="overflow-x-auto px-1 pt-1">
+              <table className="proto-tbl w-full text-[13px]">
+                <thead>
+                  <tr>
+                    <th className={TH}>Ejercicio</th><th className={`${TH} text-right`}>Periodos cerrados</th><th className={`${TH} text-right`}>Resultado</th>
+                    <th className={TH}>Asiento de cierre</th><th className={TH}>Estado</th><th className={TH}><span className="sr-only">Acción</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {years.map((year) => (
+                    <tr key={year.year}>
+                      <td className={TD} data-label="Ejercicio"><strong className="font-semibold tabular-nums">{year.year}</strong></td>
+                      <td className={`${TD} text-right tabular-nums`} data-label="Periodos cerrados">{year.closed_periods} de 12</td>
+                      <td className={`${TD} text-right tabular-nums`} data-label="Resultado">
+                        {money(year.result)}
+                        <small className="app-muted block text-xs">{year.result >= 0 ? "utilidad" : "pérdida"}</small>
+                      </td>
+                      <td className={TD} data-label="Asiento de cierre">
+                        {year.closing_entry ? (
+                          <button type="button" className="cursor-pointer font-medium tabular-nums text-[color:var(--p-brand-text)] hover:underline" onClick={() => setOpenEntry(year.closing_entry?.id ?? null)}>
+                            {year.closing_entry.number}
+                          </button>
+                        ) : <span className="app-muted">{year.status === "CLOSED" ? "Sin ingresos ni gastos" : "—"}</span>}
+                      </td>
+                      <td className={TD} data-label="Estado">
+                        <Badge tone={stateOf(YEAR_STATES, year.status)[1]}>{stateOf(YEAR_STATES, year.status)[0]}</Badge>
+                        {year.status === "CLOSED" && year.closed_by && <small className="app-muted block text-xs">por {year.closed_by}{year.closed_at ? ` · ${dateTime(year.closed_at)}` : ""}</small>}
+                        {year.status === "OPEN" && year.reason && <small className="app-muted block text-xs">Reabierto: {year.reason}</small>}
+                      </td>
+                      <td className={`${TD} text-right`} data-label="">
+                        {year.status === "OPEN" ? (
+                          <Btn size="sm" variant="secondary" permission="accounting.approve" disabled={Boolean(year.blocker)} title={year.blocker ?? undefined} onClick={() => setClosingYear(year)}>
+                            Cerrar ejercicio
+                          </Btn>
+                        ) : (
+                          <Btn
+                            size="sm" variant="ghost" permission="accounting.approve" disabled={year.year !== lastClosed}
+                            title={year.year !== lastClosed ? `Reabre primero el ejercicio ${lastClosed}` : undefined} onClick={() => setReopeningYear(year)}
+                          >
+                            Reabrir
+                          </Btn>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="app-muted px-5 pt-3 text-[12.5px]">
+              Cerrar el ejercicio lleva al 31 de diciembre los ingresos y gastos del año a resultados acumulados (utilidad a 5911, pérdida a 5921), cierra diciembre y da por cerrado el presupuesto del año. Se cierra un año terminado, después del anterior y con enero a noviembre cerrados.
+            </p>
+            <div className="mt-2 border-t border-[color:var(--app-border)] px-3.5 py-3">
+              <ExportButtons permission="accounting.export" total={years.length} busy={yearExporter.busy} onExport={(format) => yearExporter.run(format, "ejercicios-contables", "Ejercicios contables", YEAR_EXPORT, years)} />
+            </div>
+          </>
+        )}
+      </Card>
+      {closingYear && (
+        <Modal
+          title={`Cerrar ejercicio ${closingYear.year}`}
+          size="sm"
+          onClose={() => setClosingYear(null)}
+          footer={
+            <>
+              <Btn variant="ghost" onClick={() => setClosingYear(null)}>Volver</Btn>
+              <Btn disabled={busy} onClick={() => changeYear(closingYear, "close")}>Cerrar ejercicio</Btn>
+            </>
+          }
+        >
+          <p className="text-[15px]">
+            Se registra el asiento de cierre al 31/12/{closingYear.year}: {closingYear.result >= 0 ? "utilidad" : "pérdida"} de {money(Math.abs(closingYear.result))} a {closingYear.result >= 0 ? "5911 Utilidades acumuladas" : "5921 Pérdidas acumuladas"}.
+          </p>
+          <p className="app-muted mt-2 text-[13px]">Diciembre queda cerrado y el presupuesto aprobado del año pasa a Cerrado. Se deshace reabriendo el ejercicio, con motivo.</p>
+        </Modal>
+      )}
+      {reopeningYear && (
+        <ReasonModal
+          title={`Reabrir ejercicio ${reopeningYear.year}`}
+          text="Se extorna el asiento de cierre el mismo 31 de diciembre y se reabren diciembre y el presupuesto del año. Queda auditado."
+          label="Motivo"
+          confirmLabel="Reabrir"
+          busy={busy}
+          onClose={() => setReopeningYear(null)}
+          onConfirm={(reason) => changeYear(reopeningYear, "reopen", reason)}
+        />
+      )}
+      {openEntry && <JournalEntryModal key={openEntry} id={openEntry} toast={toast} onClose={() => setOpenEntry(null)} onOpen={setOpenEntry} />}
       {closing && (
         <Modal
           title={`Cerrar periodo ${closing.period}`}

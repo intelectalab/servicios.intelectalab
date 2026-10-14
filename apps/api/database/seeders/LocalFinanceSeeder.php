@@ -37,7 +37,7 @@ class LocalFinanceSeeder extends Seeder
         'treasury.view', 'treasury.create', 'treasury.manage', 'treasury.export',
         // Compras: pide y recibe (no aprueba ni exporta órdenes) y lleva todo lo de cuentas por pagar.
         'purchases.view', 'purchases.create', 'purchases.manage', 'budgets.manage',
-        'payables.view', 'payables.create', 'payables.manage', 'payables.approve', 'payables.export',
+        'payables.view', 'payables.create', 'payables.manage', 'payables.approve', 'payables.pay', 'payables.export',
     ];
 
     /** Recursos que el rol alcanza en toda la empresa. */

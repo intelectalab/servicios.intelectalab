@@ -14,9 +14,9 @@ class WorkOrderChecklistItem extends Model
     public $incrementing = false;
     public $timestamps = false;
 
-    protected $fillable = ['tenant_id', 'work_order_id', 'position', 'label', 'required', 'done', 'done_by', 'done_at', 'evidence_note', 'evidence_document_id'];
+    protected $fillable = ['tenant_id', 'work_order_id', 'position', 'label', 'required', 'evidence_required', 'done', 'done_by', 'done_at', 'evidence_note', 'evidence_document_id'];
 
-    protected $casts = ['required' => 'boolean', 'done' => 'boolean', 'done_at' => 'datetime'];
+    protected $casts = ['required' => 'boolean', 'evidence_required' => 'boolean', 'done' => 'boolean', 'done_at' => 'datetime'];
 
     /** Foto de evidencia del ítem (documento con versiones). */
     public function evidence()

@@ -13,7 +13,8 @@ import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
 import { AccessProvider, type Scope } from "@/lib/access-context";
 import Header, { type UserProfile } from "@/components/layout/Header";
-import Sidebar, { type MenuItem } from "@/components/layout/Sidebar";
+import Sidebar, { type BuiltMenuItem, type MenuItem } from "@/components/layout/Sidebar";
+import { Card, LinkBtn, LoadError, Screen } from "@/components/ui/proto";
 
 // Menú con los grupos y el orden del prototipo.
 //  - Ítems con "href": pantallas ya construidas. "module" es el código del catálogo
@@ -41,6 +42,8 @@ const MENU_ITEMS: MenuItem[] = [
 
   { href: "/contracted-services", label: "Servicios contratados", module: "ORDENES_TRABAJO", requiredPermission: "contracted_services.view", icon: Layers, superModule: "Operaciones" },
   { href: "/work-orders", label: "Órdenes de trabajo", module: "ORDENES_TRABAJO", requiredPermission: "work_orders.view", icon: Wrench, superModule: "Operaciones" },
+  // No está en el prototipo (solo trae plantillas de ejemplo): la pidió ella el 2026-10-14.
+  { href: "/checklist-templates", label: "Plantillas de checklist", module: "ORDENES_TRABAJO", requiredPermission: "checklists.view", icon: ListChecks, superModule: "Operaciones" },
   { href: "/projects", label: "Proyectos", module: "PROYECTOS", requiredPermission: "projects.view", icon: SquareKanban, superModule: "Operaciones" },
   { href: "/timesheets", label: "Horas y costos", module: "TIMESHEETS", requiredPermission: "time_entries.view", icon: Clock, superModule: "Operaciones" },
   { href: "/agenda", label: "Agenda", module: "AGENDA", requiredPermission: "agenda.view", icon: Calendar, superModule: "Operaciones" },
@@ -127,6 +130,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const [roleName, setRoleName] = useState<string | undefined>(undefined);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [accessLoaded, setAccessLoaded] = useState(false);
+  const [accessFailed, setAccessFailed] = useState(false);
+  const [accessAttempt, setAccessAttempt] = useState(0);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -148,6 +153,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     async function loadUserDataAndPermissions() {
+      setPermissionsLoading(true);
+      setAccessFailed(false);
       try {
         const userResponse = await apiFetch<{ name: string; email: string }>("/v1/me");
         if (!cancelled && userResponse) {
@@ -169,6 +176,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         console.error("Error al cargar datos de sesión", err);
+        // Sin la sesión no se sabe qué puede abrir: se ofrece reintentar en vez de quedarse cargando.
+        if (!cancelled) setAccessFailed(true);
       } finally {
         if (!cancelled) setPermissionsLoading(false);
       }
@@ -178,7 +187,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [accessAttempt]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -209,6 +218,17 @@ export default function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (homeDenied) router.replace(fallback);
   }, [homeDenied, fallback, router]);
+
+  // Una pantalla abierta por su dirección sin permiso (o fuera del plan) no se monta: sus
+  // lecturas fallarían con "No se pudo cargar…". Se dice por qué y adónde ir.
+  const routeItem = MENU_ITEMS.find(
+    (item): item is BuiltMenuItem => !item.soon && (pathname === item.href || Boolean(pathname?.startsWith(`${item.href}/`))),
+  );
+  const routeDenied = accessLoaded && routeItem && !homeDenied
+    ? routeItem.module !== undefined && !modules.includes(routeItem.module)
+      ? "plan"
+      : !permissions.includes(routeItem.requiredPermission) ? "role" : null
+    : null;
 
   // El rol real llega con /me/access; mientras tanto se muestra uno genérico.
   const sessionUser = currentUser ? { ...currentUser, role: roleName ?? currentUser.role } : null;
@@ -280,7 +300,34 @@ export default function AppShell({ children }: { children: ReactNode }) {
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">
-          <AccessProvider value={{ permissions, scopes, loading: permissionsLoading }}>{homeDenied ? null : children}</AccessProvider>
+          <AccessProvider value={{ permissions, scopes, loading: permissionsLoading }}>
+            {accessFailed ? (
+              <Screen>
+                <Card>
+                  <LoadError text="No se pudo cargar tu sesión: el servidor no respondió." onRetry={() => setAccessAttempt((n) => n + 1)} />
+                </Card>
+              </Screen>
+            ) : homeDenied ? null : routeDenied && routeItem ? (
+              <Screen>
+                <Card>
+                  <div className="flex flex-col items-center px-4 py-10 text-center">
+                    <Lock size={28} className="app-muted mb-2" aria-hidden="true" />
+                    <p className="font-semibold">{routeItem.label}</p>
+                    <p className="app-muted mt-1 max-w-[52ch]">
+                      {routeDenied === "plan"
+                        ? "Esta pantalla no está incluida en el plan de tu empresa."
+                        : "Tu rol no tiene permiso para abrir esta pantalla. Si la necesitas, pídeselo al administrador de tu empresa."}
+                    </p>
+                    <div className="mt-3">
+                      <LinkBtn href={fallback} variant="secondary" size="sm">
+                        Ir a {firstScreen && !firstScreen.soon ? firstScreen.label : "Mi perfil"}
+                      </LinkBtn>
+                    </div>
+                  </div>
+                </Card>
+              </Screen>
+            ) : children}
+          </AccessProvider>
         </main>
       </div>
     </div>

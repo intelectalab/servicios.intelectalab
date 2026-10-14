@@ -118,6 +118,63 @@ class OperationsTest extends TestCase
         $this->postJson("/api/v1/contracted-services/{$single}/activate")->assertOk()->assertJsonPath('recurring_instance', null);
     }
 
+    public function test_suspending_or_ending_the_contract_carries_its_contracted_services(): void
+    {
+        $this->makeTenant();
+        $admin = $this->makeUser('Admin', [...self::ADMIN, 'contracts.manage']);
+        $this->as($admin);
+        $contract = $this->makeContract();
+        $active = $this->makeContracted(['recurring' => true, 'status' => 'PENDING', 'service_id' => $this->makeService('Soporte mensual', true)], $contract);
+        $this->postJson("/api/v1/contracted-services/{$active}/activate")->assertOk();
+        $byHand = $this->makeContracted([], $contract);
+        $this->postJson("/api/v1/contracted-services/{$byHand}/suspend", ['reason' => 'Pausa pedida por el cliente'])->assertOk();
+        $pending = $this->makeContracted(['status' => 'PENDING'], $contract);
+        $status = fn (string $id) => DB::table('contracted_services')->where('id', $id)->value('status');
+        $instance = fn () => DB::table('recurring_service_instances')->where('contracted_service_id', $active)->value('status');
+        $version = DB::table('contracted_services')->where('id', $active)->value('lock_version');
+
+        // Suspender el contrato suspende sus servicios activos (y su cobro recurrente).
+        $detail = $this->postJson("/api/v1/contracts/{$contract[0]}/suspend", ['reason' => 'Falta de pago'])->assertOk()->json();
+        $this->assertSame(['SUSPENDED', 'SUSPENDED', 'PENDING', 'SUSPENDED'], [$status($active), $status($byHand), $status($pending), $instance()]);
+        $this->assertStringContainsString('Falta de pago', DB::table('contracted_services')->where('id', $active)->value('status_reason'));
+        $this->assertStringContainsString('1 servicio contratado suspendido con el contrato', $detail['history'][0]['metadata']['note']);
+        // Quien tenía la ficha abierta con la versión anterior no lo pisa.
+        $this->assertGreaterThan($version, DB::table('contracted_services')->where('id', $active)->value('lock_version'));
+        $this->withHeaders(['If-Match' => (string) $version])->postJson("/api/v1/contracted-services/{$active}/cancel", ['reason' => 'x'])->assertStatus(409);
+        $this->flushHeaders();
+        // La marca "suspendido con el contrato" solo vale en un servicio suspendido.
+        $this->assertDatabaseRejects(fn () => DB::table('contracted_services')->where('id', $pending)->update(['suspended_by_contract' => true]));
+
+        // Reactivarlo devuelve solo los que se suspendieron con él.
+        $this->postJson("/api/v1/contracts/{$contract[0]}/reactivate")->assertOk();
+        $this->assertSame(['ACTIVE', 'SUSPENDED', 'ACTIVE'], [$status($active), $status($byHand), $instance()]);
+        // Todo ocurre en el mismo segundo: se busca el movimiento sin depender del orden.
+        $this->assertContains('contracted_service.reactivate', DB::table('audit_logs')->where('entity_id', $active)->pluck('action')->all());
+
+        // Con órdenes de trabajo abiertas no se termina: dice qué servicio las tiene.
+        $order = $this->order($admin, $active);
+        $this->postJson("/api/v1/contracts/{$contract[0]}/terminate", ['reason' => 'Fin anticipado'])->assertStatus(422)
+            ->assertJsonValidationErrors('status')->assertJsonFragment(['No se puede terminar el contrato: el servicio Soporte mensual tiene órdenes de trabajo abiertas. Ciérralas o cancélalas primero.']);
+        $this->assertSame('ACTIVE', DB::table('contracts')->where('id', $contract[0])->value('status'));
+        $this->postJson("/api/v1/work-orders/{$order['id']}/cancel", ['reason' => 'Duplicada'])->assertOk();
+
+        // Terminado, cancela todos sus servicios abiertos con el motivo.
+        $this->postJson("/api/v1/contracts/{$contract[0]}/terminate", ['reason' => 'Fin anticipado'])->assertOk()->assertJsonPath('status', 'TERMINATED');
+        $this->assertSame(['CANCELLED', 'CANCELLED', 'CANCELLED', 'CANCELLED'], [$status($active), $status($byHand), $status($pending), $instance()]);
+        $this->assertFalse((bool) DB::table('contracted_services')->where('contract_id', $contract[0])->where('suspended_by_contract', true)->exists());
+
+        // Vencido: los que estaban en marcha se completan y los que no empezaron se cancelan.
+        $other = $this->makeContract();
+        $running = $this->makeContracted([], $other);
+        $notStarted = $this->makeContracted(['status' => 'PENDING'], $other);
+        $this->postJson("/api/v1/contracts/{$other[0]}/expire")->assertOk()->assertJsonPath('status', 'EXPIRED');
+        $this->assertSame(['COMPLETED', 'CANCELLED'], [$status($running), $status($notStarted)]);
+        // Cada movimiento tiene su texto en Auditoría (propio o por su verbo).
+        foreach (DB::table('audit_logs')->whereIn('entity_id', [$active, $running, $notStarted])->pluck('action') as $action) {
+            $this->assertNotSame($action, AuditCatalog::actionLabel($action));
+        }
+    }
+
     public function test_contracted_services_list_searches_filters_sorts_and_counts(): void
     {
         $this->makeTenant();
@@ -232,8 +289,9 @@ class OperationsTest extends TestCase
         // Nace en la sede de su servicio contratado.
         $this->assertSame($branch, DB::table('work_orders')->where('id', $order['id'])->value('branch_id'));
 
-        // Cambiar la plantilla después no altera el checklist de la orden.
-        DB::table('checklist_items')->where('checklist_id', $template)->update(['label' => 'Otro texto']);
+        // Cambiar la plantilla después (sus ítems se retiran y entran otros) no altera el checklist de la orden.
+        DB::table('checklist_items')->where('checklist_id', $template)->update(['removed_at' => now()]);
+        DB::table('checklist_items')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'checklist_id' => $template, 'position' => 1, 'label' => 'Otro texto']);
         $this->getJson("/api/v1/work-orders/{$order['id']}")->assertJsonPath('checklist_items.0.label', 'Verificación inicial');
 
         // Con técnico al crear nace asignada; el técnico debe poder ejecutar órdenes.
@@ -247,7 +305,8 @@ class OperationsTest extends TestCase
         // El formulario ofrece técnicos, plantillas y servicios activos.
         $options = $this->getJson('/api/v1/work-orders/options')->assertOk();
         $this->assertSame(['Admin', 'Tito Técnico'], $options->json('technicians.*.name'));
-        $this->assertSame([['id' => $template, 'name' => 'Checklist de instalación', 'items' => 3]], $options->json('templates'));
+        // Cuenta los ítems vigentes de la plantilla (los retirados arriba no).
+        $this->assertSame([['id' => $template, 'name' => 'Checklist de instalación', 'items' => 1, 'service_id' => null]], $options->json('templates'));
         $this->assertSame([$contracted], $options->json('contracted_services.*.id'));
         $this->assertSame('Minera Los Andes SAC', $options->json('contracted_services.0.customer'));
     }

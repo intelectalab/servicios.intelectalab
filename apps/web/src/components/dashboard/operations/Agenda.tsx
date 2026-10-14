@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { CalendarDays, CalendarRange, Check, Pencil, Plus, Wrench } from "lucide-react";
+import { CalendarDays, CalendarRange, Check, Lock, Pencil, Plus, Wrench } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
 import { dateTime, fieldErrors, firstError, toLocalInput } from "@/lib/crm";
 import { AGENDA_STATES, AGENDA_TYPES } from "@/lib/operations";
 import {
-  Badge, Btn, Field, Filters, FormGrid, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, useToasts, type Tone,
+  Badge, Btn, Field, Filters, FormGrid, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, deniedText, useToasts, type Tone,
 } from "@/components/ui/proto";
 import { useAccess } from "@/lib/access-context";
 import { PickSelect } from "@/components/ui/pick-select";
@@ -245,7 +245,7 @@ export default function Agenda() {
                 <header className="app-muted pointer-events-none flex items-center justify-between gap-1 text-xs capitalize">
                   <span>{day.toLocaleDateString("es-PE", { weekday: "short" })}</span>
                   <span className="inline-flex items-center gap-1">
-                    {canCreate && (
+                    {canCreate ? (
                       <button
                         type="button"
                         onClick={() => setForm({ day })}
@@ -254,6 +254,17 @@ export default function Agenda() {
                         className="pointer-events-auto grid h-6 w-6 cursor-pointer place-items-center rounded-md text-[color:var(--p-brand-text)] hover:bg-[var(--p-brand-soft)] sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover:opacity-100"
                       >
                         <Plus size={14} />
+                      </button>
+                    ) : !accessLoading && (
+                      // Sin permiso no se esconde: sale con candado y el motivo, como todo botón.
+                      <button
+                        type="button"
+                        disabled
+                        title={deniedText("agenda.create")}
+                        aria-label={`Nuevo evento el ${day.toLocaleDateString("es-PE", { weekday: "long", day: "numeric" })}: ${deniedText("agenda.create")}`}
+                        className="pointer-events-auto grid h-6 w-6 cursor-not-allowed place-items-center rounded-md opacity-45 sm:opacity-0 sm:group-hover:opacity-45"
+                      >
+                        <Lock size={13} />
                       </button>
                     )}
                     <strong className="app-text text-xl font-semibold tabular-nums">{day.getDate()}</strong>

@@ -24,6 +24,7 @@ import { PriorityChip } from "@/components/dashboard/operations/WorkOrdersList";
 import type { ChecklistItem, TimeEntryOptions, WorkOrderDetail as WorkOrder, WorkOrderOptions } from "@/types/operations";
 
 const LINK = "text-[color:var(--p-brand-text)] hover:underline";
+const PHOTO_HINT = "Este ítem pide foto de evidencia: se marca al adjuntarla desde la App del técnico.";
 
 /** Acción que pide un motivo antes de ejecutarse: un cambio de estado o devolver el checklist. */
 type Reasoned = { path: string; title: string; label: string; confirm: string; done: string };
@@ -253,15 +254,18 @@ export default function WorkOrderDetail() {
                       </Notice>
                     )}
                     <ul className="grid">
-                      {items.map((item) => (
+                      {items.map((item) => {
+                        // Con evidencia obligatoria, el ítem se da por hecho al adjuntar su foto (App del técnico).
+                        const needsPhoto = item.evidence_required && !item.evidence && !item.done;
+                        return (
                         <li key={item.id} className="flex items-start gap-2.5 border-b border-[color:var(--app-border)] py-2 last:border-b-0">
                           <button
                             type="button"
                             role="checkbox"
                             aria-checked={item.done}
                             aria-label={`${item.done ? "Desmarcar" : "Marcar"} ítem: ${item.label}`}
-                            title={checkable ? undefined : checkHint}
-                            disabled={!checkable || busy}
+                            title={!checkable ? checkHint : needsPhoto ? PHOTO_HINT : undefined}
+                            disabled={!checkable || busy || needsPhoto}
                             onClick={() => act(`checklist-items/${item.id}`, "PATCH", { done: !item.done }, "Checklist actualizado")}
                             className={`mt-0.5 grid h-5 w-5 shrink-0 cursor-pointer place-items-center rounded-full border transition-colors disabled:cursor-not-allowed disabled:opacity-55 ${
                               item.done ? "border-[#1B8FC9] bg-[#1B8FC9] text-[#fff]" : "border-[color:var(--p-field-border)] bg-[var(--app-surface)] hover:border-[#1B8FC9]"
@@ -272,6 +276,7 @@ export default function WorkOrderDetail() {
                           <div className="min-w-0 flex-1">
                             <span className={item.done ? "app-muted line-through" : ""}>{item.label}</span>
                             {item.required && <em className="ml-1 not-italic text-[color:var(--p-danger-text)]" title="Obligatorio">*</em>}
+                            {needsPhoto && <span className="ml-2" title={PHOTO_HINT}><Chip>Foto obligatoria</Chip></span>}
                             {item.evidence ? (
                               <button type="button" onClick={() => viewEvidence(item.id)} title="Ver la foto de evidencia" className={`${LINK} ml-2 cursor-pointer text-[12.5px]`}>
                                 Foto: {item.evidence.file_name}
@@ -284,8 +289,8 @@ export default function WorkOrderDetail() {
                           <button
                             type="button"
                             aria-label={`Nota de evidencia: ${item.label}`}
-                            title={checkable ? "Nota de evidencia" : checkHint}
-                            disabled={!checkable || busy}
+                            title={!checkable ? checkHint : needsPhoto ? PHOTO_HINT : "Nota de evidencia"}
+                            disabled={!checkable || busy || needsPhoto}
                             onClick={() => {
                               setNote(item.evidence_note ?? "");
                               setNoting(item);
@@ -295,7 +300,8 @@ export default function WorkOrderDetail() {
                             <MessageSquareText size={15} />
                           </button>
                         </li>
-                      ))}
+                        );
+                      })}
                     </ul>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="app-muted text-[12.5px]">

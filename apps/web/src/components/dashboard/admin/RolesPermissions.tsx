@@ -23,10 +23,10 @@ type Permission = { code: string; name: string; description: string | null };
 
 type RolesResponse = { roles: Role[]; permissions: Permission[]; scope_resources: { code: string; name: string }[] };
 
-type Settings = { segregation: boolean; direct_order: boolean };
+type Settings = { segregation: boolean; direct_order: boolean; match_tolerance: number };
 
 // Reglas de la empresa que se activan o desactivan desde esta pantalla.
-const RULES: { key: keyof Settings; label: string; hint: string; on: string; off: string }[] = [
+const RULES: { key: "segregation" | "direct_order"; label: string; hint: string; on: string; off: string }[] = [
   {
     key: "segregation",
     label: "Quien crea una cotización no puede aprobarla",
@@ -58,6 +58,7 @@ const RESOURCES: Record<string, string> = {
   scoring: "Puntuación de leads",
   contracted_services: "Servicios contratados",
   work_orders: "Órdenes de trabajo",
+  checklists: "Plantillas de checklist",
   projects: "Proyectos",
   tasks: "Tareas de proyectos",
   deliverables: "Entregables",
@@ -87,7 +88,7 @@ const RESOURCES: Record<string, string> = {
 
 // Acciones de la matriz, en el orden en que se muestran.
 const ACTIONS: Record<string, string> = {
-  view: "Ver", create: "Crear", manage: "Gestionar", configure: "Configurar", approve: "Aprobar", export: "Exportar", use: "Usar", reveal: "Revelar", delete: "Eliminar",
+  view: "Ver", create: "Crear", manage: "Gestionar", configure: "Configurar", approve: "Aprobar", pay: "Pagar", export: "Exportar", use: "Usar", reveal: "Revelar", delete: "Eliminar",
 };
 
 // Alcances que se pueden elegir, de menor a mayor.
@@ -248,6 +249,30 @@ export default function RolesPermissions() {
       toast(firstError(err, "No se pudo guardar el alcance."), "danger");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Tolerancia del cruce de 3 vías (Compras): se escribe y se guarda con su botón.
+  const [tolerance, setTolerance] = useState<string | null>(null);
+  const [savingTolerance, setSavingTolerance] = useState(false);
+  const toleranceValue = tolerance ?? (settings ? String(settings.match_tolerance) : "");
+
+  async function saveTolerance() {
+    const value = Number(toleranceValue.replace(",", "."));
+    if (!Number.isFinite(value) || value < 0 || value > 10) {
+      toast("La tolerancia del cruce va de 0 % a 10 %.", "danger");
+      return;
+    }
+    setSavingTolerance(true);
+    try {
+      const next = await apiFetch<Settings>("/v1/tenant/settings", { method: "PUT", body: JSON.stringify({ match_tolerance: value }) });
+      setSettings(next);
+      setTolerance(null);
+      toast(`Tolerancia del cruce: ${next.match_tolerance} %`);
+    } catch (err) {
+      toast(firstError(err, "No se pudo guardar el ajuste."), "danger");
+    } finally {
+      setSavingTolerance(false);
     }
   }
 
@@ -414,6 +439,27 @@ export default function RolesPermissions() {
                     </span>
                   </label>
                 ))}
+                <div className="flex flex-wrap items-start gap-2.5 border-t border-[color:var(--app-border)] pt-3">
+                  <label className="relative min-w-0 flex-[1_1_260px]">
+                    Tolerancia del cruce de 3 vías en Compras
+                    <small className="app-muted block text-[12.5px]">
+                      Diferencia máxima entre lo facturado por el proveedor y lo recibido de su orden de compra para aprobar el comprobante. De 0 % a 10 %; si no se cambia, 2 %.
+                    </small>
+                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <input
+                      type="number" min={0} max={10} step={0.5} inputMode="decimal" aria-label="Tolerancia del cruce de 3 vías (%)"
+                      className={`${INPUT} h-9 w-[86px] text-right tabular-nums`} value={toleranceValue}
+                      disabled={!can("tenant.manage")} title={can("tenant.manage") ? undefined : deniedText("tenant.manage")}
+                      onChange={(event) => setTolerance(event.target.value)}
+                      onKeyDown={(event) => { if (event.key === "Enter") saveTolerance(); }}
+                    />
+                    <span>%</span>
+                    <Btn size="sm" variant="secondary" permission="tenant.manage" disabled={savingTolerance || tolerance === null} onClick={saveTolerance}>
+                      {savingTolerance ? "Guardando…" : "Guardar"}
+                    </Btn>
+                  </span>
+                </div>
               </div>
             </Card>
           )}

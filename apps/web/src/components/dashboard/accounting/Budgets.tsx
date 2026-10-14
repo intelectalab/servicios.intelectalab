@@ -66,6 +66,7 @@ export default function Budgets() {
   const [detail, setDetail] = useState<CenterBudget | null>(null);
   const [busy, setBusy] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [closingBudget, setClosingBudget] = useState(false);
   const [lineFor, setLineFor] = useState<{ account: string; annual: number } | null>(null);
   const [centerForm, setCenterForm] = useState<CostCenterRow | "new" | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -171,8 +172,20 @@ export default function Budgets() {
               {draft ? (
                 <Btn size="sm" permission="budgets.approve" disabled={busy} onClick={() => act(`/v1/budgets/${budget.id}/approve`, {}, "Presupuesto aprobado")}>Aprobar presupuesto</Btn>
               ) : budget.status === "APPROVED" ? (
-                <Btn size="sm" variant="ghost" permission="budgets.manage" onClick={() => setReopening(true)}>Reabrir para ajuste</Btn>
-              ) : null}
+                <>
+                  <Btn size="sm" variant="ghost" permission="budgets.manage" onClick={() => setReopening(true)}>Reabrir para ajuste</Btn>
+                  {/* Como el prototipo: el presupuesto aprobado de un año terminado se cierra. */}
+                  <Btn
+                    size="sm" variant="secondary" permission="budgets.approve" disabled={busy || year >= new Date().getFullYear()}
+                    title={year >= new Date().getFullYear() ? `El ejercicio ${year} aún no termina` : undefined}
+                    onClick={() => setClosingBudget(true)}
+                  >
+                    Cerrar ejercicio
+                  </Btn>
+                </>
+              ) : (
+                <span className="text-[12.5px]">Ejercicio cerrado: el presupuesto queda solo para consulta. Se reabre si Contabilidad reabre el ejercicio {year}.</span>
+              )}
             </div>
           </Notice>
         ) : (
@@ -301,6 +314,20 @@ export default function Budgets() {
           label="Motivo del ajuste" confirmLabel="Reabrir" busy={busy}
           onClose={() => setReopening(false)} onConfirm={(reason) => act(`/v1/budgets/${budget.id}/reopen`, { reason }, "Presupuesto reabierto para ajuste")}
         />
+      )}
+      {closingBudget && budget && (
+        <Modal
+          title={`Cerrar ejercicio ${year}`} size="sm" onClose={() => setClosingBudget(false)}
+          footer={
+            <>
+              <Btn variant="ghost" onClick={() => setClosingBudget(false)}>Volver</Btn>
+              <Btn disabled={busy} permission="budgets.approve" onClick={async () => { await act(`/v1/budgets/${budget.id}/close`, {}, "Presupuesto cerrado"); setClosingBudget(false); }}>Cerrar ejercicio</Btn>
+            </>
+          }
+        >
+          <p className="text-[15px]">{budget.name} queda cerrado: ya no se ajusta ni se reabre para ajuste.</p>
+          <p className="app-muted mt-2 text-[13px]">El asiento de cierre del año lo registra Contabilidad al cerrar el ejercicio en Plan de cuentas y periodos.</p>
+        </Modal>
       )}
       {lineFor && budget && detail && detail.center.id === selected && (
         <LineModal

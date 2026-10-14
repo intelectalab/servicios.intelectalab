@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/proto";
 import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
-import { PaySuppliersModal, SupplierInvoiceModal } from "@/components/dashboard/purchasing/PurchaseModals";
+import { PaySuppliersModal, SupplierInvoiceModal, SupplierPaymentModal } from "@/components/dashboard/purchasing/PurchaseModals";
 import type { PaginatedResponse } from "@/types/customer";
 import type { Payable, PayableSummary, SupplierPayment } from "@/types/purchasing";
 
@@ -62,6 +62,8 @@ const PAYMENT_EXPORT_COLUMNS: ExportColumn<SupplierPayment>[] = [
   { label: "Detracción (S/)", value: (payment) => payment.detraction_amount || "", width: 16, kind: "number" },
   { label: "Constancia", value: (payment) => payment.detraction_number ?? "", width: 18, kind: "center" },
   { label: "Registró", value: (payment) => payment.creator ?? "", width: 24 },
+  { label: "Estado", value: (payment) => (payment.status === "REVERSED" ? "Revertido" : "Pagado"), width: 13, kind: "center" },
+  { label: "Motivo de la reversión", value: (payment) => payment.reversal_reason ?? "", width: 34 },
 ];
 
 const PAYMENT_COLUMNS: Column<SupplierPayment>[] = [
@@ -70,6 +72,7 @@ const PAYMENT_COLUMNS: Column<SupplierPayment>[] = [
     render: (payment) => (
       <div className="whitespace-nowrap">
         <strong className="font-semibold tabular-nums">{payment.payment_number}</strong>
+        {payment.status === "REVERSED" && <span className="ml-1.5"><Chip tone="muted">Revertido</Chip></span>}
         <small className="app-muted block text-xs">{supplierMethodLabel(payment.payment_method)}{payment.reference ? ` · ${payment.reference}` : ""}</small>
       </div>
     ),
@@ -294,7 +297,7 @@ export default function Payables() {
             {suppliers.size > 1 ? <span className="text-[color:var(--p-danger-text)]">proveedores distintos</span> : toPay[0].supplier.name}
             {currencies.size > 1 && <span className="text-[color:var(--p-danger-text)]"> · monedas distintas</span>}
           </span>
-          <Btn size="sm" onClick={() => setPaying(true)} permission="payables.approve" disabled={Boolean(blocked)} title={blocked ?? undefined}>
+          <Btn size="sm" onClick={() => setPaying(true)} permission="payables.pay" disabled={Boolean(blocked)} title={blocked ?? undefined}>
             <Wallet size={14} />
             <span>Pagar seleccionadas</span>
           </Btn>
@@ -361,7 +364,7 @@ export default function Payables() {
         </Card>
       )}
 
-      <SupplierPayments version={reload} toast={toast} />
+      <SupplierPayments version={reload} toast={toast} onChanged={() => setReload((n) => n + 1)} onInvoice={setOpenInvoice} />
 
       {openInvoice && <SupplierInvoiceModal id={openInvoice} toast={toast} onClose={() => setOpenInvoice(null)} onChanged={() => setReload((n) => n + 1)} />}
       {paying && toPay.length > 0 && (
@@ -382,7 +385,10 @@ export default function Payables() {
 }
 
 /** Tarjeta "Pagos a proveedores": los pagos registrados, del más reciente al más antiguo. */
-function SupplierPayments({ version, toast }: { version: number; toast: (text: string, tone?: "success" | "danger" | "warning") => void }) {
+function SupplierPayments({
+  version, toast, onChanged, onInvoice,
+}: { version: number; toast: (text: string, tone?: "success" | "danger" | "warning", detail?: string) => void; onChanged: () => void; onInvoice: (id: string) => void }) {
+  const [openPayment, setOpenPayment] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [sort, setSort] = useState<SortState>(null);
@@ -448,6 +454,7 @@ function SupplierPayments({ version, toast }: { version: number; toast: (text: s
             cols={PAYMENT_COLUMNS}
             rows={data?.data ?? []}
             rowKey={paymentKey}
+            onRowClick={(payment) => setOpenPayment(payment.id)}
             loading={loading && !data}
             empty="Aún no se registran pagos a proveedores."
           />
@@ -467,6 +474,12 @@ function SupplierPayments({ version, toast }: { version: number; toast: (text: s
             />
           )}
         </>
+      )}
+      {openPayment && (
+        <SupplierPaymentModal
+          id={openPayment} toast={toast} onClose={() => setOpenPayment(null)} onChanged={onChanged}
+          onInvoice={(invoiceId) => { setOpenPayment(null); onInvoice(invoiceId); }}
+        />
       )}
     </Card>
   );

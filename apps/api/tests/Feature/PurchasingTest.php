@@ -29,7 +29,7 @@ class PurchasingTest extends TestCase
 
     private const FINANCE = [
         'purchases.view', 'purchases.create', 'purchases.manage', 'budgets.manage',
-        'payables.view', 'payables.create', 'payables.manage', 'payables.approve', 'payables.export',
+        'payables.view', 'payables.create', 'payables.manage', 'payables.approve', 'payables.pay', 'payables.export',
         'treasury.view', 'treasury.create', 'treasury.manage',
     ];
 
@@ -535,6 +535,13 @@ class PurchasingTest extends TestCase
         $this->assertDatabaseRejects(fn () => DB::table('cost_centers')->where('id', $center)->delete());
         $invoice = $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center))->assertCreated()->json();
         $this->getJson('/api/v1/supplier-invoices?export=1')->assertOk();
+
+        // Aprobar el gasto no da para pagarlo: pagar es otro permiso (Gerencia aprueba, Finanzas paga).
+        $this->as($this->makeUser('Gerencia que aprueba', ['payables.view', 'payables.approve']));
+        $approvedInvoice = $this->postJson("/api/v1/supplier-invoices/{$invoice['id']}/approve")->assertOk()->json();
+        $this->getJson('/api/v1/supplier-payments/options')->assertStatus(403);
+        $this->postJson('/api/v1/supplier-payments', ['payable_ids' => [$approvedInvoice['payable']['id']]])->assertStatus(403);
+        $this->postJson('/api/v1/supplier-invoices', [])->assertStatus(403);
 
         // Otra empresa: no existe.
         $this->makeTenant(self::MODULES);

@@ -368,6 +368,11 @@ export interface CashExpense {
   cost_center: string | null;
   expense_account: string | null;
   amount: number;
+  /** Clasificación vigente en códigos, para corregirla. */
+  cost_center_id: string | null;
+  expense_account_code: string | null;
+  /** Veces que se corrigió su centro o cuenta. */
+  corrections: number;
 }
 
 export interface CashCount {

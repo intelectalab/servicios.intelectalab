@@ -35,6 +35,8 @@ class Chart
         '5011' => ['Acciones', 'EQUITY', true],
         '59' => ['Resultados acumulados', 'EQUITY', false],
         '5911' => ['Utilidades acumuladas', 'EQUITY', true],
+        // Para el cierre de un ejercicio con pérdida.
+        '5921' => ['Pérdidas acumuladas', 'EQUITY', true],
         '62' => ['Gastos de personal', 'EXPENSE', false],
         '6211' => ['Sueldos y salarios', 'EXPENSE', true],
         '63' => ['Gastos de servicios prestados por terceros', 'EXPENSE', false],

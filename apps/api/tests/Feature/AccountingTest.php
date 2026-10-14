@@ -34,7 +34,7 @@ class AccountingTest extends TestCase
         'receivables.view', 'receivables.manage', 'payments.view', 'payments.create', 'payments.manage', 'payments.approve',
         'treasury.view', 'treasury.create', 'treasury.manage',
         'purchases.view', 'purchases.create', 'purchases.manage', 'budgets.manage',
-        'payables.view', 'payables.create', 'payables.manage', 'payables.approve',
+        'payables.view', 'payables.create', 'payables.manage', 'payables.approve', 'payables.pay',
         ...self::ACCOUNTANT,
     ];
 

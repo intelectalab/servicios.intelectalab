@@ -204,3 +204,20 @@ export interface BudgetOptions {
   branches: { id: string; name: string }[];
   accounts: ChartOption[];
 }
+
+/** Ejercicio contable (año): abierto o cerrado, con su asiento de cierre. */
+export interface FiscalYear {
+  year: number;
+  status: "OPEN" | "CLOSED";
+  /** Periodos del año ya cerrados. */
+  closed_periods: number;
+  /** Ingresos menos gastos del año (sin el asiento de cierre). */
+  result: number;
+  closing_entry: { id: string; number: string } | null;
+  budget_status: "DRAFT" | "APPROVED" | "CLOSED" | null;
+  closed_at: string | null;
+  closed_by: string | null;
+  reason: string | null;
+  /** Por qué aún no se puede cerrar (null si se puede o ya está cerrado). */
+  blocker: string | null;
+}

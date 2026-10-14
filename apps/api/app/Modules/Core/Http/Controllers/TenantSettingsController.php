@@ -21,12 +21,17 @@ class TenantSettingsController extends Controller
         $data = $request->validate([
             'segregation' => ['sometimes', 'boolean'],
             'direct_order' => ['sometimes', 'boolean'],
+            // Cruce de 3 vías de Compras: diferencia máxima entre lo facturado y lo recibido.
+            'match_tolerance' => ['sometimes', 'numeric', 'min:0', 'max:10'],
+        ], [
+            'match_tolerance.max' => 'La tolerancia del cruce va de 0 % a 10 %.',
+            'match_tolerance.min' => 'La tolerancia del cruce va de 0 % a 10 %.',
         ]);
 
         $configuration = self::configuration($tenantId);
         $before = self::settings($tenantId);
         foreach ($data as $key => $value) {
-            $configuration[$key] = (bool) $value;
+            $configuration[$key] = $key === 'match_tolerance' ? round((float) $value, 1) : (bool) $value;
         }
 
         DB::table('tenants')->where('id', $tenantId)->update([
@@ -47,7 +52,7 @@ class TenantSettingsController extends Controller
         return response()->json(self::settings($tenantId));
     }
 
-    /** Ajustes vigentes; los dos están activos mientras la empresa no los desactive. */
+    /** Ajustes vigentes; las reglas están activas mientras la empresa no las desactive. */
     public static function settings(string $tenantId): array
     {
         $configuration = self::configuration($tenantId);
@@ -57,6 +62,8 @@ class TenantSettingsController extends Controller
             'segregation' => (bool) ($configuration['segregation'] ?? true),
             // Orden directa: convertir una cotización aprobada en orden sin pasar por contrato.
             'direct_order' => (bool) ($configuration['direct_order'] ?? true),
+            // Tolerancia del cruce de 3 vías, en porcentaje (2 % si la empresa no la cambió).
+            'match_tolerance' => (float) ($configuration['match_tolerance'] ?? 2),
         ];
     }
 

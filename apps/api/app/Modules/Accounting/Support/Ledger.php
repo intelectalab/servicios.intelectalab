@@ -23,15 +23,19 @@ class Ledger
         'INVOICE' => 'Venta', 'PAYMENT' => 'Cobro', 'WITHHOLDING' => 'Detracción / retención', 'FX' => 'Dif. de cambio',
         'REFUND' => 'Reembolso', 'SUPPLIER_INVOICE' => 'Compra', 'SUPPLIER_PAYMENT' => 'Pago a proveedor', 'CASH_EXPENSE' => 'Caja chica',
         'BANK_FEE' => 'Extracto', 'UNIDENTIFIED' => 'Extracto', 'TRANSFER' => 'Transferencia', 'OPENING' => 'Apertura',
-        'MANUAL' => 'Manual', 'REVERSAL' => 'Extorno',
+        'MANUAL' => 'Manual', 'REVERSAL' => 'Extorno', 'IMPORT' => 'Importado', 'YEAR_CLOSE' => 'Cierre de ejercicio',
     ];
 
     /** Orígenes que se eligen en el filtro del libro diario (dos tipos comparten "Extracto"). */
     public const SOURCE_FILTERS = [
         'INVOICE' => 'Venta', 'PAYMENT' => 'Cobro', 'SUPPLIER_INVOICE' => 'Compra', 'SUPPLIER_PAYMENT' => 'Pago a proveedor',
         'CASH_EXPENSE' => 'Caja chica', 'BANK' => 'Extracto', 'TRANSFER' => 'Transferencia', 'OPENING' => 'Apertura',
-        'MANUAL' => 'Manual', 'REVERSAL' => 'Extorno', 'FX' => 'Dif. de cambio', 'REFUND' => 'Reembolso', 'WITHHOLDING' => 'Detracción / retención',
+        'MANUAL' => 'Manual', 'IMPORT' => 'Importado', 'REVERSAL' => 'Extorno', 'FX' => 'Dif. de cambio', 'REFUND' => 'Reembolso',
+        'WITHHOLDING' => 'Detracción / retención', 'YEAR_CLOSE' => 'Cierre de ejercicio',
     ];
+
+    /** Orígenes que registra una persona (no un documento): no cuentan como automáticos. */
+    public const BY_HAND = ['MANUAL', 'IMPORT', 'REVERSAL'];
 
     /**
      * Escribe un asiento. Devuelve su id, o null si el documento ya tenía su asiento o no hay nada
@@ -139,6 +143,20 @@ class Ledger
         DB::table('acc_journal_entries')->where('id', $entry->id)->update(['status' => 'REVERSED', 'reversed_by' => $reversal, 'reason' => $reason]);
 
         return $reversal;
+    }
+
+    /**
+     * Deja fuera de una consulta de líneas el asiento de cierre del ejercicio y sus extornos: no son
+     * ingresos ni gastos del año, solo los trasladan a resultados acumulados (y de vuelta al reabrir).
+     *
+     * @param  \Illuminate\Database\Query\Builder  $query  con el asiento unido como `$alias`
+     */
+    public static function withoutYearClose($query, string $alias = 'e')
+    {
+        return $query->where("{$alias}.source_type", '<>', 'YEAR_CLOSE')
+            ->where(fn ($q) => $q->where("{$alias}.source_type", '<>', 'REVERSAL')->orWhereNull("{$alias}.reversal_of")
+                ->orWhereNotExists(fn ($closing) => $closing->selectRaw('1')->from('acc_journal_entries as yc')
+                    ->whereColumn('yc.id', "{$alias}.reversal_of")->where('yc.source_type', 'YEAR_CLOSE')));
     }
 
     /** Asiento vigente de un documento, si lo tiene. */

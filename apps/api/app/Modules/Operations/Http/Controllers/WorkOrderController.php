@@ -88,8 +88,9 @@ class WorkOrderController extends Controller
 
         return response()->json([
             'technicians' => Technicians::list($tenantId),
-            'templates' => Checklist::query()->where('active', true)->withCount('items')->orderBy('name')->limit(200)->get(['id', 'name'])
-                ->map(fn (Checklist $template) => ['id' => $template->id, 'name' => $template->name, 'items' => (int) $template->items_count]),
+            // Con su servicio: al elegir el servicio contratado, el formulario propone su plantilla.
+            'templates' => Checklist::query()->where('active', true)->withCount('items')->orderBy('name')->limit(200)->get(['id', 'name', 'service_id'])
+                ->map(fn (Checklist $template) => ['id' => $template->id, 'name' => $template->name, 'items' => (int) $template->items_count, 'service_id' => $template->service_id]),
             // Por su modelo: solo los servicios contratados que la persona alcanza.
             'contracted_services' => ContractedService::query()
                 ->with('customer.party.person', 'customer.party.organization', 'service:id,name')
@@ -98,6 +99,7 @@ class WorkOrderController extends Controller
                 ->map(fn (ContractedService $service) => [
                     'id' => $service->id,
                     'service' => $service->service?->name,
+                    'service_id' => $service->service_id,
                     'customer' => $this->customerName($service->customer),
                 ]),
         ]);
@@ -175,6 +177,7 @@ class WorkOrderController extends Controller
                 WorkOrderChecklistItem::create([
                     'tenant_id' => $tenantId, 'work_order_id' => $order->id,
                     'position' => $item->position, 'label' => $item->label, 'required' => $item->required,
+                    'evidence_required' => $item->evidence_required,
                 ]);
             }
 
@@ -335,6 +338,10 @@ class WorkOrderController extends Controller
         }
         if ($order->checklist_status === 'APPROVED') {
             throw ValidationException::withMessages(['checklist' => ['El checklist ya fue aprobado.']]);
+        }
+        // Un ítem con evidencia obligatoria se da por hecho al adjuntar su archivo (lo exige también la base).
+        if ($data['done'] && $row->evidence_required && ! $row->evidence_document_id) {
+            throw ValidationException::withMessages(['evidence' => ["\"{$row->label}\" pide evidencia: adjunta la foto para marcarlo."]]);
         }
 
         DB::transaction(function () use ($request, $order, $row, $data) {
@@ -550,6 +557,7 @@ class WorkOrderController extends Controller
                 'position' => $item->position,
                 'label' => $item->label,
                 'required' => (bool) $item->required,
+                'evidence_required' => (bool) $item->evidence_required,
                 'done' => (bool) $item->done,
                 'done_by' => $item->doneBy?->name,
                 'done_at' => $item->done_at?->toIso8601String(),

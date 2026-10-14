@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Ledger;
 use App\Modules\Accounting\Support\Posting;
 use App\Http\Middleware\CheckPermission;
 use App\Modules\Finance\Models\FinancialAccount;
@@ -10,6 +11,7 @@ use App\Modules\Finance\Support\Treasury;
 use App\Modules\Purchasing\Models\Payable;
 use App\Modules\Purchasing\Models\SupplierPayment;
 use App\Modules\Purchasing\Support\Purchasing;
+use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
@@ -432,6 +434,119 @@ class PayableController extends Controller
             'detraction_number' => $payment->detraction_number,
             'status' => $payment->status,
             'creator' => $payment->creator_name,
+            'reversed_at' => $payment->reversed_at ? Carbon::parse($payment->reversed_at)->toIso8601String() : null,
+            'reversal_reason' => $payment->reversal_reason,
+        ];
+    }
+
+    /** Ficha del pago: a qué cuentas se aplicó, sus movimientos de banco o caja, su asiento e historial. */
+    public function showPayment(string $supplierPayment)
+    {
+        return response()->json($this->paymentDetail($this->findPayment($supplierPayment)->id));
+    }
+
+    /**
+     * Revierte un pago a proveedor, con motivo: cada cuenta por pagar recupera lo que se le aplicó
+     * (con un movimiento), el dinero vuelve a la cuenta de origen (con otro) y el asiento se extorna.
+     * El pago queda revertido; no se borra. Un pago con depósito de detracción no se revierte: la
+     * constancia es de SUNAT y no se deshace desde aquí.
+     */
+    public function reversePayment(string $supplierPayment, Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        $reason = trim($request->validate(['reason' => ['required', 'string', 'max:1000']], ['reason.required' => 'Indica el motivo de la reversión.'])['reason']);
+        $userId = $request->user()->id;
+        $id = $this->findPayment($supplierPayment)->id;
+
+        DB::transaction(function () use ($tenantId, $id, $reason, $userId) {
+            $payment = SupplierPayment::query()->whereKey($id)->lockForUpdate()->firstOrFail();
+            if ($payment->status !== 'PAID') {
+                throw ValidationException::withMessages(['status' => ['El pago ya fue revertido.']]);
+            }
+            if ((float) $payment->detraction_amount > 0) {
+                throw ValidationException::withMessages(['status' => [
+                    "El pago incluye el depósito de la detracción (constancia {$payment->detraction_number}): no se revierte desde aquí.",
+                ]]);
+            }
+            $account = Treasury::lock($tenantId, $payment->financial_account_id);
+            $supplierName = Purchasing::identity(Purchasing::supplier($tenantId, $payment->supplier_id))['name'];
+
+            $allocations = DB::table('supplier_payment_allocations as a')->join('payables as p', 'p.id', '=', 'a.payable_id')
+                ->where('a.supplier_payment_id', $payment->id)->get(['a.payable_id', 'a.amount', 'p.supplier_invoice_id']);
+            foreach ($allocations as $allocation) {
+                // El saldo lo devuelve la base con el movimiento.
+                DB::table('payable_movements')->insert([
+                    'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'payable_id' => $allocation->payable_id, 'movement_type' => 'PAYMENT_REVERSAL',
+                    'amount' => round((float) $allocation->amount, 2), 'reference' => "{$payment->payment_number} revertido: {$reason}",
+                    'supplier_payment_id' => $payment->id, 'created_by' => $userId,
+                ]);
+                AuditLogger::log(
+                    tenantId: $tenantId, userId: $userId, action: 'supplier_invoice.payment_reversed', entityType: 'SupplierInvoice', entityId: $allocation->supplier_invoice_id,
+                    metadata: ['amount' => round((float) $allocation->amount, 2), 'note' => "{$payment->payment_number} revertido: {$reason}"],
+                );
+            }
+            if ((float) $payment->amount >= 0.01 && $account) {
+                Treasury::move($account, round((float) $payment->amount, 2), 'SUPPLIER_PAYMENT_REVERSAL', trim("Reversión del pago {$payment->payment_number} · {$supplierName}", ' ·'), [
+                    'ref_id' => $payment->id, 'op_number' => $payment->reference, 'user_id' => $userId,
+                ]);
+            }
+            $entry = Ledger::entryFor($tenantId, 'SUPPLIER_PAYMENT', $payment->id);
+            $reversal = $entry ? Ledger::reverse($tenantId, $entry->id, "Reversión del pago {$payment->payment_number}: {$reason}", $userId) : null;
+
+            DB::table('supplier_payments')->where('id', $payment->id)->update([
+                'status' => 'REVERSED', 'reversed_at' => now(), 'reversed_by' => $userId, 'reversal_reason' => $reason,
+            ]);
+            $number = $reversal ? DB::table('acc_journal_entries')->where('id', $reversal)->value('entry_number') : null;
+            AuditLogger::log(
+                tenantId: $tenantId, userId: $userId, action: 'supplier_payment.reverse', entityType: 'SupplierPayment', entityId: $payment->id,
+                metadata: ['from' => 'PAID', 'to' => 'REVERSED', 'amount' => round((float) $payment->amount, 2),
+                    'note' => trim("{$payment->payment_number}: {$reason}".($entry ? " · {$entry->entry_number} extornado por {$number}" : ''))],
+            );
+        });
+
+        return response()->json($this->paymentDetail($id));
+    }
+
+    private function findPayment(string $id): SupplierPayment
+    {
+        abort_unless(Str::isUuid($id), 404);
+
+        // Por su modelo: un pago fuera del alcance de la persona "no existe".
+        return SupplierPayment::query()->findOrFail($id);
+    }
+
+    private function paymentDetail(string $id): array
+    {
+        $payment = SupplierPayment::query()->select('supplier_payments.*')
+            ->selectRaw(Purchasing::supplierName('supplier_payments').' AS supplier_name')
+            ->selectRaw(self::PAYMENT_ACCOUNT.' AS account_name')
+            ->selectRaw(self::PAYMENT_CREATOR.' AS creator_name')
+            ->findOrFail($id);
+        $tenantId = $payment->tenant_id;
+        $entry = DB::table('acc_journal_entries')->where('tenant_id', $tenantId)->where('source_type', 'SUPPLIER_PAYMENT')->where('source_id', $payment->id)
+            ->orderByDesc('created_at')->first(['id', 'entry_number', 'status']);
+
+        return [
+            ...$this->paymentRow($payment),
+            'reversed_by' => $payment->reversed_by ? DB::table('users')->where('id', $payment->reversed_by)->value('name') : null,
+            'allocations' => DB::table('supplier_payment_allocations as a')
+                ->join('payables as p', 'p.id', '=', 'a.payable_id')
+                ->join('supplier_invoices as i', 'i.id', '=', 'p.supplier_invoice_id')
+                ->where('a.supplier_payment_id', $payment->id)->orderBy('i.doc_number')
+                ->get(['a.amount', 'p.id as payable_id', 'p.status as payable_status', 'p.balance_amount', 'i.id as invoice_id', 'i.doc_number', 'i.description'])
+                ->map(fn ($row) => [
+                    'payable_id' => $row->payable_id, 'invoice_id' => $row->invoice_id, 'doc_number' => $row->doc_number, 'description' => $row->description,
+                    'amount' => round((float) $row->amount, 2), 'payable_status' => $row->payable_status, 'balance' => round((float) $row->balance_amount, 2),
+                ])->values(),
+            'movements' => DB::table('bank_movements as m')->join('financial_accounts as f', 'f.id', '=', 'm.account_id')
+                ->where('m.ref_id', $payment->id)->whereIn('m.ref_type', ['SUPPLIER_PAYMENT', 'SUPPLIER_PAYMENT_REVERSAL'])
+                ->orderBy('m.created_at')->get(['m.id', 'm.movement_date', 'm.description', 'm.amount', 'm.ref_type', 'f.name as account'])
+                ->map(fn ($row) => [
+                    'id' => $row->id, 'date' => Carbon::parse($row->movement_date)->toDateString(), 'description' => $row->description,
+                    'amount' => round((float) $row->amount, 2), 'type' => Treasury::REF_TYPES[$row->ref_type] ?? $row->ref_type, 'account' => $row->account,
+                ])->values(),
+            'journal_entry' => $entry ? ['id' => $entry->id, 'number' => $entry->entry_number, 'status' => $entry->status] : null,
+            'history' => AuditHistory::for('SupplierPayment', $payment->id),
         ];
     }
 }

@@ -20,6 +20,7 @@ class Treasury
     public const REF_TYPES = [
         'OPENING' => 'Apertura', 'PAYMENT' => 'Cobro', 'REFUND' => 'Reembolso', 'TRANSFER' => 'Transferencia', 'CASH_EXPENSE' => 'Caja chica',
         'BANK_FEE' => 'Comisión', 'DETRACTION' => 'Detracción', 'UNIDENTIFIED' => 'Por identificar', 'SUPPLIER_PAYMENT' => 'Pago proveedor', 'MANUAL' => 'Manual',
+        'SUPPLIER_PAYMENT_REVERSAL' => 'Reversión de pago',
     ];
 
     /** Saldo en libros de una cuenta (expresión SQL sobre `financial_accounts`). */

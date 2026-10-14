@@ -115,6 +115,15 @@ export function apiFetchLater<T>(path: string): Promise<T> {
   return new Promise<void>((resolve) => { setTimeout(resolve, 0); }).then(() => apiFetch<T>(path));
 }
 
+// --- Lecturas que no responden ---------------------------------------------------------
+// Una lectura (GET) que no responde en 30 s se corta y la pantalla ofrece "Reintentar", en vez
+// de quedarse cargando. Los guardados no se cortan: podrían haberse registrado y quedar a medias.
+
+const READ_TIMEOUT_MS = 30_000;
+
+/** La lectura se cortó por tiempo: el servidor no respondió. */
+export const TIMEOUT_STATUS = 0;
+
 async function send<T>(path: string, options: RequestInit, method: string): Promise<T> {
   const token = getAuthToken();
 
@@ -122,18 +131,34 @@ async function send<T>(path: string, options: RequestInit, method: string): Prom
   const version = record ? seenVersions.get(`${record[1]}/${record[2]}`) : undefined;
   const repeatKey = idempotencyKey(path, method, options.body);
 
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers: {
-      // Un archivo viaja como formulario: el navegador pone su propio tipo de contenido.
-      ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
-      Accept: "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(version !== undefined ? { "If-Match": String(version) } : {}),
-      ...(repeatKey ? { "Idempotency-Key": repeatKey } : {}),
-      ...options.headers,
-    },
-  });
+  const timeout = method === "GET" && typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = timeout ? setTimeout(() => timeout.abort(), READ_TIMEOUT_MS) : undefined;
+  // Si quien llama ya trae su propia señal, cancelarla también corta la lectura.
+  options.signal?.addEventListener("abort", () => timeout?.abort(), { once: true });
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      signal: timeout?.signal ?? options.signal,
+      headers: {
+        // Un archivo viaja como formulario: el navegador pone su propio tipo de contenido.
+        ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(version !== undefined ? { "If-Match": String(version) } : {}),
+        ...(repeatKey ? { "Idempotency-Key": repeatKey } : {}),
+        ...options.headers,
+      },
+    });
+  } catch (err) {
+    if (timeout?.signal.aborted && !options.signal?.aborted) {
+      throw new ApiError("El servidor tardó demasiado en responder. Vuelve a intentarlo.", TIMEOUT_STATUS);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (res.status === 204) {
     return undefined as T;

@@ -21,19 +21,19 @@ type Confirm = { path: string; title: string; text: string; confirmLabel: string
 const CONFIRMS: Record<"suspend" | "reactivate" | "terminate" | "expire", Confirm> = {
   suspend: {
     path: "suspend", title: "Suspender contrato", confirmLabel: "Suspender", done: "Contrato suspendido", danger: true, reason: true,
-    text: "El contrato deja de estar vigente hasta que se reactive. Se conserva el historial.",
+    text: "El contrato deja de estar vigente hasta que se reactive. Sus servicios contratados activos se suspenden con él. Se conserva el historial.",
   },
   reactivate: {
     path: "reactivate", title: "Reactivar contrato", confirmLabel: "Reactivar", done: "Contrato vigente",
-    text: "El contrato vuelve a estar vigente.",
+    text: "El contrato vuelve a estar vigente, y con él los servicios contratados que se suspendieron al suspenderlo.",
   },
   terminate: {
     path: "terminate", title: "Terminar contrato", confirmLabel: "Terminar", done: "Contrato terminado", danger: true, reason: true,
-    text: "El contrato queda terminado y ya no se podrá reactivar. Se conserva el historial.",
+    text: "El contrato queda terminado y ya no se podrá reactivar. Sus servicios contratados se cancelan; no se puede terminar si alguno tiene órdenes de trabajo abiertas. Se conserva el historial.",
   },
   expire: {
     path: "expire", title: "Marcar vencido", confirmLabel: "Marcar vencido", done: "Contrato vencido",
-    text: "El contrato queda vencido y ya no admite cambios de estado.",
+    text: "El contrato queda vencido y ya no admite cambios de estado. Sus servicios contratados se dan por completados (los que no empezaron, cancelados); no se puede si alguno tiene órdenes de trabajo abiertas.",
   },
 };
 

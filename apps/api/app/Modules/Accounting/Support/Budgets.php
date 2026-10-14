@@ -27,6 +27,8 @@ class Budgets
             ->join('acc_accounts as a', fn ($join) => $join->on('a.tenant_id', '=', 'l.tenant_id')->on('a.code', '=', 'l.account_code'))
             ->where('l.tenant_id', $tenantId)->whereNotNull('l.cost_center_id')
             ->where('e.period', 'like', "{$year}-%")
+            // El asiento de cierre no es gasto ni ingreso del año: solo los traslada a resultados acumulados.
+            ->tap(fn ($q) => Ledger::withoutYearClose($q))
             ->when($centerIds !== null, fn ($q) => $q->whereIn('l.cost_center_id', $centerIds ?: ['00000000-0000-0000-0000-000000000000']))
             ->groupBy('l.cost_center_id', 'l.account_code', 'e.period', 'a.account_type')
             ->selectRaw('l.cost_center_id, l.account_code, e.period, a.account_type, sum(l.debit) AS debit, sum(l.credit) AS credit')

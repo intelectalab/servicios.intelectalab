@@ -21,7 +21,6 @@ use App\Modules\Operations\Http\Controllers\AgendaController;
 use App\Modules\Operations\Http\Controllers\FieldController;
 use App\Modules\Operations\Http\Controllers\ProjectController;
 use App\Modules\Operations\Http\Controllers\WorkOrderController;
-use App\Modules\Operations\Http\Controllers\TaskController;
 use App\Modules\Operations\Http\Controllers\ChecklistController;
 use App\Modules\Operations\Http\Controllers\TimeEntryController;
 use App\Modules\Operations\Http\Controllers\ResourceController;
@@ -57,6 +56,7 @@ use App\Modules\Core\Http\Controllers\UserController;
 use App\Modules\Core\Http\Controllers\TenantSettingsController;
 use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Modules\Accounting\Http\Controllers\ChartController;
+use App\Modules\Accounting\Http\Controllers\FiscalYearController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\LedgerController;
 
@@ -312,12 +312,22 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:quotations.manage')->post('/portal-requests/{portalRequest}/take', [PortalRequestController::class, 'take']);
         Route::middleware('permission:portal.manage')->post('/portal-requests/{portalRequest}/reject', [PortalRequestController::class, 'reject']);
 
-        // Checklists (plantillas)
-        Route::middleware('permission:operations.view')->group(function () {
+        // Plantillas de checklist (Operaciones)
+        Route::middleware('permission:checklists.view')->group(function () {
             Route::get('/checklists', [ChecklistController::class, 'index']);
-            Route::get('/checklists/{checklist}', [ChecklistController::class, 'show']);
+            Route::get('/checklists/summary', [ChecklistController::class, 'summary']);
+            Route::get('/checklists/options', [ChecklistController::class, 'options']);
         });
-        Route::middleware('permission:operations.manage')->post('/checklists', [ChecklistController::class, 'store']);
+        Route::middleware('permission:checklists.manage')->group(function () {
+            Route::get('/checklists/template', [ChecklistController::class, 'importTemplate']);
+            Route::post('/checklists/import', [ChecklistController::class, 'import']);
+            Route::post('/checklists', [ChecklistController::class, 'store']);
+            Route::put('/checklists/{checklist}', [ChecklistController::class, 'update']);
+            Route::post('/checklists/{checklist}/duplicate', [ChecklistController::class, 'duplicate']);
+            Route::post('/checklists/{checklist}/deactivate', [ChecklistController::class, 'deactivate']);
+            Route::post('/checklists/{checklist}/activate', [ChecklistController::class, 'activate']);
+        });
+        Route::middleware('permission:checklists.view')->get('/checklists/{checklist}', [ChecklistController::class, 'show']);
 
         // Servicios contratados
         Route::middleware('permission:contracted_services.view')->group(function () {
@@ -361,15 +371,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/work-orders/{workOrder}/checklist/return', [WorkOrderController::class, 'returnChecklist']);
         });
 
-        // Tareas
-        Route::middleware('permission:operations.view')->group(function () {
-            Route::get('/tasks', [TaskController::class, 'index']);
-            Route::get('/tasks/{task}', [TaskController::class, 'show']);
-        });
-        Route::middleware('permission:operations.manage')->group(function () {
-            Route::post('/tasks', [TaskController::class, 'store']);
-            Route::patch('/tasks/{task}/checklist-items/{item}', [TaskController::class, 'completeChecklistItem']);
-        });
+        // Tareas sueltas (TaskController): desconectadas el 2026-10-14. Las tareas se trabajan dentro
+        // de su proyecto (rutas /projects/{project}/tasks); el controlador sigue en el repo.
 
         // Proyectos, con sus tareas y entregables
         Route::middleware('permission:projects.view')->group(function () {
@@ -571,6 +574,8 @@ Route::prefix('v1')->group(function () {
             Route::put('/bank-accounts/{bankAccount}', [TreasuryController::class, 'updateAccount']);
             Route::post('/bank-statement-lines/{line}/match', [TreasuryController::class, 'matchLine']);
             Route::post('/bank-statement-lines/{line}/resolve', [TreasuryController::class, 'resolveLine']);
+            // Corregir la clasificación de un gasto ya registrado es de quien responde por la tesorería.
+            Route::post('/cash-expenses/{cashExpense}/reclassify', [TreasuryController::class, 'reclassifyCashExpense']);
         });
 
         // Compras: órdenes de compra y su recepción
@@ -610,15 +615,20 @@ Route::prefix('v1')->group(function () {
             Route::get('/payables/summary', [PayableController::class, 'summary']);
             Route::get('/payables/{payable}', [PayableController::class, 'show']);
             Route::get('/supplier-payments', [PayableController::class, 'payments']);
+            Route::get('/supplier-payments/{supplierPayment}', [PayableController::class, 'showPayment'])->whereUuid('supplierPayment');
         });
         Route::middleware('permission:payables.create')->post('/supplier-invoices', [SupplierInvoiceController::class, 'store']);
         Route::middleware('permission:payables.manage')->post('/supplier-invoices/{supplierInvoice}/void', [SupplierInvoiceController::class, 'void']);
-        // Aprobar un comprobante y pagar a un proveedor comprometen dinero: permiso aparte de registrar.
+        // Aprobar un comprobante compromete dinero: permiso aparte de registrar.
         Route::middleware('permission:payables.approve')->group(function () {
             Route::post('/supplier-invoices/{supplierInvoice}/approve', [SupplierInvoiceController::class, 'approve']);
             Route::post('/supplier-invoices/{supplierInvoice}/reject', [SupplierInvoiceController::class, 'reject']);
+        });
+        // Pagar saca el dinero: es de otra persona que quien aprueba el gasto.
+        Route::middleware('permission:payables.pay')->group(function () {
             Route::get('/supplier-payments/options', [PayableController::class, 'paymentOptions']);
             Route::post('/supplier-payments', [PayableController::class, 'pay']);
+            Route::post('/supplier-payments/{supplierPayment}/reverse', [PayableController::class, 'reversePayment']);
         });
 
         // Contabilidad: libro diario, mayor y balance, estados financieros, plan de cuentas y periodos
@@ -626,15 +636,21 @@ Route::prefix('v1')->group(function () {
             Route::get('/journal-entries', [JournalController::class, 'index']);
             Route::get('/journal-entries/summary', [JournalController::class, 'summary']);
             Route::get('/journal-entries/options', [JournalController::class, 'options']);
-            Route::get('/journal-entries/{entry}', [JournalController::class, 'show']);
+            // Solo un id: /journal-entries/template es la plantilla de importación.
+            Route::get('/journal-entries/{entry}', [JournalController::class, 'show'])->whereUuid('entry');
             Route::get('/ledger/trial-balance', [LedgerController::class, 'trialBalance']);
             Route::get('/ledger/accounts/{code}', [LedgerController::class, 'account']);
             Route::get('/financial-statements', [LedgerController::class, 'statements']);
             Route::get('/accounting-accounts', [ChartController::class, 'accounts']);
             Route::get('/accounting-rules', [ChartController::class, 'rules']);
             Route::get('/accounting-periods', [ChartController::class, 'periods']);
+            Route::get('/accounting-years', [FiscalYearController::class, 'index']);
         });
-        Route::middleware('permission:accounting.create')->post('/journal-entries', [JournalController::class, 'store']);
+        Route::middleware('permission:accounting.create')->group(function () {
+            Route::post('/journal-entries', [JournalController::class, 'store']);
+            Route::get('/journal-entries/template', [JournalController::class, 'importTemplate']);
+            Route::post('/journal-entries/import', [JournalController::class, 'import']);
+        });
         Route::middleware('permission:accounting.manage')->group(function () {
             Route::post('/accounting-accounts', [ChartController::class, 'storeAccount']);
             Route::put('/accounting-accounts/{account}', [ChartController::class, 'updateAccount']);
@@ -644,6 +660,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/journal-entries/{entry}/reverse', [JournalController::class, 'reverse']);
             Route::post('/accounting-periods/{period}/close', [ChartController::class, 'closePeriod']);
             Route::post('/accounting-periods/{period}/reopen', [ChartController::class, 'reopenPeriod']);
+            Route::post('/accounting-years/{year}/close', [FiscalYearController::class, 'close']);
+            Route::post('/accounting-years/{year}/reopen', [FiscalYearController::class, 'reopen']);
         });
 
         // Centros de costo y presupuestos
@@ -657,7 +675,10 @@ Route::prefix('v1')->group(function () {
             Route::put('/budgets/{budget}/lines', [BudgetController::class, 'saveLine']);
             Route::post('/budgets/{budget}/reopen', [BudgetController::class, 'reopen']);
         });
-        Route::middleware('permission:budgets.approve')->post('/budgets/{budget}/approve', [BudgetController::class, 'approve']);
+        Route::middleware('permission:budgets.approve')->group(function () {
+            Route::post('/budgets/{budget}/approve', [BudgetController::class, 'approve']);
+            Route::post('/budgets/{budget}/close', [BudgetController::class, 'close']);
+        });
 
         // Soporte
         Route::middleware('permission:support.view')->group(function () {

@@ -69,6 +69,7 @@ class FieldController extends Controller
                     'id' => $item->id,
                     'label' => $item->label,
                     'required' => (bool) $item->required,
+                    'evidence_required' => (bool) $item->evidence_required,
                     'done' => (bool) $item->done,
                     'evidence' => $item->evidenceSummary(),
                 ])->values(),

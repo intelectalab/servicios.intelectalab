@@ -688,9 +688,10 @@ function ColumnTable<T>({
                     onColumnDrop(key);
                   }}
                   style={frozenStyle(key, true)}
-                  className={`${TH} group/th sticky top-0 bg-[var(--app-surface)] ${divider(key)} ${openMenu === key ? "z-[100]" : "z-40"} ${dragged === key ? "opacity-50" : ""}`}
+                  // Una cabecera larga baja a dos líneas en vez de ensanchar la tabla (a 1366 px se desplazaba de lado).
+                  className={`${TH} group/th sticky top-0 !whitespace-normal bg-[var(--app-surface)] ${divider(key)} ${openMenu === key ? "z-[100]" : "z-40"} ${dragged === key ? "opacity-50" : ""}`}
                 >
-                  <div className={`flex items-center gap-2 ${col.num ? "justify-end" : "justify-between"}`}>
+                  <div className={`flex items-center gap-2 pr-3 ${col.num ? "justify-end" : "justify-between"}`}>
                     <div
                       className={`flex select-none items-center gap-1.5 ${sortKey ? "cursor-pointer" : ""}`}
                       title={sortKey ? "Ordenar" : undefined}
@@ -725,7 +726,8 @@ function ColumnTable<T>({
                         setPlace({ left: Math.max(8, Math.min(rect.left, window.innerWidth - 232)), top: rect.bottom + 6 });
                         setOpenMenu(openMenu === key ? null : key);
                       }}
-                      className={`cursor-pointer rounded p-1 hover:bg-[var(--app-surface-muted)] ${sorted || openMenu === key ? "opacity-100" : "opacity-0 group-hover/th:opacity-100 focus:opacity-100"}`}
+                      // Sobre el borde de la cabecera, sin ocupar ancho: el espacio que deja el pr-3 del título.
+                      className={`absolute right-1 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 hover:bg-[var(--app-surface-muted)] ${sorted || openMenu === key ? "opacity-100" : "opacity-0 group-hover/th:opacity-100 focus:opacity-100"}`}
                     >
                       <MoreVertical size={14} />
                     </button>

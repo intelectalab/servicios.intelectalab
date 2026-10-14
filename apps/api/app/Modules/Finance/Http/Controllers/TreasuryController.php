@@ -5,6 +5,7 @@ namespace App\Modules\Finance\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Posting;
 use App\Modules\Accounting\Support\Chart;
+use App\Modules\Accounting\Support\Ledger;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Support\DocumentStore;
 use App\Modules\Finance\Models\ExchangeRate;
@@ -482,6 +483,8 @@ class TreasuryController extends Controller
         $search = trim((string) $request->query('search', ''));
 
         $query = DB::table('cash_expenses')->where('account_id', $account->id)
+            ->select('cash_expenses.*')
+            ->selectRaw('(SELECT count(*) FROM cash_expense_reclassifications r WHERE r.cash_expense_id = cash_expenses.id) AS corrections')
             ->when($search !== '', function ($q) use ($search) {
                 $like = '%'.addcslashes($search, '%_\\').'%';
                 $q->where(fn ($w) => $w->where('description', 'ILIKE', $like)->orWhere('expense_number', 'ILIKE', $like)->orWhere('receipt', 'ILIKE', $like));
@@ -503,9 +506,77 @@ class TreasuryController extends Controller
             // Las cuentas del plan se muestran con su nombre; los gastos antiguos, con su texto.
             'expense_account' => preg_match('/^\d{2,10}$/', (string) $expense->expense_account) ? Chart::label($expense->tenant_id, $expense->expense_account) : $expense->expense_account,
             'amount' => (float) $expense->amount,
+            // Para corregir la clasificación: lo que tiene hoy, en códigos.
+            'cost_center_id' => $expense->cost_center_id,
+            'expense_account_code' => preg_match('/^\d{2,10}$/', (string) $expense->expense_account) ? $expense->expense_account : null,
+            'corrections' => (int) $expense->corrections,
         ]);
 
         return response()->json($page);
+    }
+
+    /**
+     * Corrige el centro de costo o la cuenta de gasto de un gasto de caja ya registrado: deja la
+     * corrección registrada (antes, después y motivo), extorna su asiento y lo contabiliza de nuevo
+     * con la clasificación correcta. El importe, la fecha y la caja no cambian.
+     */
+    public function reclassifyCashExpense(string $cashExpense, Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        abort_unless(Str::isUuid($cashExpense), 404);
+        $data = $request->validate([
+            'cost_center_id' => ['required', 'uuid'],
+            'expense_account' => ['required', 'string', 'max:20', Purchasing::expenseAccountRule($tenantId)],
+            'reason' => ['required', 'string', 'max:1000'],
+        ], [
+            'cost_center_id.required' => 'Selecciona el centro de costo.',
+            'expense_account.required' => 'Selecciona la cuenta de gasto.',
+            'reason.required' => 'Indica el motivo de la corrección.',
+        ]);
+        $center = DB::table('cost_centers')->where('tenant_id', $tenantId)->where('id', $data['cost_center_id'])->where('active', true)->first(['id', 'code', 'name']);
+        if (! $center) {
+            throw ValidationException::withMessages(['cost_center_id' => ['El centro de costo indicado no existe o está inactivo.']]);
+        }
+
+        $result = DB::transaction(function () use ($request, $tenantId, $cashExpense, $data, $center) {
+            $expense = DB::table('cash_expenses')->where('tenant_id', $tenantId)->where('id', $cashExpense)->lockForUpdate()->first();
+            abort_unless((bool) $expense, 404);
+            $account = trim($data['expense_account']);
+            if ($expense->cost_center_id === $center->id && $expense->expense_account === $account) {
+                throw ValidationException::withMessages(['cost_center_id' => ['El gasto ya tiene ese centro de costo y esa cuenta.']]);
+            }
+            $reason = trim($data['reason']);
+
+            // El asiento vigente se extorna en el periodo del gasto (o hoy, si está cerrado) y se rehace.
+            $entry = Ledger::entryFor($tenantId, 'CASH_EXPENSE', $expense->id);
+            $date = Ledger::openDate($tenantId, Carbon::parse($expense->expense_date)->toDateString());
+            $reversed = $entry ? Ledger::reverse($tenantId, $entry->id, "Corrección de {$expense->expense_number}: {$reason}", $request->user()->id, $date) : null;
+
+            // Primero la corrección: la base solo deja cambiar la clasificación si está registrada.
+            $correctionId = (string) Str::uuid();
+            DB::table('cash_expense_reclassifications')->insert([
+                'id' => $correctionId, 'tenant_id' => $tenantId, 'cash_expense_id' => $expense->id,
+                'old_cost_center_id' => $expense->cost_center_id, 'new_cost_center_id' => $center->id,
+                'old_account' => $expense->expense_account, 'new_account' => $account,
+                'reason' => $reason, 'reversed_entry_id' => $entry?->id, 'created_by' => $request->user()->id,
+            ]);
+            DB::table('cash_expenses')->where('id', $expense->id)->update([
+                'cost_center_id' => $center->id, 'cost_center' => Str::limit("{$center->code} · {$center->name}", 100, ''), 'expense_account' => $account,
+            ]);
+            $new = Posting::cashExpense($tenantId, $expense->id, $request->user()->id);
+            DB::table('cash_expense_reclassifications')->where('id', $correctionId)->update(['new_entry_id' => $new]);
+
+            $number = fn (?string $id) => $id ? DB::table('acc_journal_entries')->where('id', $id)->value('entry_number') : null;
+            $this->audit($request, 'treasury.cash_reclassify', 'CashExpense', $expense->id, [
+                'before' => ['cost_center' => $expense->cost_center, 'expense_account' => $expense->expense_account],
+                'after' => ['cost_center' => "{$center->code} · {$center->name}", 'expense_account' => $account],
+                'note' => trim("{$expense->expense_number}: {$reason}".($entry ? " · {$entry->entry_number} extornado por {$number($reversed)}, nuevo {$number($new)}" : '')),
+            ]);
+
+            return ['id' => $expense->id, 'expense_number' => $expense->expense_number, 'reversed' => $number($reversed), 'entry' => $number($new)];
+        });
+
+        return response()->json($result);
     }
 
     /** Listas del gasto de caja chica: centros de costo activos y cuentas de gasto del plan. */
