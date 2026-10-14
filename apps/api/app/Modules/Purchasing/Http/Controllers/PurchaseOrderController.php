@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Budgets;
 use App\Http\Middleware\CheckPermission;
 use App\Modules\Core\Http\Controllers\TenantSettingsController;
 use App\Modules\Purchasing\Models\PurchaseOrder;
@@ -125,7 +126,7 @@ class PurchaseOrderController extends Controller
             'suppliers' => Purchasing::suppliers($tenantId),
             // Para filtrar se ofrecen todos; para elegir en un documento nuevo, solo los activos.
             'cost_centers' => Purchasing::costCenters($tenantId, false),
-            'expense_accounts' => Purchasing::expenseAccounts(),
+            'expense_accounts' => Purchasing::expenseAccounts($tenantId),
             'default_account' => Purchasing::DEFAULT_EXPENSE_ACCOUNT,
         ]);
     }
@@ -208,7 +209,11 @@ class PurchaseOrderController extends Controller
         DB::transaction(function () use ($request, $order) {
             $order->approved_by = $request->user()->id;
             $order->approved_at = now();
-            $this->move($request, $order, 'APPROVED', 'purchase_order.approve');
+            // Como en el prototipo: sobre el presupuesto disponible se aprueba con advertencia, que queda registrada.
+            $budget = Budgets::check($order->tenant_id, $order->cost_center_id, $this->subtotalPen($order), $order->id);
+            $warning = $budget && $budget['over'] ? 'Aprobada sobre presupuesto: disponible S/ '.number_format($budget['available'], 2) : null;
+            $order->budget_warning = $warning;
+            $this->move($request, $order, 'APPROVED', 'purchase_order.approve', $warning);
         });
 
         return response()->json($this->detail($order, $request));
@@ -345,7 +350,7 @@ class PurchaseOrderController extends Controller
             'items.*.description' => ['required', 'string', 'max:500'],
             'items.*.quantity' => ['required', 'numeric', 'gt:0', 'max:99999999'],
             'items.*.unit_cost' => ['required', 'numeric', 'gt:0', 'max:9999999999'],
-            'items.*.account_code' => ['required', 'in:'.implode(',', array_keys(Purchasing::EXPENSE_ACCOUNTS))],
+            'items.*.account_code' => ['required', 'string', Purchasing::expenseAccountRule($request->attributes->get('tenant_id'))],
         ], [
             'supplier_id.required' => 'Selecciona un proveedor.',
             'cost_center_id.required' => 'Selecciona el centro de costo.',
@@ -451,6 +456,12 @@ class PurchaseOrderController extends Controller
         ];
     }
 
+    /** Subtotal de la orden en soles (en dólares, al tipo de cambio vigente). */
+    private function subtotalPen(PurchaseOrder $order): float
+    {
+        return round((float) $order->subtotal * ($order->currency === 'USD' ? (Purchasing::rate() ?? 1.0) : 1.0), 2);
+    }
+
     private function detail(PurchaseOrder $order, Request $request): array
     {
         $order = $this->listing()->with('items', 'approver:id,name')->findOrFail($order->id);
@@ -480,8 +491,8 @@ class PurchaseOrderController extends Controller
                 ])->values(),
             // Quien la creó no la aprueba mientras la empresa tenga activa la segregación de funciones.
             'segregated' => $order->status === 'SUBMITTED' && $this->segregated($order, $request),
-            // Presupuesto del centro de costo: lo dará Contabilidad (Centros de costo y presupuestos). Hoy no existe.
-            'budget' => null,
+            // Presupuesto del centro de costo (Contabilidad → Centros de costo y presupuestos), sin contar esta orden.
+            'budget' => Budgets::check($order->tenant_id, $order->cost_center_id, $this->subtotalPen($order), $order->id),
             'supplier_invoices' => $seesInvoices
                 ? SupplierInvoiceController::listing()->where('supplier_invoices.purchase_order_id', $order->id)
                     ->orderByDesc('supplier_invoices.issue_date')->orderByDesc('supplier_invoices.created_at')->limit(200)->get()

@@ -157,6 +157,8 @@ class FiscalGateway
                         'amount' => -1 * (float) $receivable->balance_amount, 'reference' => 'Baja '.($result->code ?: $invoice->invoice_number), 'created_by' => $userId,
                     ]);
                 }
+                // Anulado ante SUNAT: su asiento se extorna.
+                \App\Modules\Accounting\Support\Posting::invoiceVoided($tenantId, $invoice->id, $userId);
             }
 
             AuditLogger::log(

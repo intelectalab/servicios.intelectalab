@@ -3,6 +3,7 @@
 namespace App\Modules\Finance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Posting;
 use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Finance\Models\FinancialAccount;
 use App\Modules\Finance\Models\Payment;
@@ -94,7 +95,8 @@ class TreasuryController extends Controller
 
             $opening = round((float) ($data['opening_balance'] ?? 0), 2);
             if ($opening > 0) {
-                Treasury::move($account, $opening, 'OPENING', 'Saldo de apertura', ['date' => $data['opening_date'] ?? now(), 'user_id' => $request->user()->id]);
+                $movementId = Treasury::move($account, $opening, 'OPENING', 'Saldo de apertura', ['date' => $data['opening_date'] ?? now(), 'user_id' => $request->user()->id]);
+                Posting::bankMovement($tenantId, $movementId, $request->user()->id);
             }
             $this->audit($request, 'treasury.account_create', 'FinancialAccount', $account->id, ['note' => $account->name, 'opening' => $opening]);
 
@@ -441,6 +443,7 @@ class TreasuryController extends Controller
                 DB::table('bank_statement_lines')->where('id', $row->id)->update([
                     'status' => 'CREATED', 'movement_id' => $movementId, 'rule' => $kind === 'FEE' ? 'Comisión registrada' : 'Abono por identificar', ...$resolved,
                 ]);
+                Posting::bankMovement($row->tenant_id, $movementId, $request->user()->id);
             }
             $this->audit($request, 'treasury.line_'.strtolower($kind), 'BankStatement', $row->statement_id, ['note' => $row->description, 'amount' => $amount]);
         });
@@ -522,6 +525,7 @@ class TreasuryController extends Controller
                 'created_by' => $request->user()->id, 'created_at' => now(),
             ]);
             Treasury::move($cash, -1 * $amount, 'CASH_EXPENSE', 'Caja chica · '.trim($data['description']), ['date' => $date, 'ref_id' => $id, 'user_id' => $request->user()->id]);
+            Posting::cashExpense($cash->tenant_id, $id, $request->user()->id);
             $this->audit($request, 'treasury.cash_expense', 'CashExpense', $id, ['note' => "{$number}: ".trim($data['description']), 'amount' => $amount]);
 
             return ['id' => $id, 'expense_number' => $number, 'amount' => $amount];
@@ -674,6 +678,7 @@ class TreasuryController extends Controller
         $common = ['date' => $date ?? now(), 'ref_id' => $transferId, 'op_number' => $reference, 'user_id' => $request->user()->id];
         Treasury::move($from, -1 * $amount, 'TRANSFER', "Transferencia a {$to->name}", $common);
         Treasury::move($to, $amount, 'TRANSFER', "Transferencia desde {$from->name}", $common);
+        Posting::transfer($tenantId, $transferId, $request->user()->id);
         $this->audit($request, $action, 'FinancialAccount', $from->id, [
             'note' => "{$from->name} → {$to->name} · {$reference}", 'amount' => $amount,
         ]);

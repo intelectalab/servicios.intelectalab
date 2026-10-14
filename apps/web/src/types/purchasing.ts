@@ -68,7 +68,7 @@ export interface PurchaseReceipt {
   at: string;
 }
 
-/** Presupuesto del centro de costo. Lo dará Contabilidad: hoy la API siempre responde null. */
+/** Presupuesto aprobado del centro de costo en el año (Contabilidad); null si no tiene. */
 export interface BudgetCheck {
   annual: number;
   actual: number;
@@ -150,6 +150,8 @@ export interface SupplierInvoiceDetail extends SupplierInvoice {
     id: string; status: PayableStatus; balance_amount: number; currency: Currency; detraction_amount: number; detraction_deposited: boolean;
     movements: PayableDetail["movements"];
   } | null;
+  /** Su asiento en el libro diario (nace al aprobarlo para pago). */
+  journal_entry: { id: string; number: string } | null;
   history: HistoryEntry[];
 }
 

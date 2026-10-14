@@ -3,6 +3,7 @@
 namespace App\Modules\Finance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Posting;
 use App\Modules\Core\Models\Customer;
 use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Finance\Models\Payment;
@@ -182,6 +183,7 @@ class PaymentController extends Controller
                 $customer = Customer::with('party.person', 'party.organization')->where('tenant_id', $tenantId)->find($payment->customer_id);
                 Treasury::paymentIn($payment, $account, Billing::identity($customer)['name'], $request->user()->id);
             }
+            Posting::payment($tenantId, $payment->id, $request->user()->id);
 
             if ($request->boolean('auto_allocate')) {
                 $this->allocateInto($request, $payment, null);
@@ -305,6 +307,7 @@ class PaymentController extends Controller
             ]);
             // El dinero sale de la cuenta donde entró el cobro.
             Treasury::refundOut($payment, $refund->id, $amount, $request->user()->id);
+            Posting::refund($tenantId, $refund->id, $request->user()->id);
             $previous = $payment->status;
             $payment->refunded_amount = round((float) $payment->refunded_amount + $amount, 2);
             $payment->status = $this->statusOf($payment);
@@ -402,10 +405,12 @@ class PaymentController extends Controller
                 ]);
             }
             // El saldo y el estado de la cuenta los actualiza la base con este movimiento.
-            ReceivableMovement::create([
+            $movement = ReceivableMovement::create([
                 'tenant_id' => $payment->tenant_id, 'receivable_id' => $receivable->id, 'movement_type' => 'PAYMENT',
                 'amount' => -1 * $amount, 'reference' => $payment->payment_number, 'payment_id' => $payment->id, 'created_by' => $request->user()->id,
             ]);
+            // La diferencia de cambio de esta aplicación va al libro diario.
+            Posting::receivableFx($payment->tenant_id, $movement->id, $difference, now()->toDateString(), $payment->payment_number, $payment->customer_id, $request->user()->id);
 
             $available = round($available - $amount, 2);
             $applied = round($applied + $amount, 2);

@@ -112,7 +112,7 @@ Son cosas que funcionan y que el kit pide de otra manera. Ninguna es un error de
 - Tarea automática que venza las cotizaciones (hoy es un botón).
 - Ruta CRM de las solicitudes del portal. *(El CRM empezó el 2026-10-08 con Leads y Pipeline: [cambios/2026-10-08_crm-leads-y-pipeline.md](cambios/2026-10-08_crm-leads-y-pipeline.md); esta ruta sigue pendiente.)*
 - Operaciones, Finanzas, Soporte, Documentos: hay rutas de API sueltas, sin pantalla ni pruebas.
-- Compras, Tesorería, Contabilidad: nada. *(Tesorería se hizo el 2026-10-13 como Bancos y caja, y Compras ese mismo día: [cambios/2026-10-13_compras-ordenes-comprobantes-y-cuentas-por-pagar.md](cambios/2026-10-13_compras-ordenes-comprobantes-y-cuentas-por-pagar.md). Contabilidad sigue pendiente.)*
+- Compras, Tesorería, Contabilidad: nada. *(Tesorería se hizo el 2026-10-13 como Bancos y caja, y Compras ese mismo día: [cambios/2026-10-13_compras-ordenes-comprobantes-y-cuentas-por-pagar.md](cambios/2026-10-13_compras-ordenes-comprobantes-y-cuentas-por-pagar.md). Contabilidad se hizo el 2026-10-14: [cambios/2026-10-14_contabilidad.md](cambios/2026-10-14_contabilidad.md); sus asientos se escriben en la misma operación que el documento, no por la bandeja de eventos.)*
 - Datos de demostración del kit (dos empresas): no son cargables, los nombres de tabla no coinciden.
 
 ---

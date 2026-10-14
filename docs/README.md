@@ -66,6 +66,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-13 | Finanzas: comprobantes listos para conectar el proveedor de SUNAT (contrato del proveedor, envío tras emitir, respuesta guardada, reintento) | [cambios/2026-10-13_finanzas-listo-para-proveedor-sunat.md](cambios/2026-10-13_finanzas-listo-para-proveedor-sunat.md) |
 | 2026-10-13 | Finanzas: Recurrencia (ciclos y renovaciones), Bancos y caja (cuentas, movimientos, conciliación por extracto, caja chica) y Facturación electrónica (configuración, series, contingencia, bajas, detracciones y retenciones) | [cambios/2026-10-13_finanzas-recurrencia-bancos-y-facturacion-electronica.md](cambios/2026-10-13_finanzas-recurrencia-bancos-y-facturacion-electronica.md) |
 | 2026-10-13 | Compras: Órdenes de compra (aprobación con segregación, recepción, PDF), Comprobantes de proveedor (sin duplicados, cruce de 3 vías, detracción y retención de 4.ª) y Cuentas por pagar (vencimientos y pago con depósito de detracción); centros de costo y cuenta BN del proveedor | [cambios/2026-10-13_compras-ordenes-comprobantes-y-cuentas-por-pagar.md](cambios/2026-10-13_compras-ordenes-comprobantes-y-cuentas-por-pagar.md) |
+| 2026-10-14 | Contabilidad: asientos automáticos de cada documento, Libro diario (asiento manual y extorno), Mayor y balance de comprobación, Estados financieros, Centros de costo y presupuestos (control en las órdenes de compra) y Plan de cuentas, reglas y periodos | [cambios/2026-10-14_contabilidad.md](cambios/2026-10-14_contabilidad.md) |
 
 ## Cómo se escribe cada entrada
 

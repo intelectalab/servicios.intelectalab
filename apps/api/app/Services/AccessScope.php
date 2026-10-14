@@ -44,6 +44,7 @@ class AccessScope
         'recurring' => 'Servicios recurrentes',
         'purchases' => 'Órdenes de compra',
         'payables' => 'Cuentas por pagar',
+        'budgets' => 'Centros de costo y presupuestos',
     ];
 
     /** De menor a mayor alcance. */
@@ -149,6 +150,8 @@ class AccessScope
             'purchases' => $query->whereIn("{$table}.owner_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
             // Un comprobante de proveedor, su cuenta por pagar y un pago, de quien los registró.
             'payables' => $query->whereIn("{$table}.owner_user_id", $owners),
+            // Un centro de costo (y su presupuesto) es de su responsable y de quien lo creó.
+            'budgets' => $query->whereIn("{$table}.manager_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
         };
     }
 

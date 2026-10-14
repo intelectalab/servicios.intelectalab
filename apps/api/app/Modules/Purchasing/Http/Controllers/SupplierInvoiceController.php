@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Posting;
 use App\Modules\Finance\Support\Billing;
 use App\Modules\Finance\Support\Withholding;
 use App\Modules\Purchasing\Models\Payable;
@@ -95,7 +96,7 @@ class SupplierInvoiceController extends Controller
         return response()->json([
             'suppliers' => Purchasing::suppliers($tenantId),
             'cost_centers' => Purchasing::costCenters($tenantId, false),
-            'expense_accounts' => Purchasing::expenseAccounts(),
+            'expense_accounts' => Purchasing::expenseAccounts($tenantId),
             'default_account' => Purchasing::DEFAULT_EXPENSE_ACCOUNT,
             'detraction_codes' => Purchasing::detractionCodes(),
             'terms_days' => Billing::DEFAULT_TERMS_DAYS,
@@ -134,7 +135,7 @@ class SupplierInvoiceController extends Controller
             'currency' => ['required', 'in:PEN,USD'],
             'purchase_order_id' => ['nullable', 'uuid'],
             'cost_center_id' => ['required', 'uuid'],
-            'expense_account' => ['required', 'in:'.implode(',', array_keys(Purchasing::EXPENSE_ACCOUNTS))],
+            'expense_account' => ['required', 'string', Purchasing::expenseAccountRule($request->attributes->get('tenant_id'))],
             'description' => ['nullable', 'string', 'max:500'],
             'detraction_code' => ['nullable', 'in:'.implode(',', array_keys(Withholding::CODES))],
         ], [
@@ -270,6 +271,8 @@ class SupplierInvoiceController extends Controller
                 // Lo retenido no se le paga al proveedor: se declara y paga a SUNAT.
                 $movement('RETENTION_4TA', -1 * round((float) $invoice->retention_4ta, 2));
             }
+            // Aprobado para pago, se contabiliza (como en el prototipo).
+            Posting::supplierInvoice($invoice->tenant_id, $invoice->id, $request->user()->id);
         });
 
         return response()->json($this->detail($invoice));
@@ -391,6 +394,9 @@ class SupplierInvoiceController extends Controller
                         'reference' => $movement->reference, 'at' => Carbon::parse($movement->created_at)->toIso8601String(),
                     ])->values(),
             ] : null,
+            // Su asiento en el libro diario (nace al aprobarlo para pago).
+            'journal_entry' => ($entry = \App\Modules\Accounting\Support\Ledger::entryFor($invoice->tenant_id, 'SUPPLIER_INVOICE', $invoice->id))
+                ? ['id' => $entry->id, 'number' => $entry->entry_number] : null,
             'history' => AuditHistory::for('SupplierInvoice', $invoice->id),
         ];
     }

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Purchasing\Support;
 
+use App\Modules\Accounting\Support\Chart;
 use App\Modules\Core\Models\Supplier;
 use App\Modules\Finance\Models\ExchangeRate;
 use App\Modules\Finance\Support\Billing;
@@ -14,8 +15,8 @@ use Illuminate\Support\Facades\DB;
 class Purchasing
 {
     /**
-     * Cuentas de gasto del PCGE que se ofrecen al comprar. Lista fija mientras no exista el plan
-     * de cuentas de Contabilidad; cuando exista, saldrá de ahí.
+     * Cuentas de gasto con que nace el plan de cuentas. Desde Contabilidad, las que se ofrecen al
+     * comprar salen del plan de la empresa (sus cuentas de gasto imputables y activas).
      */
     public const EXPENSE_ACCOUNTS = [
         '6211' => 'Sueldos y salarios',
@@ -61,7 +62,22 @@ class Purchasing
 
     public static function accountLabel(?string $code): string
     {
+        $tenantId = request()->attributes->get('tenant_id');
+        if ($tenantId) {
+            return Chart::label((string) $tenantId, $code);
+        }
+
         return $code === null ? '' : (isset(self::EXPENSE_ACCOUNTS[$code]) ? "{$code} · ".self::EXPENSE_ACCOUNTS[$code] : $code);
+    }
+
+    /** Regla de validación: una cuenta de gasto imputable y activa del plan de la empresa. */
+    public static function expenseAccountRule(string $tenantId): \Closure
+    {
+        return function (string $attribute, $value, \Closure $fail) use ($tenantId) {
+            if (! Chart::postable($tenantId, is_string($value) ? $value : null, ['EXPENSE'])) {
+                $fail('Selecciona una cuenta de gasto del plan de cuentas.');
+            }
+        };
     }
 
     /**
@@ -115,9 +131,9 @@ class Purchasing
             ->map(fn ($center) => ['id' => $center->id, 'code' => $center->code, 'name' => $center->name, 'active' => (bool) $center->active])->all();
     }
 
-    public static function expenseAccounts(): array
+    public static function expenseAccounts(string $tenantId): array
     {
-        return collect(self::EXPENSE_ACCOUNTS)->map(fn (string $name, string $code) => ['code' => (string) $code, 'name' => $name])->values()->all();
+        return collect(Chart::options($tenantId, ['EXPENSE']))->map(fn (array $account) => ['code' => $account['code'], 'name' => $account['name']])->values()->all();
     }
 
     public static function detractionCodes(): array

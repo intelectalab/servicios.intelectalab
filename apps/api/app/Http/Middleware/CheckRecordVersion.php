@@ -67,6 +67,9 @@ class CheckRecordVersion
         'bankAccount' => 'financial_accounts',
         'purchaseOrder' => 'purchase_orders',
         'supplierInvoice' => 'supplier_invoices',
+        'costCenter' => 'cost_centers',
+        'budget' => 'budgets',
+        'account' => 'acc_accounts',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -90,6 +93,7 @@ class CheckRecordVersion
         'recurring_service_instances' => RecurringInstance::class,
         'purchase_orders' => PurchaseOrder::class,
         'supplier_invoices' => SupplierInvoice::class,
+        'cost_centers' => \App\Modules\Accounting\Models\CostCenter::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

@@ -59,11 +59,11 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/supplier-invoices", label: "Comprobantes de proveedor", module: "FINANZAS", requiredPermission: "payables.view", icon: ReceiptText, superModule: "Compras" },
   { href: "/payables", label: "Cuentas por pagar", module: "FINANZAS", requiredPermission: "payables.view", icon: HandCoins, superModule: "Compras" },
 
-  { label: "Libro diario", icon: BookOpen, superModule: "Contabilidad", soon: true },
-  { label: "Mayor y balance", icon: Scale, superModule: "Contabilidad", soon: true },
-  { label: "Estados financieros", icon: ChartPie, superModule: "Contabilidad", soon: true },
-  { label: "Centros de costo y presupuestos", icon: Crosshair, superModule: "Contabilidad", soon: true },
-  { label: "Plan de cuentas y periodos", icon: ListTree, superModule: "Contabilidad", soon: true },
+  { href: "/journal", label: "Libro diario", module: "FINANZAS", requiredPermission: "accounting.view", icon: BookOpen, superModule: "Contabilidad" },
+  { href: "/ledger", label: "Mayor y balance", module: "FINANZAS", requiredPermission: "accounting.view", icon: Scale, superModule: "Contabilidad" },
+  { href: "/financial-statements", label: "Estados financieros", module: "FINANZAS", requiredPermission: "accounting.view", icon: ChartPie, superModule: "Contabilidad" },
+  { href: "/budgets", label: "Centros de costo y presupuestos", module: "FINANZAS", requiredPermission: "budgets.view", icon: Crosshair, superModule: "Contabilidad" },
+  { href: "/chart-of-accounts", label: "Plan de cuentas y periodos", module: "FINANZAS", requiredPermission: "accounting.view", icon: ListTree, superModule: "Contabilidad" },
 
   { label: "Tickets y SLA", icon: LifeBuoy, superModule: "Soporte", soon: true },
   { label: "Garantías", icon: Shield, superModule: "Soporte", soon: true },

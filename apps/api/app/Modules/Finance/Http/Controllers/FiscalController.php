@@ -215,7 +215,8 @@ class FiscalController extends Controller
                 ->where('v.tenant_id', $request->attributes->get('tenant_id'))
                 // Por su modelo: solo las de los comprobantes que la persona alcanza.
                 ->whereIn('v.invoice_id', Invoice::query()->select('invoices.id'))
-                ->orderByDesc('v.created_at')->limit(200)
+                // Entre dos del mismo segundo, primero la que sigue viva o fue aceptada (un comprobante tiene una sola).
+                ->orderByDesc('v.created_at')->orderByRaw("CASE v.status WHEN 'PENDING' THEN 0 WHEN 'ACCEPTED' THEN 1 ELSE 2 END")->orderByDesc('v.id')->limit(200)
                 ->get(['v.id', 'v.invoice_id', 'v.invoice_number', 'v.ticket', 'v.reason', 'v.status', 'v.response', 'v.created_at', 'users.name as by'])
                 ->map(fn ($void) => [
                     'id' => $void->id, 'invoice_id' => $void->invoice_id, 'invoice_number' => $void->invoice_number, 'ticket' => $void->ticket,

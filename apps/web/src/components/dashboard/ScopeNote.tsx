@@ -92,8 +92,16 @@ const PURCHASE_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza lo tuyo y lo de tus sedes.",
 };
 
+// Un centro de costo (y su presupuesto) es de su responsable y de quien lo creó.
+const BUDGET_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los centros de costo de los que eres responsable y los que creaste.",
+  TEAM: "Tu rol alcanza tus centros de costo y los de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus centros de costo y los de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "budgets" ? BUDGET_HINTS
     : resource === "purchases" || resource === "payables" ? PURCHASE_HINTS
     : resource === "recurring" ? RECURRING_HINTS
     : resource === "billing" ? BILLING_HINTS

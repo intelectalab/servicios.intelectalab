@@ -573,12 +573,18 @@ export function SupplierInvoiceModal({
                     saldo {money(invoice.payable.balance_amount, invoice.payable.currency)}
                   </span>,
                 ] : null,
-                // Como en el prototipo; el asiento lo generará Contabilidad, que aún no existe.
+                // Como en el prototipo: el enlace lleva al libro diario buscando ese asiento.
                 [
                   "Asiento",
-                  <span key="journal" className="app-muted text-[12.5px]">
-                    {invoice.status === "APPROVED" ? "Sin asiento: se generará cuando exista Contabilidad (Libro diario)." : "Se genera al aprobar para pago, cuando exista Contabilidad (Libro diario)."}
-                  </span>,
+                  invoice.journal_entry ? (
+                    can("accounting.view")
+                      ? <Link key="journal" href={`/journal?q=${encodeURIComponent(invoice.journal_entry.number)}`} className={`${LINK} tabular-nums`}>{invoice.journal_entry.number}</Link>
+                      : <span key="journal" className="tabular-nums">{invoice.journal_entry.number}</span>
+                  ) : (
+                    <span key="journal" className="app-muted text-[12.5px]">
+                      {invoice.status === "APPROVED" ? "Sin asiento en el libro diario." : "Se genera al aprobar para pago."}
+                    </span>
+                  ),
                 ],
                 invoice.reason ? ["Motivo", invoice.reason] : null,
                 ["Registró", invoice.creator ?? "—"],

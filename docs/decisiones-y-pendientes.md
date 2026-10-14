@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría, Operaciones completo salvo la pantalla de plantillas de checklist y Finanzas completo: Por facturar, Comprobantes, Cuentas por cobrar, Cobros, Recurrencia, Bancos y caja, Facturación electrónica y Monedas y tipo de cambio, y Compras: Órdenes de compra, Comprobantes de proveedor y Cuentas por pagar).
+Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones completo salvo la pantalla de plantillas de checklist y Finanzas completo: Por facturar, Comprobantes, Cuentas por cobrar, Cobros, Recurrencia, Bancos y caja, Facturación electrónica y Monedas y tipo de cambio, Compras: Órdenes de compra, Comprobantes de proveedor y Cuentas por pagar, y Contabilidad: Libro diario, Mayor y balance, Estados financieros, Centros de costo y presupuestos y Plan de cuentas y periodos).
 
 ## Decisiones tomadas
 
@@ -101,8 +101,19 @@ Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría, Operaciones c
 - Órdenes, comprobantes, cuentas por pagar, movimientos y pagos no se borran.
 - Permisos `purchases.*` (Ver, Crear, Gestionar, Aprobar, Exportar), `payables.*` (Ver, Crear = registrar, Gestionar = anular, Aprobar = aprobar comprobantes y **pagar**, Exportar) y `budgets.manage` (crear centros de costo). Reparto del prototipo: Gerencia ve, aprueba y exporta (también paga); Operaciones pide y recibe en su sede; Finanzas pide y recibe, y lleva cuentas por pagar.
 - Alcance en dos recursos nuevos: Órdenes de compra (propia = quien la pidió) y Cuentas por pagar (propio = quien lo registró).
-- Mientras no exista Contabilidad: centros de costo con alta rápida desde Compras (tabla `cost_centers`, no se borran), cuentas de gasto fijas (las 11 del prototipo) y sin control de presupuesto.
+- Centros de costo con alta rápida desde Compras (tabla `cost_centers`, no se borran); desde el 2026-10-14 se gestionan en Contabilidad, las cuentas de gasto salen del plan de cuentas y la orden de compra se controla contra el presupuesto aprobado (avisa y deja aprobar).
 - La cuenta de detracciones del proveedor es un dato del rol Proveedor en Clientes y actores.
+
+### Contabilidad (2026-10-14)
+- Detalle en [cambios/2026-10-14_contabilidad.md](cambios/2026-10-14_contabilidad.md). Cuelga del módulo Finanzas del plan.
+- **Todo documento deja su asiento en la misma operación** en que se registra (venta, nota de crédito, cobro, aplicación en dólares, reembolso, constancia, compra aprobada, pago a proveedor, caja chica, comisión y abono del extracto, transferencia, apertura); una baja aceptada lo extorna. Un documento tiene un solo asiento vigente. Todo asiento pasa por `App\Modules\Accounting\Support\Ledger`; las reglas están en `Support\Posting`.
+- Un asiento cuadra, usa cuentas imputables y activas, cae en un periodo abierto y **no se edita: se extorna** (con motivo, una vez). Lo garantiza la base.
+- Moneda funcional, soles: lo que está en dólares se lleva a soles con el tipo de cambio que guarda el documento; las diferencias de cambio de cobros y pagos van a 6761 / 7761.
+- **Plan de cuentas por empresa**, sembrado con el subconjunto del PCGE del prototipo (más la 40172); se agregan cuentas; código y tipo no cambian; las cuentas de las reglas automáticas no se desactivan ni se subdividen.
+- **Periodos** AAAA-MM: solo se cierra uno terminado y con la conciliación bancaria al día; reabrir pide motivo; un documento con fecha en un periodo cerrado se contabiliza hoy.
+- **Presupuesto**: uno por año, por centro de costo y cuenta, en doce meses iguales; se prepara en borrador, lo aprueba quien tenga `budgets.approve` y se reabre con motivo. Ejecutado = libro diario; comprometido = órdenes de compra aprobadas sin facturar. La orden que supera el disponible se aprueba con advertencia registrada.
+- Permisos `accounting.*` (Ver, Crear = asiento manual, Gestionar = plan de cuentas, Aprobar = extornar y periodos, Exportar) y `budgets.*` (Ver, Gestionar, Aprobar, Exportar), con el reparto del prototipo. Alcance nuevo "Centros de costo y presupuestos" (propio = responsable o quien lo creó; Sede = centros de sus sedes); la contabilidad no lleva alcance.
+- Lo registrado antes de Contabilidad se contabiliza con `php artisan accounting:post-pending` (no duplica).
 
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
@@ -177,9 +188,10 @@ Estado al 2026-10-13 (con el CRM completo, la pantalla Auditoría, Operaciones c
 
 ## Pendientes
 
-- Compras: control de presupuesto por centro de costo, plan de cuentas y asientos (con Contabilidad); consulta de validez ante SUNAT; nota de crédito de proveedor; revertir un pago a proveedor; tolerancia del cruce en Configuración; aviso de órdenes por aprobar (con Notificaciones); pagos parciales y programados.
+- Compras: consulta de validez ante SUNAT; nota de crédito de proveedor; revertir un pago a proveedor; tolerancia del cruce en Configuración; aviso de órdenes por aprobar (con Notificaciones); pagos parciales y programados; separar "pagar" de "aprobar comprobantes" para Gerencia (propuesto, sin respuesta).
+- Contabilidad: editar las reglas automáticas por empresa; cierre de ejercicio; libros electrónicos (PLE); planilla (cuentas 62); PDF del asiento; importar asientos. En Tenant A, los cobros PAG-2026-0001…0004 (anteriores a Bancos y caja) no tienen cuenta: la 1041/1011 no coincide con Bancos y caja.
 - Listados anchos a 1366 px (Órdenes de compra, Cobros, Recurrencia): se desplazan de lado porque las cabeceras no bajan de línea; propuesto permitir cabeceras en dos líneas en la tabla compartida.
-- Finanzas: elegir el proveedor de facturación electrónica y escribir su clase (con él, XML y CDR, y consultar el ticket de una baja pendiente); renovación automática de instancias recurrentes; avisos de renovación, de cobranza y de arqueo con diferencia (con Notificaciones); centros de costo, cuentas de gasto y asientos (con Contabilidad); guardar el archivo del extracto como adjunto; cambio entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos por horas aprobadas y por hitos; nota de crédito parcial; editar el vencimiento de un borrador; pago en línea; activar el programador del servidor para los ciclos diarios.
+- Finanzas: elegir el proveedor de facturación electrónica y escribir su clase (con él, XML y CDR, y consultar el ticket de una baja pendiente); renovación automática de instancias recurrentes; avisos de renovación, de cobranza y de arqueo con diferencia (con Notificaciones); elegir centro de costo y cuenta de gasto de listas en Caja chica (hoy texto libre; el asiento los toma si coinciden con el plan); guardar el archivo del extracto como adjunto; cambio entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos por horas aprobadas y por hitos; nota de crédito parcial; editar el vencimiento de un borrador; pago en línea; activar el programador del servidor para los ciclos diarios.
 - Operaciones: en la App del técnico, abrirla sin señal desde cero, borrar lo guardado en el teléfono al cerrar sesión, registrar dónde estaba el técnico y ubicación en el cliente; rejilla por horas y arrastrar para reprogramar en Agenda; pantalla de plantillas de checklist (hoy solo por la API); antivirus para los archivos adjuntos y pantalla Documentos; facturar por horas (con Finanzas); avisos de horas y costos por aprobar (con Notificaciones); retirar las rutas antiguas `/tasks`; evidencias con archivo (con Documentos); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte); que suspender o terminar un contrato arrastre sus servicios contratados.
 - CRM: solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.

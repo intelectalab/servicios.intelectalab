@@ -3,6 +3,7 @@
 namespace App\Modules\Finance\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Posting;
 use App\Modules\Finance\Fiscal\FiscalGateway;
 use App\Modules\Finance\Models\BillableEvent;
 use App\Modules\Finance\Models\ExchangeRate;
@@ -247,6 +248,8 @@ class InvoiceController extends Controller
             ]);
 
             $this->openReceivable($request, $invoice);
+            // Su asiento en el libro diario, en la misma operación.
+            Posting::invoice($tenantId, $invoice->id, $request->user()->id);
             $this->audit($request, $invoice, 'invoice.issue', array_filter([
                 'from' => 'DRAFT', 'to' => 'ISSUED',
                 'note' => $invoice->invoice_number.($contingency ? ' · en contingencia' : '').($withholding ? ' · '.Withholding::label($withholding['type'], $withholding['code'], $withholding['rate']) : ''),
@@ -345,6 +348,7 @@ class InvoiceController extends Controller
                 ]);
             }
 
+            Posting::invoice($tenantId, $note->id, $request->user()->id);
             $this->audit($request, $note, 'invoice.credit_note', ['to' => 'ISSUED', 'note' => "{$reason} (corrige {$invoice->invoice_number})"]);
             $this->audit($request, $invoice, 'invoice.correct', ['from' => 'ISSUED', 'to' => 'CORRECTED', 'note' => "{$note->invoice_number}: {$reason}"]);
             if (! $contingency) {
@@ -450,6 +454,7 @@ class InvoiceController extends Controller
                 'withholding_status' => 'RECEIVED', 'withholding_number' => $number, 'withholding_date' => $date, 'withholding_registered_by' => $request->user()->id,
             ]);
             $banked = $detraction && Treasury::detractionIn($invoice, $amountPen, $number, $date, $request->user()->id);
+            Posting::withholding($invoice->tenant_id, $invoice->id, $request->user()->id);
 
             $this->audit($request, $invoice, 'invoice.withholding_receipt', [
                 'note' => ($detraction ? 'Constancia de detracción ' : 'Certificado de retención ').$number.' · S/ '.number_format($amountPen, 2)

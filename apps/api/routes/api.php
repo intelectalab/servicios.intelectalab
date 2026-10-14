@@ -55,6 +55,10 @@ use App\Modules\Core\Http\Controllers\OrgUnitController;
 use App\Modules\Core\Http\Controllers\RoleController;
 use App\Modules\Core\Http\Controllers\UserController;
 use App\Modules\Core\Http\Controllers\TenantSettingsController;
+use App\Modules\Accounting\Http\Controllers\BudgetController;
+use App\Modules\Accounting\Http\Controllers\ChartController;
+use App\Modules\Accounting\Http\Controllers\JournalController;
+use App\Modules\Accounting\Http\Controllers\LedgerController;
 
 Route::prefix('v1')->group(function () {
     Route::get('/saas-plans', [SaasPlanController::class, 'index']);
@@ -588,8 +592,11 @@ Route::prefix('v1')->group(function () {
             Route::post('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve']);
             Route::post('/purchase-orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject']);
         });
-        // Centros de costo: se dan de alta desde Compras mientras no exista su pantalla en Contabilidad.
-        Route::middleware('permission:budgets.manage')->post('/cost-centers', [CostCenterController::class, 'store']);
+        // Centros de costo: se dan de alta en Contabilidad y, rápido, desde los formularios de Compras.
+        Route::middleware('permission:budgets.manage')->group(function () {
+            Route::post('/cost-centers', [CostCenterController::class, 'store']);
+            Route::put('/cost-centers/{costCenter}', [BudgetController::class, 'updateCenter']);
+        });
 
         // Compras: comprobantes de proveedor, cuentas por pagar y pagos a proveedores
         Route::middleware('permission:payables.view')->group(function () {
@@ -611,6 +618,44 @@ Route::prefix('v1')->group(function () {
             Route::get('/supplier-payments/options', [PayableController::class, 'paymentOptions']);
             Route::post('/supplier-payments', [PayableController::class, 'pay']);
         });
+
+        // Contabilidad: libro diario, mayor y balance, estados financieros, plan de cuentas y periodos
+        Route::middleware('permission:accounting.view')->group(function () {
+            Route::get('/journal-entries', [JournalController::class, 'index']);
+            Route::get('/journal-entries/summary', [JournalController::class, 'summary']);
+            Route::get('/journal-entries/options', [JournalController::class, 'options']);
+            Route::get('/journal-entries/{entry}', [JournalController::class, 'show']);
+            Route::get('/ledger/trial-balance', [LedgerController::class, 'trialBalance']);
+            Route::get('/ledger/accounts/{code}', [LedgerController::class, 'account']);
+            Route::get('/financial-statements', [LedgerController::class, 'statements']);
+            Route::get('/accounting-accounts', [ChartController::class, 'accounts']);
+            Route::get('/accounting-rules', [ChartController::class, 'rules']);
+            Route::get('/accounting-periods', [ChartController::class, 'periods']);
+        });
+        Route::middleware('permission:accounting.create')->post('/journal-entries', [JournalController::class, 'store']);
+        Route::middleware('permission:accounting.manage')->group(function () {
+            Route::post('/accounting-accounts', [ChartController::class, 'storeAccount']);
+            Route::put('/accounting-accounts/{account}', [ChartController::class, 'updateAccount']);
+        });
+        // Extornar y cerrar periodos es de quien responde por la contabilidad, no de quien registra.
+        Route::middleware('permission:accounting.approve')->group(function () {
+            Route::post('/journal-entries/{entry}/reverse', [JournalController::class, 'reverse']);
+            Route::post('/accounting-periods/{period}/close', [ChartController::class, 'closePeriod']);
+            Route::post('/accounting-periods/{period}/reopen', [ChartController::class, 'reopenPeriod']);
+        });
+
+        // Centros de costo y presupuestos
+        Route::middleware('permission:budgets.view')->group(function () {
+            Route::get('/budgets/execution', [BudgetController::class, 'execution']);
+            Route::get('/budgets/options', [BudgetController::class, 'options']);
+            Route::get('/cost-centers/{costCenter}/budget', [BudgetController::class, 'center']);
+        });
+        Route::middleware('permission:budgets.manage')->group(function () {
+            Route::post('/budgets', [BudgetController::class, 'store']);
+            Route::put('/budgets/{budget}/lines', [BudgetController::class, 'saveLine']);
+            Route::post('/budgets/{budget}/reopen', [BudgetController::class, 'reopen']);
+        });
+        Route::middleware('permission:budgets.approve')->post('/budgets/{budget}/approve', [BudgetController::class, 'approve']);
 
         // Soporte
         Route::middleware('permission:support.view')->group(function () {

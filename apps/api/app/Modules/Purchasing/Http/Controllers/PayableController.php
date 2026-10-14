@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Support\Posting;
 use App\Http\Middleware\CheckPermission;
 use App\Modules\Finance\Models\FinancialAccount;
 use App\Modules\Finance\Support\Treasury;
@@ -342,6 +343,7 @@ class PayableController extends Controller
                 ]);
             }
 
+            Posting::supplierPayment($tenantId, $payment->id, $userId);
             AuditLogger::log(
                 tenantId: $tenantId, userId: $userId, action: 'supplier_payment.create', entityType: 'SupplierPayment', entityId: $payment->id,
                 metadata: ['to' => 'PAID', 'amount' => $net, 'detraction' => $detraction, 'documents' => count($parts), 'note' => $payment->payment_number],

@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Accounting\Http\Controllers\BudgetController;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -10,8 +11,8 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Centros de costo: a qué área o proyecto se carga una compra. Mientras no exista la pantalla
- * de Contabilidad (Centros de costo y presupuestos) se dan de alta desde los formularios de Compras.
+ * Centros de costo: a qué área o proyecto se carga una compra o una venta. Se dan de alta en
+ * Contabilidad (Centros de costo y presupuestos) y, rápido, desde los formularios de Compras.
  */
 class CostCenterController extends Controller
 {
@@ -31,8 +32,14 @@ class CostCenterController extends Controller
         if (DB::table('cost_centers')->where('tenant_id', $tenantId)->where('code', $data['code'])->exists()) {
             throw ValidationException::withMessages(['code' => ['El código ya existe.']]);
         }
+        // Tipo, sede y responsable: los da la pantalla de Contabilidad; el alta rápida de Compras crea uno de gastos.
+        $extra = BudgetController::validateCenter($request, $tenantId);
 
-        $center = ['id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'code' => $data['code'], 'name' => trim($data['name']), 'active' => true];
+        $center = [
+            'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'code' => $data['code'], 'name' => trim($data['name']), 'active' => true,
+            'kind' => $extra['kind'] ?? 'COST', 'branch_id' => $extra['branch_id'] ?? null, 'manager_user_id' => $extra['manager_user_id'] ?? null,
+            'created_by' => $request->user()->id,
+        ];
         DB::transaction(function () use ($request, $tenantId, $center) {
             DB::table('cost_centers')->insert($center);
             AuditLogger::log(
@@ -41,6 +48,6 @@ class CostCenterController extends Controller
             );
         });
 
-        return response()->json(['id' => $center['id'], 'code' => $center['code'], 'name' => $center['name'], 'active' => true], 201);
+        return response()->json(['id' => $center['id'], 'code' => $center['code'], 'name' => $center['name'], 'kind' => $center['kind'], 'active' => true], 201);
     }
 }
