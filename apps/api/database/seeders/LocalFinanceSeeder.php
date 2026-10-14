@@ -35,10 +35,13 @@ class LocalFinanceSeeder extends Seeder
         // Como en la matriz del prototipo: en Recurrencia procesa ciclos y renueva, pero no exporta.
         'recurring.view', 'recurring.create', 'recurring.manage',
         'treasury.view', 'treasury.create', 'treasury.manage', 'treasury.export',
+        // Compras: pide y recibe (no aprueba ni exporta órdenes) y lleva todo lo de cuentas por pagar.
+        'purchases.view', 'purchases.create', 'purchases.manage', 'budgets.manage',
+        'payables.view', 'payables.create', 'payables.manage', 'payables.approve', 'payables.export',
     ];
 
     /** Recursos que el rol alcanza en toda la empresa. */
-    private const TENANT_SCOPE = ['contracts', 'orders', 'contracted_services', 'projects', 'time_entries', 'cost_entries', 'billing', 'receivables', 'payments', 'recurring'];
+    private const TENANT_SCOPE = ['contracts', 'orders', 'contracted_services', 'projects', 'time_entries', 'cost_entries', 'billing', 'receivables', 'payments', 'recurring', 'purchases', 'payables'];
 
     public function run(): void
     {

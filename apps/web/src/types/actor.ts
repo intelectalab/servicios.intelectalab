@@ -47,6 +47,7 @@ export interface ActorContact {
 export interface ActorDetail extends Actor {
   address: string | null;
   customer: { id: string; status: string; credit_limit: string | null; payment_terms_days: number | null; preferred_currency: string; retention_agent?: boolean } | null;
+  supplier?: { id: string; status: string; detraction_account: string | null } | null;
   contacts: ActorContact[];
   /** Personas con rol Contacto enlazadas a esta organización. */
   contact_people: { id: string; name: string; position: string | null; email: string | null; phone: string | null; phone_country_code: string | null; status: string }[];

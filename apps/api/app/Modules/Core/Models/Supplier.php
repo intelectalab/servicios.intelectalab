@@ -16,6 +16,7 @@ class Supplier extends Model
         'tenant_id',
         'party_id',
         'status',
+        'detraction_account',
     ];
 
     protected static function boot()

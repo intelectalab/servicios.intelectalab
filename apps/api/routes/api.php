@@ -34,6 +34,10 @@ use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Finance\Http\Controllers\ReceivableController;
 use App\Modules\Finance\Http\Controllers\RecurringController;
 use App\Modules\Finance\Http\Controllers\TreasuryController;
+use App\Modules\Purchasing\Http\Controllers\CostCenterController;
+use App\Modules\Purchasing\Http\Controllers\PayableController;
+use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
+use App\Modules\Purchasing\Http\Controllers\SupplierInvoiceController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
@@ -293,6 +297,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/parties', [PartyController::class, 'store']);
             Route::put('/parties/{party}', [PartyController::class, 'update']);
             Route::post('/parties/{party}/roles', [PartyController::class, 'addRole']);
+            Route::put('/parties/{party}/supplier', [PartyController::class, 'updateSupplier']);
             Route::post('/parties/{party}/deactivate', [PartyController::class, 'deactivate']);
             Route::post('/parties/{party}/activate', [PartyController::class, 'activate']);
         });
@@ -560,6 +565,51 @@ Route::prefix('v1')->group(function () {
             Route::put('/bank-accounts/{bankAccount}', [TreasuryController::class, 'updateAccount']);
             Route::post('/bank-statement-lines/{line}/match', [TreasuryController::class, 'matchLine']);
             Route::post('/bank-statement-lines/{line}/resolve', [TreasuryController::class, 'resolveLine']);
+        });
+
+        // Compras: órdenes de compra y su recepción
+        Route::middleware('permission:purchases.view')->group(function () {
+            Route::get('/purchase-orders', [PurchaseOrderController::class, 'index']);
+            Route::get('/purchase-orders/summary', [PurchaseOrderController::class, 'summary']);
+            Route::get('/purchase-orders/options', [PurchaseOrderController::class, 'options']);
+            Route::get('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'show']);
+        });
+        Route::middleware('permission:purchases.create')->post('/purchase-orders', [PurchaseOrderController::class, 'store']);
+        Route::middleware('permission:purchases.manage')->group(function () {
+            Route::put('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
+            Route::post('/purchase-orders/{purchaseOrder}/submit', [PurchaseOrderController::class, 'submit']);
+            Route::post('/purchase-orders/{purchaseOrder}/reopen', [PurchaseOrderController::class, 'reopen']);
+            Route::post('/purchase-orders/{purchaseOrder}/receipts', [PurchaseOrderController::class, 'receive']);
+            Route::post('/purchase-orders/{purchaseOrder}/close', [PurchaseOrderController::class, 'close']);
+            Route::post('/purchase-orders/{purchaseOrder}/cancel', [PurchaseOrderController::class, 'cancel']);
+        });
+        // Aprobar es de otra persona que quien pide: permiso aparte.
+        Route::middleware('permission:purchases.approve')->group(function () {
+            Route::post('/purchase-orders/{purchaseOrder}/approve', [PurchaseOrderController::class, 'approve']);
+            Route::post('/purchase-orders/{purchaseOrder}/reject', [PurchaseOrderController::class, 'reject']);
+        });
+        // Centros de costo: se dan de alta desde Compras mientras no exista su pantalla en Contabilidad.
+        Route::middleware('permission:budgets.manage')->post('/cost-centers', [CostCenterController::class, 'store']);
+
+        // Compras: comprobantes de proveedor, cuentas por pagar y pagos a proveedores
+        Route::middleware('permission:payables.view')->group(function () {
+            Route::get('/supplier-invoices', [SupplierInvoiceController::class, 'index']);
+            Route::get('/supplier-invoices/summary', [SupplierInvoiceController::class, 'summary']);
+            Route::get('/supplier-invoices/options', [SupplierInvoiceController::class, 'options']);
+            Route::get('/supplier-invoices/{supplierInvoice}', [SupplierInvoiceController::class, 'show']);
+            Route::get('/payables', [PayableController::class, 'index']);
+            Route::get('/payables/summary', [PayableController::class, 'summary']);
+            Route::get('/payables/{payable}', [PayableController::class, 'show']);
+            Route::get('/supplier-payments', [PayableController::class, 'payments']);
+        });
+        Route::middleware('permission:payables.create')->post('/supplier-invoices', [SupplierInvoiceController::class, 'store']);
+        Route::middleware('permission:payables.manage')->post('/supplier-invoices/{supplierInvoice}/void', [SupplierInvoiceController::class, 'void']);
+        // Aprobar un comprobante y pagar a un proveedor comprometen dinero: permiso aparte de registrar.
+        Route::middleware('permission:payables.approve')->group(function () {
+            Route::post('/supplier-invoices/{supplierInvoice}/approve', [SupplierInvoiceController::class, 'approve']);
+            Route::post('/supplier-invoices/{supplierInvoice}/reject', [SupplierInvoiceController::class, 'reject']);
+            Route::get('/supplier-payments/options', [PayableController::class, 'paymentOptions']);
+            Route::post('/supplier-payments', [PayableController::class, 'pay']);
         });
 
         // Soporte

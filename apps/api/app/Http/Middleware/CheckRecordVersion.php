@@ -16,6 +16,8 @@ use App\Modules\Operations\Models\Project;
 use App\Modules\Operations\Models\TimeEntry;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Portal\Models\PortalRequest;
+use App\Modules\Purchasing\Models\PurchaseOrder;
+use App\Modules\Purchasing\Models\SupplierInvoice;
 use App\Modules\Services\Models\Contract;
 use App\Modules\Services\Models\Order;
 use App\Modules\Services\Models\Quotation;
@@ -63,6 +65,8 @@ class CheckRecordVersion
         'payment' => 'payments',
         'recurring' => 'recurring_service_instances',
         'bankAccount' => 'financial_accounts',
+        'purchaseOrder' => 'purchase_orders',
+        'supplierInvoice' => 'supplier_invoices',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -84,6 +88,8 @@ class CheckRecordVersion
         'invoices' => Invoice::class,
         'payments' => Payment::class,
         'recurring_service_instances' => RecurringInstance::class,
+        'purchase_orders' => PurchaseOrder::class,
+        'supplier_invoices' => SupplierInvoice::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

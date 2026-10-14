@@ -6,7 +6,7 @@ import { SCOPE_COOKIE, TOKEN_COOKIE } from "@/lib/auth";
 const AUTH_ROUTES = ["/login", "/forgot-password", "/reset-password"];
 
 // Cada tipo de cuenta tiene su propia consola y no entra a la otra.
-const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/audit", "/roles", "/users", "/profile"];
+const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/purchase-orders", "/supplier-invoices", "/payables", "/audit", "/roles", "/users", "/profile"];
 const PLATFORM_PREFIXES = ["/superadmin"];
 const TENANT_HOME = "/actors";
 // Módulos desconectados: sus pantallas siguen en el repo, pero las reemplaza Clientes y actores.
@@ -103,6 +103,9 @@ export const config = {
     "/banks/:path*",
     "/fiscal/:path*",
     "/exchange-rates/:path*",
+    "/purchase-orders/:path*",
+    "/supplier-invoices/:path*",
+    "/payables/:path*",
     "/audit/:path*",
     "/roles/:path*",
     "/users/:path*",

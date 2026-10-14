@@ -85,8 +85,16 @@ const RECURRING_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza tus servicios recurrentes y los de tus sedes.",
 };
 
+// Una orden de compra es de quien la pidió; un comprobante de proveedor, su cuenta por pagar y un pago, de quien los registró.
+const PURCHASE_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza solo lo que pediste o registraste tú.",
+  TEAM: "Tu rol alcanza lo tuyo y lo de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza lo tuyo y lo de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "purchases" || resource === "payables" ? PURCHASE_HINTS
     : resource === "recurring" ? RECURRING_HINTS
     : resource === "billing" ? BILLING_HINTS
     : resource === "receivables" ? RECEIVABLE_HINTS

@@ -259,6 +259,29 @@ class PartyController extends Controller
         return response()->json($this->detail($party->fresh()));
     }
 
+    /**
+     * Datos propios del rol Proveedor: su cuenta de detracciones en el Banco de la Nación, adonde
+     * se deposita lo detraído al pagarle.
+     */
+    public function updateSupplier(string $party, Request $request)
+    {
+        $party = $this->find($party, $request);
+        abort_unless($party->supplier, 404);
+        $data = $request->validate([
+            'detraction_account' => ['present', 'nullable', 'regex:/^\d{2}-\d{3}-\d{6}$/'],
+        ], ['detraction_account.regex' => 'La cuenta de detracciones tiene el formato 00-000-000000.']);
+
+        $before = $party->supplier->detraction_account;
+        DB::transaction(function () use ($party, $data, $request, $before) {
+            $party->supplier->update(['detraction_account' => $data['detraction_account'] ?: null]);
+            if ($before !== ($data['detraction_account'] ?: null)) {
+                $this->audit($request, $party, 'party.supplier.update', ['note' => 'Cuenta de detracciones: '.($data['detraction_account'] ?: 'sin registrar')]);
+            }
+        });
+
+        return response()->json($this->detail($party->fresh()));
+    }
+
     /** Agrega un rol a una identidad que ya existe, sin duplicarla. */
     public function addRole(string $party, Request $request)
     {
@@ -418,7 +441,7 @@ class PartyController extends Controller
                 'person',
                 'organization',
                 'customer:id,party_id,status,credit_limit,payment_terms_days,preferred_currency,retention_agent',
-                'supplier:id,party_id,status',
+                'supplier:id,party_id,status,detraction_account',
                 'employee:id,person_party_id,status,position,employee_code,user_id',
                 'employee.user:id,name',
             )
@@ -543,6 +566,7 @@ class PartyController extends Controller
             'address' => DB::table('contacts')->where('party_id', $party->id)->where('contact_type', 'ADDRESS')
                 ->orderByDesc('is_primary')->orderBy('created_at')->value('value'),
             'customer' => $party->customer?->only(['id', 'status', 'credit_limit', 'payment_terms_days', 'preferred_currency', 'retention_agent']),
+            'supplier' => $party->supplier?->only(['id', 'status', 'detraction_account']),
             'contacts' => Contact::where('party_id', $party->id)->orderByDesc('is_primary')->orderBy('created_at')
                 ->get(['id', 'contact_name', 'contact_type', 'value', 'country_code', 'is_primary']),
             // Personas con rol Contacto enlazadas a esta organización.

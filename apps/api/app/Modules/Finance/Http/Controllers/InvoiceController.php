@@ -635,7 +635,9 @@ class InvoiceController extends Controller
 
         $settings = FiscalSettings::for($invoice->tenant_id);
         $draft = $invoice->status === 'DRAFT';
-        $void = DB::table('fiscal_void_requests')->where('invoice_id', $invoice->id)->orderByDesc('created_at')->first();
+        // La baja viva (en curso o aceptada; solo puede haber una) y, si no hay, la más reciente.
+        $void = DB::table('fiscal_void_requests')->where('invoice_id', $invoice->id)
+            ->orderByRaw("CASE WHEN status IN ('PENDING', 'ACCEPTED') THEN 0 ELSE 1 END")->orderByDesc('created_at')->first();
         // En borrador, lo que le correspondería si se emitiera ahora (en dólares, al tipo de cambio vigente).
         $preview = $draft && $invoice->invoice_type === 'INVOICE'
             ? Withholding::compute($invoice, $settings, (bool) $invoice->customer?->retention_agent, $invoice->currency === 'USD' ? (float) (ExchangeRate::current('USD')?->sell ?? 0) : null)

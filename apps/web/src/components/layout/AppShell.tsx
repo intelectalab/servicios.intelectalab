@@ -55,9 +55,9 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/fiscal", label: "Facturación electrónica", module: "FINANZAS", requiredPermission: "fiscal.view", icon: ShieldCheck, superModule: "Finanzas" },
   { href: "/exchange-rates", label: "Monedas y tipo de cambio", module: "FINANZAS", requiredPermission: "fiscal.view", icon: TrendingUp, superModule: "Finanzas" },
 
-  { label: "Órdenes de compra", icon: ShoppingCart, superModule: "Compras", soon: true },
-  { label: "Comprobantes de proveedor", icon: ReceiptText, superModule: "Compras", soon: true },
-  { label: "Cuentas por pagar", icon: HandCoins, superModule: "Compras", soon: true },
+  { href: "/purchase-orders", label: "Órdenes de compra", module: "FINANZAS", requiredPermission: "purchases.view", icon: ShoppingCart, superModule: "Compras" },
+  { href: "/supplier-invoices", label: "Comprobantes de proveedor", module: "FINANZAS", requiredPermission: "payables.view", icon: ReceiptText, superModule: "Compras" },
+  { href: "/payables", label: "Cuentas por pagar", module: "FINANZAS", requiredPermission: "payables.view", icon: HandCoins, superModule: "Compras" },
 
   { label: "Libro diario", icon: BookOpen, superModule: "Contabilidad", soon: true },
   { label: "Mayor y balance", icon: Scale, superModule: "Contabilidad", soon: true },

@@ -42,9 +42,11 @@ class LocalOperationsSeeder extends Seeder
                 'cost_entries.view', 'cost_entries.create', 'cost_entries.approve',
                 'deliverables.view', 'deliverables.manage', 'deliverables.approve',
                 'agenda.view', 'agenda.create', 'agenda.manage',
+                // Compras de su sede: las pide y las recibe; no las aprueba.
+                'purchases.view', 'purchases.create', 'purchases.manage',
             ],
             'BRANCH',
-            ['contracts', 'orders', 'contracted_services', 'work_orders', 'projects', 'time_entries', 'cost_entries', 'agenda'],
+            ['contracts', 'orders', 'contracted_services', 'work_orders', 'projects', 'time_entries', 'cost_entries', 'agenda', 'purchases'],
         ],
         // Técnico: ejecuta las órdenes de trabajo que tiene asignadas.
         'TECNICO' => [

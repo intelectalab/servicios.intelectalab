@@ -44,6 +44,10 @@ class ListExport
         'api/v1/recurring' => 'recurring',
         'api/v1/bank-movements' => 'treasury',
         'api/v1/cash-expenses' => 'treasury',
+        'api/v1/purchase-orders' => 'purchases',
+        'api/v1/supplier-invoices' => 'payables',
+        'api/v1/payables' => 'payables',
+        'api/v1/supplier-payments' => 'payables',
         'api/v1/users' => 'users',
         'api/v1/audit' => 'audit',
     ];

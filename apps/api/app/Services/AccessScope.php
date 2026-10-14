@@ -42,6 +42,8 @@ class AccessScope
         'receivables' => 'Cuentas por cobrar',
         'payments' => 'Cobros',
         'recurring' => 'Servicios recurrentes',
+        'purchases' => 'Órdenes de compra',
+        'payables' => 'Cuentas por pagar',
     ];
 
     /** De menor a mayor alcance. */
@@ -143,6 +145,10 @@ class AccessScope
                 ->orWhereIn("{$table}.contracted_service_id", fn ($sub) => $sub->select('id')->from('contracted_services')
                     ->where(fn ($own) => $own->whereIn('owner_user_id', $owners)
                         ->orWhereIn('contract_id', fn ($contracts) => $contracts->select('id')->from('contracts')->whereIn('created_by', $owners)))),
+            // Una orden de compra es propia de quien la pidió.
+            'purchases' => $query->whereIn("{$table}.owner_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
+            // Un comprobante de proveedor, su cuenta por pagar y un pago, de quien los registró.
+            'payables' => $query->whereIn("{$table}.owner_user_id", $owners),
         };
     }
 

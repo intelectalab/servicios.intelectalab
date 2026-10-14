@@ -78,6 +78,8 @@ export function ActorForm({
     currency: actor?.customer?.preferred_currency === "USD" ? "USD" : "PEN",
     retention: Boolean(actor?.customer?.retention_agent),
   }));
+  // Dato del rol Proveedor: su cuenta de detracciones en el Banco de la Nación.
+  const [bnAccount, setBnAccount] = useState(actor?.supplier?.detraction_account ?? "");
   // Un teléfono guardado sin prefijo se edita "sin formato", tal como está.
   const [unformatted, setUnformatted] = useState(Boolean(actor?.phone && !actor.phone_country_code));
 
@@ -93,6 +95,7 @@ export function ActorForm({
       .map((days): [string, string] => [days, `${days} días`]),
   ];
   const isContact = roles.includes("CONTACT");
+  const isSupplier = roles.includes("SUPPLIER");
   const hasPosition = roles.includes("EMPLOYEE") || isContact;
   const availableRoles = ROLES.filter((role) => isOrg ? role !== "EMPLOYEE" && role !== "CONTACT" : true);
 
@@ -126,6 +129,7 @@ export function ActorForm({
     }
     if (!roles.length) found.roles = "Selecciona al menos un rol.";
     if (isCustomer && terms.limit !== "" && !(Number(terms.limit) >= 0)) found.credit_limit = "El límite no puede ser negativo.";
+    if (isSupplier && bnAccount.trim() && !/^\d{2}-\d{3}-\d{6}$/.test(bnAccount.trim())) found.detraction_account = "La cuenta de detracciones tiene el formato 00-000-000000.";
     return found;
   }
 
@@ -152,6 +156,12 @@ export function ActorForm({
     });
   }
 
+  /** Guarda la cuenta de detracciones en el proveedor de la identidad, si cambió. */
+  async function saveSupplier(partyId: string, supplierId: string | null) {
+    if (!isSupplier || !supplierId || bnAccount.trim() === (actor?.supplier?.detraction_account ?? "")) return;
+    await apiFetch(`/v1/parties/${partyId}/supplier`, { method: "PUT", body: JSON.stringify({ detraction_account: bnAccount.trim() || null }) });
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     const found = validate();
@@ -176,12 +186,14 @@ export function ActorForm({
           saved = await apiFetch<ActorDetail>(`/v1/parties/${actor.id}/roles`, { method: "POST", body: JSON.stringify({ role }) });
         }
         await saveTerms(saved.customer_id);
+        await saveSupplier(actor.id, saved.supplier_id);
         await saveCustom(actor.id);
         onSaved(saved, "Party actualizada");
       } else {
         const saved = await apiFetch<ActorDetail>("/v1/parties", { method: "POST", body: JSON.stringify({ ...fields, kind, roles }) });
         // La identidad ya existe: si un campo personalizado falla, se completa luego desde la tabla.
         await saveTerms(saved.customer_id).catch(() => undefined);
+        await saveSupplier(saved.id, saved.supplier_id).catch(() => undefined);
         await saveCustom(saved.id).catch(() => undefined);
         onSaved(saved, "Party creada en CORE");
       }
@@ -346,6 +358,13 @@ export function ActorForm({
               <small className="app-muted block text-xs">{isCustomer ? "Al facturarle más de S/ 700 sin detracción, retiene el 3 %." : "Se guarda con el rol Cliente"}</small>
             </span>
           </label>
+          <div className="mt-3">
+            <FormGrid>
+              <Field label="Cuenta de detracciones (Banco de la Nación)" error={errors.detraction_account} hint={isSupplier ? "Adonde se deposita la detracción al pagarle. Formato 00-000-000000." : "Se guarda con el rol Proveedor"}>
+                <input className={INPUT} value={isSupplier ? bnAccount : ""} onChange={(event) => setBnAccount(event.target.value)} placeholder="00-000-000000" maxLength={13} disabled={!isSupplier} />
+              </Field>
+            </FormGrid>
+          </div>
         </div>
 
         {customFields.length > 0 && (
