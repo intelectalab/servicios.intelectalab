@@ -256,7 +256,8 @@ export function FilterSelect({
   label, value, onChange, options,
 }: { label: string; value: string; onChange: (value: string) => void; options: [string, string][] }) {
   return (
-    <label className="flex-[1_1_140px] sm:flex-none">
+    // `relative`: la etiqueta oculta se coloca respecto del filtro; si no, bajo el pliegue añade una franja vacía a la página.
+    <label className="relative flex-[1_1_140px] sm:flex-none">
       <span className="sr-only">{label}</span>
       <select
         value={value}

@@ -64,6 +64,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-13 | Operaciones: App del técnico (visitas del día, mapa y ruta, checklist, fotos de evidencia, trabajo sin conexión con sincronización; instalable en el teléfono) | [cambios/2026-10-13_operaciones-app-del-tecnico.md](cambios/2026-10-13_operaciones-app-del-tecnico.md) |
 | 2026-10-13 | Finanzas y CxC, primera parte: Por facturar (eventos facturables), Comprobantes (emisión, nota de crédito, PDF), Cuentas por cobrar (antigüedad, movimientos) y Cobros (aplicar, conciliar, reembolsar); permiso propio para el tipo de cambio | [cambios/2026-10-13_finanzas-facturacion-cxc-y-cobros.md](cambios/2026-10-13_finanzas-facturacion-cxc-y-cobros.md) |
 | 2026-10-13 | Finanzas: comprobantes listos para conectar el proveedor de SUNAT (contrato del proveedor, envío tras emitir, respuesta guardada, reintento) | [cambios/2026-10-13_finanzas-listo-para-proveedor-sunat.md](cambios/2026-10-13_finanzas-listo-para-proveedor-sunat.md) |
+| 2026-10-13 | Finanzas: Recurrencia (ciclos y renovaciones), Bancos y caja (cuentas, movimientos, conciliación por extracto, caja chica) y Facturación electrónica (configuración, series, contingencia, bajas, detracciones y retenciones) | [cambios/2026-10-13_finanzas-recurrencia-bancos-y-facturacion-electronica.md](cambios/2026-10-13_finanzas-recurrencia-bancos-y-facturacion-electronica.md) |
 
 ## Cómo se escribe cada entrada
 

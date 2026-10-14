@@ -8,6 +8,7 @@ use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Finance\Models\BillableEvent;
 use App\Modules\Finance\Models\Invoice;
 use App\Modules\Finance\Models\Payment;
+use App\Modules\Finance\Models\RecurringInstance;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\AgendaEvent;
 use App\Modules\Operations\Models\CostEntry;
@@ -60,6 +61,8 @@ class CheckRecordVersion
         'billableEvent' => 'billable_events',
         'invoice' => 'invoices',
         'payment' => 'payments',
+        'recurring' => 'recurring_service_instances',
+        'bankAccount' => 'financial_accounts',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -80,6 +83,7 @@ class CheckRecordVersion
         'billable_events' => BillableEvent::class,
         'invoices' => Invoice::class,
         'payments' => Payment::class,
+        'recurring_service_instances' => RecurringInstance::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

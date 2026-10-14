@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Coins, FileText, Plus, Receipt, TrendingUp } from "lucide-react";
+import { Coins, FileText, Plus, Receipt, RefreshCw, TrendingUp } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { isoDateFromNow, shortDate } from "@/lib/commercial";
 import { exportCsv, exportXlsx, fetchAllPages, type ExportColumn } from "@/lib/export-table";
@@ -97,6 +97,7 @@ export default function ExchangeRates() {
   const [reload, setReload] = useState(0);
   const [sort, setSort] = useState<SortState>(null);
   const [modal, setModal] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const { selection, selectedRows, clear: clearSelection } = useRowSelection(rateKey);
 
@@ -135,6 +136,24 @@ export default function ExchangeRates() {
     return () => { cancelled = true; };
   }, [page, perPage, sort, reload]);
 
+  /** Trae el tipo de cambio que publica SUNAT; si SUNAT no responde, no se guarda nada. */
+  async function syncFromSunat() {
+    setSyncing(true);
+    try {
+      const { rate, unchanged } = await apiFetch<{ rate: ExchangeRate; unchanged: boolean }>("/v1/exchange-rates/sync", { method: "POST" });
+      const detail = `${shortDate(rate.rate_date)} · compra ${rate3(rate.buy)} · venta ${rate3(rate.sell)}`;
+      toast(unchanged ? "El tipo de cambio ya estaba al día" : "Tipo de cambio actualizado desde SUNAT", "success", detail);
+      if (!unchanged) {
+        setPage(1);
+        setReload((n) => n + 1);
+      }
+    } catch (err) {
+      toast(err instanceof ApiError ? (err.errors && Object.values(err.errors)[0]?.[0]) || err.message : "No se pudo consultar a SUNAT.", "danger");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function runExport(format: "xlsx" | "csv", picked?: ExchangeRate[]) {
     setExporting(true);
     try {
@@ -157,10 +176,16 @@ export default function ExchangeRates() {
       <PageHead
         title="Monedas y tipo de cambio"
         actions={
-          <Btn variant="secondary" onClick={() => setModal(true)} permission="fiscal.manage">
-            <Plus size={16} />
-            <span>Registrar tipo de cambio</span>
-          </Btn>
+          <>
+            <Btn onClick={syncFromSunat} disabled={syncing} permission="fiscal.manage">
+              <RefreshCw size={16} className={syncing ? "animate-spin" : undefined} />
+              <span>{syncing ? "Consultando a SUNAT…" : "Actualizar desde SUNAT"}</span>
+            </Btn>
+            <Btn variant="secondary" onClick={() => setModal(true)} permission="fiscal.manage">
+              <Plus size={16} />
+              <span>Registrar tipo de cambio</span>
+            </Btn>
+          </>
         }
       />
 

@@ -6,7 +6,7 @@ import { Send, Wallet } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { customerName, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { dateTime } from "@/lib/crm";
-import { AGING, MOVEMENT_LABELS, RECEIVABLE_STATES, bucketLabel } from "@/lib/finance";
+import { AGING, MOVEMENT_LABELS, RECEIVABLE_STATES, WITHHOLDING_STATES, bucketLabel } from "@/lib/finance";
 import { useAccess } from "@/lib/access-context";
 import { exportCsv, exportXlsx, recordExport, fetchAllPages, type ExportColumn } from "@/lib/export-table";
 import {
@@ -38,6 +38,11 @@ const EXPORT_COLUMNS: ExportColumn<Receivable>[] = [
   { label: "Antigüedad", value: (receivable) => bucketLabel(receivable.bucket), width: 16, kind: "center" },
   { label: "Moneda", value: (receivable) => receivable.currency, width: 10, kind: "center" },
   { label: "Original", value: (receivable) => receivable.original_amount, width: 14, kind: "money", currency: (receivable) => receivable.currency },
+  { label: "Detracción / retención (S/)", value: (receivable) => receivable.withholding?.amount ?? "", width: 22, kind: "number" },
+  {
+    label: "Constancia", width: 20, kind: "center",
+    value: (receivable) => (receivable.withholding ? `${receivable.withholding.type === "DETRACTION" ? "Detracción" : "Retención"} · ${stateOf(WITHHOLDING_STATES, receivable.withholding.status)[0]}` : ""),
+  },
   { label: "Saldo", value: (receivable) => receivable.balance_amount, width: 14, kind: "money", currency: (receivable) => receivable.currency },
   {
     label: "Estado",
@@ -145,8 +150,16 @@ export default function Receivables() {
       ),
     },
     { label: "Original", num: true, sortKey: "original", filter: "number", render: (receivable) => money(receivable.original_amount, receivable.currency) },
-    // Aún sin datos: las detracciones y retenciones llegan con Facturación electrónica.
-    { label: "Detracción / retención", num: true, render: () => <span className="app-muted" title="Las detracciones y retenciones llegan con Facturación electrónica">—</span> },
+    {
+      label: "Detracción / retención", num: true, sortKey: "withholding", filter: "number",
+      render: (receivable) =>
+        receivable.withholding ? (
+          <div className="whitespace-nowrap">
+            {money(receivable.withholding.amount)}
+            <small className="mt-0.5 block"><Badge tone={stateOf(WITHHOLDING_STATES, receivable.withholding.status)[1]}>{stateOf(WITHHOLDING_STATES, receivable.withholding.status)[0]}</Badge></small>
+          </div>
+        ) : "—",
+    },
     {
       label: "Saldo", num: true, sortKey: "balance", filter: "number",
       render: (receivable) => <strong className="font-semibold">{money(receivable.balance_amount, receivable.currency)}</strong>,
@@ -359,6 +372,13 @@ function ReceivableModal({ id, version, seesInvoices, onClose }: { id: string; v
                 </span>,
               ],
               ["Original", money(receivable.original_amount, receivable.currency)],
+              receivable.withholding ? [
+                receivable.withholding.type === "DETRACTION" ? "Detracción" : "Retención",
+                <span key="withholding" className="inline-flex flex-wrap items-center gap-1.5">
+                  {money(receivable.withholding.amount)}
+                  <Badge tone={stateOf(WITHHOLDING_STATES, receivable.withholding.status)[1]}>{stateOf(WITHHOLDING_STATES, receivable.withholding.status)[0]}</Badge>
+                </span>,
+              ] : null,
               ["Saldo", <strong key="balance" className="font-semibold tabular-nums">{money(receivable.balance_amount, receivable.currency)}</strong>],
               ["Estado", <Badge key="status" tone={stateOf(RECEIVABLE_STATES, receivable.status)[1]}>{stateOf(RECEIVABLE_STATES, receivable.status)[0]}</Badge>],
             ]}

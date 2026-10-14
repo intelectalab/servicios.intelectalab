@@ -3,6 +3,7 @@
 namespace App\Modules\Operations\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Finance\Support\Recurrence;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Contract;
@@ -259,6 +260,8 @@ class ContractedServiceController extends Controller
             'frequency' => $recurrence->frequency,
             'interval_value' => $recurrence->interval_value,
             'next_cycle_date' => max($service->start_date?->toDateString() ?? '', now()->toDateString()),
+            // Lo pactado en el servicio contratado: cambiar el catálogo no altera sus ciclos.
+            ...Recurrence::snapshot($service),
             'created_at' => now(),
             'updated_at' => now(),
         ]);

@@ -1,23 +1,81 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { ArrowLeft, FileCode2, FileText, Send } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
-import { dateTime, firstError } from "@/lib/crm";
+import { isoDateFromNow, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
+import { dateTime, fieldErrors, firstError } from "@/lib/crm";
 import {
-  FISCAL_STATES, INVOICE_STATES, INVOICE_TRACK, MOVEMENT_LABELS, RECEIVABLE_STATES, downloadInvoicePdf, financeHistoryLabel, invoiceCustomer, methodLabel, taxIdText, typeLabel,
+  FISCAL_STATES, INVOICE_STATES, INVOICE_TRACK, MOVEMENT_LABELS, RECEIVABLE_STATES, VOID_STATES, WITHHOLDING_STATES, downloadInvoicePdf, financeHistoryLabel, invoiceCustomer,
+  methodLabel, netToCollect, taxIdText, typeLabel, withholdingLabel,
 } from "@/lib/finance";
 import {
-  Badge, Btn, Card, Chip, Kv, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline, useToasts,
+  Badge, Btn, Card, Chip, Field, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline, useDenied, useToasts,
 } from "@/components/ui/proto";
+import { PickSelect } from "@/components/ui/pick-select";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import type { InvoiceDetail as Invoice } from "@/types/finance";
 
 const LINK = "text-[color:var(--p-brand-text)] hover:underline";
+
+/** Constancia de depósito de la detracción o certificado de retención que entrega el cliente. */
+function WithholdingReceiptModal({ invoice, onClose, onDone }: { invoice: Invoice; onClose: () => void; onDone: () => void }) {
+  const detraction = invoice.withholding?.type === "DETRACTION";
+  const [number, setNumber] = useState("");
+  const [date, setDate] = useState(isoDateFromNow(0));
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    setErrors({});
+    try {
+      await apiFetch(`/v1/invoices/${invoice.id}/withholding-receipt`, { method: "POST", body: JSON.stringify({ number: number.trim(), date }) });
+      onDone();
+    } catch (err) {
+      const fields = fieldErrors(err);
+      setErrors(fields);
+      if (!fields.number && !fields.date) setError(firstError(err, "No se pudo registrar la constancia."));
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={detraction ? "Constancia de depósito de detracción" : "Certificado de retención"}
+      size="sm"
+      onClose={onClose}
+      footer={
+        <>
+          <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+          <Btn type="submit" form="withholding-form" disabled={saving} permission="receivables.manage">{saving ? "Registrando…" : "Registrar"}</Btn>
+        </>
+      }
+    >
+      <form id="withholding-form" onSubmit={submit} className="grid gap-3">
+        {error && <Notice tone="warn">{error}</Notice>}
+        <p>
+          {detraction
+            ? "El cliente depositó la detracción en la cuenta del Banco de la Nación. Al registrarla, se descuenta de la cuenta por cobrar y entra a la cuenta de detracciones."
+            : "El cliente retuvo el 3 % y entregó el certificado. Se descuenta de la cuenta por cobrar como crédito contra el IGV."}
+        </p>
+        <Field label={detraction ? "N.º de constancia" : "N.º de certificado"} required error={errors.number}>
+          <input className={INPUT} value={number} onChange={(e) => setNumber(e.target.value)} maxLength={100} required autoFocus />
+        </Field>
+        <Field label="Fecha" error={errors.date}>
+          <input className={INPUT} type="date" value={date} max={isoDateFromNow(0)} onChange={(e) => setDate(e.target.value)} required />
+        </Field>
+        <p><strong className="font-semibold">Importe: {money(invoice.withholding?.amount ?? 0)}</strong></p>
+      </form>
+    </Modal>
+  );
+}
 
 export default function InvoiceDetail() {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +89,9 @@ export default function InvoiceDetail() {
   const [issuing, setIssuing] = useState(false);
   const [discarding, setDiscarding] = useState(false);
   const [crediting, setCrediting] = useState(false);
+  const [receiving, setReceiving] = useState(false);
+  const [voiding, setVoiding] = useState(false);
+  const modeDenied = useDenied("billing.manage");
 
   useEffect(() => {
     const flash = takeFlash();
@@ -64,6 +125,21 @@ export default function InvoiceDetail() {
     } finally {
       setBusy(false);
       // También tras un error: si otra persona lo cambió, se ve la versión vigente.
+      setReload((n) => n + 1);
+    }
+  }
+
+  /** En un borrador de factura: cómo se calculará su detracción o retención al emitir. */
+  async function setWithholdingMode(value: string) {
+    const [mode, code] = value.split(":");
+    setBusy(true);
+    try {
+      await apiFetch(`/v1/invoices/${id}/withholding`, { method: "PUT", body: JSON.stringify({ mode, code: code ?? null }) });
+      toast("Detracción / retención actualizada");
+    } catch (err) {
+      toast(firstError(err, "No se pudo actualizar."), "danger");
+    } finally {
+      setBusy(false);
       setReload((n) => n + 1);
     }
   }
@@ -120,6 +196,12 @@ export default function InvoiceDetail() {
     && (invoice.fiscal_status === "REJECTED" || (provider.connected && invoice.fiscal_status !== "ACCEPTED"));
   // Serie de contingencia: las que empiezan con cero.
   const contingency = Boolean(invoice.series?.startsWith("0"));
+  // Emitido, la detracción o retención fijada en el comprobante; en borrador, la que le correspondería.
+  const withheld = invoice.withholding ?? invoice.withholding_preview;
+  const draftInvoice = status === "DRAFT" && invoice.invoice_type === "INVOICE";
+  const modeValue = invoice.withholding_mode === "DETRACTION" ? `DETRACTION:${invoice.withholding_mode_code ?? ""}` : invoice.withholding_mode;
+  const voidable = status === "ISSUED" && invoice.fiscal_status === "ACCEPTED" && invoice.invoice_type !== "CREDIT_NOTE";
+  const receivableOpen = receivable ? receivable.status === "OPEN" || receivable.status === "PARTIAL" : false;
 
   return (
     <Screen>
@@ -147,6 +229,11 @@ export default function InvoiceDetail() {
                 {invoice.fiscal_status === "NOT_SENT" ? "Enviar a SUNAT" : "Reintentar envío SUNAT"}
               </Btn>
             )}
+            {voidable && (
+              <Btn variant="ghost" onClick={() => setVoiding(true)} permission="billing.approve" disabled={busy || Boolean(invoice.void_blocked)} title={invoice.void_blocked ?? undefined}>
+                Comunicación de baja
+              </Btn>
+            )}
             <Btn variant="secondary" onClick={downloadPdf} disabled={printing}>
               <FileText size={16} />
               <span>{status === "DRAFT" ? "Vista previa PDF" : "Descargar PDF"}</span>
@@ -166,7 +253,7 @@ export default function InvoiceDetail() {
         storageKey="erp.cards.invoice-detail"
         className="grid grid-cols-1 gap-x-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
         zones={[
-          { className: "min-w-0 lg:min-h-24", cards: ["detail", "fiscal", "states"] },
+          { className: "min-w-0 lg:min-h-24", cards: ["detail", "withholding", "fiscal", "states"] },
           { className: "min-w-0 lg:min-h-24", cards: ["receivable", "payments", "links", "history"] },
         ]}
         cards={[
@@ -209,13 +296,65 @@ export default function InvoiceDetail() {
                         "Tipo de cambio",
                         invoice.exchange_rate ? `${invoice.exchange_rate.toFixed(3)} · equivale a ${money(invoice.total * invoice.exchange_rate)}` : "Se fija al emitir",
                       ] : null,
+                      withheld ? [withholdingLabel(withheld), `− ${money(withheld.amount)}`] : null,
+                      withheld ? [
+                        "Neto a cobrar al cliente",
+                        <strong key="net" className="font-semibold tabular-nums">
+                          {currency === "USD" && !invoice.exchange_rate ? "Se fija al emitir" : money(netToCollect(invoice, withheld.amount), currency)}
+                        </strong>,
+                      ] : null,
                     ]}
                   />
+                  {draftInvoice && (
+                    <div className="mt-2">
+                      <Field
+                        label="Detracción / retención"
+                        hint={modeDenied ?? "Se calcula en soles y queda fijada al emitir. Aplica a facturas por más de S/ 700."}
+                      >
+                        <PickSelect
+                          className={`${INPUT} disabled:opacity-60`} ariaLabel="Detracción / retención" searchable disabled={busy || Boolean(modeDenied)} value={modeValue}
+                          onChange={(value) => { if (value !== modeValue) setWithholdingMode(value); }}
+                          options={[
+                            ["AUTO", "Automática (según la configuración fiscal)"],
+                            ...invoice.detraction_codes.map((code): [string, string] => [`DETRACTION:${code.code}`, `Detracción ${code.rate} % · ${code.code} ${code.name}`]),
+                            ["RETENTION", "Retención 3 % (cliente agente de retención)"],
+                            ["NONE", "No aplica"],
+                          ]}
+                        />
+                      </Field>
+                    </div>
+                  )}
                 </div>
                 {invoice.reason && <Notice tone="warn"><strong className="font-semibold">Motivo:</strong> {invoice.reason}</Notice>}
               </Card>
             ),
           },
+          ...(invoice.withholding && status !== "DRAFT" ? [{
+            id: "withholding",
+            node: (
+              <Card title={invoice.withholding.type === "DETRACTION" ? "Detracción (SPOT)" : "Retención del IGV"}>
+                <Kv
+                  rows={[
+                    ["Importe", `${money(invoice.withholding.amount)} (en soles)`],
+                    ["Estado", <Badge key="status" tone={stateOf(WITHHOLDING_STATES, invoice.withholding.status)[1]}>{stateOf(WITHHOLDING_STATES, invoice.withholding.status)[0]}</Badge>],
+                    invoice.withholding.type === "DETRACTION"
+                      ? ["Depósito en", `Cuenta de detracciones del Banco de la Nación ${invoice.detraction_account ?? "(sin registrar)"}`]
+                      : ["Agente de retención", invoiceCustomer(invoice)],
+                    invoice.withholding.number
+                      ? [invoice.withholding.type === "DETRACTION" ? "Constancia" : "Certificado", `${invoice.withholding.number}${invoice.withholding.date ? ` · ${shortDate(invoice.withholding.date)}` : ""}`]
+                      : null,
+                  ]}
+                />
+                {invoice.withholding.status === "PENDING" && receivableOpen && status === "ISSUED" && (
+                  <div className="mt-1">
+                    <Btn variant="secondary" onClick={() => setReceiving(true)} permission="receivables.manage" disabled={busy}>
+                      {invoice.withholding.type === "DETRACTION" ? "Registrar constancia de depósito" : "Registrar certificado de retención"}
+                    </Btn>
+                  </div>
+                )}
+              </Card>
+            ),
+          }] : []),
           {
             id: "fiscal",
             node: (
@@ -226,6 +365,16 @@ export default function InvoiceDetail() {
                     ["Respuesta", invoice.fiscal_response ?? (invoice.fiscal_status === "PENDING" ? "Esperando la respuesta del proveedor…" : "—")],
                     ["Proveedor", provider.connected ? provider.name : <span key="provider" className="app-muted">Sin proveedor conectado</span>],
                     ["Serie", <span key="series" className="inline-flex items-center gap-1.5">{invoice.series ?? "—"}{contingency && <Chip tone="warning">Contingencia</Chip>}</span>],
+                    invoice.void_request ? [
+                      "Comunicación de baja",
+                      <span key="void" className="grid gap-0.5">
+                        <span className="inline-flex flex-wrap items-center gap-1.5">
+                          <Badge tone={stateOf(VOID_STATES, invoice.void_request.status)[1]}>{stateOf(VOID_STATES, invoice.void_request.status)[0]}</Badge>
+                          {invoice.void_request.ticket && <span className="app-muted text-xs tabular-nums">ticket {invoice.void_request.ticket}</span>}
+                        </span>
+                        {invoice.void_request.response && <small className="app-muted text-xs">{invoice.void_request.response}</small>}
+                      </span>,
+                    ] : null,
                   ]}
                 />
               </Card>
@@ -240,6 +389,7 @@ export default function InvoiceDetail() {
                   {status === "DRAFT" && <p className="app-muted text-[12.5px]">Al emitirlo recibe serie y correlativo y nace su cuenta por cobrar. Después ya no se modifica.</p>}
                   {status === "ISSUED" && <p className="app-muted text-[12.5px]">Un comprobante emitido no se edita: se corrige con una nota de crédito.</p>}
                   {status === "CANCELLED" && <p className="app-muted text-[12.5px]">Borrador descartado: sus eventos volvieron a quedar por facturar.</p>}
+                  {status === "VOID" && <p className="app-muted text-[12.5px]">Anulado ante SUNAT con una comunicación de baja. Su cuenta por cobrar quedó sin saldo.</p>}
                 </div>
               </Card>
             ),
@@ -351,7 +501,10 @@ export default function InvoiceDetail() {
         >
           <p className="text-[15px]">{label} · {money(invoice.total, currency)}</p>
           <p className="app-muted mt-2">Se asigna serie y correlativo y se crea la cuenta por cobrar. Después no se puede editar.</p>
-          {provider.connected ? (
+          {withheld && <p className="app-muted mt-2">Queda con {withholdingLabel(withheld).toLowerCase()}: {money(withheld.amount)}.</p>}
+          {invoice.contingency_mode ? (
+            <Notice tone="warn">La empresa está emitiendo <strong className="font-semibold">en contingencia</strong>: el comprobante saldrá con la serie de contingencia y se informará a SUNAT al restablecer el servicio.</Notice>
+          ) : provider.connected ? (
             <p className="app-muted mt-2">Al emitirlo se envía a SUNAT por {provider.name}.</p>
           ) : (
             <Notice tone="warn">No hay un proveedor de facturación electrónica conectado: el comprobante queda emitido en el sistema y <strong className="font-semibold">sin enviar a SUNAT</strong>.</Notice>
@@ -394,6 +547,30 @@ export default function InvoiceDetail() {
           onClose={() => setCrediting(false)}
           onConfirm={async (reason) => {
             if (await act("credit-note", { reason }, "Nota de crédito emitida")) setCrediting(false);
+          }}
+        />
+      )}
+      {receiving && (
+        <WithholdingReceiptModal
+          invoice={invoice}
+          onClose={() => setReceiving(false)}
+          onDone={() => {
+            setReceiving(false);
+            toast("Constancia registrada: la cuenta por cobrar se actualizó");
+            setReload((n) => n + 1);
+          }}
+        />
+      )}
+      {voiding && (
+        <ReasonModal
+          title="Comunicación de baja"
+          text="Anula el comprobante ante SUNAT. Solo procede dentro de los 7 días de emitido y si el cliente no lo pagó; en otro caso, usa nota de crédito."
+          label="Motivo"
+          confirmLabel="Enviar baja"
+          busy={busy}
+          onClose={() => setVoiding(false)}
+          onConfirm={async (reason) => {
+            if (await act("void", { reason }, "Comunicación de baja enviada")) setVoiding(false);
           }}
         />
       )}

@@ -46,7 +46,7 @@ export interface ActorContact {
 /** Vista 360: la identidad y lo que cada área tiene de ella. */
 export interface ActorDetail extends Actor {
   address: string | null;
-  customer: { id: string; status: string; credit_limit: string | null; payment_terms_days: number | null; preferred_currency: string } | null;
+  customer: { id: string; status: string; credit_limit: string | null; payment_terms_days: number | null; preferred_currency: string; retention_agent?: boolean } | null;
   contacts: ActorContact[];
   /** Personas con rol Contacto enlazadas a esta organización. */
   contact_people: { id: string; name: string; position: string | null; email: string | null; phone: string | null; phone_country_code: string | null; status: string }[];

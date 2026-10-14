@@ -22,6 +22,13 @@ class ReceivableController extends Controller
 
     private const WITH = ['customer.party.person', 'customer.party.organization'];
 
+    /** Detracción o retención del comprobante de la fila (importe en soles). */
+    private const WITHHOLDING = [
+        'withholding_type' => '(SELECT i.withholding_type FROM invoices i WHERE i.id = receivables.invoice_id)',
+        'withholding_amount' => '(SELECT i.withholding_amount FROM invoices i WHERE i.id = receivables.invoice_id)',
+        'withholding_status' => '(SELECT i.withholding_status FROM invoices i WHERE i.id = receivables.invoice_id)',
+    ];
+
     public function index(Request $request)
     {
         $search = trim((string) $request->query('search', ''));
@@ -32,6 +39,7 @@ class ReceivableController extends Controller
             ->select('receivables.*')
             ->selectRaw(self::INVOICE_NUMBER.' AS invoice_number')
             ->selectRaw(Receivable::DAYS_OVERDUE.' AS days_overdue')
+            ->selectRaw(collect(self::WITHHOLDING)->map(fn (string $sql, string $as) => "{$sql} AS {$as}")->implode(', '))
             ->when(isset(Receivable::STATES[$status]), fn ($q) => $q->where('receivables.status', $status))
             ->when($status === 'OVERDUE', fn ($q) => $this->overdue($q))
             ->when($bucket, function ($q) use ($bucket) {
@@ -56,6 +64,7 @@ class ReceivableController extends Controller
             'due' => ColumnFilters::date('receivables.due_date'),
             'original' => ColumnFilters::number('receivables.original_amount'),
             'balance' => ColumnFilters::number('receivables.balance_amount'),
+            'withholding' => ColumnFilters::number(self::WITHHOLDING['withholding_amount']),
         ]);
 
         ListSort::apply($query, $request, [
@@ -64,6 +73,7 @@ class ReceivableController extends Controller
             'due' => 'receivables.due_date',
             'original' => 'receivables.original_amount',
             'balance' => 'receivables.balance_amount',
+            'withholding' => self::WITHHOLDING['withholding_amount'],
             'status' => ListSort::labels('receivables.status', Receivable::STATES),
         ], fn ($q) => $q->orderBy('receivables.due_date')->orderBy('receivables.id'), 'receivables.id');
 
@@ -117,6 +127,7 @@ class ReceivableController extends Controller
             ->select('receivables.*')
             ->selectRaw(self::INVOICE_NUMBER.' AS invoice_number')
             ->selectRaw(Receivable::DAYS_OVERDUE.' AS days_overdue')
+            ->selectRaw(collect(self::WITHHOLDING)->map(fn (string $sql, string $as) => "{$sql} AS {$as}")->implode(', '))
             ->findOrFail($receivable);
 
         return response()->json([
@@ -152,6 +163,9 @@ class ReceivableController extends Controller
             'overdue' => $overdue,
             'days_overdue' => $overdue ? $days : 0,
             'bucket' => $open ? Receivable::bucketOf($days) : null,
+            'withholding' => $receivable->withholding_type ? [
+                'type' => $receivable->withholding_type, 'amount' => (float) $receivable->withholding_amount, 'status' => $receivable->withholding_status,
+            ] : null,
         ];
     }
 }

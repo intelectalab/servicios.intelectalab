@@ -107,6 +107,68 @@ class FiscalGateway
         });
     }
 
+    /** ¿El proveedor de la empresa sabe presentar comunicaciones de baja? */
+    public static function supportsVoid(string $tenantId): bool
+    {
+        return self::providerFor($tenantId) instanceof FiscalVoidProvider;
+    }
+
+    /** Presenta la comunicación de baja en cuanto la operación en curso queda guardada. */
+    public static function queueVoid(string $requestId, string $tenantId, ?string $userId): void
+    {
+        DB::afterCommit(fn () => self::sendVoid($requestId, $tenantId, $userId));
+    }
+
+    /**
+     * Presenta una baja y guarda la respuesta. Aceptada, el comprobante queda anulado y su cuenta
+     * por cobrar, sin saldo. Rechazada (o sin comunicación), el comprobante sigue emitido.
+     */
+    public static function sendVoid(string $requestId, string $tenantId, ?string $userId = null): void
+    {
+        $provider = self::providerFor($tenantId);
+        $request = DB::table('fiscal_void_requests')->where('tenant_id', $tenantId)->where('id', $requestId)->where('status', 'PENDING')->first();
+        $invoice = $request ? Invoice::ignoringAccessScope()->where('tenant_id', $tenantId)->find($request->invoice_id) : null;
+        if (! $provider instanceof FiscalVoidProvider || ! $invoice || $invoice->status !== 'ISSUED') {
+            return;
+        }
+
+        try {
+            $result = $provider->void(FiscalDocument::from($invoice), $request->reason, self::settings($tenantId));
+        } catch (Throwable $e) {
+            report($e);
+            $result = FiscalResult::rejected('No se pudo comunicar con el proveedor de facturación electrónica. Vuelve a solicitar la baja.');
+        }
+
+        DB::transaction(function () use ($invoice, $request, $tenantId, $userId, $result) {
+            DB::table('fiscal_void_requests')->where('id', $request->id)->update([
+                'status' => $result->status,
+                'ticket' => $result->code ? Str::limit($result->code, 100, '') : $request->ticket,
+                'response' => Str::limit((string) $result->message, 1000, '…'),
+                'resolved_at' => $result->status === 'PENDING' ? null : now(),
+            ]);
+
+            if ($result->status === 'ACCEPTED') {
+                $invoice->update(['status' => 'VOID']);
+                $receivable = \App\Modules\Finance\Models\Receivable::ignoringAccessScope()->where('invoice_id', $invoice->id)->lockForUpdate()->first();
+                if ($receivable && (float) $receivable->balance_amount > 0) {
+                    // El saldo y el estado de la cuenta los actualiza la base con este movimiento.
+                    \App\Modules\Finance\Models\ReceivableMovement::create([
+                        'tenant_id' => $tenantId, 'receivable_id' => $receivable->id, 'movement_type' => 'VOID',
+                        'amount' => -1 * (float) $receivable->balance_amount, 'reference' => 'Baja '.($result->code ?: $invoice->invoice_number), 'created_by' => $userId,
+                    ]);
+                }
+            }
+
+            AuditLogger::log(
+                tenantId: $tenantId, userId: $userId, action: 'invoice.void_'.strtolower($result->status), entityType: 'Invoice', entityId: $invoice->id,
+                metadata: array_filter([
+                    'from' => $result->status === 'ACCEPTED' ? 'ISSUED' : null, 'to' => $result->status === 'ACCEPTED' ? 'VOID' : null,
+                    'note' => $result->message, 'code' => $result->code,
+                ]),
+            );
+        });
+    }
+
     /** Datos fiscales de la empresa que recibe el proveedor. Las credenciales no van aquí: las resuelve su clase. */
     private static function settings(string $tenantId): array
     {

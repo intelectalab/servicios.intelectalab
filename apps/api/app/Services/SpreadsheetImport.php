@@ -129,8 +129,19 @@ class SpreadsheetImport
      * @param  string[]  $notes
      * @param  array<string, string[]>  $lists  columnas con lista desplegable: cabecera => opciones
      * @param  string[]  $openLists  columnas cuya lista solo sugiere (aceptan otro valor)
+     * @param  array<string, int>  $widths  ancho de las columnas que necesitan más que el de su título: cabecera => ancho
      */
-    public static function template(string $filename, string $title, array $headers, array $examples, array $notes, array $lists = [], array $openLists = []): StreamedResponse
+    public static function template(string $filename, string $title, array $headers, array $examples, array $notes, array $lists = [], array $openLists = [], array $widths = []): StreamedResponse
+    {
+        return response()->streamDownload(
+            static fn () => (new Xlsx(self::templateBook($title, $headers, $examples, $notes, $lists, $openLists, $widths)))->save('php://output'),
+            $filename,
+            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+        );
+    }
+
+    /** El libro de la plantilla, antes de enviarlo. */
+    public static function templateBook(string $title, array $headers, array $examples, array $notes, array $lists = [], array $openLists = [], array $widths = []): Spreadsheet
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -164,7 +175,7 @@ class SpreadsheetImport
         foreach ($headers as $index => $header) {
             $cell = Coordinate::stringFromColumnIndex($index + 1).$line;
             $sheet->setCellValue($cell, $header);
-            $sheet->getColumnDimensionByColumn($index + 1)->setWidth(max(16, strlen($header) + 6));
+            $sheet->getColumnDimensionByColumn($index + 1)->setWidth($widths[$header] ?? max(16, strlen($header) + 6));
         }
         $sheet->getStyle("A{$line}:{$last}{$line}")->applyFromArray([
             'font' => ['name' => 'Arial', 'size' => 10, 'bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
@@ -231,10 +242,6 @@ class SpreadsheetImport
             $spreadsheet->setActiveSheetIndex(0);
         }
 
-        return response()->streamDownload(
-            static fn () => (new Xlsx($spreadsheet))->save('php://output'),
-            $filename,
-            ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-        );
+        return $spreadsheet;
     }
 }

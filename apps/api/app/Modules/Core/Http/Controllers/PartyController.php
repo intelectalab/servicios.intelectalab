@@ -417,7 +417,7 @@ class PartyController extends Controller
             ->with(
                 'person',
                 'organization',
-                'customer:id,party_id,status,credit_limit,payment_terms_days,preferred_currency',
+                'customer:id,party_id,status,credit_limit,payment_terms_days,preferred_currency,retention_agent',
                 'supplier:id,party_id,status',
                 'employee:id,person_party_id,status,position,employee_code,user_id',
                 'employee.user:id,name',
@@ -542,7 +542,7 @@ class PartyController extends Controller
             ...$this->summary($party),
             'address' => DB::table('contacts')->where('party_id', $party->id)->where('contact_type', 'ADDRESS')
                 ->orderByDesc('is_primary')->orderBy('created_at')->value('value'),
-            'customer' => $party->customer?->only(['id', 'status', 'credit_limit', 'payment_terms_days', 'preferred_currency']),
+            'customer' => $party->customer?->only(['id', 'status', 'credit_limit', 'payment_terms_days', 'preferred_currency', 'retention_agent']),
             'contacts' => Contact::where('party_id', $party->id)->orderByDesc('is_primary')->orderBy('created_at')
                 ->get(['id', 'contact_name', 'contact_type', 'value', 'country_code', 'is_primary']),
             // Personas con rol Contacto enlazadas a esta organización.

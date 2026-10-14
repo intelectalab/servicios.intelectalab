@@ -4,7 +4,6 @@ namespace App\Modules\Finance\Support;
 
 use App\Modules\Core\Models\Customer;
 use App\Modules\Finance\Models\BillableEvent;
-use App\Modules\Finance\Models\Invoice;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
@@ -16,9 +15,6 @@ class Billing
 {
     /** IGV, en porcentaje. Todos los servicios nacen afectos. */
     public const TAX_RATE = 18;
-
-    /** Serie con la que se emite cada tipo de comprobante. */
-    private const SERIES = ['INVOICE' => 'F001', 'RECEIPT' => 'B001'];
 
     /** Mientras no haya un proveedor de facturación electrónica conectado, nada se envía a SUNAT. */
     public const NOT_SENT_NOTE = 'Sin proveedor de facturación electrónica conectado: el comprobante no se envió a SUNAT.';
@@ -32,30 +28,12 @@ class Billing
     }
 
     /**
-     * Serie de un comprobante. La nota de crédito sigue a lo que corrige: la de una factura
-     * empieza con F y la de una boleta con B.
-     */
-    public static function seriesFor(string $type, ?Invoice $corrects = null): string
-    {
-        if ($type === 'CREDIT_NOTE') {
-            return $corrects?->invoice_type === 'RECEIPT' ? 'BC01' : 'FC01';
-        }
-
-        return self::SERIES[$type] ?? 'F001';
-    }
-
-    /**
      * Siguiente correlativo de una serie. Bloquea la fila de la serie hasta que termine la
      * transacción: dos emisiones a la vez no reciben el mismo número. Debe llamarse dentro de una.
      */
     public static function nextNumber(string $tenantId, string $type, string $series): int
     {
-        $configuration = fn () => DB::table('fiscal_configurations')->where('tenant_id', $tenantId)->where('country_code', 'PE')->value('id');
-        $configurationId = $configuration();
-        if (! $configurationId) {
-            DB::table('fiscal_configurations')->insertOrIgnore(['id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'country_code' => 'PE']);
-            $configurationId = $configuration();
-        }
+        $configurationId = FiscalSettings::ensure($tenantId);
 
         DB::table('fiscal_series')->insertOrIgnore([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'fiscal_configuration_id' => $configurationId,

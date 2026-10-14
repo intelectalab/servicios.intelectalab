@@ -78,8 +78,16 @@ const RECEIVABLE_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza tus cuentas por cobrar y las de tus sedes.",
 };
 
+// Una instancia recurrente es de quien lleva su servicio contratado y de quien vendió su contrato.
+const RECURRING_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los servicios recurrentes de los que eres responsable y los de tus contratos.",
+  TEAM: "Tu rol alcanza tus servicios recurrentes y los de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus servicios recurrentes y los de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "recurring" ? RECURRING_HINTS
     : resource === "billing" ? BILLING_HINTS
     : resource === "receivables" ? RECEIVABLE_HINTS
     : resource === "payments" ? ENTRY_HINTS

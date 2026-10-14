@@ -115,6 +115,7 @@ class CustomerController extends Controller
             // Actualizar condiciones comerciales del cliente
             $customer->update([
                 'payment_terms_days' => $request->input('payment_terms_days', $customer->payment_terms_days),
+                'retention_agent' => $request->has('retention_agent') ? $request->boolean('retention_agent') : $customer->retention_agent,
                 'credit_limit' => $request->has('credit_limit') ? $request->input('credit_limit') : $customer->credit_limit,
                 'preferred_currency' => $request->input('preferred_currency', $customer->preferred_currency),
             ]);

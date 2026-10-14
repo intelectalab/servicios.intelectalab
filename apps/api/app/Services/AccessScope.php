@@ -41,6 +41,7 @@ class AccessScope
         'billing' => 'Facturación',
         'receivables' => 'Cuentas por cobrar',
         'payments' => 'Cobros',
+        'recurring' => 'Servicios recurrentes',
     ];
 
     /** De menor a mayor alcance. */
@@ -137,6 +138,11 @@ class AccessScope
             'receivables' => $query->whereIn("{$table}.owner_user_id", $owners),
             // Un cobro, de quien lo registró.
             'payments' => $query->whereIn("{$table}.created_by", $owners),
+            // Una instancia recurrente es propia de quien lleva su servicio contratado y de quien vendió su contrato.
+            'recurring' => $query->whereIn("{$table}.owner_user_id", $owners)
+                ->orWhereIn("{$table}.contracted_service_id", fn ($sub) => $sub->select('id')->from('contracted_services')
+                    ->where(fn ($own) => $own->whereIn('owner_user_id', $owners)
+                        ->orWhereIn('contract_id', fn ($contracts) => $contracts->select('id')->from('contracts')->whereIn('created_by', $owners)))),
         };
     }
 

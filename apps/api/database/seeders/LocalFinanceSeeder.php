@@ -24,18 +24,21 @@ class LocalFinanceSeeder extends Seeder
     // si después se cambia desde la aplicación, el seeder no la pisa.
     private const ACCOUNT = ['finanzas@erp-saas.test', 'Fabiola Núñez (Finanzas)', 'contrasena-de-prueba'];
 
-    // Finanzas: factura eventos, emite comprobantes y gestiona cuentas por cobrar, cobros y reembolsos.
+    // Finanzas: factura eventos, emite comprobantes y gestiona cuentas por cobrar, cobros, reembolsos, recurrencia, bancos y caja.
     private const PERMISSIONS = [
         'core.view', 'services.view', 'contracts.view', 'orders.view', 'contracted_services.view', 'projects.view',
         'time_entries.view', 'cost_entries.view', 'cost_entries.approve',
         'billing.view', 'billing.create', 'billing.manage', 'billing.approve', 'billing.export',
         'receivables.view', 'receivables.manage', 'receivables.export',
         'payments.view', 'payments.create', 'payments.manage', 'payments.approve', 'payments.export',
-        'fiscal.view', 'fiscal.manage',
+        'fiscal.view', 'fiscal.manage', 'fiscal.configure',
+        // Como en la matriz del prototipo: en Recurrencia procesa ciclos y renueva, pero no exporta.
+        'recurring.view', 'recurring.create', 'recurring.manage',
+        'treasury.view', 'treasury.create', 'treasury.manage', 'treasury.export',
     ];
 
     /** Recursos que el rol alcanza en toda la empresa. */
-    private const TENANT_SCOPE = ['contracts', 'orders', 'contracted_services', 'projects', 'time_entries', 'cost_entries', 'billing', 'receivables', 'payments'];
+    private const TENANT_SCOPE = ['contracts', 'orders', 'contracted_services', 'projects', 'time_entries', 'cost_entries', 'billing', 'receivables', 'payments', 'recurring'];
 
     public function run(): void
     {

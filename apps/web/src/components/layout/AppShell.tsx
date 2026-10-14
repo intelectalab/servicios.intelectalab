@@ -50,9 +50,9 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/invoices", label: "Comprobantes", module: "FINANZAS", requiredPermission: "billing.view", icon: Receipt, superModule: "Finanzas" },
   { href: "/receivables", label: "Cuentas por cobrar", module: "FINANZAS", requiredPermission: "receivables.view", icon: Coins, superModule: "Finanzas" },
   { href: "/payments", label: "Cobros", module: "FINANZAS", requiredPermission: "payments.view", icon: Wallet, superModule: "Finanzas" },
-  { label: "Recurrencia", icon: Repeat, superModule: "Finanzas", soon: true },
-  { label: "Bancos y caja", icon: Landmark, superModule: "Finanzas", soon: true },
-  { label: "Facturación electrónica", icon: ShieldCheck, superModule: "Finanzas", soon: true },
+  { href: "/recurring", label: "Recurrencia", module: "FINANZAS", requiredPermission: "recurring.view", icon: Repeat, superModule: "Finanzas" },
+  { href: "/banks", label: "Bancos y caja", module: "FINANZAS", requiredPermission: "treasury.view", icon: Landmark, superModule: "Finanzas" },
+  { href: "/fiscal", label: "Facturación electrónica", module: "FINANZAS", requiredPermission: "fiscal.view", icon: ShieldCheck, superModule: "Finanzas" },
   { href: "/exchange-rates", label: "Monedas y tipo de cambio", module: "FINANZAS", requiredPermission: "fiscal.view", icon: TrendingUp, superModule: "Finanzas" },
 
   { label: "Órdenes de compra", icon: ShoppingCart, superModule: "Compras", soon: true },

@@ -76,6 +76,7 @@ export function ActorForm({
     days: actor?.customer ? (actor.customer.payment_terms_days == null ? "" : String(actor.customer.payment_terms_days)) : "30",
     limit: actor?.customer?.credit_limit == null ? "" : Number(actor.customer.credit_limit).toFixed(2),
     currency: actor?.customer?.preferred_currency === "USD" ? "USD" : "PEN",
+    retention: Boolean(actor?.customer?.retention_agent),
   }));
   // Un teléfono guardado sin prefijo se edita "sin formato", tal como está.
   const [unformatted, setUnformatted] = useState(Boolean(actor?.phone && !actor.phone_country_code));
@@ -146,6 +147,7 @@ export function ActorForm({
         payment_terms_days: terms.days === "" ? null : Number(terms.days),
         credit_limit: terms.limit === "" ? null : Number(terms.limit),
         preferred_currency: terms.currency,
+        retention_agent: terms.retention,
       }),
     });
   }
@@ -334,6 +336,16 @@ export function ActorForm({
               />
             </Field>
           </FormGrid>
+          <label className={`relative mt-3 flex items-start gap-2 text-[13px] ${isCustomer ? "cursor-pointer" : "opacity-60"}`}>
+            <input
+              type="checkbox" className="mt-0.5 h-4 w-4 accent-[#1B8FC9]" disabled={!isCustomer} checked={isCustomer && terms.retention}
+              onChange={(event) => setTerms((current) => ({ ...current, retention: event.target.checked }))}
+            />
+            <span>
+              Agente de retención del IGV
+              <small className="app-muted block text-xs">{isCustomer ? "Al facturarle más de S/ 700 sin detracción, retiene el 3 %." : "Se guarda con el rol Cliente"}</small>
+            </span>
+          </label>
         </div>
 
         {customFields.length > 0 && (

@@ -5,7 +5,7 @@ import { downloadDocumentPdf, pdfAmount, pdfMoney } from "@/lib/document-pdf";
 import type { HistoryEntry } from "@/types/commercial";
 import type {
   AgingBucket, BillableEventSource, BillableEventStatus, FiscalStatus, InvoiceDetail, InvoiceStatus, InvoiceType, MovementType,
-  PaymentDetail, PaymentStatus, ReceivableStatus,
+  AccountKind, CycleStatus, VoidStatus, Withholding, WithholdingStatus, PaymentDetail, PaymentStatus, ReceivableStatus, RecurringStatus, StatementLineStatus,
 } from "@/types/finance";
 
 export const EVENT_STATES: [BillableEventStatus, string, Tone][] = [
@@ -109,6 +109,82 @@ export const methodLabel = (method: string) => PAYMENT_METHODS[method] ?? method
 
 export const SOURCE_LABELS: Record<string, string> = { BACKOFFICE: "Registrado aquí", GATEWAY: "Pasarela", PORTAL: "Portal" };
 
+export const RECURRING_STATES: [RecurringStatus, string, Tone][] = [
+  ["ACTIVE", "Activa", "success"],
+  ["SUSPENDED", "Suspendida", "warning"],
+  ["EXPIRED", "Vencida", "muted"],
+  ["CANCELLED", "Cancelada", "muted"],
+];
+
+export const CYCLE_STATES: [CycleStatus, string, Tone][] = [
+  ["PENDING", "Pendiente", "neutral"],
+  ["PROCESSING", "Procesando", "info"],
+  ["COMPLETED", "Completado", "success"],
+  ["FAILED", "Fallido", "danger"],
+  ["SKIPPED", "Omitido", "muted"],
+];
+
+export const RECURRING_FREQUENCIES: Record<string, string> = {
+  DAILY: "Diaria", WEEKLY: "Semanal", MONTHLY: "Mensual", QUARTERLY: "Trimestral", YEARLY: "Anual", CUSTOM: "Personalizada",
+};
+
+/** "Mensual", o "Cada 2 meses" si el intervalo no es uno. */
+export function frequencyLabel(frequency: string, interval = 1) {
+  const label = RECURRING_FREQUENCIES[frequency] ?? frequency;
+  return interval > 1 ? `${label} · cada ${interval}` : label;
+}
+
+export const WITHHOLDING_STATES: [WithholdingStatus, string, Tone][] = [
+  ["PENDING", "Por recibir", "warning"],
+  ["RECEIVED", "Constancia recibida", "success"],
+];
+
+export const VOID_STATES: [VoidStatus, string, Tone][] = [
+  ["PENDING", "Enviada (ticket)", "info"],
+  ["ACCEPTED", "Aceptada", "success"],
+  ["REJECTED", "Rechazada", "danger"],
+];
+
+const pct = (rate: number) => `${Number(rate.toFixed(2))} %`;
+
+/** "Detracción 12 % (código 037)" o "Retención 3 %". */
+export function withholdingLabel(withholding: Pick<Withholding, "type" | "code" | "rate">) {
+  return withholding.type === "DETRACTION"
+    ? `Detracción ${pct(withholding.rate)}${withholding.code ? ` (código ${withholding.code})` : ""}`
+    : `Retención ${pct(withholding.rate)}`;
+}
+
+/** Lo que el cliente paga directamente, en la moneda del comprobante: el total menos lo detraído o retenido. */
+export function netToCollect(invoice: { total: number; currency: string; exchange_rate: number | null }, amountPen: number) {
+  const inDocument = invoice.currency === "USD" ? (invoice.exchange_rate ? amountPen / invoice.exchange_rate : 0) : amountPen;
+  return Math.round((invoice.total - inDocument) * 100) / 100;
+}
+
+export const ACCOUNT_KINDS: Record<AccountKind, string> = { BANK: "Cuenta bancaria", CASH: "Caja", DETRACTION: "Detracciones (BN)" };
+
+/** Origen de un movimiento de banco o caja. */
+export const MOVEMENT_ORIGINS: [string, string][] = [
+  ["PAYMENT", "Cobro"],
+  ["REFUND", "Reembolso"],
+  ["TRANSFER", "Transferencia"],
+  ["CASH_EXPENSE", "Caja chica"],
+  ["BANK_FEE", "Comisión"],
+  ["DETRACTION", "Detracción"],
+  ["UNIDENTIFIED", "Por identificar"],
+  ["OPENING", "Apertura"],
+  ["SUPPLIER_PAYMENT", "Pago proveedor"],
+  ["MANUAL", "Manual"],
+];
+
+export const originLabel = (origin: string) => MOVEMENT_ORIGINS.find(([key]) => key === origin)?.[1] ?? origin;
+
+export const LINE_STATES: [StatementLineStatus, string, Tone][] = [
+  ["UNMATCHED", "Sin conciliar", "warning"],
+  ["MATCHED", "Conciliada", "success"],
+  ["CREATED", "Registrada", "info"],
+  ["IGNORED", "Ignorada", "muted"],
+];
+
 /** Nombre del cliente: el del comprobante si ya quedó escrito en él, si no el vigente. */
 export const invoiceCustomer = (invoice: { customer_name: string | null; customer: InvoiceDetail["customer"] }) =>
   invoice.customer_name || customerName(invoice.customer);
@@ -127,11 +203,22 @@ const HISTORY_LABELS: Record<string, string> = {
   "invoice.fiscal_accepted": "Aceptado por SUNAT",
   "invoice.fiscal_rejected": "Rechazado por SUNAT",
   "invoice.fiscal_pending": "Recibido por el proveedor",
+  "invoice.withholding_mode": "Detracción o retención definida",
+  "invoice.withholding_receipt": "Constancia registrada",
+  "invoice.void_request": "Comunicación de baja solicitada",
+  "invoice.void_accepted": "Baja aceptada por SUNAT",
+  "invoice.void_rejected": "Baja rechazada",
+  "invoice.void_pending": "Baja recibida por SUNAT",
+  "fiscal.contingency_start": "Contingencia activada",
+  "fiscal.contingency_end": "Servicio restablecido",
   "payment.create": "Cobro registrado",
   "payment.register": "Cobro registrado",
   "payment.allocate": "Aplicado a cuentas por cobrar",
   "payment.reconcile": "Conciliado con el banco",
   "payment.refund": "Reembolso",
+  "recurring.cycle_completed": "Ciclo procesado",
+  "recurring.cycle_failed": "Ciclo fallido",
+  "recurring.renew": "Renovado",
 };
 
 export const financeHistoryLabel = (entry: HistoryEntry) => HISTORY_LABELS[entry.action] ?? entry.action;
@@ -140,12 +227,14 @@ export const financeHistoryLabel = (entry: HistoryEntry) => HISTORY_LABELS[entry
 export async function downloadInvoicePdf(invoice: InvoiceDetail) {
   const currency = invoice.currency;
   const draft = invoice.status === "DRAFT";
+  // Emitido, lo fijado en el comprobante; en borrador, lo que le correspondería.
+  const withheld = invoice.withholding ?? invoice.withholding_preview;
 
   await downloadDocumentPdf({
     file: `${typeLabel(invoice.invoice_type).replace(/ /g, "_")}_${invoice.invoice_number ?? "borrador"}`,
     title: typeLabel(invoice.invoice_type).toUpperCase(),
     number: invoice.invoice_number ?? "BORRADOR",
-    watermark: draft ? "BORRADOR" : invoice.status === "CANCELLED" ? "DESCARTADO" : invoice.status === "CORRECTED" ? "CORREGIDO" : undefined,
+    watermark: draft ? "BORRADOR" : invoice.status === "CANCELLED" ? "DESCARTADO" : invoice.status === "CORRECTED" ? "CORREGIDO" : invoice.status === "VOID" ? "ANULADO" : undefined,
     left: [
       ["Cliente", invoiceCustomer(invoice)],
       ["RUC / documento", invoice.customer_tax_id ?? "-"],
@@ -166,9 +255,17 @@ export async function downloadInvoicePdf(invoice: InvoiceDetail) {
       ["Op. gravada", pdfMoney(invoice.subtotal, currency)],
       ["IGV 18%", pdfMoney(invoice.tax_total, currency)],
       ["Importe total", pdfMoney(invoice.total, currency), true],
+      ...(withheld ? [
+        [withholdingLabel(withheld), `- ${pdfMoney(withheld.amount, "PEN")}`] as [string, string],
+        ["Neto a cobrar al cliente", pdfMoney(netToCollect(invoice, withheld.amount), currency)] as [string, string],
+      ] : []),
     ],
     notes: [
       ...(invoice.reason ? [["Motivo", invoice.reason] as [string, string]] : []),
+      ...(withheld?.type === "DETRACTION" ? [[
+        "Detracción",
+        `Operación sujeta al Sistema de Pago de Obligaciones Tributarias (SPOT). Depositar ${pdfMoney(withheld.amount, "PEN")} en la cuenta del Banco de la Nación ${invoice.detraction_account ?? "(sin registrar)"}.`,
+      ] as [string, string]] : []),
       // Mientras SUNAT no lo haya aceptado, este documento no es el comprobante electrónico.
       ...(invoice.fiscal_status === "ACCEPTED" ? [] : [["Aviso", "Documento interno. No es la representación impresa de un comprobante electrónico: no fue aceptado por SUNAT."] as [string, string]]),
     ],

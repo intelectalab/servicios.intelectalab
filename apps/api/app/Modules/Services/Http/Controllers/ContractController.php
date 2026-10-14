@@ -378,13 +378,8 @@ class ContractController extends Controller
                 ->orderBy('ri.created_at')
                 ->get([
                     'ri.id', 'ri.status', 'ri.frequency', 'ri.next_cycle_date', 'services.name as service_name',
-                    DB::raw("COALESCE(
-                        (SELECT p.amount FROM recurring_service_prices p
-                          WHERE p.recurring_instance_id = ri.id AND p.valid_from <= CURRENT_DATE
-                            AND (p.valid_to IS NULL OR p.valid_to >= CURRENT_DATE)
-                          ORDER BY p.valid_from DESC LIMIT 1),
-                        round(cs.price * cs.quantity * 1.18, 2)
-                    ) AS amount"),
+                    // Lo pactado en la instancia (con IGV), no el precio vigente del catálogo.
+                    DB::raw('round(round(ri.unit_price * ri.quantity, 2) * 1.18, 2) AS amount'),
                 ]),
             'history' => AuditHistory::for('Contract', $contract->id),
         ];

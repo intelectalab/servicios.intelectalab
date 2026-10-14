@@ -69,7 +69,8 @@ const RESOURCES: Record<string, string> = {
   billing: "Eventos facturables y comprobantes",
   receivables: "Cuentas por cobrar",
   payments: "Cobros",
-  fiscal: "Monedas y tipo de cambio",
+  fiscal: "Facturación electrónica y tipo de cambio",
+  treasury: "Bancos y caja",
   finance: "Finanzas",
   recurring: "Recurrencia",
   support: "Soporte",
@@ -82,7 +83,7 @@ const RESOURCES: Record<string, string> = {
 
 // Acciones de la matriz, en el orden en que se muestran.
 const ACTIONS: Record<string, string> = {
-  view: "Ver", create: "Crear", manage: "Gestionar", approve: "Aprobar", export: "Exportar", use: "Usar", reveal: "Revelar", delete: "Eliminar",
+  view: "Ver", create: "Crear", manage: "Gestionar", configure: "Configurar", approve: "Aprobar", export: "Exportar", use: "Usar", reveal: "Revelar", delete: "Eliminar",
 };
 
 // Alcances que se pueden elegir, de menor a mayor.

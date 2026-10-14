@@ -12,6 +12,9 @@ use App\Modules\Finance\Models\Payment;
 use App\Modules\Finance\Models\Receivable;
 use App\Modules\Finance\Models\ReceivableMovement;
 use App\Modules\Finance\Support\Billing;
+use App\Modules\Finance\Support\FiscalSettings;
+use App\Modules\Finance\Support\Treasury;
+use App\Modules\Finance\Support\Withholding;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
@@ -32,6 +35,9 @@ use Illuminate\Validation\ValidationException;
 class InvoiceController extends Controller
 {
     private const MAX_EVENTS = 100;
+
+    /** Días desde la emisión en que SUNAT admite la comunicación de baja. */
+    private const VOID_DAYS = 7;
 
     private const WITH = ['customer.party.person', 'customer.party.organization'];
 
@@ -148,7 +154,8 @@ class InvoiceController extends Controller
                 'customer_id' => $customer->id,
                 'contract_id' => $contracts->count() === 1 ? $contracts->first() : null,
                 'invoice_type' => $data['type'],
-                'series' => Billing::seriesFor($data['type']),
+                // Provisional: la serie definitiva se toma al emitir (normal o de contingencia).
+                'series' => FiscalSettings::seriesFor(FiscalSettings::for($tenantId), $data['type'])[1],
                 'status' => 'DRAFT',
                 'currency' => $first->currency,
                 'due_date' => now()->addDays((int) ($customer->payment_terms_days ?: Billing::DEFAULT_TERMS_DAYS))->toDateString(),
@@ -212,24 +219,43 @@ class InvoiceController extends Controller
         }
 
         DB::transaction(function () use ($request, $invoice, $tenantId, $identity, $rate) {
-            $number = Billing::nextNumber($tenantId, $invoice->invoice_type, $invoice->series);
+            // La configuración se lee dentro de la operación: la serie (normal o de contingencia) es la de este momento.
+            $settings = FiscalSettings::for($tenantId);
+            $contingency = $settings['mode'] === 'CONTINGENCY';
+            [$seriesType, $series] = FiscalSettings::seriesFor($settings, $invoice->invoice_type);
+            $withholding = Withholding::compute($invoice, $settings, (bool) $invoice->customer?->retention_agent, $rate ? (float) $rate : null);
+
+            $number = Billing::nextNumber($tenantId, $seriesType, $series);
             $invoice->update([
+                'series' => $series,
                 'number' => $number,
-                'invoice_number' => Billing::formatNumber($invoice->series, $number),
+                'invoice_number' => Billing::formatNumber($series, $number),
                 'issue_date' => now()->toDateString(),
                 'issued_at' => now(),
                 'status' => 'ISSUED',
                 'exchange_rate' => $rate,
-                'fiscal_status' => 'NOT_SENT',
-                'fiscal_response' => Billing::NOT_SENT_NOTE,
+                'fiscal_status' => $contingency ? 'CONTINGENCY' : 'NOT_SENT',
+                'fiscal_response' => $contingency ? FiscalSettings::CONTINGENCY_NOTE : Billing::NOT_SENT_NOTE,
                 'customer_tax_id' => $identity['tax_id'],
                 'customer_name' => $identity['name'],
+                // Su detracción o retención queda fijada al emitir, en soles.
+                'withholding_type' => $withholding['type'] ?? null,
+                'withholding_code' => $withholding['code'] ?? null,
+                'withholding_rate' => $withholding['rate'] ?? null,
+                'withholding_amount' => $withholding['amount'] ?? null,
+                'withholding_status' => $withholding ? 'PENDING' : null,
             ]);
 
             $this->openReceivable($request, $invoice);
-            $this->audit($request, $invoice, 'invoice.issue', ['from' => 'DRAFT', 'to' => 'ISSUED', 'note' => $invoice->invoice_number]);
+            $this->audit($request, $invoice, 'invoice.issue', array_filter([
+                'from' => 'DRAFT', 'to' => 'ISSUED',
+                'note' => $invoice->invoice_number.($contingency ? ' · en contingencia' : '').($withholding ? ' · '.Withholding::label($withholding['type'], $withholding['code'], $withholding['rate']) : ''),
+            ]));
             // Con proveedor conectado queda "En envío" y sale hacia SUNAT al cerrar esta operación.
-            FiscalGateway::queue($invoice, $request->user()->id);
+            // En contingencia no sale: se informa al restablecer el servicio.
+            if (! $contingency) {
+                FiscalGateway::queue($invoice, $request->user()->id);
+            }
         });
 
         return response()->json($this->detail($invoice, $request));
@@ -257,11 +283,13 @@ class InvoiceController extends Controller
             $receivable = Receivable::ignoringAccessScope()->where('invoice_id', $invoice->id)->lockForUpdate()->first();
             if ($receivable && (float) $receivable->balance_amount < (float) $receivable->original_amount) {
                 throw ValidationException::withMessages([
-                    'status' => ['El comprobante tiene cobros aplicados. Reembolsa esos cobros antes de emitir la nota de crédito.'],
+                    'status' => ['El comprobante tiene cobros o constancias aplicados a su cuenta por cobrar. Reembolsa esos cobros antes de emitir la nota de crédito.'],
                 ]);
             }
 
-            $series = Billing::seriesFor('CREDIT_NOTE', $invoice);
+            $settings = FiscalSettings::for($tenantId);
+            $contingency = $settings['mode'] === 'CONTINGENCY';
+            $series = FiscalSettings::seriesFor($settings, 'CREDIT_NOTE', $invoice)[1];
             $note = Invoice::create([
                 'tenant_id' => $tenantId,
                 'customer_id' => $invoice->customer_id,
@@ -304,7 +332,8 @@ class InvoiceController extends Controller
                 'issue_date' => now()->toDateString(),
                 'issued_at' => now(),
                 'status' => 'ISSUED',
-                'fiscal_response' => Billing::NOT_SENT_NOTE,
+                'fiscal_status' => $contingency ? 'CONTINGENCY' : 'NOT_SENT',
+                'fiscal_response' => $contingency ? FiscalSettings::CONTINGENCY_NOTE : Billing::NOT_SENT_NOTE,
             ]);
 
             $invoice->update(['status' => 'CORRECTED']);
@@ -318,7 +347,9 @@ class InvoiceController extends Controller
 
             $this->audit($request, $note, 'invoice.credit_note', ['to' => 'ISSUED', 'note' => "{$reason} (corrige {$invoice->invoice_number})"]);
             $this->audit($request, $invoice, 'invoice.correct', ['from' => 'ISSUED', 'to' => 'CORRECTED', 'note' => "{$note->invoice_number}: {$reason}"]);
-            FiscalGateway::queue($note, $request->user()->id);
+            if (! $contingency) {
+                FiscalGateway::queue($note, $request->user()->id);
+            }
 
             return $note;
         });
@@ -345,6 +376,137 @@ class InvoiceController extends Controller
         });
 
         return response()->json($this->detail($invoice, $request));
+    }
+
+    /**
+     * En un borrador de factura, decide cómo se calcula su detracción o retención: según la
+     * configuración de la empresa, con un código de detracción concreto, como retención o ninguna.
+     */
+    public function withholdingMode(string $invoice, Request $request)
+    {
+        $invoice = $this->find($invoice);
+        $this->assertStatus($invoice, ['DRAFT'], 'cambiar la detracción de');
+        if ($invoice->invoice_type !== 'INVOICE') {
+            throw ValidationException::withMessages(['mode' => ['La detracción y la retención aplican solo a facturas.']]);
+        }
+        $data = $request->validate([
+            'mode' => ['required', 'in:'.implode(',', array_keys(Withholding::MODES))],
+            'code' => ['nullable', 'required_if:mode,DETRACTION', 'in:'.implode(',', array_keys(Withholding::CODES))],
+        ], ['code.required_if' => 'Selecciona el código de detracción.']);
+
+        DB::transaction(function () use ($request, $invoice, $data) {
+            $invoice->update(['withholding_mode' => $data['mode'], 'withholding_code' => $data['mode'] === 'DETRACTION' ? $data['code'] : null]);
+            $this->audit($request, $invoice, 'invoice.withholding_mode', [
+                'note' => Withholding::MODES[$data['mode']].($data['mode'] === 'DETRACTION' ? " · código {$data['code']}" : ''),
+            ]);
+        });
+
+        return response()->json($this->detail($invoice, $request));
+    }
+
+    /**
+     * Registra la constancia de depósito de la detracción o el certificado de retención que
+     * entrega el cliente: ese importe baja de la cuenta por cobrar y, si es detracción, entra a la
+     * cuenta de detracciones de la empresa.
+     */
+    public function withholdingReceipt(string $invoice, Request $request)
+    {
+        $invoice = $this->find($invoice);
+        if (! $invoice->withholding_type || ! in_array($invoice->status, ['ISSUED', 'CORRECTED'], true)) {
+            throw ValidationException::withMessages(['status' => ['El comprobante no tiene detracción ni retención.']]);
+        }
+        if ($invoice->withholding_status !== 'PENDING') {
+            throw ValidationException::withMessages(['status' => ['Ya se registró la constancia.']]);
+        }
+        $data = $request->validate([
+            'number' => ['required', 'string', 'max:100'],
+            'date' => ['nullable', 'date', 'before_or_equal:today'],
+        ], [
+            'number.required' => 'Indica el número de constancia o certificado.',
+            'date.before_or_equal' => 'La fecha no puede ser futura.',
+        ]);
+        $number = trim($data['number']);
+        $date = \Illuminate\Support\Carbon::parse($data['date'] ?? now())->toDateString();
+        $detraction = $invoice->withholding_type === 'DETRACTION';
+
+        DB::transaction(function () use ($request, $invoice, $number, $date, $detraction) {
+            // Sin importar el alcance de quien registra: la cuenta es del comprobante.
+            $receivable = Receivable::ignoringAccessScope()->where('invoice_id', $invoice->id)->lockForUpdate()->first();
+            if (! $receivable || ! in_array($receivable->status, Receivable::OPEN, true) || (float) $receivable->balance_amount <= 0) {
+                throw ValidationException::withMessages(['status' => ['La cuenta por cobrar no tiene saldo.']]);
+            }
+
+            $amountPen = (float) $invoice->withholding_amount;
+            // La cuenta está en la moneda del comprobante; el importe retenido, en soles.
+            $inDocument = $invoice->currency === 'USD' && (float) $invoice->exchange_rate > 0 ? round($amountPen / (float) $invoice->exchange_rate, 2) : $amountPen;
+            $applied = round(min($inDocument, (float) $receivable->balance_amount), 2);
+
+            // El saldo y el estado de la cuenta los actualiza la base con este movimiento.
+            ReceivableMovement::create([
+                'tenant_id' => $invoice->tenant_id, 'receivable_id' => $receivable->id, 'movement_type' => 'WITHHOLDING',
+                'amount' => -1 * $applied, 'reference' => ($detraction ? 'Detracción · constancia ' : 'Retención · certificado ').$number, 'created_by' => $request->user()->id,
+            ]);
+            $invoice->update([
+                'withholding_status' => 'RECEIVED', 'withholding_number' => $number, 'withholding_date' => $date, 'withholding_registered_by' => $request->user()->id,
+            ]);
+            $banked = $detraction && Treasury::detractionIn($invoice, $amountPen, $number, $date, $request->user()->id);
+
+            $this->audit($request, $invoice, 'invoice.withholding_receipt', [
+                'note' => ($detraction ? 'Constancia de detracción ' : 'Certificado de retención ').$number.' · S/ '.number_format($amountPen, 2)
+                    .($detraction && ! $banked ? ' (sin cuenta de detracciones registrada en Bancos y caja)' : ''),
+                'amount' => $amountPen,
+            ]);
+        });
+
+        return response()->json($this->detail($invoice, $request));
+    }
+
+    /**
+     * Comunicación de baja: anula ante SUNAT un comprobante aceptado, dentro de los 7 días de
+     * emitido y sin cobros. Fuera de eso, se corrige con nota de crédito. La presenta el proveedor;
+     * mientras no responda que la aceptó, el comprobante sigue emitido.
+     */
+    public function void(string $invoice, Request $request)
+    {
+        $invoice = $this->find($invoice);
+        $reason = trim($request->validate(
+            ['reason' => ['required', 'string', 'max:1000']],
+            ['reason.required' => 'Indica el motivo de la baja.'],
+        )['reason']);
+
+        $requestId = DB::transaction(function () use ($request, $invoice, $reason) {
+            $receivable = Receivable::ignoringAccessScope()->where('invoice_id', $invoice->id)->lockForUpdate()->first();
+            if ($blocked = $this->voidBlocked($invoice, $receivable)) {
+                throw ValidationException::withMessages(['status' => [$blocked]]);
+            }
+
+            $id = (string) Str::uuid();
+            DB::table('fiscal_void_requests')->insert([
+                'id' => $id, 'tenant_id' => $invoice->tenant_id, 'invoice_id' => $invoice->id, 'invoice_number' => $invoice->invoice_number,
+                'reason' => $reason, 'status' => 'PENDING', 'requested_by' => $request->user()->id, 'created_at' => now(),
+            ]);
+            $this->audit($request, $invoice, 'invoice.void_request', ['note' => $reason]);
+            // Sale hacia el proveedor al cerrar esta operación, nunca dentro de ella.
+            FiscalGateway::queueVoid($id, $invoice->tenant_id, $request->user()->id);
+
+            return $id;
+        });
+
+        return response()->json([...$this->detail($invoice, $request), 'void_request_id' => $requestId], 201);
+    }
+
+    /** Por qué no procede la baja de un comprobante; null si procede. */
+    private function voidBlocked(Invoice $invoice, ?Receivable $receivable): ?string
+    {
+        return match (true) {
+            $invoice->status !== 'ISSUED' || $invoice->fiscal_status !== 'ACCEPTED' => 'Solo se da de baja un comprobante emitido y aceptado por SUNAT.',
+            $invoice->invoice_type === 'CREDIT_NOTE' => 'Una nota de crédito no se da de baja desde aquí.',
+            ! FiscalGateway::supportsVoid($invoice->tenant_id) => 'El proveedor de facturación electrónica conectado no ofrece comunicaciones de baja.',
+            $invoice->issue_date && $invoice->issue_date->diffInDays(today()) > self::VOID_DAYS => 'Pasaron más de '.self::VOID_DAYS.' días desde la emisión: corrige con nota de crédito.',
+            $receivable && (float) $receivable->balance_amount < (float) $receivable->original_amount => 'El comprobante tiene cobros aplicados: corrige con nota de crédito.',
+            DB::table('fiscal_void_requests')->where('invoice_id', $invoice->id)->whereIn('status', ['PENDING', 'ACCEPTED'])->exists() => 'El comprobante ya tiene una comunicación de baja en curso.',
+            default => null,
+        };
     }
 
     /** Descarta un borrador: no llegó a emitirse, así que sus eventos vuelven a quedar por facturar. */
@@ -434,6 +596,16 @@ class InvoiceController extends Controller
             'balance_due' => (float) $invoice->balance_due,
             'status' => $invoice->status,
             'fiscal_status' => $invoice->fiscal_status,
+            // Detracción o retención fijada al emitir; el importe, en soles.
+            'withholding' => $invoice->withholding_type ? [
+                'type' => $invoice->withholding_type,
+                'code' => $invoice->withholding_code,
+                'rate' => (float) $invoice->withholding_rate,
+                'amount' => (float) $invoice->withholding_amount,
+                'status' => $invoice->withholding_status,
+                'number' => $invoice->withholding_number,
+                'date' => $invoice->withholding_date?->toDateString(),
+            ] : null,
             'created_at' => $invoice->created_at?->toIso8601String(),
             'lock_version' => (int) $invoice->lock_version,
         ];
@@ -461,8 +633,31 @@ class InvoiceController extends Controller
                 ])->values()
             : [];
 
+        $settings = FiscalSettings::for($invoice->tenant_id);
+        $draft = $invoice->status === 'DRAFT';
+        $void = DB::table('fiscal_void_requests')->where('invoice_id', $invoice->id)->orderByDesc('created_at')->first();
+        // En borrador, lo que le correspondería si se emitiera ahora (en dólares, al tipo de cambio vigente).
+        $preview = $draft && $invoice->invoice_type === 'INVOICE'
+            ? Withholding::compute($invoice, $settings, (bool) $invoice->customer?->retention_agent, $invoice->currency === 'USD' ? (float) (ExchangeRate::current('USD')?->sell ?? 0) : null)
+            : null;
+
         return [
             ...$this->row($invoice),
+            'withholding_mode' => $invoice->withholding_mode,
+            'withholding_mode_code' => $draft ? $invoice->withholding_code : null,
+            'withholding_preview' => $preview ? [...$preview, 'label' => Withholding::label($preview['type'], $preview['code'], $preview['rate'])] : null,
+            // Opciones del borrador de factura: códigos de detracción con su porcentaje.
+            'detraction_codes' => $draft && $invoice->invoice_type === 'INVOICE'
+                ? collect(Withholding::CODES)->map(fn (array $code, string $key) => ['code' => $key, 'name' => $code[0], 'rate' => $code[1]])->values()
+                : [],
+            'detraction_account' => $settings['detraction']['account'],
+            'contingency_mode' => $settings['mode'] === 'CONTINGENCY',
+            'void_request' => $void ? [
+                'id' => $void->id, 'status' => $void->status, 'ticket' => $void->ticket, 'reason' => $void->reason, 'response' => $void->response,
+                'at' => \Illuminate\Support\Carbon::parse($void->created_at)->toIso8601String(),
+            ] : null,
+            // null = procede la baja; si no, el motivo por el que no.
+            'void_blocked' => $invoice->status === 'ISSUED' && $invoice->fiscal_status === 'ACCEPTED' ? $this->voidBlocked($invoice, $receivable) : 'Solo se da de baja un comprobante emitido y aceptado por SUNAT.',
             'reason' => $invoice->reason,
             'fiscal_response' => $invoice->fiscal_response,
             'fiscal_provider' => FiscalGateway::summary($invoice->tenant_id),

@@ -402,6 +402,7 @@ export default function ActorDetail() {
                       ["Días de crédito", actor.customer.payment_terms_days == null ? "—" : `${actor.customer.payment_terms_days} días`],
                       ["Límite de crédito", actor.customer.credit_limit == null ? "—" : money(actor.customer.credit_limit, actor.customer.preferred_currency)],
                       ["Moneda", actor.customer.preferred_currency === "USD" ? "USD ($)" : "PEN (S/)"],
+                      ["Agente de retención", actor.customer.retention_agent ? "Sí (retiene el 3 % del IGV)" : "No"],
                     ]}
                   />
                 </Card>

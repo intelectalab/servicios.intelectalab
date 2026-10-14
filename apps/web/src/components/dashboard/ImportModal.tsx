@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, type DragEvent, type FormEvent } from "react";
+import { useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { getAuthToken } from "@/lib/auth";
 import { Btn, Modal, Notice } from "@/components/ui/proto";
@@ -25,7 +25,7 @@ function failure(data: { message?: string; errors?: Record<string, string[]> } |
  * elegir el archivo y ver cuántas filas entraron y cuáles no (con su motivo).
  */
 export function ImportModal({
-  title, endpoint, templateName, hint, onClose, onImported,
+  title, endpoint, templateName, hint, onClose, onImported, children,
 }: {
   title: string;
   /** Ruta de la API: `${endpoint}/template` y `${endpoint}/import`. */
@@ -37,6 +37,8 @@ export function ImportModal({
   onClose: () => void;
   /** Entró al menos una fila: refrescar el listado. */
   onImported: () => void;
+  /** Campos propios de quien importa (p. ej. a qué cuenta entra el archivo), encima de la plantilla. */
+  children?: ReactNode;
 }) {
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -142,6 +144,7 @@ export function ImportModal({
         </div>
       ) : (
         <form onSubmit={submit}>
+          {children && <div className="mb-3.5">{children}</div>}
           <div className="mb-3.5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] px-4 py-3">
             <div className="min-w-0">
               <p className="font-semibold">¿Necesitas la estructura correcta?</p>

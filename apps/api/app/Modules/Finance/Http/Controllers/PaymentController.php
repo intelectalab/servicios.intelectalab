@@ -11,6 +11,7 @@ use App\Modules\Finance\Models\Receivable;
 use App\Modules\Finance\Models\ReceivableMovement;
 use App\Modules\Finance\Models\Refund;
 use App\Modules\Finance\Support\Billing;
+use App\Modules\Finance\Support\Treasury;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
@@ -87,9 +88,11 @@ class PaymentController extends Controller
         return response()->json([
             'customers' => Customer::query()->with('party.person', 'party.organization')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')
                 ->orderByDesc('created_at')->limit(self::OPTIONS_LIMIT)->get()
-                ->map(fn (Customer $customer) => ['id' => $customer->id, 'name' => Billing::identity($customer)['name'], 'currency' => $customer->preferred_currency])
+                ->map(fn (Customer $customer) => ['id' => $customer->id, 'name' => Billing::identity($customer)['name'], 'currency' => $customer->preferred_currency === 'USD' ? 'USD' : 'PEN'])
                 ->filter(fn (array $customer) => $customer['name'] !== '')->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)->values(),
-            'accounts' => DB::table('financial_accounts')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->orderBy('name')
+            // A la cuenta de detracciones solo entra lo que depositan los clientes por ese concepto.
+            'accounts' => DB::table('financial_accounts')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')
+                ->whereIn('account_type', ['BANK', 'CASH'])->orderBy('name')
                 ->get(['id', 'name', 'currency', 'account_type']),
             'methods' => Payment::METHODS,
         ]);
@@ -144,16 +147,6 @@ class PaymentController extends Controller
             throw ValidationException::withMessages(['customer_id' => ['El cliente indicado no existe.']]);
         }
 
-        if (! empty($data['financial_account_id'])) {
-            $account = DB::table('financial_accounts')->where('tenant_id', $tenantId)->where('id', $data['financial_account_id'])->where('status', 'ACTIVE')->first(['name', 'currency']);
-            if (! $account) {
-                throw ValidationException::withMessages(['financial_account_id' => ['La cuenta de destino no existe.']]);
-            }
-            if ($account->currency !== $data['currency']) {
-                throw ValidationException::withMessages(['financial_account_id' => ["La cuenta {$account->name} está en {$account->currency}."]]);
-            }
-        }
-
         $paidAt = isset($data['paid_at']) ? \Illuminate\Support\Carbon::parse($data['paid_at']) : now();
         $rate = null;
         if ($data['currency'] === 'USD') {
@@ -165,6 +158,9 @@ class PaymentController extends Controller
         }
 
         $payment = DB::transaction(function () use ($request, $tenantId, $data, $paidAt, $rate) {
+            // La cuenta a la que entra el dinero: la indicada o, si solo hay una posible, esa.
+            $account = Treasury::destinationFor($tenantId, $data['currency'], $data['payment_method'], $data['financial_account_id'] ?? null);
+
             $payment = Payment::create([
                 'tenant_id' => $tenantId,
                 'customer_id' => $data['customer_id'],
@@ -175,12 +171,17 @@ class PaymentController extends Controller
                 'payment_method' => $data['payment_method'],
                 'reference' => isset($data['reference']) ? trim($data['reference']) : null,
                 'source' => 'BACKOFFICE',
-                'financial_account_id' => $data['financial_account_id'] ?? null,
+                'financial_account_id' => $account?->id,
                 'status' => 'CONFIRMED',
                 'paid_at' => $paidAt,
                 'created_by' => $request->user()->id,
             ]);
             $this->audit($request, $payment, 'payment.create', ['to' => 'CONFIRMED', 'amount' => (float) $payment->amount, 'method' => $payment->payment_method]);
+            if ($account) {
+                // Todo cobro deja su movimiento en la cuenta: de ahí sale el saldo de bancos y caja.
+                $customer = Customer::with('party.person', 'party.organization')->where('tenant_id', $tenantId)->find($payment->customer_id);
+                Treasury::paymentIn($payment, $account, Billing::identity($customer)['name'], $request->user()->id);
+            }
 
             if ($request->boolean('auto_allocate')) {
                 $this->allocateInto($request, $payment, null);
@@ -238,6 +239,7 @@ class PaymentController extends Controller
 
         DB::transaction(function () use ($request, $payment) {
             $payment->update(['reconciled' => true, 'reconciled_at' => now(), 'reconciled_by' => $request->user()->id]);
+            Treasury::reconcilePayment($payment);
             $this->audit($request, $payment, 'payment.reconcile');
         });
 
@@ -297,10 +299,12 @@ class PaymentController extends Controller
                 $rest = round($rest - $back, 2);
             }
 
-            Refund::create([
+            $refund = Refund::create([
                 'tenant_id' => $tenantId, 'payment_id' => $payment->id, 'amount' => $amount, 'reason' => $reason,
                 'status' => 'PROCESSED', 'created_by' => $request->user()->id,
             ]);
+            // El dinero sale de la cuenta donde entró el cobro.
+            Treasury::refundOut($payment, $refund->id, $amount, $request->user()->id);
             $previous = $payment->status;
             $payment->refunded_amount = round((float) $payment->refunded_amount + $amount, 2);
             $payment->status = $this->statusOf($payment);

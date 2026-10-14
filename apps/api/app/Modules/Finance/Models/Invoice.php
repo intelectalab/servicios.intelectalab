@@ -43,6 +43,8 @@ class Invoice extends Model
         'status', 'currency', 'exchange_rate', 'issue_date', 'issued_at', 'due_date', 'subtotal', 'tax_total',
         'total', 'balance_due', 'fiscal_document_id', 'fiscal_status', 'fiscal_response',
         'customer_tax_id', 'customer_name', 'related_invoice_id', 'reason', 'owner_user_id', 'created_by', 'branch_id',
+        'withholding_mode', 'withholding_type', 'withholding_code', 'withholding_rate', 'withholding_amount', 'withholding_status',
+        'withholding_number', 'withholding_date', 'withholding_registered_by',
     ];
 
     protected $casts = [
@@ -54,6 +56,9 @@ class Invoice extends Model
         'total' => 'decimal:4',
         'balance_due' => 'decimal:4',
         'exchange_rate' => 'decimal:6',
+        'withholding_rate' => 'decimal:3',
+        'withholding_amount' => 'decimal:4',
+        'withholding_date' => 'date',
     ];
 
     protected static function boot()

@@ -18,6 +18,7 @@ class Customer extends Model
         'status',
         'credit_limit',
         'payment_terms_days',
+        'retention_agent',
         'preferred_currency',
     ];
 

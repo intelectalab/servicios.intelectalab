@@ -28,9 +28,12 @@ use App\Modules\Operations\Http\Controllers\ResourceController;
 use App\Modules\Documents\Http\Controllers\DocumentController;
 use App\Modules\Finance\Http\Controllers\BillableEventController;
 use App\Modules\Finance\Http\Controllers\ExchangeRateController;
+use App\Modules\Finance\Http\Controllers\FiscalController;
 use App\Modules\Finance\Http\Controllers\InvoiceController;
 use App\Modules\Finance\Http\Controllers\PaymentController;
 use App\Modules\Finance\Http\Controllers\ReceivableController;
+use App\Modules\Finance\Http\Controllers\RecurringController;
+use App\Modules\Finance\Http\Controllers\TreasuryController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
@@ -475,7 +478,28 @@ Route::prefix('v1')->group(function () {
             Route::get('/exchange-rates', [ExchangeRateController::class, 'index']);
             Route::get('/exchange-rates/summary', [ExchangeRateController::class, 'summary']);
         });
-        Route::middleware('permission:fiscal.manage')->post('/exchange-rates', [ExchangeRateController::class, 'store']);
+        Route::middleware('permission:fiscal.manage')->group(function () {
+            Route::post('/exchange-rates', [ExchangeRateController::class, 'store']);
+            Route::post('/exchange-rates/sync', [ExchangeRateController::class, 'sync']);
+        });
+
+        // Facturación electrónica: configuración fiscal, series, contingencia y bajas
+        Route::middleware('permission:fiscal.view')->group(function () {
+            Route::get('/fiscal/summary', [FiscalController::class, 'summary']);
+            Route::get('/fiscal/settings', [FiscalController::class, 'settings']);
+            Route::get('/fiscal/contingency', [FiscalController::class, 'contingency']);
+            Route::get('/fiscal/voids', [FiscalController::class, 'voids']);
+        });
+        // Configurar es aparte de registrar el tipo de cambio: cambia cómo emite toda la empresa.
+        Route::middleware('permission:fiscal.configure')->group(function () {
+            Route::put('/fiscal/settings', [FiscalController::class, 'updateSettings']);
+            Route::put('/fiscal/series', [FiscalController::class, 'updateSeries']);
+            Route::post('/fiscal/contingency/start', [FiscalController::class, 'startContingency']);
+            Route::post('/fiscal/contingency/end', [FiscalController::class, 'endContingency']);
+        });
+        Route::middleware('permission:billing.manage')->put('/invoices/{invoice}/withholding', [InvoiceController::class, 'withholdingMode']);
+        Route::middleware('permission:receivables.manage')->post('/invoices/{invoice}/withholding-receipt', [InvoiceController::class, 'withholdingReceipt']);
+        Route::middleware('permission:billing.approve')->post('/invoices/{invoice}/void', [InvoiceController::class, 'void']);
 
         // Cuentas por cobrar
         Route::middleware('permission:receivables.view')->group(function () {
@@ -497,6 +521,45 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:payments.approve')->group(function () {
             Route::post('/payments/{payment}/reconcile', [PaymentController::class, 'reconcile']);
             Route::post('/payments/{payment}/refund', [PaymentController::class, 'refund']);
+        });
+
+        // Servicios recurrentes: instancias, ciclos y renovaciones
+        Route::middleware('permission:recurring.view')->group(function () {
+            Route::get('/recurring', [RecurringController::class, 'index']);
+            Route::get('/recurring/summary', [RecurringController::class, 'summary']);
+            Route::get('/recurring/{recurring}', [RecurringController::class, 'show']);
+        });
+        Route::middleware('permission:recurring.create')->post('/recurring/run-cycles', [RecurringController::class, 'runCycles']);
+        Route::middleware('permission:recurring.manage')->group(function () {
+            Route::post('/recurring/{recurring}/renew', [RecurringController::class, 'renew']);
+            Route::post('/recurring/{recurring}/suspend', [RecurringController::class, 'suspend']);
+            Route::post('/recurring/{recurring}/reactivate', [RecurringController::class, 'reactivate']);
+            Route::post('/recurring/{recurring}/cancel', [RecurringController::class, 'cancel']);
+        });
+
+        // Bancos y caja: cuentas, movimientos, conciliación y caja chica
+        Route::middleware('permission:treasury.view')->group(function () {
+            Route::get('/bank-accounts', [TreasuryController::class, 'accounts']);
+            Route::get('/bank-accounts/summary', [TreasuryController::class, 'summary']);
+            Route::get('/bank-movements', [TreasuryController::class, 'movements']);
+            Route::get('/bank-statements', [TreasuryController::class, 'reconciliation']);
+            Route::get('/cash-expenses', [TreasuryController::class, 'cashExpenses']);
+            Route::get('/cash-counts', [TreasuryController::class, 'cashCounts']);
+        });
+        Route::middleware('permission:treasury.create')->group(function () {
+            Route::post('/bank-transfers', [TreasuryController::class, 'transfer']);
+            Route::post('/bank-accounts/{bankAccount}/refill', [TreasuryController::class, 'refill']);
+            Route::get('/bank-accounts/{bankAccount}/statements/template', [TreasuryController::class, 'statementTemplate']);
+            Route::post('/bank-accounts/{bankAccount}/statements/import', [TreasuryController::class, 'importStatement']);
+            Route::post('/cash-expenses', [TreasuryController::class, 'storeCashExpense']);
+            Route::post('/cash-counts', [TreasuryController::class, 'storeCashCount']);
+        });
+        // Crear cuentas y conciliar a mano es de quien responde por la tesorería.
+        Route::middleware('permission:treasury.manage')->group(function () {
+            Route::post('/bank-accounts', [TreasuryController::class, 'storeAccount']);
+            Route::put('/bank-accounts/{bankAccount}', [TreasuryController::class, 'updateAccount']);
+            Route::post('/bank-statement-lines/{line}/match', [TreasuryController::class, 'matchLine']);
+            Route::post('/bank-statement-lines/{line}/resolve', [TreasuryController::class, 'resolveLine']);
         });
 
         // Soporte

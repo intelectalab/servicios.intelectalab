@@ -111,7 +111,7 @@ export function PaymentFormModal({
           </Field>
           <Field
             label="Cuenta de destino" span={2} error={errors.financial_account_id}
-            hint={options && !accounts.length ? "Sin cuentas registradas en esta moneda: llegarán con Bancos y caja." : undefined}
+            hint={options && !accounts.length ? "Sin cuentas en esta moneda: se registran en Bancos y caja." : "Sin elegirla, va a la única cuenta posible para ese método; si hay varias, hay que elegir."}
           >
             <PickSelect
               className={INPUT} ariaLabel="Cuenta de destino" disabled={!accounts.length} value={accountId} onChange={setAccountId}

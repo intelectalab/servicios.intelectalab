@@ -62,6 +62,17 @@ class FiscalDocument
                 'tax' => abs((float) $item->tax_amount),
                 'total' => abs((float) $item->line_total),
             ])->values()->all(),
+            // Detracción (SPOT) o retención del IGV, en soles; null si no le corresponde.
+            'withholding' => $invoice->withholding_type ? [
+                'type' => $invoice->withholding_type,
+                'code' => $invoice->withholding_code,
+                'rate' => (float) $invoice->withholding_rate,
+                'amount_pen' => (float) $invoice->withholding_amount,
+                // Cuenta de detracciones de la empresa en el Banco de la Nación.
+                'account' => $invoice->withholding_type === 'DETRACTION' ? (\App\Modules\Finance\Support\FiscalSettings::for($invoice->tenant_id)['detraction']['account']) : null,
+            ] : null,
+            // Emitido con la serie de contingencia: se informa a SUNAT en un resumen.
+            'contingency' => (bool) preg_match(\App\Modules\Finance\Support\FiscalSettings::CONTINGENCY_PATTERN, (string) $invoice->series),
             // Solo en notas de crédito: el comprobante que corrige y por qué.
             'corrects' => $invoice->related ? [
                 'type_code' => self::TYPE_CODES[$invoice->related->invoice_type] ?? null,

@@ -9,3 +9,6 @@ Artisan::command('inspire', function () {
 
 // Limpia de la base las sesiones (tokens) que ya vencieron hace más de un día.
 Illuminate\Support\Facades\Schedule::command('sanctum:prune-expired --hours=24')->daily();
+
+// Cada madrugada, los ciclos vencidos de los servicios recurrentes dejan su evento facturable.
+Illuminate\Support\Facades\Schedule::command('recurring:run-cycles')->dailyAt('05:00');

@@ -83,7 +83,15 @@ const COLUMNS: Column<Invoice>[] = [
     ),
   },
   { label: "Emisión", sortKey: "issue", filter: "date", render: (invoice) => <span className="whitespace-nowrap">{shortDate(invoice.issue_date)}</span> },
-  { label: "Total", num: true, sortKey: "total", filter: "number", render: (invoice) => money(invoice.total, invoice.currency) },
+  {
+    label: "Total", num: true, sortKey: "total", filter: "number",
+    render: (invoice) => (
+      <div className="whitespace-nowrap">
+        {money(invoice.total, invoice.currency)}
+        {invoice.withholding && <small className="app-muted block text-xs">{invoice.withholding.type === "DETRACTION" ? "detr." : "ret."} {money(invoice.withholding.amount)}</small>}
+      </div>
+    ),
+  },
   {
     label: "SUNAT", sortKey: "fiscal",
     render: (invoice) => <Badge tone={stateOf(FISCAL_STATES, invoice.fiscal_status)[1]}>{stateOf(FISCAL_STATES, invoice.fiscal_status)[0]}</Badge>,
