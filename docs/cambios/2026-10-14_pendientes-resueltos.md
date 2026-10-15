@@ -41,7 +41,7 @@ Además se hicieron dos arreglos pequeños que ya cubrían tus reglas: la pantal
 
 - En la tabla compartida, una cabecera larga baja a dos líneas en vez de ensanchar la tabla. El botón de opciones (⋮) de cada columna ya no ocupa ancho: va sobre el borde de la cabecera.
 - A 1366 px, sin desplazamiento lateral: Órdenes de compra, Recurrencia, Comprobantes de proveedor y Cuentas por pagar (medido).
-- **Cobros sigue con 107 px de más.** No es por la cabecera: sus celdas son anchas (el número del recibo con su detalle, el monto con "− S/ 200.00 reembolsado" y los cuatro botones de Acciones). Arreglarlo es tocar las celdas de esa pantalla, que no se pidió. Queda propuesto.
+- **Cobros** (ajuste posterior, lo pediste): sus celdas eran anchas. El detalle del recibo (método · operación · origen) ya no tiene un ancho mínimo de 170 px y baja de línea; en Monto, "− S/ 200.00 reembolsado" puede bajar a otra línea (el importe nunca se parte). No se quitó ningún dato ni columna. A 1366 px la tabla mide 1000 de 1000 px, sin desplazamiento lateral, en claro y en oscuro; a 375 px se ve como tarjetas, sin desbordar. Archivo: `components/dashboard/finance/Payments.tsx`.
 
 ### 5. El contrato arrastra a sus servicios contratados
 
@@ -140,7 +140,6 @@ Además se hicieron dos arreglos pequeños que ya cubrían tus reglas: la pantal
 
 - **Plantillas de checklist**: el prototipo no tiene esta pantalla. Se hizo con las opciones que elegiste.
 - **Pagar** es un permiso aparte. En el prototipo, Gerencia aprobaba y pagaba.
-- **Cobros** sigue con desplazamiento lateral a 1366 px (ver punto 4).
 - La ficha del gasto de caja y la del pago a proveedor no existen en el prototipo. Se agregaron porque son el lugar natural de corregir y revertir, y abren con el clic en la fila (tu regla).
 
 ## Base de datos
@@ -193,7 +192,6 @@ Migraciones nuevas, **ya corridas** en tu base local. Todas suman reglas o colum
   - El cierre real de un ejercicio: tu único año es 2026 y aún no termina. Solo se probó con pruebas automáticas, que adelantan el reloj a 2027.
   - La cascada del contrato: no se suspendió ninguno de tus contratos, porque tienen OT y servicios en uso. Solo con pruebas automáticas.
   - El aviso "No se pudo cargar tu sesión": requiere que falle la carga de la sesión al entrar, y eso no se puede simular sin recargar la página.
-- Cobros a 1366 px (ver punto 4): propuesto.
 - Las cuentas del asiento de cierre (5911 / 5921) son una decisión mía: valídalas con tu contador junto con las demás reglas.
 - Revertir un pago con detracción, nota de crédito de proveedor, pagos parciales y programados, consulta de validez SUNAT: siguen pendientes.
 

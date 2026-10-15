@@ -166,8 +166,9 @@ export default function Payments() {
     {
       label: "Recibo", sortKey: "payment", filter: "text",
       render: (payment) => (
-        <div className="min-w-[170px]">
-          <strong className="font-semibold tabular-nums">{payment.payment_number}</strong>
+        // Sin ancho mínimo fijo: el detalle (método · operación · origen) baja de línea para que la tabla quepa a 1366 px.
+        <div className="min-w-[120px]">
+          <strong className="whitespace-nowrap font-semibold tabular-nums">{payment.payment_number}</strong>
           <small className="app-muted block text-xs">
             {[methodLabel(payment.payment_method), payment.reference, SOURCE_LABELS[payment.source] ?? payment.source].filter(Boolean).join(" · ")}
           </small>
@@ -179,9 +180,14 @@ export default function Payments() {
     {
       label: "Monto", num: true, sortKey: "amount", filter: "number",
       render: (payment) => (
-        <div className="whitespace-nowrap">
-          {money(payment.amount, payment.currency)}
-          {payment.refunded_amount > 0 && <small className="block text-xs text-[color:var(--p-warning-text)]">− {money(payment.refunded_amount, payment.currency)} reembolsado</small>}
+        <div>
+          <span className="whitespace-nowrap">{money(payment.amount, payment.currency)}</span>
+          {/* El importe no se parte; "reembolsado" puede bajar a otra línea. */}
+          {payment.refunded_amount > 0 && (
+            <small className="block whitespace-normal text-xs text-[color:var(--p-warning-text)]">
+              <span className="whitespace-nowrap">− {money(payment.refunded_amount, payment.currency)}</span> reembolsado
+            </small>
+          )}
         </div>
       ),
     },
