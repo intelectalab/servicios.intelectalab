@@ -363,6 +363,7 @@ class ServiceController extends Controller
             'unit' => $request->unit,
             'billing_mode' => $request->billing_mode ?? 'ONE_TIME',
             'warranty_months' => (int) ($request->warranty_months ?? 0),
+            'warranty_conditions' => trim((string) $request->warranty_conditions) ?: null,
         ];
     }
 

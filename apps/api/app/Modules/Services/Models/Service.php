@@ -22,6 +22,7 @@ class Service extends Model
         'unit',
         'billing_mode',
         'warranty_months',
+        'warranty_conditions',
         'metadata',
     ];
 

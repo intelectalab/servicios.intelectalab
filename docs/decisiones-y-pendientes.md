@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones completo (con la pantalla de plantillas de checklist) y Finanzas completo: Por facturar, Comprobantes, Cuentas por cobrar, Cobros, Recurrencia, Bancos y caja, Facturación electrónica y Monedas y tipo de cambio, Compras: Órdenes de compra, Comprobantes de proveedor y Cuentas por pagar, y Contabilidad: Libro diario, Mayor y balance, Estados financieros, Centros de costo y presupuestos y Plan de cuentas y periodos, con cierre de ejercicio).
+Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones completo (con la pantalla de plantillas de checklist) y Finanzas completo: Por facturar, Comprobantes, Cuentas por cobrar, Cobros, Recurrencia, Bancos y caja, Facturación electrónica y Monedas y tipo de cambio, Compras: Órdenes de compra, Comprobantes de proveedor y Cuentas por pagar, y Contabilidad: Libro diario, Mayor y balance, Estados financieros, Centros de costo y presupuestos y Plan de cuentas y periodos, con cierre de ejercicio; y desde el 2026-10-15 Soporte: Tickets y SLA, Garantías y Calendario laboral y SLA).
 
 ## Decisiones tomadas
 
@@ -122,6 +122,17 @@ Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones c
 - **Cierre de ejercicio** (2026-10-14, [cambios/2026-10-14_pendientes-resueltos.md](cambios/2026-10-14_pendientes-resueltos.md)): asiento al 31 de diciembre que salda ingresos y gastos contra 5911 (utilidad) o 5921 (pérdida); cierra diciembre y el presupuesto del año. Solo un año terminado, después del anterior y con enero a noviembre cerrados. Se deshace reabriendo el ejercicio (extorno el mismo 31 de diciembre), nunca extornándolo desde el libro diario. El estado de resultados y lo ejecutado del presupuesto no cuentan el cierre ni su extorno. El presupuesto también se cierra con su botón "Cerrar ejercicio" (quien aprueba presupuestos), sin asiento.
 - **Importar asientos** (2026-10-14): ImportModal y plantilla Excel; cada asiento se valida entero y el que tiene un error no entra. Origen propio "Importado". **PDF del asiento** con la composición de los demás documentos.
 
+### Soporte (2026-10-15)
+- Detalle en [cambios/2026-10-15_soporte-tickets-sla-garantias.md](cambios/2026-10-15_soporte-tickets-sla-garantias.md). Módulo Soporte del plan.
+- **Ticket:** Abierto → Clasificado (triage: prioridad P1–P4 y SLA) → Asignado → En atención ⇄ Esperando cliente → Resuelto → Cerrado, y Reabierto. Se asigna solo clasificado; resolver pide la resolución y reabrir el motivo (lo exige la base). Escalar sube una prioridad y recalcula la resolución desde ese momento.
+- **SLA:** se calcula al clasificar con la política de la prioridad, el calendario laboral de la empresa y el contrato (Premium = un porcentaje del tiempo, 50 % si no se cambia). Esperando cliente pausa el reloj y la pausa se suma al vencimiento; reabrir recalcula desde ese momento. Cambiar el calendario no mueve los tickets ya clasificados. "En riesgo" = 75 % del plazo consumido.
+- **Calendario laboral y SLA** (Administración): horario por día, modo por prioridad (horario hábil o 24×7), tiempos por prioridad, porcentaje Premium y feriados (se retiran, no se borran). Por defecto, el del prototipo: oficina de Lima, feriados de Perú, P1 en 24×7. Depende del módulo Soporte.
+- **Conversación:** respuestas públicas y notas internas; los mensajes no se editan ni se borran y el portal nunca escribe notas internas.
+- **Garantía:** cobertura = última OT completada del servicio contratado (o su inicio) + meses de garantía del servicio; se valida al registrar el reclamo; aprobar exige que esté cubierto (también la base); rechazar pide motivo y resolver pide cómo. Un reclamo por ticket. Las condiciones de garantía son un dato del servicio en el Catálogo. No factura.
+- Permisos `tickets.*` (Ver, Crear, Gestionar = atender, Aprobar = escalar, Exportar), `warranty.*` (Ver, Crear, Gestionar = validar y resolver, Aprobar, Exportar) y `sla.view/manage`, con el reparto del prototipo; los `support.*` de antes se renombraron. Rol **Soporte** de prueba (`LocalSupportSeeder`).
+- Alcance en Tickets (propio = quien lo atiende, quien lo registró y quien vendió el contrato del cliente; con Equipo, además lo del equipo y la bandeja sin tomar) y en Garantías (propio = quien lo registró y quien atiende su ticket).
+- "Crear OT" desde el ticket: sobre un servicio contratado activo del cliente, una por ticket; usa el mismo alta que la pantalla de órdenes de trabajo (`Operations/Support/WorkOrders`).
+
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
 - Permisos `audit.view` y `audit.export`, sin módulo del plan. Como en el prototipo, los tienen Administrador y Gerencia.
@@ -197,6 +208,7 @@ Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones c
 
 ## Pendientes
 
+- Soporte: avisos (escalar, asignar, SLA por vencer) con Notificaciones; tickets y reclamos desde el portal del cliente (responder reanuda el reloj); tarea programada de vencimientos.
 - Compras: consulta de validez ante SUNAT; nota de crédito de proveedor; aviso de órdenes por aprobar (con Notificaciones); pagos parciales y programados; revertir un pago con depósito de detracción (hoy no se permite).
 - Contabilidad: editar las reglas automáticas por empresa; libros electrónicos (PLE); planilla (cuentas 62); validar con el contador las cuentas del cierre (5911/5921). En Tenant A, los cobros PAG-2026-0001…0004 (anteriores a Bancos y caja) no tienen cuenta: la 1041/1011 no coincide con Bancos y caja.
 - Finanzas: elegir el proveedor de facturación electrónica y escribir su clase (con él, XML y CDR, y consultar el ticket de una baja pendiente); renovación automática de instancias recurrentes; avisos de renovación, de cobranza y de arqueo con diferencia (con Notificaciones); cambio entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos por horas aprobadas y por hitos; nota de crédito parcial; editar el vencimiento de un borrador; pago en línea; activar el programador del servidor para los ciclos diarios.

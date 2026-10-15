@@ -71,6 +71,8 @@ class CheckRecordVersion
         'costCenter' => 'cost_centers',
         'budget' => 'budgets',
         'account' => 'acc_accounts',
+        'ticket' => 'support_tickets',
+        'claim' => 'warranty_claims',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */
@@ -95,6 +97,8 @@ class CheckRecordVersion
         'purchase_orders' => PurchaseOrder::class,
         'supplier_invoices' => SupplierInvoice::class,
         'cost_centers' => \App\Modules\Accounting\Models\CostCenter::class,
+        'support_tickets' => \App\Modules\Support\Models\SupportTicket::class,
+        'warranty_claims' => \App\Modules\Support\Models\WarrantyClaim::class,
     ];
 
     public function handle(Request $request, Closure $next): Response

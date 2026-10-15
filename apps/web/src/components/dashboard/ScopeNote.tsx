@@ -99,8 +99,24 @@ const BUDGET_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza tus centros de costo y los de tus sedes.",
 };
 
+// Un ticket es de quien lo atiende, de quien lo registró y de quien vendió el contrato del cliente.
+const TICKET_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los tickets que atiendes, los que registraste y los de los clientes de tus contratos.",
+  TEAM: "Tu rol alcanza los tickets de tu equipo y la bandeja que nadie tomó todavía.",
+  BRANCH: "Tu rol alcanza tus tickets y los de tus sedes.",
+};
+
+// Un reclamo de garantía es de quien lo registró y de quien atiende su ticket.
+const WARRANTY_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los reclamos que registraste y los de los tickets que atiendes.",
+  TEAM: "Tu rol alcanza tus reclamos y los de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus reclamos y los de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
+    : resource === "tickets" ? TICKET_HINTS
+    : resource === "warranty" ? WARRANTY_HINTS
     : resource === "budgets" ? BUDGET_HINTS
     : resource === "purchases" || resource === "payables" ? PURCHASE_HINTS
     : resource === "recurring" ? RECURRING_HINTS

@@ -185,7 +185,7 @@ export function Who({ name }: { name?: string | null }) {
   if (!name) return <span className="app-muted">Sin asignar</span>;
   const initials = name.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
   return (
-    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+    <span className="inline-flex items-center gap-1.5 sm:whitespace-nowrap">
       <span aria-hidden="true" className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-[var(--p-brand-soft)] text-[9.5px] font-semibold text-[color:var(--p-brand-soft-text)]">
         {initials}
       </span>

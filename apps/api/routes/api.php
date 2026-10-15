@@ -37,7 +37,9 @@ use App\Modules\Purchasing\Http\Controllers\CostCenterController;
 use App\Modules\Purchasing\Http\Controllers\PayableController;
 use App\Modules\Purchasing\Http\Controllers\PurchaseOrderController;
 use App\Modules\Purchasing\Http\Controllers\SupplierInvoiceController;
+use App\Modules\Support\Http\Controllers\SlaSettingsController;
 use App\Modules\Support\Http\Controllers\SupportTicketController;
+use App\Modules\Support\Http\Controllers\WarrantyClaimController;
 use App\Modules\Credentials\Http\Controllers\CredentialController;
 use App\Modules\Crm\Http\Controllers\CrmActivityController;
 use App\Modules\Crm\Http\Controllers\CrmCampaignController;
@@ -680,18 +682,54 @@ Route::prefix('v1')->group(function () {
             Route::post('/budgets/{budget}/close', [BudgetController::class, 'close']);
         });
 
-        // Soporte
-        Route::middleware('permission:support.view')->group(function () {
-            Route::get('/support-tickets', [SupportTicketController::class, 'index']);
-            Route::get('/support-tickets/{ticket}', [SupportTicketController::class, 'show']);
+        // Soporte: tickets y SLA. Las rutas anteriores /support-tickets se reemplazaron por estas.
+        Route::middleware('permission:tickets.view')->group(function () {
+            Route::get('/tickets', [SupportTicketController::class, 'index']);
+            Route::get('/tickets/summary', [SupportTicketController::class, 'summary']);
+            Route::get('/tickets/options', [SupportTicketController::class, 'options']);
+            Route::get('/tickets/{ticket}', [SupportTicketController::class, 'show']);
         });
-        Route::middleware('permission:support.manage')->group(function () {
-            Route::post('/support-tickets', [SupportTicketController::class, 'store']);
-            Route::post('/support-tickets/{ticket}/assign', [SupportTicketController::class, 'assign']);
-            Route::post('/support-tickets/{ticket}/comments', [SupportTicketController::class, 'addComment']);
-            Route::post('/support-tickets/{ticket}/resolve', [SupportTicketController::class, 'resolve']);
-            Route::post('/support-tickets/{ticket}/close', [SupportTicketController::class, 'close']);
-            Route::post('/support-tickets/{ticket}/reopen', [SupportTicketController::class, 'reopen']);
+        Route::middleware('permission:tickets.create')->post('/tickets', [SupportTicketController::class, 'store']);
+        Route::middleware('permission:tickets.manage')->group(function () {
+            Route::post('/tickets/{ticket}/triage', [SupportTicketController::class, 'triage']);
+            Route::post('/tickets/{ticket}/assign', [SupportTicketController::class, 'assign']);
+            Route::post('/tickets/{ticket}/comments', [SupportTicketController::class, 'comment']);
+            Route::post('/tickets/{ticket}/start', [SupportTicketController::class, 'start']);
+            Route::post('/tickets/{ticket}/wait', [SupportTicketController::class, 'wait']);
+            Route::post('/tickets/{ticket}/resume', [SupportTicketController::class, 'resume']);
+            Route::post('/tickets/{ticket}/resolve', [SupportTicketController::class, 'resolve']);
+            Route::post('/tickets/{ticket}/close', [SupportTicketController::class, 'close']);
+            Route::post('/tickets/{ticket}/reopen', [SupportTicketController::class, 'reopen']);
+        });
+        // Escalar sube la prioridad y acorta el plazo: permiso aparte de atender.
+        Route::middleware('permission:tickets.approve')->post('/tickets/{ticket}/escalate', [SupportTicketController::class, 'escalate']);
+        // Crear la OT del ticket pide ver el ticket y crear órdenes de trabajo.
+        Route::middleware(['permission:tickets.view', 'permission:work_orders.create'])
+            ->post('/tickets/{ticket}/work-order', [SupportTicketController::class, 'createWorkOrder']);
+
+        // Soporte: reclamos de garantía
+        Route::middleware('permission:warranty.view')->group(function () {
+            Route::get('/warranty-claims', [WarrantyClaimController::class, 'index']);
+            Route::get('/warranty-claims/options', [WarrantyClaimController::class, 'options']);
+            Route::get('/warranty-claims/{claim}', [WarrantyClaimController::class, 'show']);
+        });
+        Route::middleware('permission:warranty.create')->post('/warranty-claims', [WarrantyClaimController::class, 'store']);
+        Route::middleware('permission:warranty.manage')->group(function () {
+            Route::post('/warranty-claims/{claim}/check-coverage', [WarrantyClaimController::class, 'coverage']);
+            Route::post('/warranty-claims/{claim}/resolve', [WarrantyClaimController::class, 'resolve']);
+        });
+        Route::middleware('permission:warranty.approve')->group(function () {
+            Route::post('/warranty-claims/{claim}/approve', [WarrantyClaimController::class, 'approve']);
+            Route::post('/warranty-claims/{claim}/reject', [WarrantyClaimController::class, 'reject']);
+        });
+
+        // Administración: calendario laboral y SLA
+        Route::middleware('permission:sla.view')->get('/sla-settings', [SlaSettingsController::class, 'show']);
+        Route::middleware('permission:sla.manage')->group(function () {
+            Route::put('/sla-settings/calendar', [SlaSettingsController::class, 'updateCalendar']);
+            Route::put('/sla-settings/policies', [SlaSettingsController::class, 'updatePolicies']);
+            Route::post('/sla-settings/holidays', [SlaSettingsController::class, 'addHoliday']);
+            Route::delete('/sla-settings/holidays/{holiday}', [SlaSettingsController::class, 'removeHoliday']);
         });
 
         // Rutas de prueba para verificar permisos

@@ -45,6 +45,8 @@ class AccessScope
         'purchases' => 'Órdenes de compra',
         'payables' => 'Cuentas por pagar',
         'budgets' => 'Centros de costo y presupuestos',
+        'tickets' => 'Tickets',
+        'warranty' => 'Garantías',
     ];
 
     /** De menor a mayor alcance. */
@@ -97,6 +99,14 @@ class AccessScope
             // Un documento sin sede no es de ninguna: no se abre a todas las sedes.
             if ($scope === 'BRANCH' && $context['branch_ids']) {
                 $visible->orWhereIn("{$table}.branch_id", $context['branch_ids']);
+            }
+
+            // La mesa de ayuda: el equipo ve los tickets de su equipo y la bandeja que nadie tomó.
+            if ($resource === 'tickets' && $scope === 'TEAM') {
+                $visible->orWhere(fn (Builder $pool) => $pool->whereNull("{$table}.assigned_user_id")->whereNull("{$table}.team_id"));
+                if ($context['team_id']) {
+                    $visible->orWhere("{$table}.team_id", $context['team_id']);
+                }
             }
         });
     }
@@ -152,10 +162,17 @@ class AccessScope
             'payables' => $query->whereIn("{$table}.owner_user_id", $owners),
             // Un centro de costo (y su presupuesto) es de su responsable y de quien lo creó.
             'budgets' => $query->whereIn("{$table}.manager_user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
+            // Un ticket es propio de quien lo atiende, de quien lo registró y de quien vendió el contrato del cliente.
+            'tickets' => $query->whereIn("{$table}.assigned_user_id", $owners)->orWhereIn("{$table}.created_by", $owners)
+                ->orWhereIn("{$table}.contract_id", fn ($sub) => $sub->select('id')->from('contracts')
+                    ->where(fn ($own) => $own->whereIn('created_by', $owners)->orWhereIn('quotation_id', $fromQuotation))),
+            // Un reclamo de garantía, de quien lo registró y de quien atiende su ticket.
+            'warranty' => $query->whereIn("{$table}.created_by", $owners)
+                ->orWhereIn("{$table}.ticket_id", fn ($sub) => $sub->select('id')->from('support_tickets')->whereIn('assigned_user_id', $owners)),
         };
     }
 
-    /** @return array{user_id: string, branch_id: ?string, branch_ids: string[], team_user_ids: string[], scopes: array<string, string>}|null */
+    /** @return array{user_id: string, branch_id: ?string, team_id: ?string, branch_ids: string[], team_user_ids: string[], scopes: array<string, string>}|null */
     private static function context(): ?array
     {
         $request = request();
@@ -196,6 +213,7 @@ class AccessScope
         return [
             'user_id' => $userId,
             'branch_id' => $member?->default_branch_id,
+            'team_id' => $member?->team_id,
             'branch_ids' => array_values(array_unique(array_filter([$member?->default_branch_id, ...$extraBranchIds]))),
             'team_user_ids' => array_values(array_unique([$userId, ...$teamUserIds])),
             'scopes' => self::scopesFor($roles),

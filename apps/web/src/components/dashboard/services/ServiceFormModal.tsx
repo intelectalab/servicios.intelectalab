@@ -27,6 +27,7 @@ export default function ServiceFormModal({
     billing_mode: (service?.billing_mode ?? "ONE_TIME") as BillingMode,
     frequency: service?.recurrence?.frequency ?? "",
     warranty_months: String(service?.warranty_months ?? 0),
+    warranty_conditions: service?.warranty_conditions ?? "",
     price: "",
     description: service?.description ?? "",
   });
@@ -97,6 +98,7 @@ export default function ServiceFormModal({
           billing_mode: form.billing_mode,
           frequency: form.billing_mode === "RECURRING" ? form.frequency : null,
           warranty_months: Number(form.warranty_months) || 0,
+          warranty_conditions: form.warranty_conditions.trim() || null,
           description: form.description.trim() || null,
           ...(service ? {} : { price: form.price === "" ? null : Number(form.price) }),
         }),
@@ -184,6 +186,21 @@ export default function ServiceFormModal({
 
           <Field label="Descripción" span={3} error={errors.description}>
             <textarea className={INPUT} rows={3} value={form.description} onChange={(e) => set("description")(e.target.value)} />
+          </Field>
+          <Field
+            label="Condiciones de garantía"
+            span={3}
+            error={errors.warranty_conditions}
+            hint={Number(form.warranty_months) > 0 ? "Se muestran en la cobertura de cada reclamo de garantía." : "Se guardan con los meses de garantía."}
+          >
+            <textarea
+              className={INPUT}
+              rows={2}
+              maxLength={1000}
+              value={form.warranty_conditions}
+              onChange={(e) => set("warranty_conditions")(e.target.value)}
+              placeholder="Cubre defectos de ejecución; excluye mal uso y terceros."
+            />
           </Field>
         </FormGrid>
 

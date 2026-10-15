@@ -68,8 +68,8 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/budgets", label: "Centros de costo y presupuestos", module: "FINANZAS", requiredPermission: "budgets.view", icon: Crosshair, superModule: "Contabilidad" },
   { href: "/chart-of-accounts", label: "Plan de cuentas y periodos", module: "FINANZAS", requiredPermission: "accounting.view", icon: ListTree, superModule: "Contabilidad" },
 
-  { label: "Tickets y SLA", icon: LifeBuoy, superModule: "Soporte", soon: true },
-  { label: "Garantías", icon: Shield, superModule: "Soporte", soon: true },
+  { href: "/tickets", label: "Tickets y SLA", module: "SOPORTE", requiredPermission: "tickets.view", icon: LifeBuoy, superModule: "Soporte" },
+  { href: "/warranty-claims", label: "Garantías", module: "SOPORTE", requiredPermission: "warranty.view", icon: Shield, superModule: "Soporte" },
 
   { label: "Documentos", icon: Folder, superModule: "Control", soon: true },
   { label: "Credential Vault", icon: KeyRound, superModule: "Control", soon: true },
@@ -85,7 +85,8 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Seguridad y aislamiento", icon: Lock, superModule: "Administración", soon: true },
   { label: "Usuarios del portal", icon: UserRound, superModule: "Administración", soon: true },
   { label: "Reglas de aprobación", icon: ListChecks, superModule: "Administración", soon: true },
-  { label: "Calendario laboral y SLA", icon: CalendarClock, superModule: "Administración", soon: true },
+  // Del módulo Soporte: sin él, el calendario no se usa (sale con el candado del plan).
+  { href: "/sla-calendar", label: "Calendario laboral y SLA", module: "SOPORTE", requiredPermission: "sla.view", icon: CalendarClock, superModule: "Administración" },
   { label: "Notificaciones", icon: Bell, superModule: "Administración", soon: true },
   { label: "Importación masiva", icon: Upload, superModule: "Administración", soon: true },
 ];

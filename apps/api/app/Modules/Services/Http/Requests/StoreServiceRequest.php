@@ -30,6 +30,8 @@ class StoreServiceRequest extends FormRequest
             'billing_mode' => ['nullable', 'in:ONE_TIME,RECURRING,PER_EVENT'],
             'frequency' => ['nullable', 'required_if:billing_mode,RECURRING', 'in:MONTHLY,QUARTERLY,YEARLY'],
             'warranty_months' => ['nullable', 'integer', 'min:0', 'max:120'],
+            // Lo que cubre la garantía: se muestra en la cobertura de cada reclamo.
+            'warranty_conditions' => ['nullable', 'string', 'max:1000'],
             // Precio inicial (sin IGV): crea la primera versión del precio.
             'price' => ['nullable', 'numeric', 'min:0'],
         ];

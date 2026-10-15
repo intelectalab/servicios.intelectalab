@@ -20,6 +20,7 @@ use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Contract;
 use App\Modules\Services\Models\Quotation;
+use App\Modules\Support\Models\SupportTicket;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
@@ -547,9 +548,6 @@ class PartyController extends Controller
         // Cada parte de la vista del cliente pide el permiso de ver de su módulo (y que la empresa
         // tenga el módulo): ver clientes no da acceso a sus comprobantes, tickets u oportunidades.
         $can = fn (string $permission) => CheckPermission::granted(request(), $permission);
-        $ofCustomer = fn (string $table, string $permission) => DB::table($table)
-            ->where("{$table}.customer_id", $customerId ?? '00000000-0000-0000-0000-000000000000')
-            ->when(! $can($permission), fn ($query) => $query->whereRaw('false'));
 
         // Cotizaciones y contratos: solo con su permiso de ver y dentro del alcance del rol
         // (lo propio, equipo, sede o empresa), igual que en sus listados.
@@ -609,7 +607,8 @@ class PartyController extends Controller
             // Por su modelo, para respetar el alcance del rol. Un borrador descartado no es un comprobante del cliente.
             'invoices' => $ofCustomerInScope(Invoice::class, 'billing.view')->where('status', '<>', 'CANCELLED')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'invoice_number', 'issue_date', 'total', 'currency', 'status']),
-            'tickets' => $ofCustomer('support_tickets', 'support.view')->orderByDesc('created_at')->limit(100)
+            // Por su modelo, para respetar el alcance del rol.
+            'tickets' => $ofCustomerInScope(SupportTicket::class, 'tickets.view')->orderByDesc('opened_at')->limit(100)
                 ->get(['id', 'ticket_number', 'subject', 'priority', 'status']),
             // Los documentos aún no se enlazan a una identidad.
             'documents' => [],

@@ -38,6 +38,7 @@ export interface Service {
   unit: string | null;
   billing_mode: BillingMode;
   warranty_months: number;
+  warranty_conditions?: string | null;
   category: ServiceCategory | null;
   current_price: ServicePrice | null;
   recurrence: { frequency: Frequency; interval_value: number } | null;

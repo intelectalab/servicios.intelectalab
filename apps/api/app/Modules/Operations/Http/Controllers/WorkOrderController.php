@@ -13,11 +13,11 @@ use App\Modules\Documents\Support\DocumentStore;
 use App\Modules\Finance\Support\Billing;
 use App\Modules\Operations\Support\AgendaClash;
 use App\Modules\Operations\Support\Technicians;
+use App\Modules\Operations\Support\WorkOrders;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
-use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -148,40 +148,17 @@ class WorkOrderController extends Controller
             $this->assertAssignable($tenantId, $assignee, null, $start, $end);
         }
 
-        $order = DB::transaction(function () use ($request, $tenantId, $data, $service, $template, $start, $end, $assignee) {
-            $order = WorkOrder::create([
-                'tenant_id' => $tenantId,
-                'customer_id' => $service->customer_id,
-                'contracted_service_id' => $service->id,
-                'contract_id' => $service->contract_id,
-                'service_id' => $service->service_id,
-                'code' => SequentialNumberGenerator::next($tenantId, 'work_orders', 'code', 'OT'),
-                'title' => trim($data['title']),
-                'status' => 'PLANNED',
-                'priority' => $data['priority'] ?? 'NORMAL',
+        $order = DB::transaction(function () use ($request, $data, $service, $template, $start, $end, $assignee) {
+            $order = WorkOrders::create($request, $service, $template, [
+                'title' => $data['title'],
+                'priority' => $data['priority'] ?? null,
                 'scheduled_start' => $start,
                 'scheduled_end' => $end,
                 'location' => $this->text($data['location'] ?? null),
                 'latitude' => $data['latitude'] ?? null,
                 'longitude' => $data['longitude'] ?? null,
                 'description' => $this->text($data['description'] ?? null),
-                'created_by' => $request->user()->id,
-                'checklist_id' => $template?->id,
-                'checklist_name' => $template?->name,
-                'checklist_status' => $template ? 'PENDING' : null,
-                // La orden nace en la sede de su servicio; si no tiene, en la de quien la crea.
-                ...($service->branch_id ? ['branch_id' => $service->branch_id] : []),
             ]);
-
-            foreach ($template?->items ?? [] as $item) {
-                WorkOrderChecklistItem::create([
-                    'tenant_id' => $tenantId, 'work_order_id' => $order->id,
-                    'position' => $item->position, 'label' => $item->label, 'required' => $item->required,
-                    'evidence_required' => $item->evidence_required,
-                ]);
-            }
-
-            $this->audit($request, $order, 'work_order.create', ['to' => 'PLANNED', 'code' => $order->code, 'title' => $order->title]);
 
             if ($assignee) {
                 $order->update(['assigned_user_id' => $assignee, 'status' => 'ASSIGNED']);

@@ -272,6 +272,7 @@ export default function ServiceDetail() {
               ["Modalidad", BILLING_MODES[service.billing_mode]],
               ["Recurrencia", service.recurrence ? `Cada ${service.recurrence.interval_value} · ${FREQUENCIES[service.recurrence.frequency]}` : "No recurrente"],
               ["Garantía", service.warranty_months ? `${service.warranty_months} meses` : "Sin garantía"],
+              service.warranty_months && service.warranty_conditions ? ["Condiciones de garantía", service.warranty_conditions] : null,
               ["Afecto a IGV", "Sí (18%)"],
               ["Descripción", service.description || "—"],
             ]}

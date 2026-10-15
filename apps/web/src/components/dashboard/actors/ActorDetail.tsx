@@ -9,16 +9,19 @@ import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } 
 import { CONTRACT_STATES } from "@/lib/contracts";
 import { LEAD_STATES, OPPORTUNITY_STATES } from "@/lib/crm";
 import { WORK_ORDER_STATES } from "@/lib/operations";
+import { TICKET_STATES } from "@/lib/support";
 import { ACTOR_ENTITY, ACTOR_STATES, ROLE_LABELS, ROLE_TONES, kindLabel, phoneText, rolesText } from "@/lib/actors";
 import {
   Badge, Btn, Card, Chip, DataTable, Kv, LinkBtn, LoadError, Modal, Notice, PageHead, Screen, StateTrack, Tabs, Timeline, useDenied, useToasts,
   type Column,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
+import { PriorityTag } from "@/components/dashboard/support/SupportParts";
 import { ActorForm } from "./ActorForm";
 import { ContactForm } from "./ActorModals";
 import type { ActorContact, ActorDetail as Actor } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
+import type { TicketPriority } from "@/types/support";
 
 type Row<K extends keyof Actor> = Actor[K] extends (infer T)[] ? T : never;
 
@@ -55,9 +58,17 @@ const INVOICE_COLUMNS: Column<Row<"invoices">>[] = [
 ];
 
 const TICKET_COLUMNS: Column<Row<"tickets">>[] = [
-  { label: "Ticket", render: (row) => <><strong className="font-semibold">{row.ticket_number}</strong><small className="app-muted block text-xs">{row.subject}</small></> },
-  { label: "Prioridad", render: (row) => row.priority },
-  { label: "Estado", render: (row) => raw(row.status) },
+  {
+    label: "Ticket",
+    render: (row) => (
+      <>
+        <Link href={`/tickets/${row.id}`} className="font-semibold hover:text-[color:var(--p-brand-text)] hover:underline">{row.ticket_number}</Link>
+        <small className="app-muted block text-xs">{row.subject}</small>
+      </>
+    ),
+  },
+  { label: "Prioridad", render: (row) => <PriorityTag priority={row.priority as TicketPriority | null} /> },
+  { label: "Estado", render: (row) => { const [label, tone] = stateOf(TICKET_STATES, row.status); return <Badge tone={tone}>{label}</Badge>; } },
 ];
 
 const DOCUMENT_COLUMNS: Column<Row<"documents">>[] = [
@@ -468,7 +479,7 @@ export default function ActorDetail() {
       )}
       {tab === "operaciones" && <Listing title="Órdenes de trabajo" permission="work_orders.view" cols={WORK_ORDER_COLUMNS} rows={actor.work_orders} onRowClick={(row) => router.push(`/work-orders/${row.id}`)} />}
       {tab === "finanzas" && <Listing title="Comprobantes" permission="billing.view" cols={INVOICE_COLUMNS} rows={actor.invoices} onRowClick={(row) => router.push(`/invoices/${row.id}`)} />}
-      {tab === "soporte" && <Listing title="Tickets" permission="support.view" cols={TICKET_COLUMNS} rows={actor.tickets} />}
+      {tab === "soporte" && <Listing title="Tickets" permission="tickets.view" cols={TICKET_COLUMNS} rows={actor.tickets} />}
       {tab === "documentos" && <Listing title="Documentos vinculados" cols={DOCUMENT_COLUMNS} rows={actor.documents} />}
       {tab === "crm" && (
         <>
