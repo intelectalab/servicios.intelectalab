@@ -70,6 +70,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-14 | Tesorería (Bancos y caja): caja chica con centro de costo y cuenta del plan, historial de extractos, exportar el extracto, archivo del extracto guardado y transferencias protegidas en la base | [cambios/2026-10-14_tesoreria-caja-chica-extractos-transferencias.md](cambios/2026-10-14_tesoreria-caja-chica-extractos-transferencias.md) |
 | 2026-10-14 | Pendientes resueltos: pagar como permiso propio, tiempo límite de lecturas, pantalla sin permiso, cabeceras en dos líneas, contrato que arrastra sus servicios, plantillas de checklist, cierre de ejercicio, PDF e importación de asientos, corrección de gasto de caja, reversión de pago y tolerancia del cruce | [cambios/2026-10-14_pendientes-resueltos.md](cambios/2026-10-14_pendientes-resueltos.md) |
 | 2026-10-15 | Soporte: Tickets y SLA (triage, SLA en horario hábil con feriados y Premium, pausa, escalar, conversación con notas internas, OT desde el ticket), Garantías (cobertura, aprobar o rechazar) y Calendario laboral y SLA en Administración; rol Soporte | [cambios/2026-10-15_soporte-tickets-sla-garantias.md](cambios/2026-10-15_soporte-tickets-sla-garantias.md) |
+| 2026-10-20 | Despliegue en el VPS: arreglo de la web con un solo dominio, datos copiados y carpeta conectada a GitHub | [cambios/2026-10-20_despliegue-en-el-vps.md](cambios/2026-10-20_despliegue-en-el-vps.md) |
 
 ## Cómo se escribe cada entrada
 

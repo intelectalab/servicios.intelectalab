@@ -31,7 +31,7 @@ export function proxy(request: NextRequest) {
   const host = SPLIT_DOMAINS ? request.headers.get("host")?.toLowerCase() : null;
 
   // En el dominio público solo vive la landing: lo demás se abre en el del sistema.
-  if (host === SITE_HOST && pathname !== "/") {
+  if (SPLIT_DOMAINS && host === SITE_HOST && pathname !== "/") {
     return NextResponse.redirect(new URL(`${pathname}${search}`, APP_URL));
   }
 
@@ -42,7 +42,7 @@ export function proxy(request: NextRequest) {
   const inPlatformArea = matches(pathname, PLATFORM_PREFIXES);
 
   // En el dominio del sistema no hay landing: la raíz lleva al login o a la consola.
-  if (host === APP_HOST && pathname === "/") {
+  if (SPLIT_DOMAINS && host === APP_HOST && pathname === "/") {
     const target = !hasToken ? "/login" : scope === "platform" ? PLATFORM_HOME : TENANT_HOME;
     return NextResponse.redirect(new URL(target, APP_URL));
   }
