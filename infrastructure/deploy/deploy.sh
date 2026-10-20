@@ -18,7 +18,11 @@
 # Solo toca esta carpeta y su proceso de pm2; los demás sitios del servidor no.
 set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Todo va entre llaves: bash lee el script completo antes de empezar, así que
+# si el despliegue trae una versión nueva de este archivo no se mezclan.
+{
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${APP_DIR:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
 API="$APP_DIR/apps/api"
 WEB="$APP_DIR/apps/web"
 BRANCH="${BRANCH:-main}"
@@ -65,7 +69,7 @@ git log --oneline "$OLD..$NEW"
 confirmar "¿Desplegar estos cambios?" || falla "Cancelado. No se cambió nada."
 
 paso "3. Respaldo antes de actualizar"
-bash "$APP_DIR/infrastructure/deploy/backup.sh" "antes_deploy_${OLD:0:7}"
+APP_DIR="$APP_DIR" bash "$SCRIPT_DIR/backup.sh" "antes_deploy_${OLD:0:7}"
 
 trap 'echo; echo "✗ El despliegue se detuvo con un error. El código estaba en ${OLD:0:7}; para volver: cd $APP_DIR && git reset --hard ${OLD:0:7} y repetir los pasos de la web. El respaldo está en /root/backups/erp." >&2' ERR
 
@@ -140,3 +144,5 @@ if [ "$web" = "200" ] && [ "$api" = "401" ]; then
 else
   falla "El sitio no respondió como se esperaba. Revisa: tail -n 50 /var/log/nginx/error.log y pm2 logs $PM2_NAME --lines 50"
 fi
+exit 0
+}

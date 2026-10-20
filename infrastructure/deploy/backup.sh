@@ -7,7 +7,7 @@
 # conservan solo los últimos 14 (BACKUP_KEEP para cambiarlo).
 set -euo pipefail
 
-APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+APP_DIR="${APP_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 DEST_ROOT="${BACKUP_DIR:-/root/backups/erp}"
 KEEP="${BACKUP_KEEP:-14}"
 DB_NAME="${DB_NAME:-erp_saas}"
