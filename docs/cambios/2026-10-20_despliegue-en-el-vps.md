@@ -14,6 +14,17 @@ Revisar por qué servicios.intelectalab.com no funcionaba en el VPS. Después: p
 - Base de datos: se copiaron los datos locales (solo los datos; el esquema ya era igual), con respaldo previo en `/root/backups/`.
 - La carpeta `/var/www/servicios.intelectalab.com` quedó conectada a `origin` (este repo).
 
+**Scripts del servidor** (`infrastructure/deploy/`, se corren como root en el VPS)
+- `backup.sh [etiqueta]`: guarda en `/root/backups/erp/<fecha>_<etiqueta>/` la base (`pg_dump`), los `.env` de la API y la web, el sitio de nginx y los archivos subidos (`storage/app`), además del commit publicado. Conserva los últimos 14.
+- `deploy.sh [--si]`:
+  - Se detiene si hay archivos cambiados a mano en el servidor.
+  - Muestra los commits nuevos y pide confirmación.
+  - Respalda con `backup.sh` y trae el código (solo avance rápido).
+  - API: corre `composer install` si cambió `composer.lock`. Muestra las migraciones pendientes y, si se confirman, las corre como `erp_user` (pide su contraseña; no se guarda). Después limpia las cachés y corrige los permisos.
+  - Web: corre `npm ci` si cambió `package-lock.json`, compila y reinicia solo `servicios-web` en pm2. Si el build falla, deja el anterior.
+  - Al final comprueba que `/login` responda 200 y la API 401.
+- `.gitattributes`: los `.sh` se guardan con saltos de línea de Linux.
+
 ## Qué NO se tocó
 
 Los demás sitios del VPS (crm, tecsur, demotecsur, cubo-proyecto, erp_servicios) ni su configuración de nginx.
