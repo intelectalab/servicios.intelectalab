@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { exportCsv, exportXlsx, recordExport, type ExportColumn } from "@/lib/export-table";
 import {
@@ -42,6 +42,8 @@ type UsersResponse = {
   employees: Employee[];
   /** Usuarios activos que permite el plan; null si no hay límite. */
   limit: number | null;
+  /** El rol Administrador exige verificación en dos pasos (ADMIN_MFA_REQUIRED en la API). */
+  admin_mfa_required?: boolean;
 };
 
 const userKey = (user: CompanyUser) => user.id;
@@ -82,6 +84,10 @@ function UserModal({
     ...options.branches,
     ...(user?.extra_branches.filter((branch) => !options.branches.some((option) => option.id === branch.id)) ?? []),
   ].filter((branch) => branch.id !== branchId).map((branch): [string, string] => [branch.id, branch.name]);
+
+  // Con el rol Administrador la API exige el MFA aunque la casilla esté vacía: se muestra marcada y bloqueada.
+  const mfaForced = options.admin_mfa_required !== false
+    && options.roles.find((role) => role.id === roleId)?.code.toUpperCase() === "ADMIN";
 
   // Empleados sin cuenta, más el que ya esté vinculado a este usuario.
   const employees = options.employees.filter((employee) => !employee.user_id || employee.user_id === user?.id);
@@ -206,10 +212,22 @@ function UserModal({
               ]}
             />
           </Field>
-          <label className="flex cursor-pointer items-center gap-2 md:col-span-3">
-            <input type="checkbox" className="h-[17px] w-[17px] accent-[#1B8FC9]" checked={mfa} onChange={(e) => setMfa(e.target.checked)} />
-            <span>Exigir verificación en dos pasos</span>
-          </label>
+          <div className="flex flex-col gap-1 md:col-span-3">
+            <label className={`flex items-center gap-2 ${mfaForced ? "cursor-not-allowed" : "cursor-pointer"}`}>
+              <input
+                type="checkbox"
+                className="h-[17px] w-[17px] accent-[#1B8FC9] disabled:cursor-not-allowed"
+                checked={mfa || mfaForced}
+                disabled={mfaForced}
+                onChange={(e) => setMfa(e.target.checked)}
+              />
+              <span className={mfaForced ? "app-muted" : ""}>Exigir verificación en dos pasos</span>
+              {mfaForced && <Lock size={13} className="app-muted shrink-0" aria-hidden="true" />}
+            </label>
+            {mfaForced && (
+              <small className="app-muted text-xs">El rol Administrador siempre exige verificación en dos pasos.</small>
+            )}
+          </div>
         </FormGrid>
         {!user && (
           <p className="app-muted mt-3 text-[12.5px]">

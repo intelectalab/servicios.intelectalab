@@ -114,4 +114,12 @@ return [
 
     'password_timeout' => env('AUTH_PASSWORD_TIMEOUT', 10800),
 
+    /*
+    | El rol Administrador de cada empresa entra siempre con verificación en
+    | dos pasos. Con ADMIN_MFA_REQUIRED=false se apaga esa obligación y vale
+    | la casilla de cada usuario. El superadmin y el portal la siguen exigiendo.
+    */
+
+    'admin_mfa_required' => (bool) env('ADMIN_MFA_REQUIRED', true),
+
 ];

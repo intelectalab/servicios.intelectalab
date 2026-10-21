@@ -39,6 +39,50 @@ class MfaLoginTest extends TestCase
         return $user;
     }
 
+    /** Usuario sin MFA propio con el rol Administrador de su empresa. */
+    private function makeAdmin(): User
+    {
+        $user = $this->makeUser(false);
+        $tenantId = DB::table('tenant_users')->where('user_id', $user->id)->value('tenant_id');
+        $roleId = (string) Str::uuid();
+        DB::table('roles')->insert(['id' => $roleId, 'tenant_id' => $tenantId, 'code' => 'admin', 'name' => 'Administrador']);
+        DB::table('user_roles')->insert(['tenant_id' => $tenantId, 'user_id' => $user->id, 'role_id' => $roleId]);
+
+        return $user;
+    }
+
+    public function test_tenant_admin_must_verify_while_the_rule_is_on(): void
+    {
+        Mail::fake();
+        config(['auth.admin_mfa_required' => true]);
+        $admin = $this->makeAdmin();
+
+        $this->postJson('/api/v1/login', ['email' => $admin->email, 'password' => 'password123'])
+            ->assertOk()
+            ->assertJson(['mfa_required' => true])
+            ->assertJsonMissingPath('token');
+    }
+
+    public function test_tenant_admin_follows_their_own_setting_when_the_rule_is_off(): void
+    {
+        Mail::fake();
+        config(['auth.admin_mfa_required' => false]);
+
+        $admin = $this->makeAdmin();
+        $this->postJson('/api/v1/login', ['email' => $admin->email, 'password' => 'password123'])
+            ->assertOk()
+            ->assertJsonStructure(['token', 'user'])
+            ->assertJsonMissingPath('mfa_required');
+        Mail::assertNothingSent();
+
+        // Si el administrador tiene marcada su casilla, se le sigue pidiendo el código.
+        $withMfa = $this->makeAdmin();
+        $withMfa->forceFill(['mfa_enabled' => true])->save();
+        $this->postJson('/api/v1/login', ['email' => $withMfa->email, 'password' => 'password123'])
+            ->assertOk()
+            ->assertJson(['mfa_required' => true]);
+    }
+
     public function test_user_without_mfa_gets_token_directly(): void
     {
         Mail::fake();

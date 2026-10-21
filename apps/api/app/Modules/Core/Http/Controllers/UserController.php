@@ -77,8 +77,8 @@ class UserController extends Controller
                     // Sedes adicionales: amplían lo que la persona ve con el alcance "Sede".
                     'extra_branches' => ($extraBranches[$user->id] ?? collect())->map(fn ($branch) => ['id' => $branch->id, 'name' => $branch->name])->values(),
                     'employee_id' => $employees->firstWhere('user_id', $user->id)['id'] ?? null,
-                    // El administrador siempre entra con verificación en dos pasos.
-                    'mfa' => (bool) $user->mfa_enabled || $isAdmin,
+                    // El administrador entra con verificación en dos pasos mientras la regla esté encendida.
+                    'mfa' => (bool) $user->mfa_enabled || ($isAdmin && config('auth.admin_mfa_required')),
                     'mfa_enabled' => (bool) $user->mfa_enabled,
                     'last_login_at' => $user->last_login_at,
                 ];
@@ -86,6 +86,8 @@ class UserController extends Controller
 
         return response()->json([
             'users' => $users,
+            // La pantalla bloquea la casilla del rol Administrador mientras la regla esté encendida.
+            'admin_mfa_required' => (bool) config('auth.admin_mfa_required'),
             'roles' => DB::table('roles')->where('tenant_id', $tenantId)->orderBy('name')->get(['id', 'code', 'name']),
             'branches' => DB::table('branches')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']),
             'teams' => DB::table('teams')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->orderBy('name')->get(['id', 'name']),

@@ -221,8 +221,8 @@ class AuthController extends Controller
 
     /**
      * La verificación en dos pasos es obligatoria para la plataforma, los
-     * administradores del tenant y los usuarios del portal; el resto la usa
-     * solo si tiene mfa_enabled.
+     * administradores del tenant (salvo ADMIN_MFA_REQUIRED=false) y los
+     * usuarios del portal; el resto la usa solo si tiene mfa_enabled.
      */
     private function requiresMfa(User $user, ?string $tenantId): bool
     {
@@ -234,7 +234,7 @@ class AuthController extends Controller
             return false;
         }
 
-        $isTenantAdmin = DB::table('user_roles')
+        $isTenantAdmin = config('auth.admin_mfa_required') && DB::table('user_roles')
             ->join('roles', 'roles.id', '=', 'user_roles.role_id')
             ->where('user_roles.user_id', $user->id)
             ->where('user_roles.tenant_id', $tenantId)

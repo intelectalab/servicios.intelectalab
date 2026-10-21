@@ -1203,7 +1203,15 @@ class ComercialTest extends TestCase
         $this->assertSame('ACTIVE', $created['status']);
         $this->assertFalse($created['mfa']);
         $this->assertTrue(collect($list['users'])->firstWhere('id', $admin->id)['mfa']);
+        $this->assertTrue($list['admin_mfa_required']);
         $this->assertNull($list['limit']);
+
+        // Con la regla apagada, el administrador sigue su propia casilla.
+        config(['auth.admin_mfa_required' => false]);
+        $off = $this->getJson('/api/v1/users')->assertOk()->json();
+        $this->assertFalse($off['admin_mfa_required']);
+        $this->assertFalse(collect($off['users'])->firstWhere('id', $admin->id)['mfa']);
+        config(['auth.admin_mfa_required' => true]);
 
         // Nadie cambia su propio rol ni se desactiva; la empresa no se queda sin administrador.
         $own = ['name' => $admin->name, 'email' => $admin->email, 'role_id' => $salesRoleId];
