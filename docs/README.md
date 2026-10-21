@@ -72,7 +72,9 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-15 | Soporte: Tickets y SLA (triage, SLA en horario hábil con feriados y Premium, pausa, escalar, conversación con notas internas, OT desde el ticket), Garantías (cobertura, aprobar o rechazar) y Calendario laboral y SLA en Administración; rol Soporte | [cambios/2026-10-15_soporte-tickets-sla-garantias.md](cambios/2026-10-15_soporte-tickets-sla-garantias.md) |
 | 2026-10-20 | Despliegue en el VPS: arreglo de la web con un solo dominio, datos copiados, carpeta conectada a GitHub y scripts de despliegue y respaldo |
 | 2026-10-20 | Interruptor `ADMIN_MFA_REQUIRED` para el MFA obligatorio del Administrador y casilla con candado en Usuarios | [cambios/2026-10-20_mfa-administrador-interruptor.md](cambios/2026-10-20_mfa-administrador-interruptor.md) |
-| 2026-10-21 | Diseño de los correos con código (verificación y contraseña): logo, código destacado y versión en texto | [cambios/2026-10-21_correo-con-diseno.md](cambios/2026-10-21_correo-con-diseno.md) | [cambios/2026-10-20_despliegue-en-el-vps.md](cambios/2026-10-20_despliegue-en-el-vps.md) |
+| 2026-10-21 | Diseño de los correos con código (verificación y contraseña): logo, código destacado y versión en texto | [cambios/2026-10-21_correo-con-diseno.md](cambios/2026-10-21_correo-con-diseno.md) |
+| 2026-10-21 | Módulos de los planes de menor a mayor: Base 9, Profesional 19, Enterprise con los 22 (PC y VPS) | [cambios/2026-10-21_planes-modulos-escalonados.md](cambios/2026-10-21_planes-modulos-escalonados.md) |
+| 2026-10-21 | Correo de bienvenida y aviso al superadmin al registrarse; en el login, "Volver al inicio" y "Ver planes" | [cambios/2026-10-21_correos-de-registro-y-enlaces-del-login.md](cambios/2026-10-21_correos-de-registro-y-enlaces-del-login.md) | [cambios/2026-10-20_despliegue-en-el-vps.md](cambios/2026-10-20_despliegue-en-el-vps.md) |
 
 ## Cómo se escribe cada entrada
 

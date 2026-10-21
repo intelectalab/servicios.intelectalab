@@ -34,7 +34,7 @@ async function postJson(path: string, body: unknown): Promise<LoginResponse> {
   return data;
 }
 
-export default function LoginForm() {
+export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { homeUrl?: string; plansUrl?: string }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -169,7 +169,20 @@ export default function LoginForm() {
   }
 
   return (
-    <AuthShell key="login" title="Iniciar sesión" subtitle="Bienvenido(a). Ingrese sus credenciales.">
+    <AuthShell
+      key="login"
+      title="Iniciar sesión"
+      subtitle="Bienvenido(a). Ingrese sus credenciales."
+      back={{ href: homeUrl, label: "Volver al inicio" }}
+      footer={
+        <>
+          ¿Aún no tiene cuenta?{" "}
+          <a href={plansUrl} className="font-medium text-[color:var(--p-brand-text)] hover:underline">
+            Ver planes
+          </a>
+        </>
+      }
+    >
       <form onSubmit={handleSubmit} noValidate className="grid gap-3.5">
         <motion.div variants={item}>
           <label htmlFor="email" className={authLabel}>

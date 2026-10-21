@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Image from "next/image";
 import { motion, type Variants } from "framer-motion";
-import { FileText, Wrench, Receipt } from "lucide-react";
+import { ArrowLeft, FileText, Wrench, Receipt } from "lucide-react";
 import { poppins } from "@/lib/fonts";
 
 /**
@@ -68,11 +68,14 @@ export default function AuthShell({
   subtitle,
   children,
   footer,
+  back,
 }: {
   title: string;
   subtitle: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  /** Enlace discreto sobre el logo para salir de la pantalla (p. ej. a la página pública). */
+  back?: { href: string; label: string };
 }) {
   return (
     <div className={`${poppins.className} app-surface grid min-h-screen w-full grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:grid-rows-1`}>
@@ -127,6 +130,16 @@ export default function AuthShell({
           initial="hidden"
           animate="show"
         >
+          {back && (
+            <motion.a
+              variants={item}
+              href={back.href}
+              className="app-muted mb-5 inline-flex items-center gap-1.5 text-[12.5px] font-medium transition-colors hover:text-[color:var(--p-brand-text)]"
+            >
+              <ArrowLeft size={15} aria-hidden="true" />
+              {back.label}
+            </motion.a>
+          )}
           <motion.div variants={item} className="mb-7">
             <span className="logo-light block"><Logo variant="dark" /></span>
             <span className="logo-dark"><Logo variant="light" /></span>
