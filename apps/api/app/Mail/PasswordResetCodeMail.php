@@ -21,9 +21,14 @@ class PasswordResetCodeMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            htmlString: '<p>Usa este código para crear tu nueva contraseña:</p>'
-                .'<p style="font-size:24px;font-weight:700;letter-spacing:6px">'.e($this->code).'</p>'
-                ."<p>Vence en {$this->minutes} minutos. Si no solicitaste el cambio, ignora este correo.</p>",
+            view: 'mail.code',
+            text: 'mail.code-text',
+            with: [
+                'heading' => 'Crea tu nueva contraseña',
+                'intro' => 'Usa este código para crear tu nueva contraseña.',
+                'preview' => "Vence en {$this->minutes} minutos.",
+                'notice' => 'Si no solicitaste el cambio, ignora este correo.',
+            ],
         );
     }
 }
