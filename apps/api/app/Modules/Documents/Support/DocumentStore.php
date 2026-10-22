@@ -41,6 +41,12 @@ class DocumentStore
 
     public const VISIBILITIES = ['INTERNAL', 'PORTAL'];
 
+    /** Dónde queda el archivo: 'local' (disco del servidor) o 's3' (MinIO o S3), según DOCUMENTS_DRIVER. */
+    public static function provider(): string
+    {
+        return config('filesystems.disks.'.self::DISK.'.driver') === 'local' ? 'local' : 's3';
+    }
+
     /** Reglas del archivo para un formulario de subida. */
     public static function fileRules(): array
     {
@@ -94,7 +100,7 @@ class DocumentStore
             return DB::transaction(function () use ($tenantId, $userId, $file, $attributes, $document, $sha256, $objectKey) {
                 $fileObject = FileObject::create([
                     'tenant_id' => $tenantId,
-                    'storage_provider' => 's3',
+                    'storage_provider' => self::provider(),
                     'bucket' => (string) (config('filesystems.disks.'.self::DISK.'.bucket') ?? self::DISK),
                     'object_key' => $objectKey,
                     'original_name' => Str::limit($file->getClientOriginalName(), 480, ''),

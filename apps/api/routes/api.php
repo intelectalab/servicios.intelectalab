@@ -75,6 +75,10 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 
+    // Descarga de un adjunto guardado en el disco del servidor: sin sesión, solo con el enlace firmado que vence.
+    Route::get('/files/{path}', \App\Modules\Documents\Http\Controllers\DocumentFileController::class)
+        ->where('path', '.*')->middleware(['signed', 'throttle:60,1,files'])->name('documents.file');
+
     // idempotency: un alta enviada dos veces se registra una vez. record.version: nadie pisa la edición de otro.
     Route::middleware(['auth:sanctum', 'tenant.context', 'idempotency', 'record.version', 'list.export'])->group(function () {
         // Registro de una exportación: exige el permiso de exportar del listado y queda en auditoría.

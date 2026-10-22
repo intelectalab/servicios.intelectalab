@@ -260,6 +260,51 @@ class OperationsProjectsTest extends TestCase
         $at($draft, 'return', ['reason' => 'x'])->assertStatus(403);
     }
 
+    public function test_documents_on_the_server_disk_download_only_with_a_signed_link(): void
+    {
+        // DOCUMENTS_DRIVER=local, en una carpeta temporal.
+        $root = sys_get_temp_dir().'/erp-docs-'.Str::uuid();
+        config(['filesystems.disks.documents' => ['driver' => 'local', 'root' => $root, 'bucket' => 'documents', 'throw' => true]]);
+        Storage::forgetDisk('documents');
+        (new \App\Providers\AppServiceProvider($this->app))->boot();
+
+        try {
+            $tenantId = $this->makeTenant();
+            $admin = $this->makeUser('Admin', self::ADMIN);
+            $id = $this->running($admin)['id'];
+            $did = $this->postJson("/api/v1/projects/{$id}/deliverables", ['name' => 'Informe final'])->assertCreated()->json('deliverables.0.id');
+            $url = "/api/v1/projects/{$id}/deliverables/{$did}/document";
+            $this->post($url, ['title' => 'Informe', 'file' => UploadedFile::fake()->createWithContent('Informe final.pdf', '%PDF-1.4 disco')], ['Accept' => 'application/json'])
+                ->assertCreated();
+
+            $files = Storage::disk('documents')->allFiles();
+            $this->assertCount(1, $files);
+            $this->assertStringStartsWith("tenants/{$tenantId}/documents/", $files[0]);
+            $this->assertFileExists("{$root}/{$files[0]}");
+            $this->assertDatabaseHas('file_objects', ['object_key' => $files[0], 'storage_provider' => 'local', 'bucket' => 'documents']);
+
+            // El enlace lo da la API con sesión; la descarga no la pide, pero exige la firma.
+            $link = $this->getJson("{$url}-url")->assertOk()->json('url');
+            $this->assertStringContainsString('/api/v1/files/tenants/', $link);
+            $path = parse_url($link, PHP_URL_PATH).'?'.parse_url($link, PHP_URL_QUERY);
+            $this->app['auth']->forgetGuards();
+
+            $download = $this->get($path)->assertOk();
+            $this->assertSame('%PDF-1.4 disco', $download->streamedContent());
+            $this->assertStringContainsString('attachment; filename="Informe final.pdf"', $download->headers->get('Content-Disposition'));
+            $this->assertStringContainsString('sandbox', $download->headers->get('Content-Security-Policy'));
+
+            // Sin firma, con la firma de otro archivo o vencido: no se entrega.
+            $this->get(parse_url($link, PHP_URL_PATH))->assertStatus(403);
+            $this->get(str_replace(basename($files[0]), 'otro.pdf', $path))->assertStatus(403);
+            $this->travel(6)->minutes();
+            $this->get($path)->assertStatus(403);
+        } finally {
+            \Illuminate\Support\Facades\File::deleteDirectory($root);
+            Storage::forgetDisk('documents');
+        }
+    }
+
     public function test_deliverable_document_is_an_uploaded_file_with_versions(): void
     {
         Storage::fake('documents');

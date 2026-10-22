@@ -24,6 +24,8 @@
         <env name="ARGON_TIME" value="1"/>
         <env name="CACHE_STORE" value="array"/>
         <env name="MAIL_MAILER" value="array"/>
+        <!-- Las pruebas parten de la regla por defecto, aunque el .env local la apague. -->
+        <env name="ADMIN_MFA_REQUIRED" value="true" force="true"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
 

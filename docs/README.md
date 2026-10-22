@@ -74,7 +74,9 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-20 | Interruptor `ADMIN_MFA_REQUIRED` para el MFA obligatorio del Administrador y casilla con candado en Usuarios | [cambios/2026-10-20_mfa-administrador-interruptor.md](cambios/2026-10-20_mfa-administrador-interruptor.md) |
 | 2026-10-21 | Diseño de los correos con código (verificación y contraseña): logo, código destacado y versión en texto | [cambios/2026-10-21_correo-con-diseno.md](cambios/2026-10-21_correo-con-diseno.md) |
 | 2026-10-21 | Módulos de los planes de menor a mayor: Base 9, Profesional 19, Enterprise con los 22 (PC y VPS) | [cambios/2026-10-21_planes-modulos-escalonados.md](cambios/2026-10-21_planes-modulos-escalonados.md) |
-| 2026-10-21 | Correo de bienvenida y aviso al superadmin al registrarse; en el login, "Volver al inicio" y "Ver planes" | [cambios/2026-10-21_correos-de-registro-y-enlaces-del-login.md](cambios/2026-10-21_correos-de-registro-y-enlaces-del-login.md) | [cambios/2026-10-20_despliegue-en-el-vps.md](cambios/2026-10-20_despliegue-en-el-vps.md) |
+| 2026-10-21 | Correo de bienvenida y aviso al superadmin al registrarse; en el login, "Volver al inicio" y "Ver planes" | [cambios/2026-10-21_correos-de-registro-y-enlaces-del-login.md](cambios/2026-10-21_correos-de-registro-y-enlaces-del-login.md) |
+| 2026-10-21 | VPS: PHP 8.3 → 8.3.36 y 8.4 → 8.4.27 por PHP2Shell, con respaldo y cómo volver atrás | [cambios/2026-10-21_actualizacion-php-php2shell.md](cambios/2026-10-21_actualizacion-php-php2shell.md) | [cambios/2026-10-20_despliegue-en-el-vps.md](cambios/2026-10-20_despliegue-en-el-vps.md) |
+| 2026-10-22 | Documentos en el disco del servidor (`DOCUMENTS_DRIVER=local`) con descarga por enlace firmado; los 8 archivos pasados al VPS | [cambios/2026-10-22_documentos-en-el-disco-del-servidor.md](cambios/2026-10-22_documentos-en-el-disco-del-servidor.md) |
 
 ## Cómo se escribe cada entrada
 

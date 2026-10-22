@@ -60,7 +60,15 @@ return [
             'report' => false,
         ],
 
-        'documents' => [
+        // Adjuntos de las empresas (DocumentStore). DOCUMENTS_DRIVER=local los guarda en el disco del
+        // servidor, dentro de storage/app/private/documents (entra en backup.sh); s3 usa MinIO o S3.
+        // Con local, los enlaces temporales los firma y sirve la propia API (/api/v1/files/...).
+        'documents' => env('DOCUMENTS_DRIVER', 's3') === 'local' ? [
+            'driver' => 'local',
+            'root' => storage_path('app/private/documents'),
+            'bucket' => 'documents',
+            'throw' => true,
+        ] : [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),
             'secret' => env('AWS_SECRET_ACCESS_KEY'),

@@ -48,7 +48,7 @@ class DocumentController extends Controller
             // 2. Registrar el archivo físico.
             $fileObject = FileObject::create([
                 'tenant_id' => $tenantId,
-                'storage_provider' => 's3',
+                'storage_provider' => \App\Modules\Documents\Support\DocumentStore::provider(),
                 'bucket' => config('filesystems.disks.documents.bucket'),
                 'object_key' => $objectKey,
                 'original_name' => $uploadedFile->getClientOriginalName(),
