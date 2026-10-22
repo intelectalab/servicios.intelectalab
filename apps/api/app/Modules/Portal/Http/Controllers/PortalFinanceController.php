@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Support\DocumentStore;
 use App\Modules\Finance\Support\FiscalSettings;
+use App\Modules\Portal\Support\PortalContracts;
 use App\Modules\Portal\Support\PortalCustomer;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
@@ -179,10 +180,22 @@ class PortalFinanceController extends Controller
         ]);
     }
 
-    /** Documentos compartidos con el cliente: los entregables aprobados de sus proyectos y los marcados para el portal. */
+    /**
+     * Documentos del cliente: sus contratos (el PDF lo arma el sistema, firmado con sus sellos) y los
+     * archivos compartidos con él (entregables aprobados de sus proyectos y documentos marcados para el portal).
+     */
     public function documents(Request $request)
     {
-        return response()->json($this->visibleDocuments($request->attributes->get('portal_customer_id'))->values());
+        $customerId = $request->attributes->get('portal_customer_id');
+        $contracts = PortalContracts::visible($customerId)
+            ->map(fn ($contract) => [
+                'id' => $contract->id, 'kind' => 'contract', 'title' => "Contrato {$contract->contract_number}", 'category' => 'Contrato',
+                'source' => $contract->signature_status === 'SIGNED' ? 'Firmado' : null, 'versions' => null,
+                'updated_at' => Carbon::parse($contract->updated_at ?? $contract->created_at)->toIso8601String(),
+            ]);
+        $files = $this->visibleDocuments($customerId)->map(fn (array $row) => ['kind' => 'file', ...$row]);
+
+        return response()->json($contracts->concat($files)->sortByDesc('updated_at')->values());
     }
 
     /** Enlace temporal (5 minutos) para descargar un documento compartido; queda registrado. */

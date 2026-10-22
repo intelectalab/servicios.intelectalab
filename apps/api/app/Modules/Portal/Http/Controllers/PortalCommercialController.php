@@ -5,6 +5,7 @@ namespace App\Modules\Portal\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Modules\Portal\Support\PortalAccess;
+use App\Modules\Portal\Support\PortalContracts;
 use App\Modules\Portal\Support\PortalCustomer;
 use App\Modules\Portal\Support\PortalRequests;
 use App\Modules\Services\Models\Quotation;
@@ -83,6 +84,17 @@ class PortalCommercialController extends Controller
         });
 
         return response()->json($this->detail($quotation->refresh(), $request));
+    }
+
+    /** Datos del PDF de un contrato del cliente (sin borradores, salvo los ya firmados); 404 si no es suyo. */
+    public function contract(string $contract, Request $request)
+    {
+        abort_unless(PortalAccess::can($request, 'services') || PortalAccess::can($request, 'documents'), 403, 'Tu rol del portal no incluye esta sección.');
+        abort_unless(Str::isUuid($contract), 404);
+        $row = PortalContracts::visible($request->attributes->get('portal_customer_id'))->firstWhere('id', $contract);
+        abort_if(! $row, 404);
+
+        return response()->json(PortalContracts::detail($row->id));
     }
 
     /** Contratos y servicios contratados del cliente, con su renovación. */

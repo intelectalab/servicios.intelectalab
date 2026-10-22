@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ApiError, apiFetch } from "@/lib/api";
 import { excelTone, shortDate, stateOf } from "@/lib/commercial";
-import { CONTRACT_STATES, slaLabel } from "@/lib/contracts";
+import { Download } from "lucide-react";
+import { CONTRACT_STATES, downloadContractPdf, slaLabel } from "@/lib/contracts";
+import type { Contract } from "@/types/commercial";
 import { CONTRACTED_STATES } from "@/lib/operations";
 import type { ExportColumn } from "@/lib/export-table";
 import {
@@ -61,11 +63,31 @@ export function PortalServices() {
     }
   }
 
+  /** El contrato en PDF (firmado, con sus sellos). Un borrador sin firmar no se descarga. */
+  async function contractPdf(contract: PortalContract) {
+    setBusy(contract.id);
+    try {
+      await downloadContractPdf(await apiFetch<Contract>(`/v1/portal/contracts/${contract.id}`));
+    } catch {
+      toast("No se pudo generar el PDF del contrato.", "danger");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   const contractCols: Column<PortalContract>[] = [
     { label: "Contrato", render: (row) => <strong className="font-semibold">{row.contract_number}</strong> },
     { label: "Vigencia", render: (row) => `${shortDate(row.start_date)} → ${shortDate(row.end_date)}` },
     { label: "Nivel SLA", render: (row) => (row.sla_level ? <Chip>{slaLabel(row.sla_level)}</Chip> : "—") },
     { label: "Estado", render: (row) => { const [label, tone] = stateOf(CONTRACT_STATES, row.status); return <Badge tone={tone}>{label}</Badge>; } },
+    {
+      label: "",
+      render: (row) => (row.status !== "DRAFT" ? (
+        <div className="flex sm:justify-end">
+          <Btn variant="ghost" size="sm" disabled={busy === row.id} onClick={() => contractPdf(row)}><Download size={14} /> PDF</Btn>
+        </div>
+      ) : null),
+    },
   ];
 
   const serviceCols: Column<PortalContractedService>[] = [

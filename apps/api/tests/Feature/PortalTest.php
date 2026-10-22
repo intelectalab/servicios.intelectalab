@@ -463,6 +463,34 @@ class PortalTest extends TestCase
         $this->assertSame([true, null, 'PEN'], [$home['overdue'], $home['quotations_pending'], $home['balance'][0]['currency']]);
     }
 
+    public function test_the_customer_downloads_its_contracts_from_documents_and_services(): void
+    {
+        $this->portalTenant(['PORTAL', 'CONTRATOS', 'FINANZAS']);
+        $customerId = $this->makeCustomer();
+        [$active] = $this->makeContract(customerId: $customerId);
+        [$draft] = $this->makeContract(status: 'DRAFT', customerId: $customerId);
+        [$signedDraft] = $this->makeContract(status: 'DRAFT', customerId: $customerId);
+        DB::table('contracts')->where('id', $signedDraft)->update(['signature_status' => 'SIGNED']);
+        [$foreign] = $this->makeContract(customerId: $this->makeCustomer());
+        DB::table('contract_items')->insert([
+            'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'contract_id' => $active, 'description' => 'Soporte mensual',
+            'quantity' => 1, 'unit_price' => 100, 'line_total' => 118,
+        ]);
+
+        // Portal Finanzas abre Documentos (no Mis servicios): ve sus contratos vigentes y los borradores ya firmados.
+        $this->as($this->portalUser($customerId, 'PORTAL_FINANCE'));
+        $contracts = collect($this->getJson('/api/v1/portal/documents')->assertOk()->json())->where('kind', 'contract');
+        $this->assertEqualsCanonicalizing([$active, $signedDraft], $contracts->pluck('id')->all());
+        $pdf = $this->getJson("/api/v1/portal/contracts/{$active}")->assertOk()->json();
+        $this->assertSame(['Soporte mensual', null], [$pdf['items'][0]['description'], $pdf['signature']]);
+        $this->getJson("/api/v1/portal/contracts/{$draft}")->assertNotFound();
+        $this->getJson("/api/v1/portal/contracts/{$foreign}")->assertNotFound();
+
+        // Con el portal desactivado, tampoco.
+        DB::table('tenant_modules')->where('tenant_id', $this->tenantId)->where('module_code', 'PORTAL')->update(['enabled' => false]);
+        $this->getJson("/api/v1/portal/contracts/{$active}")->assertForbidden();
+    }
+
     public function test_the_database_keeps_portal_accounts_apart_from_system_accounts(): void
     {
         $this->portalTenant();

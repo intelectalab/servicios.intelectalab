@@ -898,6 +898,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware('portal.section:approve')->post('/quotations/{quotation}/decision', [PortalCommercialController::class, 'decide']);
 
         Route::middleware('portal.section:services')->get('/services', [PortalCommercialController::class, 'services']);
+        // PDF de un contrato: desde Mis servicios o desde Documentos (el controlador pide una de las dos secciones).
+        Route::get('/contracts/{contract}', [PortalCommercialController::class, 'contract']);
         Route::middleware('portal.section:sign')->group(function () {
             Route::get('/signatures', [PortalCommercialController::class, 'signatures']);
             Route::post('/signatures/{signatureRequest}/code', [PortalCommercialController::class, 'signatureCode'])->middleware('throttle:5,1,sign-code');

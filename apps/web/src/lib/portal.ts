@@ -84,7 +84,10 @@ export type PortalRequestRow = {
   status: string; resolution_note: string | null; created_at: string; quotation: { id: string; quotation_number: string } | null;
 };
 
-export type PortalDocument = { id: string; title: string; category: string; source: string | null; versions: number; updated_at: string };
+/** Un archivo compartido (enlace temporal) o un contrato del cliente (su PDF lo arma el sistema). */
+export type PortalDocument = {
+  id: string; kind: "file" | "contract"; title: string; category: string; source: string | null; versions: number | null; updated_at: string;
+};
 
 export type PortalReceivable = {
   id: string; invoice_id: string; invoice_number: string | null; invoice_type: string; due_date: string | null; overdue: boolean;

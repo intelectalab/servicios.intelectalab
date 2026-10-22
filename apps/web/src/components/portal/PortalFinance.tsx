@@ -7,6 +7,8 @@ import { excelTone, money, shortDate, stateOf } from "@/lib/commercial";
 import { downloadDocumentPdf, pdfAmount, pdfMoney } from "@/lib/document-pdf";
 import { INVOICE_STATES, PAYMENT_STATES, downloadInvoicePdf, downloadPaymentPdf, methodLabel, typeLabel } from "@/lib/finance";
 import { fileSize } from "@/lib/operations";
+import { downloadContractPdf } from "@/lib/contracts";
+import type { Contract } from "@/types/commercial";
 import type { ExportColumn } from "@/lib/export-table";
 import type { PortalDocument, PortalFinance as FinanceData, PortalInvoiceRow, PortalPaymentRow, PortalReceivable, PortalStatement } from "@/lib/portal";
 import type { InvoiceDetail, PaymentDetail } from "@/types/finance";
@@ -22,7 +24,7 @@ const DOCUMENT_EXPORT: ExportColumn<PortalDocument>[] = [
   { label: "Documento", value: (row) => row.title, width: 40 },
   { label: "Categoría", value: (row) => row.category, width: 18, kind: "center" },
   { label: "Origen", value: (row) => row.source ?? "", width: 18, kind: "center" },
-  { label: "Versiones", value: (row) => row.versions, width: 12, kind: "number" },
+  { label: "Versiones", value: (row) => row.versions ?? "", width: 12, kind: "number" },
   { label: "Fecha", value: (row) => shortDate(row.updated_at), width: 15, kind: "center" },
 ];
 
@@ -42,6 +44,18 @@ export function PortalDocuments() {
     return () => { cancelled = true; };
   }, [reload]);
 
+  /** El contrato en PDF, el mismo que genera el sistema (firmado, con sus sellos). */
+  async function contractPdf(document: PortalDocument) {
+    setBusy(document.id);
+    try {
+      await downloadContractPdf(await apiFetch<Contract>(`/v1/portal/contracts/${document.id}`));
+    } catch {
+      toast("No se pudo generar el PDF del contrato.", "danger");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function temporaryUrl(document: PortalDocument) {
     setBusy(document.id);
     try {
@@ -60,7 +74,7 @@ export function PortalDocuments() {
       render: (row) => (
         <div className="min-w-[180px]">
           <strong className="font-semibold">{row.title}</strong>
-          <small className="app-muted block text-xs">{row.category}{row.source ? ` · ${row.source}` : ""} · v{row.versions}</small>
+          <small className="app-muted block text-xs">{row.category}{row.source ? ` · ${row.source}` : ""}{row.versions ? ` · v${row.versions}` : ""}</small>
         </div>
       ),
     },
@@ -69,7 +83,11 @@ export function PortalDocuments() {
       label: "",
       render: (row) => (
         <div className="flex sm:justify-end">
-          <Btn variant="secondary" size="sm" disabled={busy === row.id} onClick={() => temporaryUrl(row)}><Link2 size={14} /> Obtener enlace de descarga</Btn>
+          {row.kind === "contract" ? (
+            <Btn variant="secondary" size="sm" disabled={busy === row.id} onClick={() => contractPdf(row)}><Download size={14} /> Descargar PDF</Btn>
+          ) : (
+            <Btn variant="secondary" size="sm" disabled={busy === row.id} onClick={() => temporaryUrl(row)}><Link2 size={14} /> Obtener enlace de descarga</Btn>
+          )}
         </div>
       ),
     },
