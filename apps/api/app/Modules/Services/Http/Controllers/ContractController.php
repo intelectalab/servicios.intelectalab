@@ -208,9 +208,19 @@ class ContractController extends Controller
                 'status' => ['El contrato activo requiere líneas y vigencia.'],
             ]);
         }
+        // Enviado a firma, no se activa hasta que firmen las dos partes o se anule la solicitud,
+        // aunque la empresa no exija la firma (activarlo antes casi siempre es un error).
+        \App\Modules\Services\Support\ContractSignatures::expireStale($contract->id);
+        $signatureStatus = DB::table('contracts')->where('id', $contract->id)->value('signature_status');
+        if (in_array($signatureStatus, ['PENDING', 'DECLINED'], true)) {
+            throw ValidationException::withMessages([
+                'status' => [$signatureStatus === 'PENDING'
+                    ? 'El contrato está enviado a firma: actívalo cuando firmen el cliente y la empresa, o anula la solicitud.'
+                    : 'El cliente rechazó la firma: anula la solicitud (o envíalo de nuevo) antes de activar el contrato.'],
+            ]);
+        }
         // RN-COM-09: si la empresa lo exige, firmado por el cliente y la empresa.
-        if (TenantSettingsController::settings($tenantId)['require_signature']
-            && DB::table('contracts')->where('id', $contract->id)->value('signature_status') !== 'SIGNED') {
+        if (TenantSettingsController::settings($tenantId)['require_signature'] && $signatureStatus !== 'SIGNED') {
             throw ValidationException::withMessages([
                 'status' => ['El contrato debe estar firmado por el cliente y la empresa antes de activarse. Envíalo a firma.'],
             ]);

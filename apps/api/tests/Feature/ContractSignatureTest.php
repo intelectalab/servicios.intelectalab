@@ -173,6 +173,30 @@ class ContractSignatureTest extends TestCase
         $this->assertSame([], $this->getJson('/api/v1/portal/signatures')->assertOk()->json('pending'));
     }
 
+    public function test_a_contract_sent_to_signature_is_not_activated_until_signed_or_cancelled(): void
+    {
+        Mail::fake();
+        $this->makeTenant(['CONTRATOS', 'PORTAL']);
+        $staff = $this->makeUser('Gerencia', self::STAFF);
+        [$contractId, $customerId] = $this->draft();
+        $client = $this->portalUser($customerId);
+
+        // La empresa no exige la firma, pero el contrato se envió a firma: espera.
+        $this->as($staff);
+        $requestId = $this->postJson("/api/v1/contracts/{$contractId}/signature-requests")->assertOk()->json('signature.id');
+        $this->postJson("/api/v1/contracts/{$contractId}/activate")->assertStatus(422)->assertJsonValidationErrors('status');
+
+        // Rechazada por el cliente: tampoco, hasta anularla.
+        $this->as($client);
+        $this->postJson("/api/v1/portal/signatures/{$requestId}/decline", ['reason' => 'Revisar el plazo.'])->assertOk();
+        $this->as($staff);
+        $this->postJson("/api/v1/contracts/{$contractId}/activate")->assertStatus(422)->assertJsonValidationErrors('status');
+
+        // Anulada, se activa como siempre.
+        $this->postJson("/api/v1/contracts/{$contractId}/signature-requests/{$requestId}/cancel")->assertOk();
+        $this->postJson("/api/v1/contracts/{$contractId}/activate", ['generate_services' => false])->assertOk()->assertJsonPath('status', 'ACTIVE');
+    }
+
     public function test_activation_requires_both_signatures_when_the_company_asks_for_it(): void
     {
         Mail::fake();

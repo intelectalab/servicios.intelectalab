@@ -229,7 +229,10 @@ function SignCard({ pending, onDone }: { pending: Pending; onDone: (data: Data, 
           {(errors.accept || errors.status) && <p className="text-[12.5px] text-[color:var(--p-danger-text)]">{errors.accept || errors.status}</p>}
           <div className="flex flex-wrap justify-end gap-2">
             <Btn variant="danger-ghost" disabled={busy} onClick={() => { setReason(""); setErrors({}); setDeclining(true); }}>Rechazar</Btn>
-            <Btn disabled={busy} onClick={sign}><Check size={15} /> Firmar contrato</Btn>
+            {/* Sin aceptar los términos no se firma (lo exige también la API). */}
+            <Btn disabled={busy || !accept} title={accept ? undefined : "Marca que leíste el contrato y aceptas sus términos"} onClick={sign}>
+              <Check size={15} /> Firmar contrato
+            </Btn>
           </div>
           <p className="app-muted text-xs">Se registran la fecha, la hora, la IP y la huella del documento.</p>
         </div>

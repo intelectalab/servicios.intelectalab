@@ -288,9 +288,14 @@ export default function ContractDetail() {
   const canSend = status === "DRAFT" && !(signature && (signature.status === "PENDING" || signature.status === "SIGNED"));
   const companyPending = signature?.status === "PENDING" && signature.signers.some((signer) => signer.side === "EMPRESA" && signer.status === "PENDING");
   // Un contrato sin líneas o sin fecha de inicio no se activa; si la empresa lo exige, tampoco sin las dos firmas.
+  // Enviado a firma, espera las dos firmas o que se anule la solicitud, aunque la empresa no exija la firma.
   const notActivable = !items.length || !contract.start_date
     ? "El contrato activo requiere líneas y vigencia"
-    : contract.signature_required && contract.signature_status !== "SIGNED"
+    : signature?.status === "PENDING"
+      ? "Enviado a firma: se activa cuando firmen el cliente y la empresa, o anula la solicitud"
+      : signature?.status === "DECLINED"
+        ? "El cliente rechazó la firma: anula la solicitud antes de activar"
+        : contract.signature_required && contract.signature_status !== "SIGNED"
       ? "Requiere la firma del cliente y de la empresa"
       : undefined;
 
