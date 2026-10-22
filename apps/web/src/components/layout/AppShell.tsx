@@ -83,7 +83,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/users", label: "Usuarios", requiredPermission: "users.view", icon: UserCog, superModule: "Administración" },
   { href: "/roles", label: "Roles y permisos", requiredPermission: "users.view", icon: Key, superModule: "Administración" },
   { label: "Seguridad y aislamiento", icon: Lock, superModule: "Administración", soon: true },
-  { label: "Usuarios del portal", icon: UserRound, superModule: "Administración", soon: true },
+  { href: "/portal-users", label: "Usuarios del portal", module: "PORTAL", requiredPermission: "portal_users.view", icon: UserRound, superModule: "Administración" },
   { label: "Reglas de aprobación", icon: ListChecks, superModule: "Administración", soon: true },
   // Del módulo Soporte: sin él, el calendario no se usa (sale con el candado del plan).
   { href: "/sla-calendar", label: "Calendario laboral y SLA", module: "SOPORTE", requiredPermission: "sla.view", icon: CalendarClock, superModule: "Administración" },

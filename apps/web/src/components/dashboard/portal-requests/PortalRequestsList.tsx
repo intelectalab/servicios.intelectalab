@@ -187,10 +187,14 @@ export default function PortalRequestsList() {
       render: (request) => (
         <div className="flex flex-wrap items-center gap-1.5 sm:flex-nowrap sm:justify-end">
           {request.crm_opportunity_id ? (
-            // Aún sin función: el pipeline de CRM no está construido.
-            <Btn variant="ghost" size="sm" onClick={() => toast("El pipeline de CRM aún no está disponible.", "warning")}>
-              Ver oportunidad
-            </Btn>
+            // Se atiende en el CRM: cotizar la oportunidad la deja cotizada; perderla, rechazada.
+            request.opportunity ? (
+              <LinkBtn href={`/crm/opportunities/${request.opportunity.id}`} variant="ghost" size="sm" permission="opportunities.view">
+                Ver oportunidad {request.opportunity.opportunity_number}
+              </LinkBtn>
+            ) : (
+              <span className="app-muted text-xs">Se atiende en el CRM</span>
+            )
           ) : isOpen(request) ? (
             <>
               <Btn variant="secondary" size="sm" onClick={() => quote(request)} permission="quotations.manage" disabled={busy}>

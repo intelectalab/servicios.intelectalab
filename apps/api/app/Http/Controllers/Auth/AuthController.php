@@ -176,15 +176,37 @@ class AuthController extends Controller
         $user->last_login_at = now();
         $user->save();
 
+        // Una cuenta del portal de clientes entra a su portal, no al sistema.
+        $portal = ! $user->is_super_admin
+            && DB::table('portal_users')->where('user_id', $user->id)->where('status', 'ACTIVE')->update(['last_login_at' => now()]) > 0;
+
         return response()->json([
             'user' => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
                 'is_super_admin' => (bool) $user->is_super_admin,
+                'portal' => $portal,
             ],
             'token' => $token,
         ]);
+    }
+
+    /**
+     * Empresa de una cuenta del portal de clientes (las cuentas del sistema no la tienen). Una
+     * invitación sin activar todavía no entra; una cuenta desactivada, tampoco.
+     */
+    public static function portalTenant(User $user): ?string
+    {
+        $membership = DB::selectOne('SELECT tenant_id, status FROM portal_membership_for_user(?)', [$user->id]);
+
+        if ($membership?->status === 'INVITED') {
+            throw ValidationException::withMessages([
+                'email' => ['Tu acceso al portal aún no está activado. Usa el código de tu correo de invitación en «Activar mi acceso».'],
+            ]);
+        }
+
+        return $membership?->status === 'ACTIVE' ? (string) $membership->tenant_id : null;
     }
 
     /**
@@ -202,7 +224,7 @@ class AuthController extends Controller
         $tenantId = DB::selectOne(
             'SELECT resolve_active_tenant_for_user(?) AS tenant_id',
             [$user->id]
-        )?->tenant_id;
+        )?->tenant_id ?? self::portalTenant($user);
 
         if (! $tenantId) {
             return null;
@@ -262,7 +284,7 @@ class AuthController extends Controller
         $tenantId = DB::selectOne(
             'SELECT resolve_active_tenant_for_user(?) AS tenant_id',
             [$user->id]
-        )?->tenant_id;
+        )?->tenant_id ?? DB::selectOne('SELECT resolve_portal_tenant_for_user(?) AS tenant_id', [$user->id])?->tenant_id;
 
         if (! $tenantId) {
             return;

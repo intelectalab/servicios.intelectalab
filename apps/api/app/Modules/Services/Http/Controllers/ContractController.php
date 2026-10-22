@@ -3,6 +3,7 @@
 namespace App\Modules\Services\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Core\Http\Controllers\TenantSettingsController;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Contract;
@@ -207,6 +208,13 @@ class ContractController extends Controller
                 'status' => ['El contrato activo requiere líneas y vigencia.'],
             ]);
         }
+        // RN-COM-09: si la empresa lo exige, firmado por el cliente y la empresa.
+        if (TenantSettingsController::settings($tenantId)['require_signature']
+            && DB::table('contracts')->where('id', $contract->id)->value('signature_status') !== 'SIGNED') {
+            throw ValidationException::withMessages([
+                'status' => ['El contrato debe estar firmado por el cliente y la empresa antes de activarse. Envíalo a firma.'],
+            ]);
+        }
 
         $generated = DB::transaction(function () use ($contract, $tenantId, $data) {
             $contract->update(['status' => 'ACTIVE']);
@@ -384,6 +392,12 @@ class ContractController extends Controller
                     DB::raw('round(round(ri.unit_price * ri.quantity, 2) * 1.18, 2) AS amount'),
                 ]),
             'history' => AuditHistory::for('Contract', $contract->id),
+            // Firma electrónica: la solicitud más reciente, si la empresa la exige y quién puede firmar por el cliente.
+            'signature' => ($latest = \App\Modules\Services\Support\ContractSignatures::forContract($contract->id)->first())
+                ? \App\Modules\Services\Support\ContractSignatures::present($latest)
+                : null,
+            'signature_required' => TenantSettingsController::settings($contract->tenant_id)['require_signature'],
+            'signature_signers' => \App\Modules\Services\Support\ContractSignatures::signers($contract->customer_id),
         ];
     }
 

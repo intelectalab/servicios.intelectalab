@@ -50,6 +50,7 @@ class CheckRecordVersion
         'contract' => 'contracts',
         'order' => 'orders',
         'portalRequest' => 'portal_requests',
+        'portalUser' => 'portal_users',
         'lead' => 'crm_leads',
         'opportunity' => 'crm_opportunities',
         'activity' => 'crm_activities',

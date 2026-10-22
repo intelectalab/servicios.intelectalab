@@ -173,6 +173,42 @@ export interface Contract {
   recurring_instances?: RecurringInstance[];
   customer_contact?: { address: string | null };
   history?: HistoryEntry[];
+  /** Firma electrónica: NONE, PENDING, SIGNED o DECLINED. */
+  signature_status?: "NONE" | "PENDING" | "SIGNED" | "DECLINED";
+  /** Solo en el detalle: la solicitud de firma más reciente. */
+  signature?: SignatureRequest | null;
+  /** La empresa exige la firma de las dos partes para activar. */
+  signature_required?: boolean;
+  /** Portal Admin activos del cliente: quienes pueden firmar por él. */
+  signature_signers?: { id: string; name: string; email: string }[];
+}
+
+export type SignatureStatus = "PENDING" | "SIGNED" | "DECLINED" | "EXPIRED" | "CANCELLED";
+
+export interface SignatureSigner {
+  side: "CLIENTE" | "EMPRESA";
+  portal_user_id: string | null;
+  name: string | null;
+  status: "PENDING" | "SIGNED" | "DECLINED";
+  signed_at: string | null;
+  otp_verified: boolean;
+  ip_address: string | null;
+  evidence_hash: string | null;
+}
+
+export interface SignatureRequest {
+  id: string;
+  contract_id: string;
+  status: SignatureStatus;
+  provider: string;
+  document_hash: string;
+  /** El contrato cambió después de enviarse a firma: ya no se puede firmar. */
+  changed: boolean;
+  expires_at: string;
+  created_at: string;
+  completed_at: string | null;
+  declined_reason: string | null;
+  signers: SignatureSigner[];
 }
 
 export type OrderStatus = "DRAFT" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
@@ -226,6 +262,8 @@ export interface PortalRequest {
   /** Motivo del rechazo. */
   resolution_note: string | null;
   crm_opportunity_id: string | null;
+  /** Oportunidad del CRM de una solicitud que llegó por esa ruta (null si quien mira no la alcanza). */
+  opportunity?: { id: string; opportunity_number: string; status: string } | null;
   quotation_id: string | null;
   created_at: string;
   customer: Customer | null;

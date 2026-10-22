@@ -113,7 +113,7 @@ class PasswordResetController extends Controller
         $tenantId = DB::selectOne(
             'SELECT resolve_active_tenant_for_user(?) AS tenant_id',
             [$user->id]
-        )?->tenant_id;
+        )?->tenant_id ?? DB::selectOne('SELECT resolve_portal_tenant_for_user(?) AS tenant_id', [$user->id])?->tenant_id;
 
         if ($tenantId) {
             DB::statement("SET app.tenant_id = '{$tenantId}'");

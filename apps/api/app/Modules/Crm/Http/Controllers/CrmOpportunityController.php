@@ -230,8 +230,22 @@ class CrmOpportunityController extends Controller
             ['reason.required' => 'El motivo de pérdida es obligatorio.'],
         )['reason']);
 
-        $opportunity->update(['status' => 'LOST', 'lost_at' => now(), 'loss_reason' => $reason, 'probability' => 0]);
-        $this->audit($request, $opportunity, 'crm_opportunity.lose', ['from' => 'OPEN', 'to' => 'LOST', 'note' => $reason]);
+        DB::transaction(function () use ($request, $opportunity, $reason) {
+            $opportunity->update(['status' => 'LOST', 'lost_at' => now(), 'loss_reason' => $reason, 'probability' => 0]);
+            $this->audit($request, $opportunity, 'crm_opportunity.lose', ['from' => 'OPEN', 'to' => 'LOST', 'note' => $reason]);
+
+            // La solicitud del portal que nació de esta oportunidad queda rechazada con el mismo motivo.
+            \App\Modules\Portal\Models\PortalRequest::ignoringAccessScope()->where('crm_opportunity_id', $opportunity->id)
+                ->whereIn('status', ['SUBMITTED', 'IN_REVIEW'])->get()
+                ->each(function ($linked) use ($request, $reason) {
+                    $previous = $linked->status;
+                    $linked->update(['status' => 'REJECTED', 'resolution_note' => $reason] + $linked->claimFor($request->user()->id));
+                    \App\Services\AuditLogger::log(
+                        tenantId: $linked->tenant_id, userId: $request->user()->id, action: 'portal_request.reject', entityType: 'PortalRequest', entityId: $linked->id,
+                        metadata: ['from' => $previous, 'to' => 'REJECTED', 'note' => $reason],
+                    );
+                });
+        });
 
         return response()->json($this->detail($opportunity, $request));
     }

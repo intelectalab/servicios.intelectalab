@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus } from "lucide-react";
+import Link from "next/link";
+import { Lock, Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { SCOPE_LABELS, useAccess, type Scope } from "@/lib/access-context";
 import { PickSelect } from "@/components/ui/pick-select";
-import { Btn, Card, Field, INPUT, LoadError, Modal, PageHead, Screen, TD, TH, deniedText, useToasts } from "@/components/ui/proto";
+import { Btn, Card, Chip, Field, INPUT, LoadError, Modal, Notice, PageHead, Screen, TD, TH, deniedText, useToasts } from "@/components/ui/proto";
 
 type Role = {
   id: string;
@@ -21,12 +22,23 @@ type Role = {
 
 type Permission = { code: string; name: string; description: string | null };
 
-type RolesResponse = { roles: Role[]; permissions: Permission[]; scope_resources: { code: string; name: string }[] };
+/** "Cliente (Portal)" del prototipo: lo decide el portal y aquí solo se muestra. */
+type CustomerRole = {
+  enabled: boolean;
+  users: number;
+  matrix: { resource: string; actions: string[]; note: string }[];
+  portal_roles: { code: string; name: string; sections: string[] }[];
+};
 
-type Settings = { segregation: boolean; direct_order: boolean; match_tolerance: number };
+type RolesResponse = { roles: Role[]; permissions: Permission[]; scope_resources: { code: string; name: string }[]; customer_role?: CustomerRole };
+
+// Pestaña del rol del cliente (no es un rol de la empresa).
+const CUSTOMER_TAB = "__customer";
+
+type Settings = { segregation: boolean; direct_order: boolean; require_signature: boolean; match_tolerance: number };
 
 // Reglas de la empresa que se activan o desactivan desde esta pantalla.
-const RULES: { key: "segregation" | "direct_order"; label: string; hint: string; on: string; off: string }[] = [
+const RULES: { key: "segregation" | "direct_order" | "require_signature"; label: string; hint: string; on: string; off: string }[] = [
   {
     key: "segregation",
     label: "Quien crea una cotización no puede aprobarla",
@@ -40,6 +52,13 @@ const RULES: { key: "segregation" | "direct_order"; label: string; hint: string;
     hint: "La cotización aprobada se puede convertir en orden sin pasar por contrato.",
     on: "Orden directa permitida",
     off: "Orden directa no permitida",
+  },
+  {
+    key: "require_signature",
+    label: "Exigir la firma electrónica para activar un contrato",
+    hint: "El contrato solo pasa a vigente firmado por el cliente (desde su portal) y por la empresa.",
+    on: "Firma electrónica exigida",
+    off: "Firma electrónica no exigida",
   },
 ];
 
@@ -85,6 +104,7 @@ const RESOURCES: Record<string, string> = {
   reports: "Reportes",
   audit: "Auditoría",
   users: "Usuarios y roles",
+  portal_users: "Usuarios del portal",
   tenant: "Empresa",
 };
 
@@ -189,6 +209,7 @@ export default function RolesPermissions() {
   }, [reload]);
 
   const role = data?.roles.find((item) => item.id === selected) ?? null;
+  const customer = selected === CUSTOMER_TAB ? data?.customer_role ?? null : null;
   const canEdit = can("users.manage") && role !== null && !role.is_admin;
 
   // Filas (recursos) y columnas (acciones) salen del catálogo de permisos de la empresa.
@@ -338,7 +359,27 @@ export default function RolesPermissions() {
                 </button>
               );
             })}
+            {data.customer_role && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={selected === CUSTOMER_TAB}
+                onClick={() => setSelected(CUSTOMER_TAB)}
+                className={`grid cursor-pointer rounded-[7px] border px-3 py-[7px] text-left transition-colors duration-200 ${
+                  selected === CUSTOMER_TAB
+                    ? "border-[#1B8FC9] bg-[var(--p-brand-soft)] text-[color:var(--p-brand-soft-text)]"
+                    : "app-surface border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"
+                }`}
+              >
+                <strong className="inline-flex items-center gap-1 font-semibold">Cliente (Portal) <Lock size={12} aria-hidden="true" /></strong>
+                <small className={`text-[10.5px] ${selected === CUSTOMER_TAB ? "" : "app-muted"}`}>
+                  {data.customer_role.users} {data.customer_role.users === 1 ? "usuario" : "usuarios"} · solo lectura
+                </small>
+              </button>
+            )}
           </div>
+
+          {customer && <CustomerRoleCard customer={customer} actions={actions} />}
 
           {role && (
             <Card title={role.name}>
@@ -481,5 +522,78 @@ export default function RolesPermissions() {
       )}
       {toasts}
     </Screen>
+  );
+}
+
+/**
+ * "Cliente (Portal)": el usuario externo del cliente, como en la matriz del prototipo, pero de solo
+ * lectura. Lo que ve cada persona lo deciden los roles del portal y siempre solo lo de su empresa:
+ * así nadie le da por error a un cliente un permiso interno.
+ */
+function CustomerRoleCard({ customer, actions }: { customer: CustomerRole; actions: string[] }) {
+  // Columnas: las de la matriz de la empresa y, si el portal usa otra, también esa.
+  const columns = [...new Set([...actions, ...customer.matrix.flatMap((row) => row.actions)])].filter((action) => ACTIONS[action]);
+  const locked = "Solo lectura: lo deciden los roles del portal";
+
+  return (
+    <>
+      <Card title={<span className="inline-flex items-center gap-2">Cliente (Portal) <Chip tone="neutral"><Lock size={11} className="mr-1" aria-hidden="true" />Solo lectura</Chip></span>}>
+        {!customer.enabled && <Notice tone="warn">La empresa no tiene el módulo Portal de clientes: sus clientes no pueden entrar al portal.</Notice>}
+        <Notice>
+          Este rol no se edita aquí. Lo que ve cada persona lo decide su rol del portal (abajo), siempre solo lo de su empresa. Las cuentas se
+          invitan, cambian de rol o desactivan en{" "}
+          <Link href="/portal-users" className="font-semibold underline">Usuarios del portal</Link>.
+        </Notice>
+        <div className="proto-tbl-wrap -mx-3 overflow-x-auto sm:-mx-5">
+          <table className="proto-tbl w-full border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className={TH}>Recurso</th>
+                {columns.map((action) => <th key={action} className={`${TH} text-center`}>{ACTIONS[action]}</th>)}
+                <th className={TH}>Alcance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customer.matrix.map((row) => (
+                <tr key={row.resource}>
+                  <td className={TD} data-label="Recurso">
+                    <strong className="font-semibold">{RESOURCES[row.resource] ?? row.resource}</strong>
+                    <small className="app-muted block max-w-[360px] text-[11.5px]">{row.note}</small>
+                  </td>
+                  {columns.map((action) => (
+                    <td key={action} className={`${TD} text-center`} data-label={ACTIONS[action]}>
+                      <input
+                        type="checkbox"
+                        className="h-[17px] w-[17px] cursor-not-allowed accent-[#1B8FC9]"
+                        checked={row.actions.includes(action)}
+                        disabled
+                        readOnly
+                        aria-label={`${ACTIONS[action]} ${RESOURCES[row.resource] ?? row.resource}`}
+                        title={locked}
+                      />
+                    </td>
+                  ))}
+                  <td className={TD} data-label="Alcance">
+                    <span className={`whitespace-nowrap ${row.actions.length ? "" : "app-muted"}`}>{row.actions.length ? "Solo su empresa" : "—"}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Card title="Roles del portal">
+        <p className="app-muted mb-3 text-[12.5px]">Dentro del portal, cada persona tiene uno de estos roles; una sección se abre si su rol la incluye y si la empresa tiene el módulo del que salen sus datos.</p>
+        <ul className="grid gap-2.5">
+          {customer.portal_roles.map((portalRole) => (
+            <li key={portalRole.code}>
+              <strong className="font-semibold">{portalRole.name}</strong>
+              <small className="app-muted block text-xs">{portalRole.sections.join(" · ")}</small>
+            </li>
+          ))}
+        </ul>
+      </Card>
+    </>
   );
 }

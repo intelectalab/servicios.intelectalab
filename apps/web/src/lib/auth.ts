@@ -5,7 +5,8 @@ const SCOPE_COOKIE = "auth_scope";
 // Sin marcar, la cookie es de sesión: se borra al cerrar el navegador.
 const REMEMBER_MAX_AGE = 60 * 60 * 24 * 30;
 
-export type AuthScope = "platform" | "tenant";
+// "portal": cuenta del portal de clientes; entra solo a /portal.
+export type AuthScope = "platform" | "tenant" | "portal";
 
 export function getAuthToken() {
   if (typeof document === "undefined") return null;

@@ -22,7 +22,7 @@ class PortalRequest extends Model
     protected $fillable = [
         'tenant_id', 'customer_id', 'request_number', 'request_type', 'subject', 'description',
         'service_id', 'status', 'resolution_note', 'crm_opportunity_id', 'quotation_id', 'created_by',
-        'taken_by', 'branch_id',
+        'taken_by', 'branch_id', 'route',
     ];
 
     protected static function boot()
@@ -58,5 +58,11 @@ class PortalRequest extends Model
     public function quotation()
     {
         return $this->belongsTo(\App\Modules\Services\Models\Quotation::class, 'quotation_id');
+    }
+
+    /** Por su modelo: una oportunidad fuera del alcance de quien mira no se entrega. */
+    public function opportunity()
+    {
+        return $this->belongsTo(\App\Modules\Crm\Models\CrmOpportunity::class, 'crm_opportunity_id');
     }
 }

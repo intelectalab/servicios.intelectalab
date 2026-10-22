@@ -28,6 +28,7 @@ class ListExport
         'api/v1/contracts' => 'contracts',
         'api/v1/orders' => 'orders',
         'api/v1/portal-requests' => 'portal',
+        'api/v1/portal-users' => 'portal_users',
         'api/v1/crm/leads' => 'leads',
         'api/v1/crm/opportunities' => 'opportunities',
         'api/v1/crm/activities' => 'activities',

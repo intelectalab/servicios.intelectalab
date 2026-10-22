@@ -17,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'permission' => \App\Http\Middleware\CheckPermission::class,
             'module' => \App\Http\Middleware\CheckModuleEnabled::class,
             'portal.user' => \App\Http\Middleware\EnsurePortalUser::class,
+            'portal.section' => \App\Http\Middleware\EnsurePortalSection::class,
             'super.admin' => \App\Http\Middleware\EnsureIsSuperAdmin::class,
             'idempotency' => \App\Http\Middleware\Idempotency::class,
             'record.version' => \App\Http\Middleware\CheckRecordVersion::class,

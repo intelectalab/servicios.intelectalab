@@ -21,6 +21,7 @@ class TenantSettingsController extends Controller
         $data = $request->validate([
             'segregation' => ['sometimes', 'boolean'],
             'direct_order' => ['sometimes', 'boolean'],
+            'require_signature' => ['sometimes', 'boolean'],
             // Cruce de 3 vías de Compras: diferencia máxima entre lo facturado y lo recibido.
             'match_tolerance' => ['sometimes', 'numeric', 'min:0', 'max:10'],
         ], [
@@ -62,6 +63,8 @@ class TenantSettingsController extends Controller
             'segregation' => (bool) ($configuration['segregation'] ?? true),
             // Orden directa: convertir una cotización aprobada en orden sin pasar por contrato.
             'direct_order' => (bool) ($configuration['direct_order'] ?? true),
+            // Firma electrónica: el contrato solo se activa firmado por el cliente y la empresa (no, si no se activa).
+            'require_signature' => (bool) ($configuration['require_signature'] ?? false),
             // Tolerancia del cruce de 3 vías, en porcentaje (2 % si la empresa no la cambió).
             'match_tolerance' => (float) ($configuration['match_tolerance'] ?? 2),
         ];

@@ -20,6 +20,7 @@ class QuotationApproval extends Model
         'decision',
         'comments',
         'decided_at',
+        'channel',
     ];
 
     protected $casts = [

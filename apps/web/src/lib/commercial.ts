@@ -39,6 +39,13 @@ const HISTORY_LABELS: Record<string, string> = {
   "quotation.update": "Borrador editado",
   "quotation.version": "Nueva versión creada",
   "contract.update": "Borrador editado",
+  "contract.signature.request": "Enviado a firma electrónica",
+  "contract.signature.customer": "Firmado por el cliente",
+  "contract.signature.company": "Firmado por la empresa",
+  "contract.signature.completed": "Contrato firmado por ambas partes",
+  "contract.signature.declined": "Firma rechazada por el cliente",
+  "contract.signature.cancel": "Solicitud de firma anulada",
+  "contract.signature.expired": "Solicitud de firma vencida",
   "party.update": "Datos editados",
   "party.role.add": "Rol agregado",
   // Movimientos anteriores a que la auditoría guardara el estado de origen y destino.

@@ -6,8 +6,13 @@ import { SCOPE_COOKIE, TOKEN_COOKIE } from "@/lib/auth";
 const AUTH_ROUTES = ["/login", "/forgot-password", "/reset-password"];
 
 // Cada tipo de cuenta tiene su propia consola y no entra a la otra.
-const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/checklist-templates", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/purchase-orders", "/supplier-invoices", "/payables", "/journal", "/ledger", "/financial-statements", "/budgets", "/chart-of-accounts", "/tickets", "/warranty-claims", "/sla-calendar", "/audit", "/roles", "/users", "/profile"];
+const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/checklist-templates", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/purchase-orders", "/supplier-invoices", "/payables", "/journal", "/ledger", "/financial-statements", "/budgets", "/chart-of-accounts", "/tickets", "/warranty-claims", "/sla-calendar", "/audit", "/roles", "/users", "/portal-users", "/profile"];
 const PLATFORM_PREFIXES = ["/superadmin"];
+// Portal de clientes: experiencia aparte. "/portal" no coincide con "/portal-requests" ni "/portal-users".
+const PORTAL_PREFIXES = ["/portal"];
+// Activar la invitación al portal: sin sesión, como el inicio de sesión.
+const PORTAL_PUBLIC = ["/portal/activate"];
+const PORTAL_HOME = "/portal";
 const TENANT_HOME = "/actors";
 // Módulos desconectados: sus pantallas siguen en el repo, pero las reemplaza Clientes y actores.
 // Para reconectarlos, vaciar esta lista y devolver sus ítems al menú (AppShell.tsx).
@@ -40,21 +45,32 @@ export function proxy(request: NextRequest) {
   const scope = request.cookies.get(SCOPE_COOKIE)?.value;
   const inTenantArea = matches(pathname, TENANT_PREFIXES);
   const inPlatformArea = matches(pathname, PLATFORM_PREFIXES);
+  const inPortalPublic = matches(pathname, PORTAL_PUBLIC);
+  const inPortalArea = matches(pathname, PORTAL_PREFIXES) && !inPortalPublic;
+  const home = scope === "platform" ? PLATFORM_HOME : scope === "portal" ? PORTAL_HOME : TENANT_HOME;
 
   // En el dominio del sistema no hay landing: la raíz lleva al login o a la consola.
   if (SPLIT_DOMAINS && host === APP_HOST && pathname === "/") {
-    const target = !hasToken ? "/login" : scope === "platform" ? PLATFORM_HOME : TENANT_HOME;
+    const target = !hasToken ? "/login" : home;
     return NextResponse.redirect(new URL(target, APP_URL));
   }
 
   if (!hasToken) {
-    return inTenantArea || inPlatformArea
+    return inTenantArea || inPlatformArea || inPortalArea
       ? NextResponse.redirect(new URL("/login", request.url))
       : NextResponse.next();
   }
 
   if (matches(pathname, AUTH_ROUTES)) {
-    return NextResponse.redirect(new URL(scope === "platform" ? PLATFORM_HOME : TENANT_HOME, request.url));
+    return NextResponse.redirect(new URL(home, request.url));
+  }
+
+  // Una cuenta del portal solo entra a su portal; las del sistema y la plataforma, no al portal.
+  if (scope === "portal" && (inTenantArea || inPlatformArea)) {
+    return NextResponse.redirect(new URL(PORTAL_HOME, request.url));
+  }
+  if (scope !== "portal" && inPortalArea) {
+    return NextResponse.redirect(new URL(home, request.url));
   }
 
   if (scope === "platform" && inTenantArea) {
@@ -118,6 +134,9 @@ export const config = {
     "/audit/:path*",
     "/roles/:path*",
     "/users/:path*",
+    "/portal-users/:path*",
+    "/portal/:path*",
+    "/portal",
     "/profile/:path*",
     "/superadmin/:path*",
   ],

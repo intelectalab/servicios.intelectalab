@@ -1,7 +1,7 @@
 import type { Tone } from "@/components/ui/proto";
 import { FREQUENCIES, customerDocument, customerName, shortDate } from "@/lib/commercial";
 import { downloadDocumentPdf, pdfAmount, pdfMoney } from "@/lib/document-pdf";
-import type { Contract, ContractItem, ContractStatus } from "@/types/commercial";
+import type { Contract, ContractItem, ContractStatus, SignatureStatus } from "@/types/commercial";
 
 export const CONTRACT_STATES: [ContractStatus, string, Tone][] = [
   ["DRAFT", "Borrador", "neutral"],
@@ -10,6 +10,22 @@ export const CONTRACT_STATES: [ContractStatus, string, Tone][] = [
   ["TERMINATED", "Terminado", "muted"],
   ["EXPIRED", "Vencido", "muted"],
 ];
+
+/** Estados de la solicitud de firma electrónica (los del prototipo). */
+export const SIGNATURE_STATES: [SignatureStatus, string, Tone][] = [
+  ["PENDING", "Pendiente", "warning"],
+  ["SIGNED", "Firmada", "success"],
+  ["DECLINED", "Rechazada", "danger"],
+  ["EXPIRED", "Vencida", "muted"],
+  ["CANCELLED", "Anulada", "muted"],
+];
+
+/** Estado de la firma de cada parte (cliente o empresa). */
+export const SIGNER_STATES: Record<string, [string, Tone]> = {
+  PENDING: ["Pendiente", "warning"], SIGNED: ["Firmado", "success"], DECLINED: ["Rechazado", "danger"],
+};
+
+export const SIGNATURE_PROVIDERS: Record<string, string> = { SIMPLE: "Firma electrónica simple (en el sistema)" };
 
 export const SLA_LEVELS: Record<string, string> = { ESTANDAR: "Estándar", PREMIUM: "Premium" };
 
@@ -32,15 +48,28 @@ export function billingOf(item: ContractItem): [string, "accent" | "neutral"] {
 // Marca de agua de los contratos que no están vigentes.
 const WATERMARK: Record<string, string> = { DRAFT: "BORRADOR", EXPIRED: "VENCIDO" };
 
-/** Genera y descarga el contrato en PDF, con los datos de su ficha. */
+const signedAt = (value: string) => new Date(value).toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" });
+
+/**
+ * Genera y descarga el contrato en PDF, con los datos de su ficha. Firmado electrónicamente por las
+ * dos partes, ya no es un borrador: cada línea de firma lleva quién firmó, cuándo y su evidencia, y
+ * las notas, la huella del documento firmado.
+ */
 export async function downloadContractPdf(contract: Contract) {
   const currency = contract.currency;
+  const signature = contract.signature?.status === "SIGNED" ? contract.signature : null;
+  const evidence = (side: "CLIENTE" | "EMPRESA") => {
+    const signer = signature?.signers.find((item) => item.side === side);
+    if (!signer?.signed_at) return "";
+    return `\nFirmado electrónicamente por ${signer.name ?? "-"}\n${signedAt(signer.signed_at)} · código verificado${signer.ip_address ? ` · IP ${signer.ip_address}` : ""}`
+      + `\nEvidencia ${signer.evidence_hash?.slice(0, 24) ?? "-"}...`;
+  };
 
   await downloadDocumentPdf({
-    file: `Contrato_${contract.contract_number}`,
+    file: `Contrato_${contract.contract_number}${signature ? "_firmado" : ""}`,
     title: "CONTRATO DE SERVICIOS",
     number: contract.contract_number,
-    watermark: WATERMARK[contract.status],
+    watermark: signature && contract.status === "DRAFT" ? undefined : WATERMARK[contract.status],
     left: [
       ["Cliente", customerName(contract.customer)],
       ["Documento", customerDocument(contract.customer) || "-"],
@@ -70,7 +99,14 @@ export async function downloadContractPdf(contract: Contract) {
         "Cláusulas",
         "1. Objeto: prestación de los servicios detallados. 2. Vigencia: según fechas indicadas, renovable por acuerdo. 3. Niveles de servicio: según el SLA pactado. 4. Facturación y pago: según la frecuencia indicada en cada línea. 5. Confidencialidad y protección de datos personales (Ley 29733). (Texto de referencia: el modelo final lo define el área legal.)",
       ],
+      ...(signature ? [[
+        "Firma electrónica",
+        `Firmado por ambas partes el ${signedAt(signature.completed_at ?? signature.created_at)} con firma electrónica simple (nombre, código de verificación enviado al correo y aceptación). Huella SHA-256 del documento firmado: ${signature.document_hash}`,
+      ] as [string, string]] : []),
     ],
-    signatures: (companyName) => [`Por el cliente: ${customerName(contract.customer)}`, `Por ${companyName}`],
+    signatures: (companyName) => [
+      `Por el cliente: ${customerName(contract.customer)}${evidence("CLIENTE")}`,
+      `Por ${companyName}${evidence("EMPRESA")}`,
+    ],
   });
 }

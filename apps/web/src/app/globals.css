@@ -7,6 +7,9 @@
   --side-active: rgb(255 255 255 / 0.16);
   --side-group-active: rgb(255 255 255 / 0.20);
   --side-ring: #1679AB;
+  /* Barra superior del portal de clientes: el mismo azul, de lado; la línea inferior, el celeste del logo. */
+  --portal-top: linear-gradient(90deg, #0F5A82 0%, #1679AB 60%, #1B8FC9 100%);
+  --portal-line: #BFE6F8;
   --background: #eaf4f8;
   --foreground: #171717;
   --app-surface: #ffffff;
@@ -69,6 +72,8 @@
   --side-active: rgb(27 143 201 / 0.62);
   --side-group-active: rgb(27 143 201 / 0.42);
   --side-ring: #0F4C6E;
+  --portal-top: linear-gradient(90deg, #0A344D 0%, #0F4C6E 60%, #14658F 100%);
+  --portal-line: #1B8FC9;
   --background: #111b22;
   --foreground: #f4fbfd;
   --app-surface: #182b35;

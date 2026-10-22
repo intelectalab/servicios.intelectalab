@@ -22,6 +22,7 @@ class PortalRequestController extends Controller
         'customer.party.organization',
         'service:id,code,name',
         'quotation:id,quotation_number,status',
+        'opportunity:id,opportunity_number,status',
     ];
 
     public function index(Request $request)
@@ -84,6 +85,12 @@ class PortalRequestController extends Controller
         if (! in_array($portalRequest->status, $from, true)) {
             throw ValidationException::withMessages([
                 'status' => ["No se puede {$verb} una solicitud en estado {$portalRequest->status}."],
+            ]);
+        }
+        // La que llegó al CRM se atiende desde su oportunidad: cotizarla o perderla la cierra aquí.
+        if ($portalRequest->route === 'CRM') {
+            throw ValidationException::withMessages([
+                'status' => ['Esta solicitud se atiende en el CRM, desde su oportunidad.'],
             ]);
         }
 

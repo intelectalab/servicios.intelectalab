@@ -48,7 +48,14 @@ use App\Modules\Crm\Http\Controllers\CrmScoringController;
 use App\Modules\Crm\Http\Controllers\CrmOpportunityController;
 use App\Modules\Core\Http\Controllers\PartyController;
 use App\Modules\Portal\Http\Controllers\PortalController;
+use App\Modules\Services\Http\Controllers\ContractSignatureController;
 use App\Modules\Portal\Http\Controllers\PortalRequestController;
+use App\Modules\Portal\Http\Controllers\PortalCommercialController;
+use App\Modules\Portal\Http\Controllers\PortalFinanceController;
+use App\Modules\Portal\Http\Controllers\PortalNoticeController;
+use App\Modules\Portal\Http\Controllers\PortalSupportController;
+use App\Modules\Portal\Http\Controllers\PortalTeamController;
+use App\Modules\Portal\Http\Controllers\PortalUserController;
 use App\Modules\Core\Http\Controllers\EmployeeController;
 use App\Modules\Core\Http\Controllers\SearchController;
 use App\Modules\Core\Http\Controllers\AuditController;
@@ -277,6 +284,16 @@ Route::prefix('v1')->group(function () {
         });
         // Activar es un permiso aparte, como aprobar una cotización.
         Route::middleware('permission:contracts.approve')->post('/contracts/{contract}/activate', [ContractController::class, 'activate']);
+        // Firma electrónica: ver, enviar y anular (gestionar); firmar por la empresa (aprobar).
+        Route::middleware('permission:contracts.view')->get('/contracts/{contract}/signature-requests', [ContractSignatureController::class, 'index']);
+        Route::middleware('permission:contracts.manage')->group(function () {
+            Route::post('/contracts/{contract}/signature-requests', [ContractSignatureController::class, 'store']);
+            Route::post('/contracts/{contract}/signature-requests/{signatureRequest}/cancel', [ContractSignatureController::class, 'cancel']);
+        });
+        Route::middleware('permission:contracts.approve')->group(function () {
+            Route::post('/contracts/{contract}/signature-requests/{signatureRequest}/code', [ContractSignatureController::class, 'code'])->middleware('throttle:5,1,sign-code');
+            Route::post('/contracts/{contract}/signature-requests/{signatureRequest}/company-sign', [ContractSignatureController::class, 'sign']);
+        });
         Route::middleware('permission:orders.create')->post('/contracts/{contract}/orders', [ContractController::class, 'createOrder']);
 
         // Orden directa desde una cotización aprobada
@@ -317,6 +334,21 @@ Route::prefix('v1')->group(function () {
         // Tomar la solicitud es el primer paso de cotizarla.
         Route::middleware('permission:quotations.manage')->post('/portal-requests/{portalRequest}/take', [PortalRequestController::class, 'take']);
         Route::middleware('permission:portal.manage')->post('/portal-requests/{portalRequest}/reject', [PortalRequestController::class, 'reject']);
+
+        // Usuarios del portal y avisos (Administración). Cuelgan del módulo Portal de clientes.
+        Route::middleware('permission:portal_users.view')->group(function () {
+            Route::get('/portal-users', [PortalUserController::class, 'index']);
+            Route::get('/portal-users/summary', [PortalUserController::class, 'summary']);
+            Route::get('/portal-users/options', [PortalUserController::class, 'options']);
+            Route::get('/portal-notices', [PortalNoticeController::class, 'index']);
+        });
+        Route::middleware('permission:portal_users.create')->post('/portal-users', [PortalUserController::class, 'store']);
+        Route::middleware('permission:portal_users.manage')->group(function () {
+            Route::patch('/portal-users/{portalUser}', [PortalUserController::class, 'update']);
+            Route::post('/portal-users/{portalUser}/resend', [PortalUserController::class, 'resend']);
+            Route::post('/portal-notices', [PortalNoticeController::class, 'store']);
+            Route::post('/portal-notices/{notice}/withdraw', [PortalNoticeController::class, 'withdraw']);
+        });
 
         // Plantillas de checklist (Operaciones)
         Route::middleware('permission:checklists.view')->group(function () {
@@ -849,10 +881,59 @@ Route::prefix('v1')->group(function () {
         Route::get('/audit', [SuperAdminDashboardController::class, 'audit']);
     });
 
-    // Portal del cliente
-    Route::prefix('portal')->middleware(['auth:sanctum', 'tenant.context', 'portal.user'])->group(function () {
-        Route::get('/dashboard', [PortalController::class, 'dashboard']);
-        Route::get('/requests', [PortalController::class, 'requests']);
-        Route::post('/requests', [PortalController::class, 'storeRequest']);
+    // Activar la invitación al portal (sin sesión): código del correo + contraseña.
+    Route::post('/portal/activate', [PortalController::class, 'activate'])->middleware('throttle:10,1,portal-activate');
+
+    // Portal del cliente: su propio contexto (portal.user); nunca pasa por tenant.context.
+    // portal.section:seccion exige el portal activo en la empresa y la sección en el rol del portal.
+    Route::prefix('portal')->middleware(['auth:sanctum', 'portal.user', 'idempotency', 'record.version'])->group(function () {
+        Route::get('/me', [PortalController::class, 'me']);
+        Route::post('/me/password', [\App\Http\Controllers\Auth\AuthController::class, 'changePassword'])->middleware('throttle:5,1,password');
+        Route::middleware('portal.section:home')->get('/home', [PortalController::class, 'home']);
+
+        Route::middleware('portal.section:quotes')->group(function () {
+            Route::get('/quotations', [PortalCommercialController::class, 'quotations']);
+            Route::get('/quotations/{quotation}', [PortalCommercialController::class, 'quotation']);
+        });
+        Route::middleware('portal.section:approve')->post('/quotations/{quotation}/decision', [PortalCommercialController::class, 'decide']);
+
+        Route::middleware('portal.section:services')->get('/services', [PortalCommercialController::class, 'services']);
+        Route::middleware('portal.section:sign')->group(function () {
+            Route::get('/signatures', [PortalCommercialController::class, 'signatures']);
+            Route::post('/signatures/{signatureRequest}/code', [PortalCommercialController::class, 'signatureCode'])->middleware('throttle:5,1,sign-code');
+            Route::post('/signatures/{signatureRequest}/sign', [PortalCommercialController::class, 'sign']);
+            Route::post('/signatures/{signatureRequest}/decline', [PortalCommercialController::class, 'declineSignature']);
+        });
+        Route::middleware('portal.section:requests')->group(function () {
+            Route::post('/services/{serviceLine}/renewal', [PortalCommercialController::class, 'renewal']);
+            Route::get('/catalog', [PortalCommercialController::class, 'catalog']);
+            Route::get('/requests', [PortalCommercialController::class, 'requests']);
+            Route::post('/requests', [PortalCommercialController::class, 'storeRequest']);
+        });
+
+        Route::middleware('portal.section:documents')->group(function () {
+            Route::get('/documents', [PortalFinanceController::class, 'documents']);
+            Route::post('/documents/{document}/temporary-url', [PortalFinanceController::class, 'documentUrl']);
+        });
+        Route::middleware('portal.section:invoices')->group(function () {
+            Route::get('/invoices', [PortalFinanceController::class, 'invoices']);
+            Route::get('/invoices/{invoice}', [PortalFinanceController::class, 'invoice']);
+            Route::get('/payments/{payment}', [PortalFinanceController::class, 'payment']);
+            Route::get('/statement', [PortalFinanceController::class, 'statement']);
+        });
+
+        Route::middleware('portal.section:support')->group(function () {
+            Route::get('/tickets', [PortalSupportController::class, 'index']);
+            Route::post('/tickets', [PortalSupportController::class, 'store']);
+            Route::get('/tickets/{ticket}', [PortalSupportController::class, 'show']);
+            Route::post('/tickets/{ticket}/comments', [PortalSupportController::class, 'comment']);
+        });
+
+        Route::middleware('portal.section:users')->group(function () {
+            Route::get('/users', [PortalTeamController::class, 'index']);
+            Route::post('/users', [PortalTeamController::class, 'store']);
+            Route::patch('/users/{portalUser}', [PortalTeamController::class, 'update']);
+            Route::post('/users/{portalUser}/resend', [PortalTeamController::class, 'resend']);
+        });
     });
 });

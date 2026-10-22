@@ -182,6 +182,20 @@ class QuotationController extends Controller
                 );
             }
 
+            // Una solicitud del portal que llegó al CRM queda cotizada al cotizar su oportunidad.
+            if ($opportunity) {
+                PortalRequest::ignoringAccessScope()->where('crm_opportunity_id', $opportunity->id)
+                    ->whereIn('status', ['SUBMITTED', 'IN_REVIEW'])->get()
+                    ->each(function (PortalRequest $linked) use ($request, $tenantId, $quotation, $quotationNumber) {
+                        $previous = $linked->status;
+                        $linked->update(['status' => 'QUOTED', 'quotation_id' => $quotation->id] + $linked->claimFor($request->user()->id));
+                        AuditLogger::log(
+                            tenantId: $tenantId, userId: $request->user()->id, action: 'portal_request.quote', entityType: 'PortalRequest', entityId: $linked->id,
+                            metadata: ['from' => $previous, 'to' => 'QUOTED', 'note' => "Cotizada con {$quotationNumber} desde su oportunidad"],
+                        );
+                    });
+            }
+
             return $quotation;
         });
 
@@ -436,6 +450,11 @@ class QuotationController extends Controller
         if (! in_array($portalRequest->status, ['SUBMITTED', 'IN_REVIEW'], true)) {
             throw ValidationException::withMessages([
                 'portal_request_id' => ['La solicitud del portal ya fue cotizada o rechazada.'],
+            ]);
+        }
+        if ($portalRequest->route === 'CRM') {
+            throw ValidationException::withMessages([
+                'portal_request_id' => ['Esta solicitud se atiende en el CRM: cotízala desde su oportunidad.'],
             ]);
         }
 

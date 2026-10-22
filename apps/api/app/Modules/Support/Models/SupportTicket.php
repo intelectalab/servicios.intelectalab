@@ -115,4 +115,31 @@ class SupportTicket extends Model
     {
         return $this->hasOne(WarrantyClaim::class, 'ticket_id');
     }
+
+    /**
+     * Cambios al salir de "Esperando cliente": el tiempo en pausa se suma a los vencimientos, en el
+     * mismo calendario del SLA. Lo usan retomar el ticket y la respuesta del cliente en el portal.
+     */
+    public function resumeClock(\Illuminate\Support\Carbon $now): array
+    {
+        if (! $this->paused_at) {
+            return [];
+        }
+
+        $mode = $this->sla_calendar_mode ?? '24X7';
+        $clock = \App\Modules\Support\Support\SlaCalendar::for($this->tenant_id);
+        $paused = $clock->between($this->paused_at, $now, $mode);
+        $changes = [
+            'paused_at' => null,
+            'paused_seconds' => (int) $this->paused_seconds + max(0, (int) $this->paused_at->diffInSeconds($now)),
+        ];
+        if ($this->resolution_due_at) {
+            $changes['resolution_due_at'] = $clock->add($this->resolution_due_at, $paused, $mode);
+        }
+        if ($this->response_due_at && ! $this->first_response_at) {
+            $changes['response_due_at'] = $clock->add($this->response_due_at, $paused, $mode);
+        }
+
+        return $changes;
+    }
 }

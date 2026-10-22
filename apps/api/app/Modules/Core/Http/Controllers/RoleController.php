@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Portal\Support\PortalAccess;
 use App\Modules\Subscription\Support\ModulePermissions;
 use App\Modules\Subscription\Support\TenantModules;
 use App\Services\AccessScope;
@@ -53,6 +54,17 @@ class RoleController extends Controller
                 ->whereIn('code', $this->assignable($tenantId))
                 ->orderBy('code')
                 ->get(['code', 'name', 'description']),
+            // "Cliente (Portal)" del prototipo: solo lectura, lo decide el portal (PortalAccess).
+            'customer_role' => [
+                'enabled' => in_array(PortalAccess::MODULE, PortalAccess::modules($tenantId), true),
+                'users' => DB::table('portal_users')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->count(),
+                'matrix' => collect(PortalAccess::CUSTOMER_MATRIX)
+                    ->map(fn (array $row, string $resource) => ['resource' => $resource, 'actions' => $row[0], 'note' => $row[1]])->values(),
+                'portal_roles' => collect(PortalAccess::ROLES)->map(fn (array $role, string $code) => [
+                    'code' => $code, 'name' => $role[0],
+                    'sections' => array_map(fn ($section) => PortalAccess::SECTION_LABELS[$section], $role[1]),
+                ])->values(),
+            ],
         ]);
     }
 

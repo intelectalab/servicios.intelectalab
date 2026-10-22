@@ -9,7 +9,7 @@ import { setAuthToken } from "@/lib/auth";
 
 type LoginResponse = {
   token?: string;
-  user?: { is_super_admin?: boolean };
+  user?: { is_super_admin?: boolean; portal?: boolean };
   mfa_required?: boolean;
   mfa_token?: string;
   message?: string;
@@ -49,10 +49,12 @@ export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { hom
   function finishLogin(data: LoginResponse) {
     if (!data.token) throw new Error("No se pudo iniciar sesión.");
 
-    setAuthToken(data.token, data.user?.is_super_admin ? "platform" : "tenant", remember);
-    // Verificamos si es superadmin para redirigirlo a su panel global
+    setAuthToken(data.token, data.user?.is_super_admin ? "platform" : data.user?.portal ? "portal" : "tenant", remember);
+    // Cada cuenta a su consola: plataforma, portal de clientes o el sistema de la empresa.
     if (data.user?.is_super_admin) {
       router.push("/superadmin/plans");
+    } else if (data.user?.portal) {
+      router.push("/portal");
     } else {
       router.push("/actors");
     }
@@ -180,6 +182,12 @@ export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { hom
           <a href={plansUrl} className="font-medium text-[color:var(--p-brand-text)] hover:underline">
             Ver planes
           </a>
+          <span className="mt-1.5 block">
+            ¿Lo invitaron al portal de clientes?{" "}
+            <a href="/portal/activate" className="font-medium text-[color:var(--p-brand-text)] hover:underline">
+              Activar mi acceso
+            </a>
+          </span>
         </>
       }
     >

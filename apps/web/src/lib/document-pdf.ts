@@ -53,12 +53,14 @@ export const pdfMoney = (value: string | number, currency: string) => `${currenc
  * notas, firmas, pie y marca de agua. Se arma en el navegador.
  */
 export async function downloadDocumentPdf(spec: PdfDocument) {
+  // En el portal de clientes la empresa y la persona salen de /portal/me (las rutas internas no le responden).
+  const portal = typeof window !== "undefined" && /^\/portal(\/|$)/.test(window.location.pathname);
   // jsPDF pesa: se carga solo al descargar.
   const [{ jsPDF }, { default: autoTable }, company, me] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
-    apiFetch<Company>("/v1/me/access"),
-    apiFetch<{ name: string }>("/v1/me").catch(() => null),
+    apiFetch<Company>(portal ? "/v1/portal/me" : "/v1/me/access"),
+    portal ? apiFetch<{ name: string }>("/v1/portal/me").catch(() => null) : apiFetch<{ name: string }>("/v1/me").catch(() => null),
   ]);
 
   const companyName = company.company?.legal_name || company.tenant?.legal_name || company.tenant?.name || "Empresa";

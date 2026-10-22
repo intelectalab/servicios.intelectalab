@@ -133,6 +133,21 @@ Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones c
 - Alcance en Tickets (propio = quien lo atiende, quien lo registró y quien vendió el contrato del cliente; con Equipo, además lo del equipo y la bandeja sin tomar) y en Garantías (propio = quien lo registró y quien atiende su ticket).
 - "Crear OT" desde el ticket: sobre un servicio contratado activo del cliente, una por ticket; usa el mismo alta que la pantalla de órdenes de trabajo (`Operations/Support/WorkOrders`).
 
+### Portal de clientes (2026-10-22)
+- Detalle en [cambios/2026-10-22_portal-de-clientes.md](cambios/2026-10-22_portal-de-clientes.md). Módulo del plan "Portal de clientes" (`PORTAL`) en Base, Profesional y Enterprise; sin él, el cliente entra y ve "Portal desactivado".
+- El cliente entra por el mismo `/login`, siempre con verificación en dos pasos, y va a `/portal`, con su propia barra (no el menú del sistema). Una cuenta es del sistema **o** del portal (lo garantiza la base); una sesión del portal no abre ninguna ruta interna ni al revés.
+- El cliente y la empresa salen de la cuenta, nunca de lo que envíe el navegador. Lo de otro cliente "no existe" (404). Sin borradores, notas internas, credenciales ni auditoría.
+- Roles del portal del prototipo: Portal Admin, Portal Finanzas y Solo lectura. Una sección se abre si el rol la incluye y si la empresa tiene el módulo del que salen sus datos.
+- Usuarios del portal: los invita la empresa o el Portal Admin del cliente, con un código de 8 caracteres válido 7 días; como mucho 10 vigentes por cliente; siempre un Portal Admin activo; nadie se desactiva ni cambia su rol. No se borran.
+- La empresa gestiona en Administración → Usuarios del portal (permisos `portal_users.*`: Administrador todo, Gerencia ve), donde también publica y retira **avisos** del portal (a un cliente o a todos).
+- El cliente aprueba o rechaza (con motivo) una cotización enviada y vigente; queda como decisión "desde el portal". La segregación de funciones no aplica al cliente.
+- Solicitudes del portal: con CRM nace además una oportunidad (fuente "Portal cliente", responsable quien vende al cliente); se atiende desde la oportunidad: cotizarla deja la solicitud Cotizada y perderla, Rechazada. Sin CRM, la bandeja de siempre.
+- Documentos del portal: los entregables aprobados o entregados de sus proyectos y los documentos marcados como visibles en el portal; enlace temporal de 5 minutos registrado en auditoría.
+- La respuesta del cliente a un ticket que esperaba al cliente lo devuelve a atención y su reloj sigue con la pausa sumada (la misma regla que "Retomar").
+- Pagar en línea se ve y avisa que no está disponible: no se simula nada.
+- **Firma electrónica de contratos** (2026-10-22, RN-COM-09/13): firma simple dentro del sistema. La empresa envía a firma un borrador (huella SHA-256 del contenido; firmante = un Portal Admin activo del cliente; vence a los 15 días; una pendiente por contrato); firman el cliente en el portal (nombre exacto + código al correo + aceptación) y la empresa (`contracts.approve`, también con código), en cualquier orden; si el contrato cambió después del envío no se firma; el cliente puede rechazar con motivo y la empresa anular. Cada firma guarda fecha, IP, navegador y evidencia, y no cambia. La regla "Exigir la firma electrónica para activar un contrato" (Reglas de la empresa) está apagada si no se cambia. Un proveedor acreditado (D-06 del kit) se conectaría en `ContractSignatures`.
+- En Roles y permisos, "Cliente (Portal)" se muestra como en el prototipo pero **de solo lectura**: lo que ve el cliente lo deciden los roles del portal (`PortalAccess`), nunca la matriz de la empresa, para que nadie le dé por error un permiso interno.
+
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
 - Permisos `audit.view` y `audit.export`, sin módulo del plan. Como en el prototipo, los tienen Administrador y Gerencia.
@@ -208,12 +223,12 @@ Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones c
 
 ## Pendientes
 
-- Soporte: avisos (escalar, asignar, SLA por vencer) con Notificaciones; tickets y reclamos desde el portal del cliente (responder reanuda el reloj); tarea programada de vencimientos.
+- Soporte: avisos (escalar, asignar, SLA por vencer) con Notificaciones; reclamos de garantía desde el portal del cliente; tarea programada de vencimientos. (Los tickets desde el portal existen desde el 2026-10-22.)
 - Compras: consulta de validez ante SUNAT; nota de crédito de proveedor; aviso de órdenes por aprobar (con Notificaciones); pagos parciales y programados; revertir un pago con depósito de detracción (hoy no se permite).
 - Contabilidad: editar las reglas automáticas por empresa; libros electrónicos (PLE); planilla (cuentas 62); validar con el contador las cuentas del cierre (5911/5921). En Tenant A, los cobros PAG-2026-0001…0004 (anteriores a Bancos y caja) no tienen cuenta: la 1041/1011 no coincide con Bancos y caja.
 - Finanzas: elegir el proveedor de facturación electrónica y escribir su clase (con él, XML y CDR, y consultar el ticket de una baja pendiente); renovación automática de instancias recurrentes; avisos de renovación, de cobranza y de arqueo con diferencia (con Notificaciones); cambio entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos por horas aprobadas y por hitos; nota de crédito parcial; editar el vencimiento de un borrador; pago en línea; activar el programador del servidor para los ciclos diarios.
 - Operaciones: en la App del técnico, abrirla sin señal desde cero, borrar lo guardado en el teléfono al cerrar sesión, registrar dónde estaba el técnico y ubicación en el cliente; rejilla por horas y arrastrar para reprogramar en Agenda; antivirus para los archivos adjuntos y pantalla Documentos; facturar por horas (con Finanzas); avisos de horas y costos por aprobar (con Notificaciones); evidencias con archivo (con Documentos); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte).
-- CRM: solicitudes del portal por la ruta CRM; pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
+- CRM: pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
@@ -228,7 +243,8 @@ Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones c
 - El contenido de Planes SaaS y la landing sigue con el estilo anterior.
 - Identidades repetidas: en "Tenant A - Prueba" hay 5 documentos con dos registros cada uno, creados en los módulos separados. Clientes y actores no crea más, pero no une los que existen. Lista en [cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md](cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md).
 - Borrar de verdad Clientes, Proveedores y Empleados (pantallas, componentes, `lib/open-record.ts`, `/v1/search`) cuando se decida.
-- Comercial tiene todas sus pantallas. Faltan el portal del cliente y Usuarios del portal: hoy las solicitudes solo se crean por la API del portal (las de prueba se insertaron a mano). Lo que Servicios y Cotizaciones aún no tienen respecto al prototipo está en [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md).
+- Comercial tiene todas sus pantallas. El portal del cliente existe desde el 2026-10-22.
+- Portal de clientes: descargar el contrato firmado desde el portal; proveedor de firma acreditado si se decide; pago en línea (pasarela); avisos al cliente (Notificaciones) cuando la empresa responde, envía una cotización o publica un aviso; pantalla Documentos para marcar documentos visibles en el portal; ver los usuarios del portal en la ficha del cliente; correr la migración en el VPS. Lo que Servicios y Cotizaciones aún no tienen respecto al prototipo está en [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md).
 - `database/schema_reference.sql` no incluye las migraciones `2026_10_05_000300` (modalidad, garantía, estado archivado, versión anterior) ni `2026_10_05_000400` (tipo de cambio).
 - La fecha de emisión de órdenes usa el día del servidor (UTC): de noche en Perú sale el día siguiente. Falta fijar la zona horaria de la aplicación.
 - Una cotización cuyo contrato ya generó una orden deja "Orden directa" deshabilitado; en el prototipo son independientes.

@@ -602,19 +602,8 @@ class SupportTicketController extends Controller
             if ($to === 'WAITING_CUSTOMER') {
                 $changes['paused_at'] = $now;
             }
-            if ($previous === 'WAITING_CUSTOMER' && $ticket->paused_at) {
-                // El tiempo en pausa se suma a los vencimientos, en el mismo calendario del SLA.
-                $mode = $ticket->sla_calendar_mode ?? '24X7';
-                $clock = SlaCalendar::for($ticket->tenant_id);
-                $paused = $clock->between($ticket->paused_at, $now, $mode);
-                $changes['paused_at'] = null;
-                $changes['paused_seconds'] = (int) $ticket->paused_seconds + max(0, (int) $ticket->paused_at->diffInSeconds($now));
-                if ($ticket->resolution_due_at) {
-                    $changes['resolution_due_at'] = $clock->add($ticket->resolution_due_at, $paused, $mode);
-                }
-                if ($ticket->response_due_at && ! $ticket->first_response_at) {
-                    $changes['response_due_at'] = $clock->add($ticket->response_due_at, $paused, $mode);
-                }
+            if ($previous === 'WAITING_CUSTOMER') {
+                $changes += $ticket->resumeClock($now);
             }
             if ($to === 'RESOLVED') {
                 $changes['resolved_at'] = $now;

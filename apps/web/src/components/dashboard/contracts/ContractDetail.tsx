@@ -3,7 +3,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Check, FileText, Send, Settings, Upload } from "lucide-react";
+import { ArrowLeft, Check, FileSignature, FileText, Send, Settings, Upload } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { customerName, historyLabel, money, setFlash, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES, SLA_LEVELS, billingOf, downloadContractPdf, slaLabel, validity } from "@/lib/contracts";
@@ -13,7 +13,8 @@ import {
   useToasts, type Column, type Tone,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
-import type { Contract, ContractedService, RecurringInstance } from "@/types/commercial";
+import type { Contract, ContractedService, RecurringInstance, SignatureRequest } from "@/types/commercial";
+import { CompanySignModal, SendSignatureModal, SignatureSummary } from "./ContractSignature";
 
 // Transiciones que piden confirmación; "reason" indica que el motivo es obligatorio.
 type Confirm = { path: string; title: string; text: string; confirmLabel: string; done: string; danger?: boolean; reason?: boolean };
@@ -168,6 +169,8 @@ export default function ContractDetail() {
   const [reasonError, setReasonError] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [signing, setSigning] = useState<"send" | "company" | null>(null);
+  const [cancelling, setCancelling] = useState<SignatureRequest | null>(null);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -280,8 +283,31 @@ export default function ContractDetail() {
   const orders = contract.orders ?? [];
   const history = contract.history ?? [];
   const visited = history.flatMap((entry) => (entry.metadata.to ? [entry.metadata.to] : [])).concat("DRAFT");
-  // Un contrato sin líneas o sin fecha de inicio no se activa.
-  const notActivable = !items.length || !contract.start_date ? "El contrato activo requiere líneas y vigencia" : undefined;
+  const signature = contract.signature ?? null;
+  // Se envía a firma un borrador sin solicitud vigente ni firmada.
+  const canSend = status === "DRAFT" && !(signature && (signature.status === "PENDING" || signature.status === "SIGNED"));
+  const companyPending = signature?.status === "PENDING" && signature.signers.some((signer) => signer.side === "EMPRESA" && signer.status === "PENDING");
+  // Un contrato sin líneas o sin fecha de inicio no se activa; si la empresa lo exige, tampoco sin las dos firmas.
+  const notActivable = !items.length || !contract.start_date
+    ? "El contrato activo requiere líneas y vigencia"
+    : contract.signature_required && contract.signature_status !== "SIGNED"
+      ? "Requiere la firma del cliente y de la empresa"
+      : undefined;
+
+  /** Anular la solicitud de firma (pendiente o rechazada). */
+  async function cancelSignature() {
+    if (!cancelling) return;
+    setBusy(true);
+    try {
+      setContract(await apiFetch<Contract>(`/v1/contracts/${id}/signature-requests/${cancelling.id}/cancel`, { method: "POST" }));
+      toast("Solicitud anulada");
+      setCancelling(null);
+    } catch (err) {
+      toast(firstError(err, "No se pudo anular la solicitud."), "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <Screen>
@@ -298,11 +324,24 @@ export default function ContractDetail() {
                   <Settings size={16} />
                   <span>Editar</span>
                 </Btn>
-                {/* Aún sin función: la firma electrónica no está construida. */}
-                <Btn variant="secondary" onClick={() => toast("La firma electrónica aún no está disponible.", "warning")} permission="contracts.manage">
-                  <Send size={16} />
-                  <span>Enviar a firma</span>
-                </Btn>
+                {canSend && (
+                  <Btn variant="secondary" onClick={() => setSigning("send")} permission="contracts.manage" disabled={busy}>
+                    <Send size={16} />
+                    <span>Enviar a firma</span>
+                  </Btn>
+                )}
+                {companyPending && (
+                  <Btn
+                    variant="secondary"
+                    onClick={() => setSigning("company")}
+                    permission="contracts.approve"
+                    disabled={busy || signature?.changed}
+                    title={signature?.changed ? "El contrato cambió después de enviarse a firma" : undefined}
+                  >
+                    <FileSignature size={16} />
+                    <span>Firmar por la empresa</span>
+                  </Btn>
+                )}
                 <Btn onClick={() => setActivating(true)} permission="contracts.approve" disabled={busy || Boolean(notActivable)} title={notActivable}>
                   <Check size={16} />
                   <span>Activar contrato</span>
@@ -410,7 +449,7 @@ export default function ContractDetail() {
             id: "signature",
             node: (
               <Card title="Firma electrónica">
-                <p className="app-muted">La firma electrónica no es obligatoria en esta empresa.</p>
+                <SignatureSummary contract={contract} onCancel={setCancelling} />
               </Card>
             ),
           },
@@ -566,6 +605,35 @@ export default function ContractDetail() {
               <small className="app-muted block text-[12.5px]">Operaciones los recibe en estado PENDIENTE.</small>
             </span>
           </label>
+        </Modal>
+      )}
+
+      {signing === "send" && (
+        <SendSignatureModal
+          contract={contract}
+          onClose={() => setSigning(null)}
+          onDone={(updated) => { setContract(updated); setSigning(null); toast("Contrato enviado a firma: el cliente lo verá en su portal"); }}
+        />
+      )}
+      {signing === "company" && signature && (
+        <CompanySignModal
+          contract={contract}
+          onClose={() => setSigning(null)}
+          onDone={(updated) => {
+            setContract(updated);
+            setSigning(null);
+            toast(updated.signature?.status === "SIGNED" ? "Contrato firmado por ambas partes" : "Firma de la empresa registrada");
+          }}
+        />
+      )}
+      {cancelling && (
+        <Modal
+          title="Anular solicitud de firma"
+          size="sm"
+          onClose={() => setCancelling(null)}
+          footer={<><Btn variant="ghost" onClick={() => setCancelling(null)}>Volver</Btn><Btn variant="danger" disabled={busy} onClick={cancelSignature}>Anular</Btn></>}
+        >
+          <p className="text-[15px]">Podrás editar el contrato y enviarlo nuevamente a firma.</p>
         </Modal>
       )}
 
