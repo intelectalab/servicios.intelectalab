@@ -12,7 +12,15 @@ class Document extends Model
     protected $keyType = 'string';
     public $incrementing = false;
 
-    protected $fillable = ['tenant_id', 'document_type', 'title', 'status', 'classification', 'visibility', 'created_by'];
+    /** Estado => texto de la pantalla. ACTIVE es "Disponible". */
+    public const STATES = ['ACTIVE' => 'Disponible', 'QUARANTINED' => 'En cuarentena', 'ARCHIVED' => 'Archivado'];
+
+    protected $fillable = [
+        'tenant_id', 'document_type', 'title', 'status', 'classification', 'visibility', 'branch_id', 'created_by',
+        'archived_at', 'archived_by',
+    ];
+
+    protected $casts = ['archived_at' => 'datetime', 'lock_version' => 'integer'];
 
     protected static function boot()
     {

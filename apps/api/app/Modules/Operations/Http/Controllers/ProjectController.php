@@ -683,6 +683,7 @@ class ProjectController extends Controller
             'size_bytes' => (int) $version->fileObject->size_bytes,
             'sha256' => trim((string) $version->fileObject->sha256),
             'antivirus_status' => $version->fileObject->antivirus_status,
+            'antivirus_engine' => $version->fileObject->antivirus_engine,
         ];
     }
 

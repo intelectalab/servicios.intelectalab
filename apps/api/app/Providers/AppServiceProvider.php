@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Modules\Documents\Antivirus\AntivirusScanner;
+use App\Modules\Documents\Antivirus\SimulatedScanner;
 use App\Modules\Documents\Support\DocumentStore;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -14,7 +16,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Antivirus de los documentos: el motor que diga config/documents.php.
+        $this->app->bind(AntivirusScanner::class, fn () => match (config('documents.antivirus')) {
+            'simulated' => new SimulatedScanner,
+            default => throw new \RuntimeException('Antivirus de documentos desconocido: '.config('documents.antivirus')),
+        });
     }
 
     /**

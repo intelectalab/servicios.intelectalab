@@ -2,9 +2,11 @@
 
 namespace App\Modules\Documents\Support;
 
+use App\Modules\Documents\Antivirus\AntivirusScanner;
 use App\Modules\Documents\Models\Document;
 use App\Modules\Documents\Models\DocumentVersion;
 use App\Modules\Documents\Models\FileObject;
+use App\Services\AccessScope;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -12,9 +14,9 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Guarda un archivo como documento con versiones, para adjuntarlo a un registro de otro módulo
- * (hoy, el entregable de un proyecto). El archivo va al almacén en la carpeta de su empresa; en
- * la base quedan el archivo, el documento, su versión y el vínculo con el registro.
+ * Guarda un archivo como documento con versiones: la pantalla Documentos y los adjuntos de otros
+ * módulos (entregables, evidencias, extractos). El archivo va al almacén en la carpeta de su
+ * empresa; en la base quedan el archivo, el documento, su versión y el vínculo con el registro.
  */
 class DocumentStore
 {
@@ -67,10 +69,15 @@ class DocumentStore
      * Sube el archivo y lo registra como versión nueva de `$document`, o como documento nuevo.
      * `$expectedSha` es la huella que calculó el navegador: si no coincide con lo recibido, se rechaza.
      *
+     * Antes de guardarlo lo analiza el antivirus. Si encuentra una amenaza, el archivo se rechaza,
+     * salvo con `$quarantine`: entonces se guarda aparte y el documento queda "En cuarentena", sin
+     * descarga posible (la pantalla Documentos lo hace así, para dejar constancia).
+     *
      * @param  array{title: string, category: string, visibility: string}  $attributes
      */
     public static function store(
         string $tenantId, string $userId, UploadedFile $file, array $attributes, ?Document $document = null, ?string $expectedSha = null,
+        bool $quarantine = false,
     ): DocumentVersion {
         $extension = strtolower($file->getClientOriginalExtension());
         if (! in_array($extension, self::EXTENSIONS, true) || in_array(strtolower((string) $file->getMimeType()), self::BLOCKED_MIMES, true)) {
@@ -82,8 +89,24 @@ class DocumentStore
             throw ValidationException::withMessages(['file' => ['El archivo llegó distinto de como salió de tu equipo. Vuelve a subirlo.']]);
         }
 
+        if ($document) {
+            if ($document->status === 'ARCHIVED') {
+                throw ValidationException::withMessages(['file' => ['Un documento archivado no recibe versiones nuevas.']]);
+            }
+            $same = $document->versions()->where('checksum', $sha256)->value('version');
+            if ($same !== null) {
+                throw ValidationException::withMessages(['file' => ["Ese archivo ya está subido: es idéntico a la versión v{$same}."]]);
+            }
+        }
+
+        $scan = app(AntivirusScanner::class)->scan($file->getRealPath());
+        if ($scan->infected() && ! $quarantine) {
+            throw ValidationException::withMessages(['file' => ['El antivirus encontró una amenaza en este archivo ('.$scan->threat.'). No se guardó.']]);
+        }
+
         // El nombre original solo se guarda como dato; la ruta en el almacén no depende de él.
-        $objectKey = "tenants/{$tenantId}/documents/".Str::uuid().'.'.$extension;
+        $folder = $scan->infected() ? 'quarantine' : 'documents';
+        $objectKey = "tenants/{$tenantId}/{$folder}/".Str::uuid().'.'.$extension;
         $disk = Storage::disk(self::DISK);
 
         // El almacén es un servicio externo: se escribe antes de abrir la transacción.
@@ -97,7 +120,7 @@ class DocumentStore
         }
 
         try {
-            return DB::transaction(function () use ($tenantId, $userId, $file, $attributes, $document, $sha256, $objectKey) {
+            return DB::transaction(function () use ($tenantId, $userId, $file, $attributes, $document, $sha256, $objectKey, $scan) {
                 $fileObject = FileObject::create([
                     'tenant_id' => $tenantId,
                     'storage_provider' => self::provider(),
@@ -108,17 +131,31 @@ class DocumentStore
                     'size_bytes' => $file->getSize(),
                     'sha256' => $sha256,
                     'encrypted' => false,
-                    // Aún no hay motor antivirus conectado: queda sin analizar.
-                    'antivirus_status' => 'PENDING',
+                    'antivirus_status' => $scan->status,
+                    'antivirus_engine' => $scan->engine,
+                    'scanned_at' => now(),
                 ]);
 
-                $fields = ['title' => $attributes['title'], 'document_type' => $attributes['category'], 'visibility' => $attributes['visibility']];
+                // La última versión manda: limpia, el documento está disponible; con amenaza, en cuarentena.
+                $fields = [
+                    'title' => $attributes['title'], 'document_type' => $attributes['category'],
+                    // Uno que nace en cuarentena no se publica en el portal.
+                    'visibility' => $scan->infected() && ! $document ? 'INTERNAL' : $attributes['visibility'],
+                    'status' => $scan->infected() ? 'QUARANTINED' : 'ACTIVE',
+                ];
                 if ($document) {
                     // Bloquea el documento: dos subidas a la vez no toman el mismo número de versión.
                     $document = Document::whereKey($document->id)->lockForUpdate()->firstOrFail();
+                    if ($document->status === 'ARCHIVED') {
+                        throw ValidationException::withMessages(['file' => ['Un documento archivado no recibe versiones nuevas.']]);
+                    }
                     $document->update($fields);
                 } else {
-                    $document = Document::create([...$fields, 'tenant_id' => $tenantId, 'status' => 'ACTIVE', 'classification' => 'INTERNAL', 'created_by' => $userId]);
+                    $document = Document::create([
+                        ...$fields, 'tenant_id' => $tenantId, 'classification' => 'INTERNAL', 'created_by' => $userId,
+                        // Nace en la sede de quien lo sube.
+                        'branch_id' => AccessScope::branchId(),
+                    ]);
                 }
 
                 $version = DocumentVersion::create([
@@ -148,11 +185,14 @@ class DocumentStore
         ]);
     }
 
-    /** Enlace temporal para descargar la última versión, con su nombre original. */
-    public static function downloadUrl(Document $document, int $minutes = 5): ?string
+    /**
+     * Enlace temporal para descargar la última versión (o la indicada), con su nombre original.
+     * Un archivo en el que el antivirus encontró una amenaza no se entrega nunca.
+     */
+    public static function downloadUrl(Document $document, int $minutes = 5, ?DocumentVersion $version = null): ?string
     {
-        $file = $document->latestVersion?->fileObject;
-        if (! $file) {
+        $file = ($version ?? $document->latestVersion)?->fileObject;
+        if (! $file || $file->antivirus_status === 'INFECTED') {
             return null;
         }
         $name = str_replace(['"', '\\', "\r", "\n"], '', Str::ascii($file->original_name)) ?: 'documento';

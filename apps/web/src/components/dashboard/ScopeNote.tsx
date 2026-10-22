@@ -113,10 +113,18 @@ const WARRANTY_HINTS: typeof HINTS = {
   BRANCH: "Tu rol alcanza tus reclamos y los de tus sedes.",
 };
 
+// Un documento es de quien lo subió; los de un registro que se ve también salen en su ficha.
+const DOCUMENT_HINTS: typeof HINTS = {
+  OWN: "Tu rol alcanza los documentos que subiste. Los de un contrato, proyecto o cliente que ves están en su ficha.",
+  TEAM: "Tu rol alcanza tus documentos y los de las personas de tu equipo.",
+  BRANCH: "Tu rol alcanza tus documentos y los de tus sedes.",
+};
+
 const hintsOf = (resource: string) =>
   resource === "portal" ? PORTAL_HINTS
     : resource === "tickets" ? TICKET_HINTS
     : resource === "warranty" ? WARRANTY_HINTS
+    : resource === "documents" ? DOCUMENT_HINTS
     : resource === "budgets" ? BUDGET_HINTS
     : resource === "purchases" || resource === "payables" ? PURCHASE_HINTS
     : resource === "recurring" ? RECURRING_HINTS

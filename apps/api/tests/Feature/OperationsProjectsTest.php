@@ -338,7 +338,7 @@ class OperationsProjectsTest extends TestCase
         $attached = $one($this->post($url, ['title' => 'Informe final v1', 'visibility' => 'PORTAL', 'sha256' => $sha, 'file' => $pdf()], ['Accept' => 'application/json'])->assertCreated());
         $this->assertEquals('informe.pdf', $attached['document_ref']);
         $this->assertEquals(
-            ['Informe final v1', 'Entregable', 'PORTAL', 1, 'informe.pdf', $sha, 'PENDING'],
+            ['Informe final v1', 'Entregable', 'PORTAL', 1, 'informe.pdf', $sha, 'CLEAN'],
             [$attached['document']['title'], $attached['document']['category'], $attached['document']['visibility'], $attached['document']['version'],
                 $attached['document']['file_name'], $attached['document']['sha256'], $attached['document']['antivirus_status']],
         );

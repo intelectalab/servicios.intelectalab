@@ -71,7 +71,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/tickets", label: "Tickets y SLA", module: "SOPORTE", requiredPermission: "tickets.view", icon: LifeBuoy, superModule: "Soporte" },
   { href: "/warranty-claims", label: "Garantías", module: "SOPORTE", requiredPermission: "warranty.view", icon: Shield, superModule: "Soporte" },
 
-  { label: "Documentos", icon: Folder, superModule: "Control", soon: true },
+  { href: "/documents", label: "Documentos", module: "DOCUMENTOS", requiredPermission: "documents.view", icon: Folder, superModule: "Control" },
   { label: "Credential Vault", icon: KeyRound, superModule: "Control", soon: true },
   { label: "Integraciones", icon: Plug, superModule: "Control", soon: true },
   { label: "Workflows", icon: Workflow, superModule: "Control", soon: true },

@@ -56,6 +56,7 @@ class ListExport
         'api/v1/budgets/execution' => 'budgets',
         'api/v1/tickets' => 'tickets',
         'api/v1/warranty-claims' => 'warranty',
+        'api/v1/documents' => 'documents',
         'api/v1/users' => 'users',
         'api/v1/audit' => 'audit',
     ];

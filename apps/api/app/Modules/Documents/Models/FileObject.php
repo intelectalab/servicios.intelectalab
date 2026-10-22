@@ -16,10 +16,10 @@ class FileObject extends Model
     protected $fillable = [
         'tenant_id', 'storage_provider', 'bucket', 'object_key',
         'original_name', 'mime_type', 'size_bytes', 'sha256',
-        'encrypted', 'antivirus_status',
+        'encrypted', 'antivirus_status', 'antivirus_engine', 'scanned_at',
     ];
 
-    protected $casts = ['encrypted' => 'boolean'];
+    protected $casts = ['encrypted' => 'boolean', 'scanned_at' => 'datetime'];
 
     protected static function boot()
     {

@@ -19,6 +19,7 @@ import { SortableBoard } from "@/components/ui/sortable-cards";
 import { PriorityTag } from "@/components/dashboard/support/SupportParts";
 import { ActorForm } from "./ActorForm";
 import { ContactForm } from "./ActorModals";
+import { DocumentDetailModal, DocumentStatusBadge } from "@/components/dashboard/documents/DocumentModals";
 import type { ActorContact, ActorDetail as Actor } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
 import type { TicketPriority } from "@/types/support";
@@ -74,7 +75,8 @@ const TICKET_COLUMNS: Column<Row<"tickets">>[] = [
 const DOCUMENT_COLUMNS: Column<Row<"documents">>[] = [
   { label: "Documento", render: (row) => <strong className="font-semibold">{row.title}</strong> },
   { label: "Categoría", render: (row) => row.category },
-  { label: "Estado", render: (row) => raw(row.status) },
+  { label: "Versión", render: (row) => `v${row.version}` },
+  { label: "Estado", render: (row) => <DocumentStatusBadge status={row.status} /> },
 ];
 
 const LEAD_COLUMNS: Column<Row<"leads">>[] = [
@@ -136,6 +138,7 @@ export default function ActorDetail() {
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [tab, setTab] = useState("resumen");
+  const [openDocument, setOpenDocument] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   // Contacto que se agrega ("new"), se edita o se va a quitar; y edición de las condiciones de cliente.
@@ -480,7 +483,9 @@ export default function ActorDetail() {
       {tab === "operaciones" && <Listing title="Órdenes de trabajo" permission="work_orders.view" cols={WORK_ORDER_COLUMNS} rows={actor.work_orders} onRowClick={(row) => router.push(`/work-orders/${row.id}`)} />}
       {tab === "finanzas" && <Listing title="Comprobantes" permission="billing.view" cols={INVOICE_COLUMNS} rows={actor.invoices} onRowClick={(row) => router.push(`/invoices/${row.id}`)} />}
       {tab === "soporte" && <Listing title="Tickets" permission="tickets.view" cols={TICKET_COLUMNS} rows={actor.tickets} />}
-      {tab === "documentos" && <Listing title="Documentos vinculados" cols={DOCUMENT_COLUMNS} rows={actor.documents} />}
+      {tab === "documentos" && (
+        <Listing title="Documentos vinculados" permission="documents.view" cols={DOCUMENT_COLUMNS} rows={actor.documents} onRowClick={(row) => setOpenDocument(row.id)} />
+      )}
       {tab === "crm" && (
         <>
           <Listing title="Oportunidades" permission="opportunities.view" cols={OPPORTUNITY_COLUMNS} rows={actor.opportunities} onRowClick={(row) => router.push(`/crm/opportunities/${row.id}`)} />
@@ -549,6 +554,9 @@ export default function ActorDetail() {
           }}
           onOpenExisting={(otherId) => router.push(`/actors/${otherId}`)}
         />
+      )}
+      {openDocument && (
+        <DocumentDetailModal documentId={openDocument} toast={toast} onClose={() => setOpenDocument(null)} onChanged={() => setReload((n) => n + 1)} />
       )}
       {toasts}
     </Screen>

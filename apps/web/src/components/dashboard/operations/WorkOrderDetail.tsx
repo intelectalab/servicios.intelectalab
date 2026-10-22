@@ -21,6 +21,8 @@ import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import { TimeEntryFormModal } from "@/components/dashboard/operations/ProjectModals";
 import { AssignWorkOrderModal, WorkOrderFormModal } from "@/components/dashboard/operations/WorkOrderModals";
 import { PriorityChip } from "@/components/dashboard/operations/WorkOrdersList";
+import { DocumentDetailModal, DocumentStatusBadge, DocumentUploadModal, useRecordDocuments } from "@/components/dashboard/documents/DocumentModals";
+import { shortSha } from "@/lib/documents";
 import type { ChecklistItem, TimeEntryOptions, WorkOrderDetail as WorkOrder, WorkOrderOptions } from "@/types/operations";
 
 const LINK = "text-[color:var(--p-brand-text)] hover:underline";
@@ -47,6 +49,9 @@ export default function WorkOrderDetail() {
   const [note, setNote] = useState("");
   const [logging, setLogging] = useState(false);
   const [timeOptions, setTimeOptions] = useState<TimeEntryOptions | null>(null);
+  const [attaching, setAttaching] = useState(false);
+  const [openDocument, setOpenDocument] = useState<string | null>(null);
+  const evidences = useRecordDocuments("WorkOrder", id, order?.lock_version);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -340,9 +345,27 @@ export default function WorkOrderDetail() {
             id: "evidence",
             node: (
               <Card title="Evidencias">
-                <p className="app-muted mb-3">Sin evidencias.</p>
-                {/* Aún sin función: depende de la pantalla Documentos. */}
-                <Btn variant="secondary" size="sm" onClick={() => toast("Subir evidencias aún no está disponible: llegará con Documentos.", "warning")}>
+                {evidences.rows?.length ? (
+                  <ul className="mb-3 grid gap-2">
+                    {evidences.rows.map((document) => (
+                      <li key={document.id} className="flex items-start gap-2">
+                        <FileText size={16} className="mt-0.5 shrink-0 text-[color:var(--p-brand)]" aria-hidden="true" />
+                        <div className="min-w-0">
+                          <span className="inline-flex flex-wrap items-center gap-1.5">
+                            <button type="button" onClick={() => setOpenDocument(document.id)} className="cursor-pointer text-left font-semibold hover:underline">
+                              {document.title}
+                            </button>
+                            <DocumentStatusBadge status={document.status} />
+                          </span>
+                          <small className="app-muted block text-xs">v{document.version}{document.file ? ` · SHA-256 ${shortSha(document.file.sha256, 12)}` : ""}</small>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="app-muted mb-3">Sin evidencias.</p>
+                )}
+                <Btn variant="secondary" size="sm" onClick={() => setAttaching(true)} permission="documents.create">
                   <Upload size={14} />
                   <span>Subir evidencia</span>
                 </Btn>
@@ -500,6 +523,18 @@ export default function WorkOrderDetail() {
             </Field>
           </div>
         </Modal>
+      )}
+      {attaching && (
+        <DocumentUploadModal
+          fixedLink={{ type: "WorkOrder", id: order.id, label: order.code, customer: Boolean(order.customer) }}
+          defaultCategory="Evidencia"
+          toast={toast}
+          onClose={() => setAttaching(false)}
+          onUploaded={evidences.refresh}
+        />
+      )}
+      {openDocument && (
+        <DocumentDetailModal documentId={openDocument} toast={toast} onClose={() => setOpenDocument(null)} onChanged={evidences.refresh} />
       )}
       {toasts}
     </Screen>

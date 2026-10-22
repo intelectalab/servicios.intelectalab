@@ -14,6 +14,8 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\Supplier;
 use App\Modules\Crm\Models\CrmLead;
+use App\Modules\Documents\Models\Document;
+use App\Modules\Documents\Support\DocumentAccess;
 use App\Modules\Finance\Models\Invoice;
 use App\Modules\Finance\Models\Receivable;
 use App\Modules\Crm\Models\CrmOpportunity;
@@ -610,8 +612,14 @@ class PartyController extends Controller
             // Por su modelo, para respetar el alcance del rol.
             'tickets' => $ofCustomerInScope(SupportTicket::class, 'tickets.view')->orderByDesc('opened_at')->limit(100)
                 ->get(['id', 'ticket_number', 'subject', 'priority', 'status']),
-            // Los documentos aún no se enlazan a una identidad.
-            'documents' => [],
+            // Los suyos y los de sus contratos, proyectos y órdenes que el rol alcanza.
+            'documents' => $can('documents.view')
+                ? DocumentAccess::forRecord('Party', $party->id)->with('latestVersion')->orderByDesc('documents.updated_at')->limit(100)->get()
+                    ->map(fn (Document $document) => [
+                        'id' => $document->id, 'title' => $document->title, 'category' => $document->document_type,
+                        'version' => (int) ($document->latestVersion?->version ?? 0), 'status' => $document->status, 'visibility' => $document->visibility,
+                    ])
+                : [],
             // Leads y oportunidades: por sus modelos, para respetar el alcance del rol.
             'leads' => CrmLead::query()->where('party_id', $party->id)
                 ->when(! $can('leads.view'), fn ($query) => $query->whereRaw('false'))->orderByDesc('created_at')->limit(100)

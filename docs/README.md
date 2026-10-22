@@ -10,6 +10,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | [criterios.md](criterios.md) | Las reglas con las que se adapta cada pantalla y la paleta del logo. |
 | [decisiones-y-pendientes.md](decisiones-y-pendientes.md) | Decisiones que no se deducen del código y lo que quedó pendiente. |
 | [comparacion-con-el-kit.md](comparacion-con-el-kit.md) | Comparación del sistema con el kit de desarrollo recibido (que se usa como guía): qué cumple, qué no y qué choca con decisiones ya tomadas. |
+| [propuesta-antivirus.md](propuesta-antivirus.md) | Opciones de antivirus real para los archivos (para revisar con quien administra el VPS) y la recomendada. |
 | [cambios/](cambios/) | Un archivo por tanda de trabajo: qué se tocó, por qué y cómo se probó. |
 
 ## Registro de cambios
@@ -78,6 +79,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-21 | VPS: PHP 8.3 → 8.3.36 y 8.4 → 8.4.27 por PHP2Shell, con respaldo y cómo volver atrás | [cambios/2026-10-21_actualizacion-php-php2shell.md](cambios/2026-10-21_actualizacion-php-php2shell.md) | [cambios/2026-10-20_despliegue-en-el-vps.md](cambios/2026-10-20_despliegue-en-el-vps.md) |
 | 2026-10-22 | Documentos en el disco del servidor (`DOCUMENTS_DRIVER=local`) con descarga por enlace firmado; los 8 archivos pasados al VPS | [cambios/2026-10-22_documentos-en-el-disco-del-servidor.md](cambios/2026-10-22_documentos-en-el-disco-del-servidor.md) |
 | 2026-10-22 | Portal de clientes: entrada con invitación y verificación, las 9 secciones del prototipo, roles del portal, solicitudes por bandeja o CRM, y Administración → Usuarios del portal con avisos | [cambios/2026-10-22_portal-de-clientes.md](cambios/2026-10-22_portal-de-clientes.md) |
+| 2026-10-22 | Documentos (Control): subir con vínculo, versiones, antivirus simulado con cuarentena, enlace temporal, visible en el portal; conectados Adjuntar documento del contrato, Evidencias de la OT y la pestaña Documentos del cliente | [cambios/2026-10-22_documentos.md](cambios/2026-10-22_documentos.md) |
 
 ## Cómo se escribe cada entrada
 

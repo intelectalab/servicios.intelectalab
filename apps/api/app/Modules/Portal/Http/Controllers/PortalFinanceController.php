@@ -228,7 +228,10 @@ class PortalFinanceController extends Controller
     private function visibleDocuments(string $customerId)
     {
         $projects = DB::table('projects')->where('customer_id', $customerId)->pluck('id');
-        $contracts = DB::table('contracts')->where('customer_id', $customerId)->where('status', '!=', 'DRAFT')->pluck('id');
+        // Los contratos que el cliente ve en su portal: no borradores, salvo los ya firmados.
+        $contracts = PortalContracts::visible($customerId)->pluck('id');
+        $workOrders = DB::table('work_orders')->where('customer_id', $customerId)->pluck('id');
+        $partyId = DB::table('customers')->where('id', $customerId)->value('party_id');
         $latest = fn ($query) => $query->select('document_id', DB::raw('max(version) AS versions'), DB::raw('max(created_at) AS updated_at'))
             ->from('document_versions')->groupBy('document_id');
 
@@ -243,15 +246,17 @@ class PortalFinanceController extends Controller
             ->map(fn ($row) => ['id' => $row->id, 'title' => $row->title, 'category' => 'Entregable', 'source' => $row->source,
                 'versions' => (int) $row->versions, 'updated_at' => Carbon::parse($row->updated_at)->toIso8601String()]);
 
-        // Documentos marcados como visibles en el portal y vinculados al cliente, a un contrato o a un proyecto suyo.
+        // Documentos marcados como visibles en el portal y vinculados al cliente o a un contrato, proyecto u orden suyos.
         $shared = DB::table('documents')
             ->joinSub($latest(DB::query()), 'v', 'v.document_id', '=', 'documents.id')
             ->where('documents.visibility', 'PORTAL')->where('documents.status', 'ACTIVE')
             ->whereExists(fn ($query) => $query->from('document_links')->whereColumn('document_links.document_id', 'documents.id')
                 ->where(fn ($link) => $link
                     ->where(fn ($q) => $q->where('entity_type', 'Customer')->where('entity_id', $customerId))
+                    ->orWhere(fn ($q) => $q->where('entity_type', 'Party')->where('entity_id', $partyId))
                     ->orWhere(fn ($q) => $q->where('entity_type', 'Contract')->whereIn('entity_id', $contracts))
-                    ->orWhere(fn ($q) => $q->where('entity_type', 'Project')->whereIn('entity_id', $projects))))
+                    ->orWhere(fn ($q) => $q->where('entity_type', 'Project')->whereIn('entity_id', $projects))
+                    ->orWhere(fn ($q) => $q->where('entity_type', 'WorkOrder')->whereIn('entity_id', $workOrders))))
             ->get(['documents.id', 'documents.title', 'documents.document_type', 'v.versions', 'v.updated_at'])
             ->map(fn ($row) => ['id' => $row->id, 'title' => $row->title, 'category' => $row->document_type, 'source' => null,
                 'versions' => (int) $row->versions, 'updated_at' => Carbon::parse($row->updated_at)->toIso8601String()]);

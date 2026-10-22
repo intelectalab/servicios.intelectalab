@@ -167,6 +167,8 @@ export interface DeliverableDocument {
   size_bytes: number;
   sha256: string;
   antivirus_status: "PENDING" | "CLEAN" | "INFECTED" | "FAILED";
+  /** Motor que lo analizó: "SIMULATED" mientras no haya uno real. */
+  antivirus_engine: string | null;
 }
 
 export interface ProjectDetail extends Project {

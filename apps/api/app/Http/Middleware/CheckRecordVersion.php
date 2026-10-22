@@ -74,6 +74,7 @@ class CheckRecordVersion
         'account' => 'acc_accounts',
         'ticket' => 'support_tickets',
         'claim' => 'warranty_claims',
+        'document' => 'documents',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */

@@ -491,13 +491,21 @@ Route::prefix('v1')->group(function () {
             Route::post('/resources/{resource}/assign', [ResourceController::class, 'assign']);
         });
 
-        // Documentos
+        // Documentos (Control → Documentos y la tarjeta de documentos de cada ficha)
         Route::middleware('permission:documents.view')->group(function () {
             Route::get('/documents', [DocumentController::class, 'index']);
+            Route::get('/documents/options', [DocumentController::class, 'options']);
             Route::get('/documents/{document}', [DocumentController::class, 'show']);
             Route::get('/documents/{document}/download-url', [DocumentController::class, 'downloadUrl']);
         });
-        Route::middleware('permission:documents.manage')->post('/documents', [DocumentController::class, 'store']);
+        Route::middleware('permission:documents.create')->group(function () {
+            Route::post('/documents', [DocumentController::class, 'store']);
+            Route::post('/documents/{document}/versions', [DocumentController::class, 'storeVersion']);
+        });
+        Route::middleware('permission:documents.manage')->group(function () {
+            Route::put('/documents/{document}', [DocumentController::class, 'update']);
+            Route::post('/documents/{document}/archive', [DocumentController::class, 'archive']);
+        });
 
         // Finanzas: eventos facturables y comprobantes (sin envío a SUNAT todavía)
         Route::middleware('permission:billing.view')->group(function () {
@@ -915,7 +923,8 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('portal.section:documents')->group(function () {
             Route::get('/documents', [PortalFinanceController::class, 'documents']);
-            Route::post('/documents/{document}/temporary-url', [PortalFinanceController::class, 'documentUrl']);
+            // {file}, no {document}: descargar no cambia la versión del documento que se edita en el sistema.
+            Route::post('/documents/{file}/temporary-url', [PortalFinanceController::class, 'documentUrl']);
         });
         Route::middleware('portal.section:invoices')->group(function () {
             Route::get('/invoices', [PortalFinanceController::class, 'invoices']);

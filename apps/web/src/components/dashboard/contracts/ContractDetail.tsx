@@ -15,6 +15,7 @@ import {
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import type { Contract, ContractedService, RecurringInstance, SignatureRequest } from "@/types/commercial";
 import { CompanySignModal, SendSignatureModal, SignatureSummary } from "./ContractSignature";
+import { DocumentDetailModal, DocumentStatusBadge, DocumentUploadModal, useRecordDocuments } from "@/components/dashboard/documents/DocumentModals";
 
 // Transiciones que piden confirmación; "reason" indica que el motivo es obligatorio.
 type Confirm = { path: string; title: string; text: string; confirmLabel: string; done: string; danger?: boolean; reason?: boolean };
@@ -171,6 +172,9 @@ export default function ContractDetail() {
   const [printing, setPrinting] = useState(false);
   const [signing, setSigning] = useState<"send" | "company" | null>(null);
   const [cancelling, setCancelling] = useState<SignatureRequest | null>(null);
+  const [attaching, setAttaching] = useState(false);
+  const [openDocument, setOpenDocument] = useState<string | null>(null);
+  const documents = useRecordDocuments("Contract", id);
 
   useEffect(() => {
     const flash = takeFlash();
@@ -368,8 +372,7 @@ export default function ContractDetail() {
                 Crear orden
               </Btn>
             )}
-            {/* Aún sin función: depende de la pantalla Documentos. */}
-            <Btn variant="ghost" onClick={() => toast("Adjuntar documentos aún no está disponible.", "warning")}>
+            <Btn variant="ghost" onClick={() => setAttaching(true)} permission="documents.create">
               <Upload size={16} />
               <span>Adjuntar documento</span>
             </Btn>
@@ -534,7 +537,22 @@ export default function ContractDetail() {
                         </span>
                       ) : "—",
                     ],
-                    ["Documentos", "—"],
+                    [
+                      "Documentos",
+                      documents.rows?.length ? (
+                        <span key="documents" className="grid gap-1">
+                          {documents.rows.map((document) => (
+                            <span key={document.id} className="inline-flex flex-wrap items-center gap-1.5">
+                              <button type="button" onClick={() => setOpenDocument(document.id)} className="cursor-pointer text-left text-[color:var(--p-brand-text)] hover:underline">
+                                {document.title}
+                              </button>
+                              <span className="app-muted text-xs">v{document.version}</span>
+                              {document.status !== "ACTIVE" && <DocumentStatusBadge status={document.status} />}
+                            </span>
+                          ))}
+                        </span>
+                      ) : "—",
+                    ],
                     ["Responsable", <Who key="owner" name={contract.creator?.name} />],
                   ]}
                 />
@@ -672,6 +690,18 @@ export default function ContractDetail() {
             </div>
           )}
         </Modal>
+      )}
+      {attaching && (
+        <DocumentUploadModal
+          fixedLink={{ type: "Contract", id: contract.id, label: `Contrato ${contract.contract_number}`, customer: true }}
+          defaultCategory="Contrato"
+          toast={toast}
+          onClose={() => setAttaching(false)}
+          onUploaded={documents.refresh}
+        />
+      )}
+      {openDocument && (
+        <DocumentDetailModal documentId={openDocument} toast={toast} onClose={() => setOpenDocument(null)} onChanged={documents.refresh} />
       )}
       {toasts}
     </Screen>

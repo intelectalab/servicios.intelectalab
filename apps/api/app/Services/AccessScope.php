@@ -47,6 +47,7 @@ class AccessScope
         'budgets' => 'Centros de costo y presupuestos',
         'tickets' => 'Tickets',
         'warranty' => 'Garantías',
+        'documents' => 'Documentos',
     ];
 
     /** De menor a mayor alcance. */
@@ -169,6 +170,8 @@ class AccessScope
             // Un reclamo de garantía, de quien lo registró y de quien atiende su ticket.
             'warranty' => $query->whereIn("{$table}.created_by", $owners)
                 ->orWhereIn("{$table}.ticket_id", fn ($sub) => $sub->select('id')->from('support_tickets')->whereIn('assigned_user_id', $owners)),
+            // Un documento, de quien lo subió.
+            'documents' => $query->whereIn("{$table}.created_by", $owners),
         };
     }
 
