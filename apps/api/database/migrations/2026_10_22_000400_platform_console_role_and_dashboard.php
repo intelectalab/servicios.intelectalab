@@ -9,20 +9,29 @@ return new class extends Migration
     // miembro de erp_platform). No lee tablas de negocio: solo ejecuta
     // platform_dashboard(), que devuelve totales de plataforma (empresas,
     // suscripciones, uso en conteos y salud), y escribe en platform_audit_logs.
-    // Debe correrse como erp_user (dueño de las tablas). La contraseña del
-    // usuario sale de DB_PLATFORM_PASSWORD; sin ella se crea solo el rol de
-    // grupo y la consola responde 503 hasta que exista el usuario.
+    // Debe correrse como erp_user (dueño de las tablas). Los dos roles los crea
+    // la migración solo si quien la corre puede crear roles (en la PC, el
+    // dueño del contenedor). En un servidor donde erp_user no puede (el VPS),
+    // los crea antes el administrador de PostgreSQL; ver
+    // docs/cambios/2026-10-22_panel-consola-de-plataforma.md. La contraseña del
+    // usuario sale de DB_PLATFORM_PASSWORD; sin el usuario, la consola
+    // responde 503.
     public function up(): void
     {
-        DB::statement("
-            DO \$\$
-            BEGIN
-                IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'erp_platform') THEN
-                    CREATE ROLE erp_platform NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
-                END IF;
-            END
-            \$\$
-        ");
+        $canManageRoles = (bool) DB::selectOne(
+            'SELECT (rolsuper OR rolcreaterole) AS can FROM pg_roles WHERE rolname = current_user'
+        )->can;
+        $groupExists = (bool) DB::selectOne("SELECT 1 AS x FROM pg_roles WHERE rolname = 'erp_platform'");
+
+        if (! $groupExists && ! $canManageRoles) {
+            throw new RuntimeException(
+                'Falta el rol erp_platform y este usuario no puede crearlo. Créalo como administrador de PostgreSQL '
+                .'(CREATE ROLE erp_platform NOLOGIN; y el usuario erp_console dentro de él) y vuelve a migrar.'
+            );
+        }
+        if (! $groupExists) {
+            DB::statement('CREATE ROLE erp_platform NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS');
+        }
 
         $user = env('DB_PLATFORM_USERNAME', 'erp_console');
         $password = env('DB_PLATFORM_PASSWORD');
@@ -30,7 +39,7 @@ return new class extends Migration
             throw new RuntimeException('DB_PLATFORM_USERNAME no es un nombre de rol válido.');
         }
 
-        if ($password) {
+        if ($password && $canManageRoles) {
             $quoted = DB::getPdo()->quote($password);
             $exists = DB::selectOne('SELECT 1 AS x FROM pg_roles WHERE rolname = ?', [$user]);
             DB::statement($exists

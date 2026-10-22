@@ -65,9 +65,25 @@ Archivos API: migración nueva, `config/database.php`, `.env.example` (`DB_PLATF
 - La prueba Enterprise de "Empresa Ejemplo SAC" venció el 13 de octubre y sigue marcada ACTIVE en la base: sale como "Vencida hace 10 días".
 - 12 usuarios activos, 3 del portal y 1 archivo en cuarentena.
 
+## En el VPS (2026-10-23)
+
+Solo se tocó este ERP: su `.env` y su PostgreSQL, que solo tiene la base `erp_saas`.
+
+1. Se añadieron `DB_PLATFORM_USERNAME` y `DB_PLATFORM_PASSWORD` (clave al azar de 32 caracteres) en `apps/api/.env`. Respaldo y forma de volver atrás: `/root/backups/erp_console_env_20261023_015619/LEEME.txt`.
+2. El primer despliegue se detuvo en la migración: allí `erp_user` no puede crear roles (en la PC sí, porque es el dueño del contenedor). No quedó nada a medias y el sitio siguió funcionando. Se cambió la migración para que solo cree los roles si quien la corre puede hacerlo; si faltan, se detiene con un mensaje que dice cómo crearlos.
+3. Los roles se crearon como administrador de PostgreSQL, sin login para `erp_platform` y sin superusuario ni BYPASSRLS para ninguno:
+
+   ```
+   CREATE ROLE erp_platform NOLOGIN;
+   CREATE ROLE erp_console LOGIN PASSWORD '<la del .env>';
+   GRANT erp_platform TO erp_console;
+   GRANT CONNECT ON DATABASE erp_saas TO erp_console;
+   ```
+4. Después se volvió a desplegar con `deploy.sh`.
+
 ## Pendiente
 
-- **VPS:** antes de desplegar, poner `DB_PLATFORM_PASSWORD` en `apps/api/.env` del servidor (`deploy.sh` corre la migración como dueño de la base, y esta crea ahí el usuario `erp_console`). Sin la variable, la migración no falla, pero el panel responde 503.
+- (Hecho el 2026-10-23, ver "En el VPS").
 - Una tarea que pase a vencidas las suscripciones de prueba cuyo plazo terminó (hoy siguen ACTIVE).
 - Los indicadores de Planes SaaS cuentan mal: "Tenants activos" es el total y el ingreso suma las pruebas (S/ 646 contra S/ 0 del panel). Se pueden sacar del mismo cálculo del panel.
 - Tenants y Suscripciones siguen en construcción. Cuando existan, un clic en una fila del panel abrirá la ficha de la empresa. Esas pantallas, y Planes, deberían pasar también al usuario de la consola: hoy leen con `erp_app` y las funciones `superadmin_*`.
