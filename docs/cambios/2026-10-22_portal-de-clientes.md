@@ -97,6 +97,7 @@ Kit: RN-COM-09 y RN-COM-13 (fase 3); prototipo: ficha del contrato y Portal → 
 - Base: `2026_10_22_000200_contract_signatures` (tablas `contract_signature_requests` y `contract_signature_signers`, `contracts.signature_status`). API: `Services/Support/ContractSignatures`, `ContractSignatureController`, rutas del portal `/portal/signatures…`, correos `ContractSignatureMail` y `ContractSignatureCodeMail`. Web: `contracts/ContractSignature.tsx`, `portal/PortalSignatures.tsx`. Pruebas: `ContractSignatureTest` (3).
 - Probado en el navegador (con `MAIL_MAILER=log` mientras probaba, devuelto a `smtp`): CTR-2026-0007 (desde COT-2026-0014, de Minera) enviado a firma, firmado por la empresa con su código, firmado por Rosa en el portal (nombre equivocado → aviso; correcto → Firmada), ficha con las dos evidencias e historial. El contrato quedó en borrador y firmado, listo para activarse.
 - **PDF del contrato firmado:** con la solicitud firmada por las dos partes, "Descargar PDF" ya no lleva la marca BORRADOR (aunque el contrato siga en borrador hasta activarlo); bajo cada línea de firma va quién firmó, cuándo, "código verificado", la IP y su evidencia, y una nota "Firma electrónica" con la fecha y la huella completa. Revisado abierto con CTR-2026-0007.
+- **Sello visual de la firma** (pedido después): sobre cada línea de firma firmada, un recuadro con un check, "FIRMADO ELECTRÓNICAMENTE" y el nombre de quien firmó en letra manuscrita (Great Vibes, licencia libre OFL, en `apps/web/public/fonts/` con su licencia; descargada del repositorio oficial de Google Fonts con tu permiso). La letra se carga solo al generar un PDF con firmas y solo se incluyen sus caracteres usados (el PDF de CTR-2026-0007 pesa 71 KB). Sin la letra (sin conexión) sale en cursiva normal. Es solo visual: la validez la dan el código, la huella y la evidencia.
 - Pendiente: aviso al ejecutivo cuando el cliente rechaza (Notificaciones); proveedor acreditado si se decide.
 
 ## Solicitudes por la ruta CRM
@@ -129,6 +130,10 @@ Con el módulo CRM, la solicitud (y la renovación) crea una oportunidad en la p
 ## Datos de prueba que quedaron en Tenant A
 
 Cuenta del portal de Rosa Quispe (Portal Admin de Minera) e invitación pendiente de Luis Rojas (Portal Finanzas); COT-2026-0013 (enviada) y 0014 (aprobada desde el portal), 0015 (borrador, desde OP-2026-0007); SOL-2026-0004 (renovación, en CRM) y 0005 (cotizada); OP-2026-0006 y 0007; TKT-2026-0009; dos avisos vigentes; el entregable "Informe de prueba (prueba)" de PRY-2026-0003, aprobado.
+
+## En el VPS (2026-10-22)
+
+Desplegado `a61323e` con `deploy.sh` (respaldo `/root/backups/erp/20261022_203718_antes_deploy_8e21ed7`): 87 archivos, las migraciones `2026_10_22_000100` y `000200` corridas, la web compilada y reiniciada. Solo se tocó este ERP. La migración activó el módulo Portal de clientes en las 7 empresas con suscripción vigente (Base, Profesional o Enterprise). Comprobado: los 7 sitios del servidor responden igual que antes (`estado.sh`); `/login` y `/portal/activate` 200, `/portal` sin sesión lleva al inicio de sesión, `/api/v1/me` y `/api/v1/portal/me` 401. En el VPS no hay cuentas del portal todavía (la de Rosa es solo de la PC).
 
 ## Pendiente
 

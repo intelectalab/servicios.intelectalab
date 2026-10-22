@@ -36,7 +36,30 @@ export type PdfDocument = {
   notes: [string, string][];
   /** Textos bajo las líneas de firma; recibe la razón social de la empresa. */
   signatures: (companyName: string) => string[];
+  /**
+   * Sello sobre cada línea de firma (en el mismo orden): nombre de quien firmó electrónicamente,
+   * o null si esa parte no firmó. Sin sellos, las líneas quedan en blanco.
+   */
+  stamps?: (string | null)[];
 };
+
+// Letra manuscrita del sello de firma (Great Vibes, licencia OFL, en public/fonts). Se carga una vez.
+const SCRIPT_FONT = "/fonts/GreatVibes-Regular.ttf";
+let scriptFont: Promise<string | null> | null = null;
+
+function loadScriptFont(): Promise<string | null> {
+  scriptFont ??= fetch(SCRIPT_FONT)
+    .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error("sin fuente"))))
+    .then((buffer) => {
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return btoa(binary);
+    })
+    // Sin la letra (sin conexión), el sello sale con cursiva normal.
+    .catch(() => { scriptFont = null; return null; });
+  return scriptFont;
+}
 
 /** La fuente del PDF no trae estos signos: se cambian por su equivalente simple. */
 const plain = (text: unknown) =>
@@ -180,15 +203,49 @@ export async function downloadDocumentPdf(spec: PdfDocument) {
 
   // Firmas.
   const signatures = spec.signatures(companyName);
-  if (y + 28 > 272) {
+  const stamped = spec.stamps?.some(Boolean) ?? false;
+  if (y + (stamped ? 56 : 28) > 272) {
     doc.addPage();
     y = 20;
   }
-  y += 16;
+  y += stamped ? 34 : 16;
   const gap = 10;
   const width = (PAGE_WIDTH - 2 * MARGIN - gap * (signatures.length - 1)) / signatures.length;
+  const script = stamped ? await loadScriptFont() : null;
+  if (script) {
+    doc.addFileToVFS("GreatVibes-Regular.ttf", script);
+    doc.addFont("GreatVibes-Regular.ttf", "GreatVibes", "normal");
+  }
   signatures.forEach((text, index) => {
     const x = MARGIN + index * (width + gap);
+    const stamp = spec.stamps?.[index];
+    if (stamp) {
+      // Sello: recuadro con el check y "Firmado electrónicamente", y el nombre en letra manuscrita.
+      const boxWidth = Math.min(width - 6, 74);
+      const left = x + (width - boxWidth) / 2;
+      const top = y - 27;
+      doc.setDrawColor(...BRAND);
+      doc.setLineWidth(0.35);
+      doc.roundedRect(left, top, boxWidth, 24, 2, 2);
+      doc.setFillColor(...BRAND);
+      doc.circle(left + 5.5, top + 5, 2.4, "F");
+      doc.setDrawColor(255);
+      doc.setLineWidth(0.55);
+      doc.line(left + 4.3, top + 5.1, left + 5.2, top + 6.1);
+      doc.line(left + 5.2, top + 6.1, left + 6.9, top + 3.9);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(...BRAND);
+      doc.text("FIRMADO ELECTRÓNICAMENTE", left + 9.5, top + 6);
+      doc.setTextColor(...INK);
+      if (script) doc.setFont("GreatVibes", "normal");
+      else doc.setFont("times", "italic");
+      let size = script ? 22 : 15;
+      doc.setFontSize(size);
+      while (size > 11 && doc.getTextWidth(plain(stamp)) > boxWidth - 8) doc.setFontSize(--size);
+      doc.text(plain(stamp), left + boxWidth / 2, top + 18.5, { align: "center" });
+      doc.setFont("helvetica", "normal");
+    }
     doc.setDrawColor(...MUTED);
     doc.setLineWidth(0.3);
     doc.line(x, y, x + width, y);

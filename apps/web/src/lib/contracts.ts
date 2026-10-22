@@ -108,5 +108,8 @@ export async function downloadContractPdf(contract: Contract) {
       `Por el cliente: ${customerName(contract.customer)}${evidence("CLIENTE")}`,
       `Por ${companyName}${evidence("EMPRESA")}`,
     ],
+    stamps: signature
+      ? (["CLIENTE", "EMPRESA"] as const).map((side) => signature.signers.find((item) => item.side === side && item.signed_at)?.name ?? null)
+      : undefined,
   });
 }
