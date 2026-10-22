@@ -52,7 +52,7 @@ export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { hom
     setAuthToken(data.token, data.user?.is_super_admin ? "platform" : data.user?.portal ? "portal" : "tenant", remember);
     // Cada cuenta a su consola: plataforma, portal de clientes o el sistema de la empresa.
     if (data.user?.is_super_admin) {
-      router.push("/superadmin/plans");
+      router.push("/superadmin/dashboard");
     } else if (data.user?.portal) {
       router.push("/portal");
     } else {

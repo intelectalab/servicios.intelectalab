@@ -17,7 +17,7 @@ const TENANT_HOME = "/actors";
 // Módulos desconectados: sus pantallas siguen en el repo, pero las reemplaza Clientes y actores.
 // Para reconectarlos, vaciar esta lista y devolver sus ítems al menú (AppShell.tsx).
 const RETIRED_PREFIXES = ["/customers", "/suppliers", "/employees"];
-const PLATFORM_HOME = "/superadmin/plans";
+const PLATFORM_HOME = "/superadmin/dashboard";
 
 // Dos dominios, como "midominio.com" (página pública) y "app.midominio.com" (el sistema).
 // Se activa al definir SITE_URL y APP_URL; sin ellas todo vive en un solo dominio.

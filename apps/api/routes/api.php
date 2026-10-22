@@ -873,8 +873,12 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::middleware(['auth:sanctum', 'super.admin'])->prefix('superadmin')->group(function () {
-        // Métricas del Dashboard global
+        // Indicadores de la pantalla Planes SaaS
         Route::get('/dashboard/metrics', [SuperAdminDashboardController::class, 'metrics']);
+
+        // Panel de la consola: solo totales de plataforma, leídos con el usuario de base de la consola.
+        Route::get('/dashboard', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformDashboardController::class, 'show']);
+        Route::post('/dashboard/exports', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformDashboardController::class, 'export'])->middleware('throttle:30,1,platform-export');
 
         // Gestión de Planes SaaS (CRUD completo)
         Route::get('/plans', [SaasPlanController::class, 'adminIndex']);

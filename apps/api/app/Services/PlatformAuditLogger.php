@@ -18,9 +18,11 @@ class PlatformAuditLogger
         ?string $entityId = null,
         ?array $beforeData = null,
         ?array $afterData = null,
-        array $metadata = []
+        array $metadata = [],
+        ?string $connection = null
     ): void {
-        DB::table('platform_audit_logs')->insert([
+        // $connection: 'pgsql_platform' desde la consola (usuario de base propio).
+        DB::connection($connection)->table('platform_audit_logs')->insert([
             'id' => (string) Str::uuid(),
             'user_id' => $userId,
             'action' => $action,

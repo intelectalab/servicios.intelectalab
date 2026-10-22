@@ -91,7 +91,10 @@ class SuperAdminTest extends TestCase
     public function test_plan_changes_are_recorded_in_the_platform_audit(): void
     {
         $superAdmin = $this->makeUser(true);
-        Sanctum::actingAs($superAdmin);
+        // La consola exige una sesión real que pasó la verificación en dos pasos.
+        $session = $superAdmin->createToken('api-token', ['*'], now()->addHour());
+        $session->accessToken->forceFill(['mfa' => true])->save();
+        $this->withToken($session->plainTextToken);
 
         $planId = $this->postJson('/api/v1/superadmin/plans', [
             'code' => 'TEST-'.Str::random(6),

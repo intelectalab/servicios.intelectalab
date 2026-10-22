@@ -231,6 +231,7 @@ Detalle en [cambios/2026-10-22_documentos.md](cambios/2026-10-22_documentos.md).
 - Sesiones de 8 h, o 30 días con "Recordarme". Se permiten varias sesiones a la vez. Cada sesión guarda desde qué navegador se abrió y si pasó la verificación en dos pasos; en Mi perfil la persona ve las suyas y puede cerrar las demás (2026-10-08, [cambios/2026-10-08_mi-perfil.md](cambios/2026-10-08_mi-perfil.md)).
 - 5 contraseñas incorrectas bloquean la cuenta 15 minutos.
 - El superadmin es `users.is_super_admin` (no un rol), no puede pertenecer a un tenant (triggers) y tiene auditoría propia en `platform_audit_logs`.
+- La consola de plataforma solo abre con un superadmin activo y una sesión que pasó la verificación en dos pasos. Su panel no muestra datos de negocio de las empresas: solo totales y conteos. Quedan auditados los accesos rechazados y las exportaciones; abrir el panel no (2026-10-22).
 
 ## Pendientes
 
@@ -243,7 +244,7 @@ Detalle en [cambios/2026-10-22_documentos.md](cambios/2026-10-22_documentos.md).
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
-- Separar la consola de plataforma en su propio usuario de base; cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
+- Consola de plataforma: el panel ya lee con su usuario de base (`erp_console`, desde el 2026-10-22, [cambios/2026-10-22_panel-consola-de-plataforma.md](cambios/2026-10-22_panel-consola-de-plataforma.md)); faltan Planes y Tenants, que aún usan `erp_app`. En el VPS hay que poner `DB_PLATFORM_PASSWORD` antes de desplegar. Las pruebas de suscripción vencidas siguen en ACTIVE. Cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
 - El drawer de planes (`SaasPlanDrawer.tsx`) tiene su lista de módulos escrita a mano y no coincide con `module_catalog`.
 - Auditoría: casi ningún movimiento guarda antes y después (solo el detalle); la entidad se muestra con su identificador, no con su número; falta decidir cuánto tiempo se conserva. El filtro "hoy" usa el día del servidor (UTC), como en los demás listados.
 - No hay página para la auditoría de plataforma (`GET /v1/superadmin/audit`), ni comando para crear superadmins, ni contador de notificaciones.

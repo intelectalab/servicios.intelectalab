@@ -80,6 +80,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-22 | Documentos en el disco del servidor (`DOCUMENTS_DRIVER=local`) con descarga por enlace firmado; los 8 archivos pasados al VPS | [cambios/2026-10-22_documentos-en-el-disco-del-servidor.md](cambios/2026-10-22_documentos-en-el-disco-del-servidor.md) |
 | 2026-10-22 | Portal de clientes: entrada con invitación y verificación, las 9 secciones del prototipo, roles del portal, solicitudes por bandeja o CRM, y Administración → Usuarios del portal con avisos | [cambios/2026-10-22_portal-de-clientes.md](cambios/2026-10-22_portal-de-clientes.md) |
 | 2026-10-22 | Documentos (Control): subir con vínculo, versiones, antivirus simulado con cuarentena, enlace temporal, visible en el portal; conectados Adjuntar documento del contrato, Evidencias de la OT y la pestaña Documentos del cliente | [cambios/2026-10-22_documentos.md](cambios/2026-10-22_documentos.md) |
+| 2026-10-22 | Panel de la consola de plataforma: totales de empresas, suscripciones, uso, salud y actividad; usuario de base propio (`erp_console`), acceso solo con 2FA y auditoría de exportaciones y accesos rechazados | [cambios/2026-10-22_panel-consola-de-plataforma.md](cambios/2026-10-22_panel-consola-de-plataforma.md) |
 
 ## Cómo se escribe cada entrada
 
