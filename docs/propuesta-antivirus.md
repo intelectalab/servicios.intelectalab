@@ -31,6 +31,10 @@ Falta **un antivirus real**. El sistema ya está preparado: el motor es una piez
 | **C** | **Servicio externo por API** (p. ej. VirusTotal) | Nada que instalar. | Sin carga en el VPS. | Los archivos de los clientes **saldrían a un tercero** (contratos, datos personales): no recomendable para un ERP. Las versiones gratuitas no permiten uso comercial. |
 | **D** | **Seguir con el simulado** | Nada. | Sin costo ni riesgo para el VPS. | No detecta nada real; solo quedan las otras protecciones (tipos, huella, enlace temporal). |
 
+## Memoria del VPS (medida)
+
+El 2026-10-23, al desplegar el módulo Documentos, el VPS tenía **7,8 GB de RAM en total y unos 6,1 GB disponibles** (`free -h`). Con eso, `clamd` (alrededor de 1 GB) parece caber holgado. Es una sola medición: conviene repetirla en un momento de más uso de los otros proyectos antes de decidir.
+
 ## Recomendación
 
 **Opción A (ClamAV con `clamd`)**, si el VPS tiene memoria libre suficiente.
