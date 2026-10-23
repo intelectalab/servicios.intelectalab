@@ -127,6 +127,21 @@ Los demás correos del sistema siguen con la marca de GSCreativas.
 - **Plantillas Excel de importación** (`SpreadsheetImport::templateBook`): el título, las notas y la cabecera usan el color de la empresa de la sesión; sin marca, los de siempre. Prueba nueva en `BrandingTest`.
 - **Probado en el navegador:** el portal de Rosa con la marca de prueba, en claro y oscuro, a 1366 y 375 px, sin desborde: inicio, cotización y Soporte. Al salir del portal, el sistema queda en azul. La marca de prueba se quitó al terminar.
 
+## En el VPS (2026-10-23)
+
+- Pediste commitear todo y desplegar. Tu commit `1729dd4` ("Arreglando modulos") ya traía la consola, el panel, las notificaciones y los botones; esto fue el commit `17038c2`. Los dos se subieron a GitHub.
+- `deploy.sh --si` (sin el `--si` se cancela solo cuando no hay terminal).
+  - Respaldo en `/root/backups/erp/20261023_072653_antes_deploy_8e1f1ce`, que es la vuelta atrás.
+  - Se corrieron las migraciones `2026_10_23_000100`, `000200`, `000300` y `000400`.
+  - Web compilada; solo se reinició `servicios-web`.
+  - Registro en `/root/backups/erp/deploy_20261023_marca.log`.
+- Comprobado después:
+  - Web y API responden, y las páginas y rutas nuevas existen (sin sesión llevan al inicio de sesión o piden sesión).
+  - La tabla `company_branding` existe, el catálogo tiene 15 módulos y `notifications.read_at` está.
+  - GD está activo en PHP 8.4.
+  - Los procesos de pm2 de los otros proyectos siguen en línea.
+- No se probó con una cuenta real del VPS, porque las contraseñas no estaban en la sesión.
+
 ## Pendiente
 
-- Correr las migraciones en el VPS: `2026_10_23_000300` (notificaciones) y `000400` (marca). Necesita commitear y desplegar, y espera tu permiso.
+- Que el Administrador de cada empresa suba su logo en Configuración → Marca de la empresa.
