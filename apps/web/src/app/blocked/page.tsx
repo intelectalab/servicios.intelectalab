@@ -47,7 +47,7 @@ function BlockedContent() {
 
   function apply(result: ProbeResult) {
     if (result === "active") {
-      router.replace("/actors");
+      router.replace("/dashboard");
       return;
     }
     if (result.status) setStatus(result.status);

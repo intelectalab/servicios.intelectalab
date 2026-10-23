@@ -85,12 +85,28 @@ class AccessScope
     /** Restringe la consulta a lo que la persona alcanza de ese recurso. */
     public static function apply(Builder $query, string $resource): void
     {
-        $scope = self::current($resource);
-        if ($scope === null || $scope === 'TENANT') {
+        $context = self::context();
+        if ($context) {
+            self::restrict($query, $resource, $context);
+        }
+    }
+
+    /**
+     * Lo mismo, con el alcance de otra persona de la empresa: para decidir a quién le llega un
+     * aviso sobre un registro (solo a quien lo vería en su pantalla).
+     */
+    public static function applyFor(Builder $query, string $resource, string $tenantId, string $userId): void
+    {
+        self::restrict($query, $resource, self::resolve($tenantId, $userId));
+    }
+
+    private static function restrict(Builder $query, string $resource, array $context): void
+    {
+        $scope = $context['scopes'][$resource] ?? self::DEFAULT;
+        if ($scope === 'TENANT') {
             return;
         }
 
-        $context = self::context();
         $table = $query->getModel()->getTable();
         $owners = $scope === 'TEAM' ? $context['team_user_ids'] : [$context['user_id']];
 

@@ -17,6 +17,7 @@ use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -192,7 +193,11 @@ class PurchaseOrderController extends Controller
         if (! PurchaseOrderItem::where('purchase_order_id', $order->id)->exists()) {
             throw ValidationException::withMessages(['status' => ['La orden de compra necesita al menos una línea.']]);
         }
-        DB::transaction(fn () => $this->move($request, $order, 'SUBMITTED', 'purchase_order.submit'));
+        DB::transaction(function () use ($request, $order) {
+            $this->move($request, $order, 'SUBMITTED', 'purchase_order.submit');
+            Notifier::send('purchase_order.submitted', 'Orden de compra por aprobar', "{$order->order_number} · ".Notifier::money($order->total, $order->currency),
+                "/purchase-orders/{$order->id}", array_diff(Notifier::withPermission('purchases.approve', $order), [$order->created_by]));
+        });
 
         return response()->json($this->detail($order, $request));
     }

@@ -20,7 +20,7 @@ class FinanceRecurringTest extends TestCase
     use DatabaseTransactions;
     use OperationsFixtures;
 
-    private const MODULES = ['ORDENES_TRABAJO', 'CONTRATOS', 'FINANZAS'];
+    private const MODULES = ['ORDENES_TRABAJO', 'CONTRATOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD'];
 
     private const FINANCE = ['recurring.view', 'recurring.create', 'recurring.manage', 'recurring.export', 'billing.view', 'contracts.view', 'contracted_services.view'];
 

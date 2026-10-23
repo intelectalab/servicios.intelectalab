@@ -6,7 +6,8 @@ import { Lock, Plus } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { SCOPE_LABELS, useAccess, type Scope } from "@/lib/access-context";
 import { PickSelect } from "@/components/ui/pick-select";
-import { Btn, Card, Chip, Field, INPUT, LoadError, Modal, Notice, PageHead, Screen, TD, TH, deniedText, useToasts } from "@/components/ui/proto";
+import { exportCsv, exportXlsx, recordExport, type ExportColumn } from "@/lib/export-table";
+import { Btn, Card, Chip, ExportButtons, Field, INPUT, LoadError, Modal, Notice, PageHead, Screen, TD, TH, deniedText, useToasts } from "@/components/ui/proto";
 
 type Role = {
   id: string;
@@ -220,6 +221,37 @@ export default function RolesPermissions() {
   const actions = Object.keys(ACTIONS).filter((action) => resources.some((resource) => codes.has(`${resource}.${action}`)));
   // Recursos cuyo alcance se elige (en los demás, quien tiene el permiso ve toda la empresa).
   const scoped = new Set(data?.scope_resources.map((resource) => resource.code));
+  const [exporting, setExporting] = useState(false);
+
+  /** Exporta la matriz del rol abierto (un recurso por fila): pide `users.export` y queda en auditoría. */
+  async function runExport(format: "xlsx" | "csv") {
+    if (!role) return;
+    const columns: ExportColumn<string>[] = [
+      { label: "Recurso", value: (resource) => RESOURCES[resource] ?? resource, width: 30 },
+      ...actions.map((action): ExportColumn<string> => ({
+        label: ACTIONS[action],
+        value: (resource) => (codes.has(`${resource}.${action}`) ? (role.permissions.includes(`${resource}.${action}`) ? "Sí" : "No") : "—"),
+        width: 12, kind: "center",
+      })),
+      {
+        label: "Alcance",
+        value: (resource) => (scoped.has(resource) ? SCOPE_LABELS[(role.scopes[resource] ?? "OWN") as Scope] : SCOPE_LABELS.TENANT),
+        width: 18,
+      },
+    ];
+    setExporting(true);
+    try {
+      await recordExport("users", format, resources.length, true);
+      const name = `permisos-${role.name.toLowerCase().replace(/[^a-z0-9]+/gi, "-")}`;
+      if (format === "xlsx") await exportXlsx(name, `Permisos · ${role.name}`, columns, resources);
+      else exportCsv(name, columns, resources);
+      toast(`${resources.length} ${resources.length === 1 ? "fila exportada" : "filas exportadas"}`);
+    } catch {
+      toast("No se pudo exportar la matriz.", "danger");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   /** Marca o desmarca un permiso y lo guarda al instante, como el prototipo. */
   async function toggle(code: string, on: boolean) {
@@ -382,7 +414,14 @@ export default function RolesPermissions() {
           {customer && <CustomerRoleCard customer={customer} actions={actions} />}
 
           {role && (
-            <Card title={role.name}>
+            <Card
+              title={role.name}
+              actions={!can("users.manage") ? (
+                <span title={deniedText("users.manage")}>
+                  <Chip tone="neutral"><Lock size={11} className="mr-1" aria-hidden="true" />Solo lectura</Chip>
+                </span>
+              ) : undefined}
+            >
               {role.description && <p className="app-muted mb-2 text-[12.5px]">{role.description}</p>}
               <div className="proto-tbl-wrap -mx-3 overflow-x-auto sm:-mx-5">
                 <table className="proto-tbl w-full border-collapse text-[13px]">
@@ -451,6 +490,9 @@ export default function RolesPermissions() {
                   </tbody>
                 </table>
               </div>
+              <div className="-mx-3 border-t border-[color:var(--app-border)] px-3 pt-2.5 sm:-mx-5 sm:px-5">
+                <ExportButtons permission="users.export" total={resources.length} busy={exporting} onExport={runExport} />
+              </div>
               <p className="app-muted mt-3 text-[12.5px]">
                 El alcance decide qué registros ve el rol: los propios, los de su equipo, los de su sede o los de toda la empresa.
                 La sede y el equipo de cada persona se asignan en Usuarios.
@@ -478,6 +520,7 @@ export default function RolesPermissions() {
                     />
                     <span>
                       {rule.label}
+                      {!can("tenant.manage") && <Lock size={12} className="app-muted ml-1.5 inline align-[-1px]" aria-label={deniedText("tenant.manage")} />}
                       <small className="app-muted block text-[12.5px]">{rule.hint}</small>
                     </span>
                   </label>
@@ -498,6 +541,7 @@ export default function RolesPermissions() {
                       onKeyDown={(event) => { if (event.key === "Enter") saveTolerance(); }}
                     />
                     <span>%</span>
+                    {!can("tenant.manage") && <Lock size={12} className="app-muted" aria-label={deniedText("tenant.manage")} />}
                     <Btn size="sm" variant="secondary" permission="tenant.manage" disabled={savingTolerance || tolerance === null} onClick={saveTolerance}>
                       {savingTolerance ? "Guardando…" : "Guardar"}
                     </Btn>

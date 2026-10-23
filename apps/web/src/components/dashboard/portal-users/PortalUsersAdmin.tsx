@@ -234,6 +234,8 @@ function NoticesTable({ notices, onWithdraw, toast }: { notices: PortalNotice[] 
     if (!notices) return;
     setExporting(true);
     try {
+      // Como las demás exportaciones: la API comprueba el permiso y la deja en auditoría.
+      await recordExport("portal_users", format, notices.length, true);
       if (format === "xlsx") await exportXlsx("avisos-portal", "Avisos del portal", NOTICE_EXPORT, notices);
       else exportCsv("avisos-portal", NOTICE_EXPORT, notices);
       toast(`${notices.length} ${notices.length === 1 ? "fila exportada" : "filas exportadas"}`);

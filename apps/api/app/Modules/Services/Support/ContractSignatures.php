@@ -7,7 +7,9 @@ use App\Mail\ContractSignatureMail;
 use App\Models\User;
 use App\Modules\Portal\Support\PortalAccess;
 use App\Modules\Portal\Support\PortalCustomer;
+use App\Modules\Services\Models\Contract;
 use App\Services\AuditLogger;
+use App\Services\Notifier;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -192,6 +194,7 @@ class ContractSignatures
                 AuditLogger::log(tenantId: $request->tenant_id, userId: $user->id, action: 'contract.signature.completed', entityType: 'Contract', entityId: $request->contract_id,
                     metadata: ['hash' => $request->document_hash, 'note' => 'Contrato firmado por ambas partes · huella '.substr($request->document_hash, 0, 16)]);
             }
+            self::notifySigned($request, $side, ! $pending);
         });
         Cache::forget(self::codeKey($request->id, $user->id));
     }
@@ -211,7 +214,26 @@ class ContractSignatures
             DB::table('contracts')->where('id', $request->contract_id)->update(['signature_status' => 'DECLINED']);
             AuditLogger::log(tenantId: $request->tenant_id, userId: $user->id, action: 'contract.signature.declined', entityType: 'Contract', entityId: $request->contract_id,
                 metadata: ['note' => 'El cliente rechazó la firma: '.trim($reason)]);
+            $contract = Contract::ignoringAccessScope()->find($request->contract_id);
+            Notifier::send('contract.signature_declined', 'Firma rechazada por el cliente', "{$contract->contract_number}: ".trim($reason),
+                "/contracts/{$contract->id}", [$contract->created_by, $request->created_by]);
         });
+    }
+
+    /**
+     * Firmado por ambas partes: a quien vendió y a quien puede activarlo. Si firmó el cliente y
+     * falta la empresa: a quien puede firmar por la empresa.
+     */
+    private static function notifySigned(object $request, string $side, bool $completed): void
+    {
+        $contract = Contract::ignoringAccessScope()->find($request->contract_id);
+        if ($completed) {
+            Notifier::send('contract.signed', 'Contrato firmado', "{$contract->contract_number} ya puede activarse", "/contracts/{$contract->id}",
+                [...Notifier::withPermission('contracts.approve', $contract), $contract->created_by]);
+        } elseif ($side === 'CLIENTE') {
+            Notifier::send('contract.customer_signed', 'El cliente firmó el contrato', "{$contract->contract_number}: falta la firma de la empresa", "/contracts/{$contract->id}",
+                Notifier::withPermission('contracts.approve', $contract));
+        }
     }
 
     /** La empresa anula una solicitud pendiente o rechazada (para editar y volver a enviar). */

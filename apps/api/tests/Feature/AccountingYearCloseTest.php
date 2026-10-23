@@ -46,7 +46,7 @@ class AccountingYearCloseTest extends TestCase
     public function test_closing_the_year_moves_results_to_retained_earnings_and_reopening_reverses_it(): void
     {
         $this->travelTo('2026-03-15 10:00:00');
-        $this->makeTenant(['FINANZAS']);
+        $this->makeTenant(['FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $this->as($this->makeUser('Contador', self::ACCOUNTANT));
         $this->entry('2026-03-10', '1041', '7041', 10000, 'Venta de servicios');
         $this->entry('2026-03-12', '6352', '1041', 4000, 'Alquiler');
@@ -124,7 +124,7 @@ class AccountingYearCloseTest extends TestCase
 
     public function test_an_approved_budget_of_an_ended_year_is_closed_by_whoever_approves_budgets(): void
     {
-        $this->makeTenant(['FINANZAS']);
+        $this->makeTenant(['FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $past = (string) Str::uuid();
         $current = (string) Str::uuid();
         DB::table('budgets')->insert([
@@ -144,7 +144,7 @@ class AccountingYearCloseTest extends TestCase
 
     public function test_journal_entries_are_imported_from_the_excel_template_entry_by_entry(): void
     {
-        $this->makeTenant(['FINANZAS']);
+        $this->makeTenant(['FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $this->as($this->makeUser('Contador', self::ACCOUNTANT));
         Chart::ensure($this->tenantId);
         $center = (string) Str::uuid();

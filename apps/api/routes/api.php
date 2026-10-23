@@ -4,7 +4,6 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Subscription\Http\Controllers\SaasPlanController;
-use App\Modules\Subscription\Http\Controllers\SuperAdmin\SuperAdminDashboardController;
 use App\Modules\Subscription\Http\Controllers\TenantRegisterController;
 use App\Modules\Core\Http\Controllers\CustomerController;
 use App\Modules\Core\Http\Controllers\SupplierController;
@@ -99,6 +98,13 @@ Route::prefix('v1')->group(function () {
         Route::get('/me/profile', [AuthController::class, 'profile']);
         Route::post('/me/sessions/revoke-others', [AuthController::class, 'revokeOtherSessions']);
         Route::put('/me/notification-preferences', [AuthController::class, 'updateNotificationPreferences']);
+        // Notificaciones (campana y centro de notificaciones): siempre las propias.
+        Route::get('/me/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
+        Route::get('/me/notifications/summary', [\App\Http\Controllers\NotificationController::class, 'summary']);
+        Route::post('/me/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'readAll']);
+        Route::post('/me/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'read']);
+        // Panel de control: cada bloque según los permisos, el alcance y el plan de la persona.
+        Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'show']);
 
         // Roles y permisos de la empresa (Administración). Como en el prototipo, dependen del recurso "usuarios".
         Route::middleware('permission:users.view')->get('/roles', [RoleController::class, 'index']);
@@ -873,9 +879,6 @@ Route::prefix('v1')->group(function () {
     });
 
     Route::middleware(['auth:sanctum', 'super.admin'])->prefix('superadmin')->group(function () {
-        // Indicadores de la pantalla Planes SaaS
-        Route::get('/dashboard/metrics', [SuperAdminDashboardController::class, 'metrics']);
-
         // Panel de la consola: solo totales de plataforma, leídos con el usuario de base de la consola.
         Route::get('/dashboard', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformDashboardController::class, 'show']);
         Route::post('/dashboard/exports', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformDashboardController::class, 'export'])->middleware('throttle:30,1,platform-export');
@@ -886,11 +889,25 @@ Route::prefix('v1')->group(function () {
         Route::put('/plans/{id}', [SaasPlanController::class, 'update']);
         Route::delete('/plans/{id}', [SaasPlanController::class, 'destroy']);
 
-        // Listado y gestión global de Tenants / Empresas
-        Route::get('/tenants', [SuperAdminDashboardController::class, 'tenants']);
+        // Catálogo de módulos del ERP (ventana de planes y fichas)
+        Route::get('/modules', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'modules']);
+
+        // Tenants / Empresas: lista, ficha, aprovisionar, estado, plan, módulos e invitación
+        Route::get('/tenants', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'index']);
+        Route::get('/tenants/options', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'options']);
+        Route::post('/tenants', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'store'])->middleware('throttle:20,1,platform-provision');
+        Route::get('/tenants/{tenant}', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'show']);
+        Route::post('/tenants/{tenant}/transitions', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'transition']);
+        Route::put('/tenants/{tenant}/plan', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'changePlan']);
+        Route::post('/tenants/{tenant}/apply-plan-modules', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'applyPlanModules']);
+        Route::post('/tenants/{tenant}/admins/{user}/invitation', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'resendInvitation'])->middleware('throttle:10,1,platform-invite');
+
+        // Suscripciones de todas las empresas
+        Route::get('/subscriptions', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformAuditController::class, 'subscriptions']);
 
         // Auditoría de plataforma (acciones del super admin)
-        Route::get('/audit', [SuperAdminDashboardController::class, 'audit']);
+        Route::get('/audit', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformAuditController::class, 'index']);
+        Route::get('/audit/options', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformAuditController::class, 'options']);
     });
 
     // Activar la invitación al portal (sin sesión): código del correo + contraseña.
@@ -939,8 +956,11 @@ Route::prefix('v1')->group(function () {
 
         Route::middleware('portal.section:support')->group(function () {
             Route::get('/tickets', [PortalSupportController::class, 'index']);
-            Route::post('/tickets', [PortalSupportController::class, 'store']);
             Route::get('/tickets/{ticket}', [PortalSupportController::class, 'show']);
+        });
+        // Crear y responder tickets no es de "Solo lectura": solo los roles con support_write.
+        Route::middleware('portal.section:support_write')->group(function () {
+            Route::post('/tickets', [PortalSupportController::class, 'store']);
             Route::post('/tickets/{ticket}/comments', [PortalSupportController::class, 'comment']);
         });
 

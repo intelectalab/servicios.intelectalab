@@ -8,6 +8,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\Feature\Concerns\OperationsFixtures;
+use Tests\Feature\Concerns\PlatformSession;
 use Tests\TestCase;
 use Throwable;
 
@@ -20,6 +21,7 @@ class PlatformDashboardTest extends TestCase
 {
     use DatabaseTransactions;
     use OperationsFixtures;
+    use PlatformSession;
 
     // La consola escribe su auditoría con su propia conexión: también se deshace al terminar.
     protected $connectionsToTransact = [null, 'pgsql_platform'];
@@ -27,26 +29,6 @@ class PlatformDashboardTest extends TestCase
     private const TOP_KEYS = ['generated_at', 'tenants', 'subscriptions', 'revenue', 'plans', 'signups', 'users', 'trials', 'usage', 'health', 'audit'];
 
     private const USAGE_KEYS = ['tenant_id', 'code', 'name', 'status', 'plan', 'trial', 'created_at', 'users', 'users_limit', 'portal_users', 'portal_users_limit', 'customers', 'customers_limit', 'storage_mb'];
-
-    private function superAdmin(string $status = 'ACTIVE'): User
-    {
-        $user = new User();
-        $user->forceFill([
-            'email' => 'sa-'.Str::random(8).'@erp-saas.test', 'password_hash' => bcrypt('password123'),
-            'name' => 'Plataforma Prueba', 'status' => $status, 'is_super_admin' => true,
-        ])->save();
-
-        return $user;
-    }
-
-    /** Sesión real (token de Sanctum), con o sin verificación en dos pasos. */
-    private function signIn(User $user, bool $mfa = true): void
-    {
-        $this->app['auth']->forgetGuards();
-        $token = $user->createToken('api-token', ['*'], now()->addHour());
-        $token->accessToken->forceFill(['mfa' => $mfa])->save();
-        $this->withToken($token->plainTextToken);
-    }
 
     private function denials(User $user): array
     {

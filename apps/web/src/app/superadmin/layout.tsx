@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Building2, CreditCard, LayoutDashboard, Receipt, ShieldCheck } from "lucide-react";
+import { Building2, CreditCard, Eye, LayoutDashboard, Plus, Receipt, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
 import Header, { type UserProfile } from "@/components/layout/Header";
@@ -20,6 +20,8 @@ const ADMIN_MENU_ITEMS: BuiltMenuItem[] = [
   { href: "/superadmin/plans", label: "Planes SaaS", icon: CreditCard, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
   { href: "/superadmin/subscriptions", label: "Suscripciones", icon: Receipt, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
   { href: "/superadmin/tenants", label: "Tenants / Empresas", icon: Building2, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
+  { href: "/superadmin/tenants/new", label: "Aprovisionar tenant", icon: Plus, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
+  { href: "/superadmin/audit", label: "Auditoría de plataforma", icon: Eye, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
 ];
 
 const GROUP_ICONS = { [GROUP]: ShieldCheck };
@@ -91,7 +93,7 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
     }
   }
 
-  const currentItem = ADMIN_MENU_ITEMS.find((item) => pathname?.startsWith(item.href));
+  const currentItem = [...ADMIN_MENU_ITEMS].sort((a, b) => b.href.length - a.href.length).find((item) => pathname?.startsWith(item.href));
   const onProfile = Boolean(pathname?.startsWith(PROFILE_HREF));
   const currentSection = currentItem?.label ?? (onProfile ? "Mi perfil" : "Administración Global");
   const currentGroup = currentItem?.superModule ?? (onProfile ? "Cuenta" : undefined);

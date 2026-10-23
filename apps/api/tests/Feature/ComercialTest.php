@@ -20,7 +20,7 @@ class ComercialTest extends TestCase
     ];
 
     /** Módulos del plan de la empresa de prueba: sin ellos la API rechaza sus permisos (MODULE_DISABLED). */
-    private const MODULES = ['SERVICIOS', 'COTIZACIONES', 'CONTRATOS', 'FINANZAS'];
+    private const MODULES = ['SERVICIOS', 'COTIZACIONES', 'CONTRATOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD'];
 
     /**
      * Estas pruebas son de los flujos comerciales, no del alcance: sus roles ven toda la

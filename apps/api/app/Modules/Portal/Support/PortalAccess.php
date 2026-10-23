@@ -16,7 +16,7 @@ class PortalAccess
     public const MODULE = 'PORTAL';
 
     public const ROLES = [
-        'PORTAL_ADMIN' => ['Portal Admin', ['home', 'quotes', 'approve', 'services', 'sign', 'requests', 'documents', 'invoices', 'pay', 'support', 'users']],
+        'PORTAL_ADMIN' => ['Portal Admin', ['home', 'quotes', 'approve', 'services', 'sign', 'requests', 'documents', 'invoices', 'pay', 'support', 'support_write', 'users']],
         'PORTAL_FINANCE' => ['Portal Finanzas', ['home', 'invoices', 'pay', 'documents']],
         'PORTAL_VIEWER' => ['Portal Solo lectura', ['home', 'quotes', 'services', 'documents', 'invoices', 'support']],
     ];
@@ -31,12 +31,13 @@ class PortalAccess
         'invoices' => ['FINANZAS'],
         'pay' => ['FINANZAS'],
         'support' => ['SOPORTE', 'TICKETS'],
+        'support_write' => ['SOPORTE', 'TICKETS'],
     ];
 
     public const SECTION_LABELS = [
         'home' => 'Inicio', 'quotes' => 'Cotizaciones', 'approve' => 'Aprobar cotizaciones', 'services' => 'Mis servicios',
         'sign' => 'Firmar contratos', 'requests' => 'Solicitudes', 'documents' => 'Documentos', 'invoices' => 'Facturas',
-        'pay' => 'Pagar en línea', 'support' => 'Soporte', 'users' => 'Usuarios',
+        'pay' => 'Pagar en línea', 'support' => 'Soporte', 'support_write' => 'Crear y responder tickets', 'users' => 'Usuarios',
     ];
 
     /**
@@ -57,7 +58,7 @@ class PortalAccess
         'billing' => [['view'], 'Sus comprobantes emitidos, con su PDF.'],
         'receivables' => [['view'], 'Sus saldos pendientes y el estado de cuenta.'],
         'payments' => [['view'], 'Sus pagos, con su recibo. Pagar en línea: sin pasarela conectada.'],
-        'tickets' => [['view', 'create', 'manage'], 'Los suyos: crear y responder. Nunca ve las notas internas.'],
+        'tickets' => [['view', 'create', 'manage'], 'Los suyos. Crear y responder: Portal Admin (Solo lectura solo los ve). Nunca ve las notas internas.'],
         'warranty' => [[], 'Aún no en el portal: los reclamos los registra la empresa.'],
         'portal' => [['view', 'create'], 'Sus solicitudes de servicio y de renovación.'],
         'opportunities' => [['create'], 'Con CRM, cada solicitud crea una oportunidad (no la ve).'],

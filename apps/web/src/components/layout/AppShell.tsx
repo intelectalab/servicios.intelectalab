@@ -23,7 +23,8 @@ import { Card, LinkBtn, LoadError, Screen } from "@/components/ui/proto";
 //  - Ítems con "soon": pantallas del prototipo que aún no existen. Al construir una,
 //    se reemplaza "soon" por su href, module y requiredPermission.
 const MENU_ITEMS: MenuItem[] = [
-  { label: "Panel de control", icon: Home, superModule: "Inicio", soon: true },
+  // Sin permiso propio: cada bloque del panel se muestra según los permisos de la persona.
+  { href: "/dashboard", label: "Panel de control", requiredPermission: "", icon: Home, superModule: "Inicio" },
 
   { href: "/crm/leads", label: "Leads", module: "CRM", requiredPermission: "leads.view", icon: Target, superModule: "CRM" },
   { href: "/crm/opportunities", label: "Pipeline", module: "CRM", requiredPermission: "opportunities.view", icon: Filter, superModule: "CRM" },
@@ -58,15 +59,15 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/fiscal", label: "Facturación electrónica", module: "FINANZAS", requiredPermission: "fiscal.view", icon: ShieldCheck, superModule: "Finanzas" },
   { href: "/exchange-rates", label: "Monedas y tipo de cambio", module: "FINANZAS", requiredPermission: "fiscal.view", icon: TrendingUp, superModule: "Finanzas" },
 
-  { href: "/purchase-orders", label: "Órdenes de compra", module: "FINANZAS", requiredPermission: "purchases.view", icon: ShoppingCart, superModule: "Compras" },
-  { href: "/supplier-invoices", label: "Comprobantes de proveedor", module: "FINANZAS", requiredPermission: "payables.view", icon: ReceiptText, superModule: "Compras" },
-  { href: "/payables", label: "Cuentas por pagar", module: "FINANZAS", requiredPermission: "payables.view", icon: HandCoins, superModule: "Compras" },
+  { href: "/purchase-orders", label: "Órdenes de compra", module: "COMPRAS", requiredPermission: "purchases.view", icon: ShoppingCart, superModule: "Compras" },
+  { href: "/supplier-invoices", label: "Comprobantes de proveedor", module: "COMPRAS", requiredPermission: "payables.view", icon: ReceiptText, superModule: "Compras" },
+  { href: "/payables", label: "Cuentas por pagar", module: "COMPRAS", requiredPermission: "payables.view", icon: HandCoins, superModule: "Compras" },
 
-  { href: "/journal", label: "Libro diario", module: "FINANZAS", requiredPermission: "accounting.view", icon: BookOpen, superModule: "Contabilidad" },
-  { href: "/ledger", label: "Mayor y balance", module: "FINANZAS", requiredPermission: "accounting.view", icon: Scale, superModule: "Contabilidad" },
-  { href: "/financial-statements", label: "Estados financieros", module: "FINANZAS", requiredPermission: "accounting.view", icon: ChartPie, superModule: "Contabilidad" },
-  { href: "/budgets", label: "Centros de costo y presupuestos", module: "FINANZAS", requiredPermission: "budgets.view", icon: Crosshair, superModule: "Contabilidad" },
-  { href: "/chart-of-accounts", label: "Plan de cuentas y periodos", module: "FINANZAS", requiredPermission: "accounting.view", icon: ListTree, superModule: "Contabilidad" },
+  { href: "/journal", label: "Libro diario", module: "CONTABILIDAD", requiredPermission: "accounting.view", icon: BookOpen, superModule: "Contabilidad" },
+  { href: "/ledger", label: "Mayor y balance", module: "CONTABILIDAD", requiredPermission: "accounting.view", icon: Scale, superModule: "Contabilidad" },
+  { href: "/financial-statements", label: "Estados financieros", module: "CONTABILIDAD", requiredPermission: "accounting.view", icon: ChartPie, superModule: "Contabilidad" },
+  { href: "/budgets", label: "Centros de costo y presupuestos", module: "CONTABILIDAD", requiredPermission: "budgets.view", icon: Crosshair, superModule: "Contabilidad" },
+  { href: "/chart-of-accounts", label: "Plan de cuentas y periodos", module: "CONTABILIDAD", requiredPermission: "accounting.view", icon: ListTree, superModule: "Contabilidad" },
 
   { href: "/tickets", label: "Tickets y SLA", module: "SOPORTE", requiredPermission: "tickets.view", icon: LifeBuoy, superModule: "Soporte" },
   { href: "/warranty-claims", label: "Garantías", module: "SOPORTE", requiredPermission: "warranty.view", icon: Shield, superModule: "Soporte" },
@@ -106,8 +107,12 @@ const GROUP_ICONS = {
 
 const SIDEBAR_STATE_KEY = "erp-sidebar-open";
 
-// Pantalla a la que se llega al iniciar sesión (la misma de proxy.ts) y el permiso que pide.
-const HOME = { href: "/actors", permission: "core.view" };
+// Pantalla a la que se llega al iniciar sesión (la misma de proxy.ts): el panel, que no pide permiso.
+const HOME = { href: "/dashboard", permission: "" };
+
+/** Quien ejecuta órdenes de trabajo sin planificarlas ni asignarlas: al entrar va a la App del técnico. */
+const isTechnician = (permissions: string[], modules: string[]) =>
+  modules.includes("ORDENES_TRABAJO") && permissions.includes("work_orders.manage") && !permissions.includes("work_orders.approve");
 
 type AccessResponse = {
   modules: string[];
@@ -117,7 +122,7 @@ type AccessResponse = {
   roles: string[];
 };
 
-export default function AppShell({ children }: { children: ReactNode }) {
+export default function AppShell({ children, plansUrl = "/#plans" }: { children: ReactNode; plansUrl?: string }) {
   const pathname = usePathname();
   const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -174,6 +179,9 @@ export default function AppShell({ children }: { children: ReactNode }) {
           setTenantName(access.tenant?.name);
           setRoleName(access.roles[0]);
           setAccessLoaded(true);
+          // Al entrar al sistema, quien solo ejecuta órdenes de trabajo va a su app; si después
+          // abre el panel desde el menú, se queda en él (el armazón ya está montado).
+          if (window.location.pathname === HOME.href && isTechnician(access.permissions, access.modules)) router.replace("/campo");
         }
       } catch (err) {
         console.error("Error al cargar datos de sesión", err);
@@ -188,7 +196,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [accessAttempt]);
+  }, [accessAttempt, router]);
 
   async function handleLogout() {
     setLoggingOut(true);
@@ -208,12 +216,12 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const menuWithLockState = MENU_ITEMS.map((item) =>
     // Sin "module" la pantalla es de administración de la empresa: no depende del plan.
     item.soon ? item : { ...item, locked: item.module !== undefined && !modules.includes(item.module) },
-  ).filter((item) => item.soon || item.locked || permissions.includes(item.requiredPermission));
+  ).filter((item) => item.soon || item.locked || !item.requiredPermission || permissions.includes(item.requiredPermission));
 
   // Un rol que no abre la pantalla de inicio (p. ej. un técnico, sin Clientes y actores) no se
   // queda ante un listado que no carga: va a la primera pantalla que sí puede abrir.
   const firstScreen = menuWithLockState.find((item) => !item.soon && !item.locked);
-  const homeDenied = accessLoaded && pathname === HOME.href && !permissions.includes(HOME.permission);
+  const homeDenied = accessLoaded && pathname === HOME.href && Boolean(HOME.permission) && !permissions.includes(HOME.permission);
   const fallback = firstScreen && !firstScreen.soon ? firstScreen.href : "/profile";
 
   useEffect(() => {
@@ -228,7 +236,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const routeDenied = accessLoaded && routeItem && !homeDenied
     ? routeItem.module !== undefined && !modules.includes(routeItem.module)
       ? "plan"
-      : !permissions.includes(routeItem.requiredPermission) ? "role" : null
+      : routeItem.requiredPermission && !permissions.includes(routeItem.requiredPermission) ? "role" : null
     : null;
 
   // El rol real llega con /me/access; mientras tanto se muestra uno genérico.
@@ -240,6 +248,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       item.soon || item.locked ? [] : [{ label: item.label, href: item.href, group: item.superModule }],
     ),
     { label: "Mi perfil", href: "/profile", group: "Cuenta" },
+    { label: "Notificaciones", href: "/notifications", group: "Cuenta" },
   ];
 
   const currentItem = MENU_ITEMS.find((item) => !item.soon && pathname?.startsWith(item.href));
@@ -254,6 +263,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
       >
         <Sidebar
           items={menuWithLockState}
+          plansUrl={plansUrl}
           compact={sidebarOpen === false}
           permissionsLoading={permissionsLoading}
           onNavigate={() => setMobileOpen(false)}
@@ -271,6 +281,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           <aside className="app-surface absolute inset-y-0 left-0 w-64 shadow-xl">
             <Sidebar
               items={menuWithLockState}
+              plansUrl={plansUrl}
               compact={false}
               permissionsLoading={permissionsLoading}
               onNavigate={() => setMobileOpen(false)}
@@ -287,8 +298,8 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header
           open={sidebarOpen || mobileOpen}
-          currentSection={currentItem?.label ?? (pathname?.startsWith("/profile") ? "Mi perfil" : "Inicio")}
-          currentGroup={currentItem?.superModule ?? (pathname?.startsWith("/profile") ? "Cuenta" : undefined)}
+          currentSection={currentItem?.label ?? (pathname?.startsWith("/profile") ? "Mi perfil" : pathname?.startsWith("/notifications") ? "Notificaciones" : "Inicio")}
+          currentGroup={currentItem?.superModule ?? (pathname?.startsWith("/profile") || pathname?.startsWith("/notifications") ? "Cuenta" : undefined)}
           onToggle={() => {
             setSidebarOpen((value) => !value);
             setMobileOpen((value) => !value);
@@ -298,6 +309,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
           tenantName={tenantName}
           screens={searchScreens}
           canSearchRecords={permissions.includes("core.view")}
+          notifications
         />
 
         <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">

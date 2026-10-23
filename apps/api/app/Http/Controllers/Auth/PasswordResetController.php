@@ -36,21 +36,7 @@ class PasswordResetController extends Controller
         $user = User::where('email', $data['email'])->first();
 
         if ($user) {
-            $code = '';
-            for ($i = 0; $i < 6; $i++) {
-                $code .= self::CODE_ALPHABET[random_int(0, strlen(self::CODE_ALPHABET) - 1)];
-            }
-
-            $expiresAt = now()->addMinutes(self::CODE_TTL_MINUTES);
-
-            // Un código nuevo reemplaza al anterior del mismo correo.
-            Cache::put($this->cacheKey($user->email), [
-                'user_id' => $user->id,
-                'code_hash' => Hash::make($code),
-                'attempts' => 0,
-                'expires_at' => $expiresAt,
-            ], $expiresAt);
-
+            $code = self::issueCode($user, self::CODE_TTL_MINUTES);
             Mail::to($user->email)->send(new PasswordResetCodeMail($code, self::CODE_TTL_MINUTES));
         }
 
@@ -70,7 +56,7 @@ class PasswordResetController extends Controller
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
         ]);
 
-        $key = $this->cacheKey($data['email']);
+        $key = self::cacheKey($data['email']);
         $challenge = Cache::get($key);
 
         if (! $challenge) {
@@ -132,7 +118,29 @@ class PasswordResetController extends Controller
         ]);
     }
 
-    private function cacheKey(string $email): string
+    /**
+     * Código de un solo uso para crear la contraseña (lo usa también la invitación del
+     * administrador de una empresa aprovisionada). Un código nuevo reemplaza al anterior.
+     */
+    public static function issueCode(User $user, int $minutes): string
+    {
+        $code = '';
+        for ($i = 0; $i < 6; $i++) {
+            $code .= self::CODE_ALPHABET[random_int(0, strlen(self::CODE_ALPHABET) - 1)];
+        }
+
+        $expiresAt = now()->addMinutes($minutes);
+        Cache::put(self::cacheKey($user->email), [
+            'user_id' => $user->id,
+            'code_hash' => Hash::make($code),
+            'attempts' => 0,
+            'expires_at' => $expiresAt,
+        ], $expiresAt);
+
+        return $code;
+    }
+
+    private static function cacheKey(string $email): string
     {
         return 'pwd-reset:'.sha1(mb_strtolower(trim($email)));
     }

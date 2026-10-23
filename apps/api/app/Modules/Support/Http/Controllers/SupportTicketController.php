@@ -23,6 +23,7 @@ use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -182,6 +183,7 @@ class SupportTicketController extends Controller
             }
 
             $this->audit($request, $ticket, 'ticket.create', ['to' => 'OPEN', 'number' => $ticket->ticket_number, 'channel' => $ticket->channel]);
+            self::notifyNew($ticket);
 
             return $ticket;
         });
@@ -253,6 +255,9 @@ class SupportTicketController extends Controller
                 'assigned_user_id' => $data['assigned_user_id'],
                 'note' => ($reassigned ? 'Reasignado a ' : 'Asignado a ').$this->userName($data['assigned_user_id']),
             ]));
+            if ($ticket->wasChanged('assigned_user_id')) {
+                Notifier::send('ticket.assigned', 'Ticket asignado', "{$ticket->ticket_number} · {$ticket->subject}", "/tickets/{$ticket->id}", [$ticket->assigned_user_id]);
+            }
         });
 
         return response()->json($this->detail($ticket));
@@ -318,6 +323,8 @@ class SupportTicketController extends Controller
                 'priority' => $priority, 'previous_priority' => $before,
                 'resolution_due_at' => $ticket->resolution_due_at?->toIso8601String(), 'note' => "Escalado {$before} → {$priority}",
             ]);
+            Notifier::send('ticket.escalated', 'Ticket escalado', "{$ticket->ticket_number} pasó a {$priority} · {$ticket->subject}", "/tickets/{$ticket->id}",
+                [...Notifier::withPermission('tickets.approve', $ticket), $ticket->assigned_user_id]);
         });
 
         return response()->json($this->detail($ticket));
@@ -640,6 +647,13 @@ class SupportTicketController extends Controller
     private function userName(?string $userId): ?string
     {
         return $userId ? DB::table('users')->where('id', $userId)->value('name') : null;
+    }
+
+    /** Ticket nuevo (de la empresa o del portal): a quien puede atenderlo y lo ve. */
+    public static function notifyNew(SupportTicket $ticket): void
+    {
+        Notifier::send('ticket.created', 'Nuevo ticket', "{$ticket->ticket_number} · {$ticket->subject}", "/tickets/{$ticket->id}",
+            Notifier::withPermission(self::AGENT_PERMISSION, $ticket));
     }
 
     private function audit(Request $request, SupportTicket $ticket, string $action, array $metadata = []): void

@@ -84,6 +84,15 @@ export default function SupplierInvoices() {
 
   const seesOrders = can("purchases.view");
 
+  // La ficha se abre también desde un enlace (?invoice=), p. ej. el aviso "por aprobar".
+  useEffect(() => {
+    async function fromLink() {
+      const id = new URLSearchParams(window.location.search).get("invoice");
+      if (id) setOpenId(id);
+    }
+    fromLink();
+  }, []);
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       setSearch(searchInput.trim());

@@ -15,6 +15,7 @@ use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -175,6 +176,10 @@ class TimeEntryController extends Controller
                 ...($branchId ? ['branch_id' => $branchId] : []),
             ]);
             $this->audit($request, $entry, 'time_entry.create', ['to' => 'SUBMITTED', 'hours' => (float) $entry->hours]);
+            // Nadie aprueba sus propias horas: el aviso va a quien puede aprobarlas y las alcanza.
+            Notifier::send('time_entry.submitted', 'Horas por aprobar',
+                $request->user()->name.': '.number_format((float) $entry->hours, 1).' h en '.($project ? "{$project->code} · {$project->name}" : "{$order->code} · {$order->title}"),
+                '/timesheets', array_diff(Notifier::withPermission('time_entries.approve', $entry), [$userId]));
 
             return $entry;
         });

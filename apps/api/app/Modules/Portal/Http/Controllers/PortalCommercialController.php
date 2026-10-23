@@ -81,6 +81,7 @@ class PortalCommercialController extends Controller
                 entityType: 'Quotation', entityId: $quotation->id,
                 metadata: array_filter(['from' => 'SUBMITTED', 'to' => $data['decision'], 'channel' => 'PORTAL', 'note' => $comment ? "Desde el portal: {$comment}" : 'Desde el portal']),
             );
+            \App\Modules\Services\Http\Controllers\QuotationController::notifyDecision($quotation, $data['decision'], $comment, portal: true);
         });
 
         return response()->json($this->detail($quotation->refresh(), $request));

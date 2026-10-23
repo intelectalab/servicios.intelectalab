@@ -4,6 +4,7 @@ namespace App\Modules\Subscription\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Subscription\Models\SaasPlan;
+use App\Modules\Subscription\Support\ModuleCatalog;
 use App\Services\PlatformAuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -53,6 +54,8 @@ class SaasPlanController extends Controller
             'support_channels' => 'nullable|array',
         ]);
 
+        // Solo módulos del catálogo, con los obligatorios siempre incluidos.
+        $validated['modules'] = ModuleCatalog::normalizePlanModules($validated['modules'] ?? []);
         $plan = SaasPlan::create($validated);
 
         PlatformAuditLogger::log($request->user()->id, 'plan.created', 'SaasPlan', $plan->id, afterData: $plan->toArray());
@@ -91,6 +94,10 @@ class SaasPlanController extends Controller
             'support_sla_hours' => 'nullable|integer',
             'support_channels' => 'nullable|array',
         ]);
+
+        if (array_key_exists('modules', $validated)) {
+            $validated['modules'] = ModuleCatalog::normalizePlanModules($validated['modules']);
+        }
 
         $before = $plan->toArray();
         $plan->update($validated);

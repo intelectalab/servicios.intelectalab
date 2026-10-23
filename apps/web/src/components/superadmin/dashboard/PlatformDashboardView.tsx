@@ -8,45 +8,21 @@ import { money, shortDate } from "@/lib/commercial";
 import { monthName, monthTick } from "@/lib/accounting";
 import { dateTimeText } from "@/lib/portal";
 import { exportCsv, exportXlsx, type ExportColumn } from "@/lib/export-table";
+import { actionLabel, count, limitText, recordPlatformExport, tenantStatus } from "@/lib/platform";
 import {
   Badge, Btn, Card, Chip, DataTable, ExportButtons, Kpi, Kpis, LoadError, PageHead, Screen, SelectionBar, useRowSelection, useToasts,
-  type Column, type Tone,
+  type Column,
 } from "@/components/ui/proto";
 import type { PlatformAuditRow, PlatformDashboard, PlatformPlanRow, PlatformTrialRow, PlatformUsageRow } from "@/types/platform";
 
 type ExportTable = "trials" | "usage" | "plans" | "audit";
 type Toast = ReturnType<typeof useToasts>["toast"];
 
-const TENANT_STATUS: Record<string, [string, Tone]> = {
-  ACTIVE: ["Activa", "success"],
-  PROVISIONING: ["En alta", "info"],
-  SUSPENDED: ["Suspendida", "warning"],
-  MAINTENANCE: ["En mantenimiento", "warning"],
-  CLOSED: ["Cerrada", "muted"],
-};
-
-const ACTIONS: Record<string, string> = {
-  "auth.login": "Inicio de sesión",
-  "auth.logout": "Cierre de sesión",
-  "plan.created": "Plan creado",
-  "plan.updated": "Plan editado",
-  "plan.deactivated": "Plan desactivado",
-  "platform.export": "Exportación del panel",
-  "platform.access_denied": "Acceso rechazado a la consola",
-};
-
-const statusOf = (status: string) => TENANT_STATUS[status] ?? [status, "neutral" as Tone];
-const actionOf = (action: string) => ACTIONS[action] ?? action;
-const count = (value: number) => value.toLocaleString("es-PE");
-const limitText = (used: number, limit: number | null) => (limit ? `${count(used)} / ${count(limit)}` : count(used));
+const statusOf = tenantStatus;
+const actionOf = actionLabel;
 const trialText = (row: PlatformTrialRow) =>
   row.days_left < 0 ? `Vencida hace ${-row.days_left} ${row.days_left === -1 ? "día" : "días"}`
     : row.days_left === 0 ? "Vence hoy" : `Vence en ${row.days_left} ${row.days_left === 1 ? "día" : "días"}`;
-
-/** Registra la exportación en la auditoría de plataforma antes de generar el archivo. */
-async function recordPlatformExport(table: ExportTable, format: "xlsx" | "csv", rows: number, selection: boolean) {
-  await apiFetch("/v1/superadmin/dashboard/exports", { method: "POST", body: JSON.stringify({ table, format, rows, selection }) });
-}
 
 /** Uso frente al límite del plan: número y barra (ámbar desde el 80 %, rojo al llegar al límite). */
 function UsageMeter({ used, limit }: { used: number; limit: number | null }) {
@@ -277,7 +253,7 @@ export function PlatformDashboardView() {
       <Kpis row>
         <Kpi
           label="Empresas" value={count(tenants.total)}
-          sub={<>{count(active)} {active === 1 ? "activa" : "activas"}{otherStatuses.map(([status, n]) => ` · ${n} ${statusOf(status)[0].toLowerCase()}`).join("")} · {tenants.new_this_month} nuevas este mes</>}
+          sub={<>{count(active)} {active === 1 ? "activa" : "activas"}{otherStatuses.map(([status, n]) => ` · ${n} ${statusOf(status)[0].toLowerCase()}`).join("")} · {tenants.new_this_month} {tenants.new_this_month === 1 ? "nueva" : "nuevas"} este mes</>}
         />
         <Kpi
           label="Suscripciones vigentes" tone="success" value={count(subs.current)}

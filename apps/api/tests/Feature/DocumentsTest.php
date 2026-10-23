@@ -140,7 +140,7 @@ class DocumentsTest extends TestCase
     public function test_only_who_manages_documents_shows_one_in_the_portal_and_the_customer_sees_it(): void
     {
         Storage::fake('documents');
-        $this->makeTenant(['CONTRATOS', 'DOCUMENTOS', 'PORTAL', 'FINANZAS']);
+        $this->makeTenant(['CONTRATOS', 'DOCUMENTOS', 'PORTAL', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $admin = $this->makeUser('Admin', self::ADMIN);
         $sales = $this->makeUser('Ventas', self::SALES, 'OWN');
         [$contractId, $customerId] = $this->makeContract($sales);
@@ -182,7 +182,7 @@ class DocumentsTest extends TestCase
     public function test_scope_record_cards_extracts_and_other_tenants(): void
     {
         Storage::fake('documents');
-        $this->makeTenant(['CONTRATOS', 'DOCUMENTOS', 'FINANZAS']);
+        $this->makeTenant(['CONTRATOS', 'DOCUMENTOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $admin = $this->makeUser('Admin', self::ADMIN);
         $sales = $this->makeUser('Ventas', self::SALES, 'OWN');
         $other = $this->makeUser('Ventas 2', self::SALES, 'OWN');

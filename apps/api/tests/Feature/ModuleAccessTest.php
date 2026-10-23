@@ -89,7 +89,7 @@ class ModuleAccessTest extends TestCase
         $access = $this->getJson('/api/v1/me/access')->assertOk()->json();
 
         // Obligatorios siempre, más el contratado; no los que el plan no incluye.
-        foreach (['CLIENTES', 'PROVEEDORES', 'EMPLEADOS', 'SERVICIOS'] as $code) {
+        foreach (['CLIENTES', 'SERVICIOS'] as $code) {
             $this->assertContains($code, $access['modules']);
         }
         $this->assertNotContains('COTIZACIONES', $access['modules']);
@@ -97,6 +97,20 @@ class ModuleAccessTest extends TestCase
 
         // Tener el módulo no da el permiso: eso depende del rol.
         $this->assertSame(['core.view'], $access['permissions']);
+    }
+
+    public function test_purchasing_and_accounting_are_their_own_modules(): void
+    {
+        // Con solo Finanzas: cobra y factura, pero Compras y Contabilidad quedan fuera del plan.
+        Sanctum::actingAs($this->makeTenantUser(['FINANZAS'], ['billing.view', 'purchases.view', 'accounting.view']));
+        $this->getJson('/api/v1/invoices')->assertOk();
+        $this->getJson('/api/v1/purchase-orders')->assertStatus(403);
+        $this->getJson('/api/v1/journal-entries')->assertStatus(403);
+
+        $this->app['auth']->forgetGuards();
+        Sanctum::actingAs($this->makeTenantUser(['FINANZAS', 'COMPRAS'], ['purchases.view', 'accounting.view']));
+        $this->getJson('/api/v1/purchase-orders')->assertOk();
+        $this->getJson('/api/v1/journal-entries')->assertStatus(403);
     }
 
     public function test_module_codes_stored_in_lowercase_still_count(): void

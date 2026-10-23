@@ -17,6 +17,7 @@ use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -227,6 +228,9 @@ class SupplierInvoiceController extends Controller
                 'created_by' => $request->user()->id,
             ]);
             $this->audit($request, $invoice, 'supplier_invoice.create', ['to' => 'REGISTERED', 'total' => (float) $invoice->total, 'note' => $invoice->doc_number]);
+            Notifier::send('supplier_invoice.registered', 'Comprobante de proveedor por aprobar',
+                "{$invoice->doc_number} · {$invoice->supplier_name} · ".Notifier::money($invoice->total, $invoice->currency),
+                "/supplier-invoices?invoice={$invoice->id}",Notifier::withPermission('payables.approve', $invoice));
 
             return $invoice;
         });

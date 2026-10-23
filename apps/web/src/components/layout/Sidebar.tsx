@@ -2,8 +2,8 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Lock, Sparkles, X, ChevronRight, Layers, Clock3, UserRound, Building2 } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { LogOut, Lock, X, ChevronRight, Layers, Clock3, UserRound, Building2 } from "lucide-react";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType } from "react";
 import { poppins } from "@/lib/fonts";
@@ -48,6 +48,8 @@ type SidebarProps = {
   tenantName?: string;
   /** Ruta de "Mi perfil" (la consola de plataforma usa la suya). */
   profileHref?: string;
+  /** Planes de la página pública, para "Ver planes" de un módulo fuera del plan. */
+  plansUrl?: string;
 };
 
 /**
@@ -135,9 +137,9 @@ export default function Sidebar({
   user,
   tenantName,
   profileHref = "/profile",
+  plansUrl = "/#plans",
 }: SidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [tooltip, setTooltip] = useState<{ label: string; top: number; left: number } | null>(null);
   const [upgradeModalModule, setUpgradeModalModule] = useState<string | null>(null);
   // Modo íconos: grupo cuyo panel de pantallas está abierto junto a su ícono.
@@ -460,42 +462,49 @@ export default function Sidebar({
       )}
 
       {upgradeModalModule && typeof document !== "undefined" && createPortal(
-        <div role="dialog" aria-modal="true" aria-label="Módulo no disponible en tu plan" className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 space-y-5 text-slate-900 relative animate-in fade-in zoom-in-95 duration-200">
+        <div
+          role="dialog" aria-modal="true" aria-label="Módulo no disponible en tu plan"
+          onClick={(event) => { if (event.target === event.currentTarget) setUpgradeModalModule(null); }}
+          className={`${poppins.className} fixed inset-0 z-[200] flex items-center justify-center bg-[rgb(8_25_55/0.45)] p-4`}
+        >
+          <div className="app-surface app-text proto-pop-in relative w-full max-w-md space-y-5 rounded-2xl border border-[color:var(--app-border)] p-6 shadow-[0_20px_50px_rgba(8,25,55,0.28)]">
             <button
+              type="button"
+              aria-label="Cerrar"
               onClick={() => setUpgradeModalModule(null)}
-              className="absolute right-4 top-4 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 cursor-pointer"
+              className="app-muted absolute right-4 top-4 cursor-pointer rounded-full p-1.5 hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]"
             >
               <X size={18} />
             </button>
 
-            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[var(--app-brand-deep)] flex items-center justify-center border border-blue-100">
-              <Sparkles size={24} />
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]">
+              <Lock size={22} />
             </div>
 
             <div className="space-y-1.5">
-              <h3 className="text-lg font-bold">Módulo no disponible en tu plan</h3>
-              <p className="text-xs text-slate-500 leading-relaxed">
-                El acceso a <strong>{upgradeModalModule}</strong> requiere de un plan superior o la activación de este módulo en tu suscripción empresarial.
+              <h3 className="text-lg font-semibold">Módulo no disponible en tu plan</h3>
+              <p className="app-muted text-[13px] leading-relaxed">
+                El acceso a <strong className="app-text">{upgradeModalModule}</strong> requiere un plan superior o activar este módulo en la suscripción de tu empresa.
               </p>
             </div>
 
-            <div className="flex gap-3 pt-2">
+            <div className="flex gap-3 pt-1">
               <button
+                type="button"
                 onClick={() => setUpgradeModalModule(null)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                className="flex-1 cursor-pointer rounded-[9px] border border-[color:var(--app-border)] bg-[var(--app-surface)] py-2.5 text-[13px] font-medium text-[color:var(--app-text)] hover:border-[#1B8FC9] hover:bg-[var(--app-surface-muted)]"
               >
-                Cancelar
+                Entendido
               </button>
-              <button
-                onClick={() => {
-                  setUpgradeModalModule(null);
-                  router.push("/settings/billing");
-                }}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--app-brand-deep)] text-white text-xs font-bold hover:bg-[var(--app-brand)] cursor-pointer shadow-md shadow-blue-500/20"
+              <a
+                href={plansUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setUpgradeModalModule(null)}
+                className="flex-1 rounded-[9px] bg-[#1B8FC9] py-2.5 text-center text-[13px] font-semibold text-[#fff] hover:bg-[#1679AB]"
               >
-                Cambiar de plan
-              </button>
+                Ver planes
+              </a>
             </div>
           </div>
         </div>,

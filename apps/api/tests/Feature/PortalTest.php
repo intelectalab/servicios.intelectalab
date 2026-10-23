@@ -27,7 +27,7 @@ class PortalTest extends TestCase
 
     private const STAFF = ['portal_users.view', 'portal_users.create', 'portal_users.manage', 'portal_users.export'];
 
-    private function portalTenant(array $modules = ['PORTAL', 'COTIZACIONES', 'CONTRATOS', 'FINANZAS', 'SOPORTE']): string
+    private function portalTenant(array $modules = ['PORTAL', 'COTIZACIONES', 'CONTRATOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD', 'SOPORTE']): string
     {
         return $this->makeTenant($modules);
     }
@@ -169,7 +169,7 @@ class PortalTest extends TestCase
 
     public function test_portal_roles_and_the_plan_module_decide_the_sections(): void
     {
-        $this->portalTenant(['PORTAL', 'COTIZACIONES', 'FINANZAS']);
+        $this->portalTenant(['PORTAL', 'COTIZACIONES', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $customerId = $this->makeCustomer();
         $finance = $this->portalUser($customerId, 'PORTAL_FINANCE');
         $viewer = $this->portalUser($customerId, 'PORTAL_VIEWER');
@@ -282,7 +282,8 @@ class PortalTest extends TestCase
         $this->portalTenant();
         $customerId = $this->makeCustomer();
         $this->makeContract(customerId: $customerId);
-        $client = $this->portalUser($customerId, 'PORTAL_VIEWER');
+        $client = $this->portalUser($customerId, 'PORTAL_ADMIN');
+        $viewer = $this->portalUser($customerId, 'PORTAL_VIEWER');
         $agent = $this->makeUser('Soporte', ['tickets.view', 'tickets.manage', 'tickets.create']);
 
         $this->as($client);
@@ -313,8 +314,16 @@ class PortalTest extends TestCase
         $this->assertGreaterThan(0, (int) DB::table('support_tickets')->where('id', $id)->value('paused_seconds'));
         $this->assertSame('PORTAL', DB::table('support_ticket_comments')->where('ticket_id', $id)->orderByDesc('created_at')->value('author_type'));
 
+        // Solo lectura ve los tickets de su empresa, pero no los crea ni los responde.
+        $this->as($viewer);
+        $this->assertNotContains('support_write', $this->getJson('/api/v1/portal/me')->json('sections'));
+        $this->getJson('/api/v1/portal/tickets')->assertOk();
+        $this->getJson("/api/v1/portal/tickets/{$id}")->assertOk();
+        $this->postJson('/api/v1/portal/tickets', ['subject' => 'Otro', 'description' => 'Otro problema.'])->assertForbidden();
+        $this->postJson("/api/v1/portal/tickets/{$id}/comments", ['body' => 'Hola'])->assertForbidden();
+
         // Un ticket de otro cliente no existe.
-        $foreign = $this->portalUser($this->makeCustomer(), 'PORTAL_VIEWER');
+        $foreign = $this->portalUser($this->makeCustomer(), 'PORTAL_ADMIN');
         $this->as($foreign);
         $this->getJson("/api/v1/portal/tickets/{$id}")->assertNotFound();
         $this->postJson("/api/v1/portal/tickets/{$id}/comments", ['body' => 'Hola'])->assertNotFound();
@@ -408,7 +417,7 @@ class PortalTest extends TestCase
 
     public function test_documents_invoices_and_statement_only_show_what_belongs_to_the_customer(): void
     {
-        $this->portalTenant(['PORTAL', 'FINANZAS', 'PROYECTOS']);
+        $this->portalTenant(['PORTAL', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD', 'PROYECTOS']);
         $customerId = $this->makeCustomer();
         $otherId = $this->makeCustomer('Otro Cliente SAC');
         $client = $this->portalUser($customerId, 'PORTAL_FINANCE');
@@ -465,7 +474,7 @@ class PortalTest extends TestCase
 
     public function test_the_customer_downloads_its_contracts_from_documents_and_services(): void
     {
-        $this->portalTenant(['PORTAL', 'CONTRATOS', 'FINANZAS']);
+        $this->portalTenant(['PORTAL', 'CONTRATOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $customerId = $this->makeCustomer();
         [$active] = $this->makeContract(customerId: $customerId);
         [$draft] = $this->makeContract(status: 'DRAFT', customerId: $customerId);

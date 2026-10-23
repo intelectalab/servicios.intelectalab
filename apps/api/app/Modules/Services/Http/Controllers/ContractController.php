@@ -19,6 +19,7 @@ use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -255,6 +256,13 @@ class ContractController extends Controller
                     'updated_at' => now(),
                 ]);
                 $created++;
+            }
+
+            // Operaciones activa los servicios: avisa a quien los gestiona y los alcanza.
+            $service = $created ? ContractedService::ignoringAccessScope()->where('contract_id', $contract->id)->first() : null;
+            if ($service) {
+                Notifier::send('contract.activated', 'Contrato activado', "{$contract->contract_number}: {$created} servicio(s) contratado(s) pendientes de activar",
+                    '/contracted-services', Notifier::withPermission('contracted_services.manage', $service));
             }
 
             return $created;

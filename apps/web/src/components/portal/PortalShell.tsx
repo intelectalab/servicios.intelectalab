@@ -15,7 +15,7 @@ import { Btn, Field, INPUT, LoadError, Modal, useToasts } from "@/components/ui/
 
 const ICONS: Record<PortalSection, LucideIcon> = {
   home: Home, quotes: FileText, approve: FileText, services: Layers, sign: FileSignature, requests: Send,
-  documents: Folder, invoices: Receipt, pay: Receipt, support: LifeBuoy, users: Users,
+  documents: Folder, invoices: Receipt, pay: Receipt, support: LifeBuoy, support_write: LifeBuoy, users: Users,
 };
 
 type PortalContextValue = {

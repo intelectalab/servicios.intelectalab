@@ -21,6 +21,7 @@ use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Http\Request;
+use App\Services\Notifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -265,7 +266,11 @@ class QuotationController extends Controller
             ]);
         }
 
-        return $this->transition($request, $quotation, 'SUBMITTED', 'quotation.submit');
+        $response = $this->transition($request, $quotation, 'SUBMITTED', 'quotation.submit');
+        Notifier::send('quotation.submitted', 'Cotización por aprobar', "{$quotation->quotation_number} · ".Notifier::money($quotation->total, $quotation->currency),
+            "/quotations/{$quotation->id}", array_diff(Notifier::withPermission('quotations.approve', $quotation), [$quotation->created_by]));
+
+        return $response;
     }
 
     public function approve(string $quotation, Request $request)
@@ -646,6 +651,7 @@ class QuotationController extends Controller
             $quotation->update($decision === 'APPROVED'
                 ? ['status' => 'APPROVED', 'approved_at' => now()]
                 : ['status' => 'REJECTED']);
+            self::notifyDecision($quotation, $decision, $comment);
         });
 
         $this->audit($request, $quotation, $action, array_filter([
@@ -653,6 +659,17 @@ class QuotationController extends Controller
         ]));
 
         return response()->json($quotation);
+    }
+
+    /** La decisión (de la empresa o del cliente en el portal) le llega a quien hizo la cotización. */
+    public static function notifyDecision(Quotation $quotation, string $decision, ?string $comment = null, bool $portal = false): void
+    {
+        $approved = $decision === 'APPROVED';
+        $who = $portal ? ' por el cliente' : '';
+        Notifier::send($approved ? 'quotation.approved' : 'quotation.rejected',
+            $approved ? "Tu cotización fue aprobada{$who}" : "Tu cotización fue rechazada{$who}",
+            $quotation->quotation_number.($approved ? ' · ya puedes generar el contrato' : ($comment ? " · {$comment}" : '')),
+            "/quotations/{$quotation->id}", [$quotation->created_by]);
     }
 
     private function transition(Request $request, Quotation $quotation, string $to, string $action)

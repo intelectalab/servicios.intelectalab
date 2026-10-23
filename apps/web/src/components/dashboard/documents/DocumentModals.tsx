@@ -9,13 +9,48 @@ import { fileSize } from "@/lib/operations";
 import { stateOf } from "@/lib/commercial";
 import { ACCEPT, DOCUMENT_STATES, MAX_BYTES, VISIBILITY_OPTIONS, antivirusText, sha256Of, shortSha } from "@/lib/documents";
 import { useAccess } from "@/lib/access-context";
-import { Badge, Btn, Card, Chip, Field, FormGrid, INPUT, Kv, LoadError, Modal, Notice, SearchSelect, TD, TH } from "@/components/ui/proto";
+import { exportCsv, exportXlsx, recordExport, type ExportColumn } from "@/lib/export-table";
+import { Badge, Btn, Card, Chip, ExportButtons, Field, FormGrid, INPUT, Kv, LoadError, Modal, Notice, SearchSelect, TD, TH } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
 import type {
   AntivirusStatus, DocumentDetail, DocumentLink, DocumentOptions, DocumentRow, DocumentVisibility, FixedLink, LinkTarget, TemporaryUrl,
 } from "@/types/documents";
 
 type Toast = (text: string, tone?: "success" | "danger" | "warning", detail?: string) => void;
+
+type Version = DocumentDetail["versions"][number];
+
+const VERSION_EXPORT: ExportColumn<Version>[] = [
+  { label: "Versión", value: (version) => `v${version.version}`, width: 10, kind: "center" },
+  { label: "Archivo", value: (version) => version.name, width: 40 },
+  { label: "Tamaño", value: (version) => fileSize(version.size), width: 12, kind: "center" },
+  { label: "SHA-256", value: (version) => version.sha256, width: 68 },
+  { label: "Antivirus", value: (version) => antivirusText(version.antivirus, version.engine)[0], width: 22 },
+  { label: "Autor", value: (version) => version.author ?? "", width: 26 },
+  { label: "Fecha", value: (version) => dateTime(version.at), width: 22, kind: "center" },
+];
+
+/** Exportar al pie de la tabla de versiones: pide `documents.export` y queda en auditoría. */
+function VersionsExport({ document, toast }: { document: DocumentDetail; toast: Toast }) {
+  const [busy, setBusy] = useState(false);
+  async function run(format: "xlsx" | "csv") {
+    setBusy(true);
+    try {
+      await recordExport("documents", format, document.versions.length, true);
+      if (format === "xlsx") await exportXlsx("versiones-documento", `Versiones · ${document.title}`, VERSION_EXPORT, document.versions);
+      else exportCsv("versiones-documento", VERSION_EXPORT, document.versions);
+    } catch {
+      toast("No se pudo exportar.", "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="border-t border-[color:var(--app-border)] px-3.5 py-2.5">
+      <ExportButtons permission="documents.export" total={document.versions.length} busy={busy} onExport={run} />
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------------------------------------
 // Piezas de la subida, compartidas con el archivo del entregable.
@@ -564,6 +599,7 @@ export function DocumentDetailModal({
                   </tbody>
                 </table>
               </div>
+              <VersionsExport document={document} toast={toast} />
             </Card>
 
             <Card title="Registro de accesos">

@@ -9,47 +9,31 @@ use Illuminate\Support\Str;
 class ModuleCatalogSeeder extends Seeder
 {
     /**
-     * Catálogo maestro de módulos. Cada fila: código, nombre, descripción,
-     * categoría, is_core y los prefijos de permisos que el módulo otorga
-     * (tabla 'permissions': "<prefijo>.view" y "<prefijo>.manage").
-     *
-     * is_core = obligatorio: está activo en todos los tenants sin depender del
-     * plan. Son los tres que comparten el permiso "core". El resto de la
-     * categoría CORE viene marcado por defecto en los planes, pero sigue al plan.
+     * Catálogo maestro de módulos: uno por grupo de pantallas del menú del ERP.
+     * Es la misma lista que fija la migración 2026_10_23_000200 (ver ahí el
+     * detalle): código, nombre, descripción, categoría, is_core y los prefijos de
+     * permisos que el módulo otorga. is_core = obligatorio en todos los tenants.
      */
     private const MODULES = [
-        // CORE — base del ERP
-        ['CLIENTES', 'Clientes', 'Gestión de clientes', 'CORE', true, ['core']],
-        ['PROVEEDORES', 'Proveedores', 'Gestión de proveedores', 'CORE', true, ['core']],
-        ['EMPLEADOS', 'Empleados', 'Gestión de empleados', 'CORE', true, ['core']],
-        ['SERVICIOS', 'Servicios', 'Catálogo y motor de servicios', 'CORE', false, ['services']],
-        ['COTIZACIONES', 'Cotizaciones', 'Propuestas comerciales', 'CORE', false, ['quotations']],
-        ['CONTRATOS', 'Contratos', 'Gestión contractual', 'CORE', false, ['contracts', 'orders']],
-        ['ORDENES_TRABAJO', 'Órdenes de trabajo', 'Operación y ejecución', 'CORE', false, ['operations', 'work_orders', 'contracted_services']],
-        ['PROYECTOS', 'Proyectos', 'Planificación de proyectos', 'CORE', false, ['projects', 'tasks', 'deliverables', 'contracted_services']],
-        ['TAREAS', 'Tareas', 'Actividades y seguimiento', 'CORE', false, ['operations']],
-        ['CHECKLISTS', 'Checklists', 'Listas de verificación', 'CORE', false, ['operations']],
-        ['AGENDA', 'Agenda', 'Citas y programación', 'CORE', false, []],
-        ['RECURSOS', 'Recursos', 'Personas y recursos', 'CORE', false, ['operations']],
-        ['DOCUMENTOS', 'Documentos', 'Gestión documental', 'CORE', false, ['documents']],
-        ['ENTREGABLES', 'Entregables', 'Control de entregas', 'CORE', false, []],
-
-        // Finanzas y facturación
-        ['FINANZAS', 'Finanzas', 'Ingresos, gastos y control', 'FINANZAS_FACTURACION', false, ['billing', 'finance']],
-        ['FACTURACION_ELECTRONICA', 'Facturación electrónica', 'Facturación / SUNAT', 'FINANZAS_FACTURACION', false, ['billing']],
-        ['PAGOS_COBRANZAS', 'Pagos y cobranzas', 'Gestión de pagos', 'FINANZAS_FACTURACION', false, ['billing']],
-        ['RENTABILIDAD', 'Rentabilidad', 'Costos y margen', 'FINANZAS_FACTURACION', false, []],
-
-        // Soporte y atención al cliente
-        ['SOPORTE', 'Soporte', 'Atención al cliente', 'SOPORTE_ATENCION_CLIENTE', false, ['support']],
-        ['TICKETS', 'Tickets', 'Gestión de tickets de soporte', 'SOPORTE_ATENCION_CLIENTE', false, ['support']],
-
-        // Operaciones y servicio
-        ['TIMESHEETS', 'Timesheets', 'Horas trabajadas', 'OPERACIONES_SERVICIO', false, ['operations', 'time_entries', 'cost_entries']],
-
-        // CRM — opcional
-        ['CRM', 'CRM', 'Leads, oportunidades y pipeline', 'CRM', false, ['leads', 'opportunities', 'activities', 'campaigns', 'scoring']],
+        ['CLIENTES', 'Clientes y actores', 'Clientes, proveedores, empleados y contactos', 'CORE', true, ['core']],
+        ['SERVICIOS', 'Servicios', 'Catálogo de servicios y precios', 'COMERCIAL', false, ['services']],
+        ['COTIZACIONES', 'Cotizaciones', 'Cotizaciones y solicitudes del portal', 'COMERCIAL', false, ['quotations', 'portal']],
+        ['CONTRATOS', 'Contratos', 'Contratos y órdenes', 'COMERCIAL', false, ['contracts', 'orders']],
+        ['ORDENES_TRABAJO', 'Órdenes de trabajo', 'Órdenes de trabajo, servicios contratados, checklists y app del técnico', 'OPERACIONES', false, ['operations', 'work_orders', 'contracted_services', 'checklists']],
+        ['PROYECTOS', 'Proyectos', 'Proyectos, tareas y entregables', 'OPERACIONES', false, ['projects', 'tasks', 'deliverables', 'contracted_services']],
+        ['TIMESHEETS', 'Horas y costos', 'Horas trabajadas y costos', 'OPERACIONES', false, ['operations', 'time_entries', 'cost_entries']],
+        ['AGENDA', 'Agenda', 'Citas y programación', 'OPERACIONES', false, ['agenda']],
+        ['FINANZAS', 'Finanzas', 'Por facturar, comprobantes, cuentas por cobrar, cobros, recurrencia, bancos y caja, facturación electrónica y tipo de cambio', 'FINANZAS', false, ['billing', 'finance', 'receivables', 'payments', 'fiscal', 'recurring', 'treasury']],
+        ['COMPRAS', 'Compras', 'Órdenes de compra, comprobantes de proveedor y cuentas por pagar', 'COMPRAS', false, ['purchases', 'payables']],
+        ['CONTABILIDAD', 'Contabilidad', 'Libro diario, mayor y balance, estados financieros, plan de cuentas, centros de costo y presupuestos', 'CONTABILIDAD', false, ['accounting', 'budgets']],
+        ['SOPORTE', 'Soporte', 'Tickets y SLA, garantías y calendario laboral', 'SOPORTE', false, ['tickets', 'warranty', 'sla']],
+        ['CRM', 'CRM', 'Leads, pipeline, actividades, campañas y puntuación', 'CRM', false, ['leads', 'opportunities', 'activities', 'campaigns', 'scoring']],
+        ['PORTAL', 'Portal de clientes', 'Acceso externo para los clientes: cotizaciones, servicios, documentos, facturas, solicitudes y soporte.', 'PORTAL', false, ['portal_users']],
+        ['DOCUMENTOS', 'Documentos', 'Gestión documental con versiones', 'CONTROL', false, ['documents']],
     ];
+
+    /** Módulos retirados (no abrían pantallas propias): quedan inactivos. */
+    private const RETIRED = ['PROVEEDORES', 'EMPLEADOS', 'TAREAS', 'CHECKLISTS', 'RECURSOS', 'ENTREGABLES', 'RENTABILIDAD', 'TICKETS', 'FACTURACION_ELECTRONICA', 'PAGOS_COBRANZAS'];
 
     public function run(): void
     {
@@ -76,5 +60,7 @@ class ModuleCatalogSeeder extends Seeder
                 'created_at' => now(),
             ]);
         }
+
+        DB::table('module_catalog')->whereIn('code', self::RETIRED)->update(['active' => false, 'is_core' => false, 'updated_at' => now()]);
     }
 }

@@ -15,7 +15,7 @@ import {
   SearchInput, SelectionBar, Who, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
-import { Kanban, ViewSwitch, useStoredView, type KanbanColumn } from "@/components/ui/kanban";
+import { Kanban, ViewSwitch, useStoredView, type KanbanColumn, MoveLocked } from "@/components/ui/kanban";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
@@ -326,6 +326,7 @@ export default function ProjectsList() {
                     disabled={busy}
                   />
                 )}
+                {movesOf(project).length === 0 && PROJECT_MOVES.some((move) => move.to !== "CANCELLED" && move.from.includes(project.status)) && <MoveLocked permission="projects.manage" />}
               </>
             )}
           />

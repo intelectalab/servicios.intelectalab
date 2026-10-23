@@ -2,7 +2,7 @@ import type { Tone } from "@/components/ui/proto";
 import type { Customer } from "@/types/customer";
 
 /** Secciones del portal (las del prototipo); el rol del portal y los módulos de la empresa deciden cuáles abre. */
-export type PortalSection = "home" | "quotes" | "approve" | "services" | "sign" | "requests" | "documents" | "invoices" | "pay" | "support" | "users";
+export type PortalSection = "home" | "quotes" | "approve" | "services" | "sign" | "requests" | "documents" | "invoices" | "pay" | "support" | "support_write" | "users";
 
 export type PortalRole = "PORTAL_ADMIN" | "PORTAL_FINANCE" | "PORTAL_VIEWER";
 

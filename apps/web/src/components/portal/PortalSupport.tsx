@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Lock } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { excelTone, stateOf } from "@/lib/commercial";
 import { TICKET_STATES } from "@/lib/support";
@@ -10,6 +11,9 @@ import { ATTENTION, dateTimeText, type PortalTicket, type PortalTicketRow } from
 import { Badge, Btn, Card, Chip, DataTable, Field, INPUT, LoadError, type Column } from "@/components/ui/proto";
 import { PortalBack, PortalTitle, usePortal } from "./PortalShell";
 import { PortalExport } from "./PortalExport";
+
+// "Solo lectura" ve sus tickets pero no los crea ni los responde.
+const READ_ONLY = "Tu rol del portal solo puede ver los tickets";
 
 function errorText(err: unknown, fallback: string) {
   return err instanceof ApiError ? (err.errors && Object.values(err.errors)[0]?.[0]) || err.message : fallback;
@@ -25,7 +29,8 @@ const EXPORT: ExportColumn<PortalTicketRow>[] = [
 
 export function PortalSupportList() {
   const router = useRouter();
-  const { toast } = usePortal();
+  const { toast, can } = usePortal();
+  const canWrite = can("support_write");
   const [rows, setRows] = useState<PortalTicketRow[] | null>(null);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
@@ -90,7 +95,10 @@ export function PortalSupportList() {
             <textarea className={INPUT} rows={3} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={5000} />
           </Field>
           <div className="flex justify-end">
-            <Btn onClick={create} disabled={busy}>{busy ? "Creando…" : "Crear ticket"}</Btn>
+            <Btn onClick={create} disabled={busy || !canWrite} title={canWrite ? undefined : READ_ONLY}>
+              {busy ? "Creando…" : "Crear ticket"}
+              {!canWrite && <Lock size={13} className="-ml-0.5 shrink-0" aria-hidden="true" />}
+            </Btn>
           </div>
         </div>
       </Card>
@@ -109,7 +117,8 @@ export function PortalSupportList() {
 }
 
 export function PortalTicketDetail({ id }: { id: string }) {
-  const { toast } = usePortal();
+  const { toast, can } = usePortal();
+  const canWrite = can("support_write");
   const [ticket, setTicket] = useState<PortalTicket | null>(null);
   const [error, setError] = useState("");
   const [missing, setMissing] = useState(false);
@@ -195,7 +204,12 @@ export function PortalTicketDetail({ id }: { id: string }) {
         {ticket.status !== "CLOSED" && (
           <div className="mt-4 grid gap-2">
             <textarea className={INPUT} rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Escribe tu respuesta…" aria-label="Respuesta" maxLength={5000} />
-            <div className="flex justify-end"><Btn onClick={send} disabled={busy}>{busy ? "Enviando…" : "Enviar"}</Btn></div>
+            <div className="flex justify-end">
+              <Btn onClick={send} disabled={busy || !canWrite} title={canWrite ? undefined : READ_ONLY}>
+                {busy ? "Enviando…" : "Enviar"}
+                {!canWrite && <Lock size={13} className="-ml-0.5 shrink-0" aria-hidden="true" />}
+              </Btn>
+            </div>
           </div>
         )}
       </Card>

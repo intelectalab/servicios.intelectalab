@@ -2,7 +2,8 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { Btn, Card, Chip, DataTable, Field, INPUT, LoadError, Modal, type Column } from "@/components/ui/proto";
+import { exportCsv, exportXlsx, recordExport, type ExportColumn } from "@/lib/export-table";
+import { Btn, Card, Chip, DataTable, ExportButtons, Field, INPUT, LoadError, Modal, type Column } from "@/components/ui/proto";
 
 export type OrgUnitKind = "branches" | "teams";
 
@@ -24,6 +25,12 @@ export const ORG_UNIT_TEXT: Record<OrgUnitKind, {
 };
 
 const unitKey = (unit: OrgUnit) => unit.id;
+
+const EXPORT_COLUMNS: ExportColumn<OrgUnit>[] = [
+  { label: "Nombre", value: (unit) => unit.name, width: 34 },
+  { label: "Usuarios", value: (unit) => unit.users, width: 12, kind: "number" },
+  { label: "Estado", value: (unit) => (unit.status === "ACTIVE" ? "Activo" : "Inactivo"), width: 14, kind: "status", tone: (unit) => (unit.status === "ACTIVE" ? "success" : "neutral") },
+];
 const isActive = (unit: OrgUnit) => unit.status === "ACTIVE";
 
 function firstError(err: unknown, fallback: string) {
@@ -95,6 +102,7 @@ export function OrgUnits({
   const [reload, setReload] = useState(0);
   const [editing, setEditing] = useState<OrgUnit | null>(null);
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const text = ORG_UNIT_TEXT[kind];
 
   useEffect(() => {
@@ -130,6 +138,23 @@ export function OrgUnits({
     }
   }
 
+  /** Exporta la tabla completa (sedes o equipos): pide `users.export` y queda en auditoría. */
+  async function runExport(format: "xlsx" | "csv") {
+    const rows = data?.[kind] ?? [];
+    setExporting(true);
+    try {
+      await recordExport("users", format, rows.length, true);
+      const name = kind === "branches" ? "sedes" : "equipos";
+      if (format === "xlsx") await exportXlsx(name, text.tab, EXPORT_COLUMNS, rows);
+      else exportCsv(name, EXPORT_COLUMNS, rows);
+      toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
+    } catch {
+      toast("No se pudo exportar la tabla.", "danger");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const columns: Column<OrgUnit>[] = [
     { label: "Nombre", render: (unit) => <strong className="font-semibold">{unit.name}</strong> },
     { label: "Usuarios", render: (unit) => unit.users },
@@ -153,7 +178,14 @@ export function OrgUnits({
         {error ? (
           <LoadError text={error} onRetry={() => setReload((n) => n + 1)} />
         ) : (
-          <DataTable cols={columns} rows={data?.[kind] ?? []} rowKey={unitKey} loading={!data} empty={text.empty} />
+          <>
+            <DataTable cols={columns} rows={data?.[kind] ?? []} rowKey={unitKey} loading={!data} empty={text.empty} />
+            {data && data[kind].length > 0 && (
+              <div className="border-t border-[color:var(--app-border)] px-3.5 py-2.5">
+                <ExportButtons permission="users.export" total={data[kind].length} busy={exporting} onExport={runExport} />
+              </div>
+            )}
+          </>
         )}
       </Card>
 

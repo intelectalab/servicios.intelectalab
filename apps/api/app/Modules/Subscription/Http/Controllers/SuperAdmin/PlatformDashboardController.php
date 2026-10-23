@@ -21,7 +21,7 @@ class PlatformDashboardController extends Controller
     public const CONNECTION = 'pgsql_platform';
 
     /** Tablas del panel que se pueden exportar (cada exportación queda auditada). */
-    public const EXPORTS = ['trials', 'usage', 'plans', 'audit'];
+    public const EXPORTS = ['trials', 'usage', 'plans', 'audit', 'tenants', 'subscriptions', 'platform_audit', 'tenant_modules', 'tenant_subscriptions', 'tenant_status'];
 
     public function show(Request $request): JsonResponse
     {

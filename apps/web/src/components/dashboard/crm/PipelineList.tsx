@@ -14,7 +14,7 @@ import {
   SearchInput, SelectionBar, Who, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
-import { Kanban, ViewSwitch, useStoredView, type KanbanColumn } from "@/components/ui/kanban";
+import { Kanban, ViewSwitch, useStoredView, type KanbanColumn, MoveLocked } from "@/components/ui/kanban";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
@@ -352,6 +352,7 @@ export default function PipelineList() {
                     disabled={busy}
                   />
                 )}
+                {!canManage && opportunity.status === "OPEN" && <MoveLocked permission="opportunities.manage" />}
                 {opportunity.status === "WON" && !opportunity.converted && (
                   <span><Chip tone="warning">Pendiente de conversión</Chip></span>
                 )}

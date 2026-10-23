@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   Menu,
-  Bell,
   ChevronDown,
   User as UserIcon,
   KeyRound,
@@ -17,6 +16,7 @@ import {
 import { poppins } from "@/lib/fonts";
 import GlobalSearch, { type SearchScreen } from "@/components/layout/GlobalSearch";
 import ChangePasswordModal from "@/components/layout/ChangePasswordModal";
+import NotificationBell from "@/components/layout/NotificationBell";
 
 export type UserProfile = {
   name: string;
@@ -40,6 +40,8 @@ type HeaderProps = {
   canSearchRecords?: boolean;
   /** Ruta de "Mi perfil y seguridad" (la consola de plataforma usa la suya). */
   profileHref?: string;
+  /** Campana de notificaciones: solo en el sistema de la empresa (la consola de plataforma no tiene). */
+  notifications?: boolean;
 };
 
 // Botón de ícono de la barra: azul del logo, igual en tema claro y oscuro.
@@ -66,6 +68,7 @@ export default function Header({
   screens = [],
   canSearchRecords = false,
   profileHref = "/profile",
+  notifications = false,
 }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -144,10 +147,7 @@ export default function Header({
           <Sun size={19} className="theme-sun-icon" />
         </button>
 
-        <button className={ICON_BUTTON} aria-label="Ver notificaciones">
-          <Bell size={20} />
-          <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-[#1B8FC9] ring-2 ring-[var(--app-surface)]" />
-        </button>
+        {notifications && <NotificationBell className={ICON_BUTTON} />}
 
         <div className="relative" ref={dropdownRef}>
           <button

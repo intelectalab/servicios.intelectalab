@@ -20,6 +20,7 @@ use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use App\Services\Notifier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -165,6 +166,7 @@ class WorkOrderController extends Controller
                 $this->audit($request, $order, 'work_order.assign', [
                     'from' => 'PLANNED', 'to' => 'ASSIGNED', 'assigned_user_id' => $assignee, 'note' => 'Asignada a '.$this->userName($assignee),
                 ]);
+                $this->notifyAssignee($order);
             }
 
             return $order;
@@ -241,6 +243,9 @@ class WorkOrderController extends Controller
                 'assigned_user_id' => $data['assigned_user_id'],
                 'note' => ($reassigned ? 'Reasignada a ' : 'Asignada a ').$this->userName($data['assigned_user_id']),
             ]));
+            if ($order->wasChanged('assigned_user_id')) {
+                $this->notifyAssignee($order);
+            }
         });
 
         return response()->json($this->detail($order));
@@ -721,6 +726,11 @@ class WorkOrderController extends Controller
         });
 
         return response()->json($this->detail($order));
+    }
+
+    private function notifyAssignee(WorkOrder $order): void
+    {
+        Notifier::send('work_order.assigned', 'Nueva orden de trabajo asignada', "{$order->code} · {$order->title}", "/work-orders/{$order->id}", [$order->assigned_user_id]);
     }
 
     private function audit(Request $request, WorkOrder $order, string $action, array $metadata = []): void

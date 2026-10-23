@@ -21,7 +21,7 @@ class FinanceTreasuryTest extends TestCase
     use DatabaseTransactions;
     use OperationsFixtures;
 
-    private const MODULES = ['CONTRATOS', 'FINANZAS'];
+    private const MODULES = ['CONTRATOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD'];
 
     private const TREASURY = [
         'treasury.view', 'treasury.create', 'treasury.manage', 'treasury.export',

@@ -43,7 +43,7 @@ const STATUS_LABELS: Record<string, string> = { ACTIVE: "Activo", INVITED: "Invi
 const CHANNELS: { key: keyof Preferences; label: string; hint?: string }[] = [
   { key: "in_app", label: "En la aplicación (campana)" },
   { key: "email", label: "Correo electrónico" },
-  { key: "whatsapp", label: "WhatsApp", hint: "Por ejemplo, avisos de OT asignada para técnicos" },
+  { key: "whatsapp", label: "WhatsApp", hint: "Por ejemplo, avisos de OT asignada para técnicos. Aún no disponible: la empresa no tiene proveedor de WhatsApp; tu elección queda guardada." },
 ];
 
 function dateTime(value: string | null) {
@@ -323,7 +323,6 @@ export default function ProfileView() {
                           </span>
                         </label>
                       ))}
-                      <p className="app-muted text-xs">Se aplicarán a tus avisos cuando exista la pantalla Notificaciones.</p>
                       <div className="flex justify-end">
                         <Btn type="submit" variant="secondary" disabled={savingPreferences}>Guardar preferencias</Btn>
                       </div>

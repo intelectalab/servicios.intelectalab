@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Lock, X } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { dateTime, fieldErrors, firstError } from "@/lib/crm";
 import { DAYS, SLA_MODES, dayText, minutesText, supportHistoryLabel } from "@/lib/support";
@@ -105,6 +105,8 @@ export default function SlaCalendar() {
   const year = settings.today.slice(0, 4);
   const lock = settings.calendar.lock_version;
   const denied = canManage ? undefined : deniedText("sla.manage");
+  // Sin permiso, las tarjetas editables lo dicen con candado (los campos quedan deshabilitados).
+  const readOnly = denied ? <span title={denied}><Chip tone="neutral"><Lock size={11} className="mr-1" aria-hidden="true" />Solo lectura</Chip></span> : undefined;
 
   const simulationCols: Column<SimulationRow>[] = [
     { label: "Prioridad", render: (row) => <span className="inline-flex items-center gap-1.5 whitespace-nowrap"><PriorityTag priority={row.priority} /> {row.label}</span> },
@@ -151,7 +153,7 @@ export default function SlaCalendar() {
           {
             id: "hours",
             node: (
-              <Card title="Horario de atención">
+              <Card title="Horario de atención" actions={readOnly}>
                 <div className="grid gap-2" title={denied}>
                   {WEEK.map((day) => {
                     const value = days[String(day)];
@@ -217,7 +219,7 @@ export default function SlaCalendar() {
           {
             id: "times",
             node: (
-              <Card title="Tiempos por prioridad">
+              <Card title="Tiempos por prioridad" actions={readOnly}>
                 <div className="grid gap-2.5" title={denied}>
                   <div className="app-muted hidden grid-cols-[minmax(110px,1fr)_1fr_1fr] gap-2.5 text-[11px] font-semibold uppercase tracking-[.05em] sm:grid">
                     <span>Prioridad</span><span>Respuesta (h)</span><span>Resolución (h)</span>
@@ -300,7 +302,7 @@ export default function SlaCalendar() {
                         onClick={() => save(`holidays/${holiday.id}`, "DELETE", null, "Feriado quitado")}
                         className="app-muted grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)] disabled:cursor-not-allowed disabled:opacity-45"
                       >
-                        <X size={15} />
+                        {canManage ? <X size={15} /> : <Lock size={13} aria-hidden="true" />}
                       </button>
                     </li>
                   ))}

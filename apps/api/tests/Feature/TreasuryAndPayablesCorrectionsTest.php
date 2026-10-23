@@ -68,7 +68,7 @@ class TreasuryAndPayablesCorrectionsTest extends TestCase
 
     public function test_a_cash_expense_is_reclassified_with_its_correction_recorded_and_a_new_entry(): void
     {
-        $this->makeTenant(['FINANZAS']);
+        $this->makeTenant(['FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $this->as($this->makeUser('Finanzas', self::FINANCE));
         $cash = $this->account(['name' => 'Caja chica', 'account_type' => 'CASH', 'bank_name' => null, 'account_number' => null, 'opening_balance' => 500, 'fund_amount' => 500]);
         $wrong = $this->center('CC-VTA');
@@ -116,7 +116,7 @@ class TreasuryAndPayablesCorrectionsTest extends TestCase
 
     public function test_a_supplier_payment_is_reversed_with_movements_and_its_entry_reversed(): void
     {
-        $this->makeTenant(['FINANZAS']);
+        $this->makeTenant(['FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $this->as($this->makeUser('Finanzas', self::FINANCE));
         $bank = $this->account(['opening_balance' => 5000]);
         $supplier = $this->supplier();
@@ -177,7 +177,7 @@ class TreasuryAndPayablesCorrectionsTest extends TestCase
 
     public function test_the_three_way_match_tolerance_is_a_company_rule(): void
     {
-        $this->makeTenant(['FINANZAS']);
+        $this->makeTenant(['FINANZAS', 'COMPRAS', 'CONTABILIDAD']);
         $finance = $this->makeUser('Finanzas', self::FINANCE);
         $approver = $this->makeUser('Gerencia', ['purchases.view', 'purchases.approve']);
         $supplier = $this->supplier();

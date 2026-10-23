@@ -32,10 +32,3 @@ export type SelectedPlan = Partial<SaasPlan> & {
   billingPeriod: BillingPeriod;
   isTrial: boolean;
 };
-
-export interface SuperAdminMetrics {
-  active_plans?: number;
-  active_tenants?: number;
-  in_trial?: number;
-  monthly_revenue?: number | string;
-}

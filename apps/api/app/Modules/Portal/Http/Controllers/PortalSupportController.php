@@ -80,6 +80,7 @@ class PortalSupportController extends Controller
                 tenantId: $tenantId, userId: $user->id, action: 'ticket.create', entityType: 'SupportTicket', entityId: $ticket->id,
                 metadata: ['to' => 'OPEN', 'number' => $ticket->ticket_number, 'channel' => 'PORTAL'],
             );
+            \App\Modules\Support\Http\Controllers\SupportTicketController::notifyNew($ticket);
 
             return $ticket;
         });

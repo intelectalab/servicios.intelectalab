@@ -20,7 +20,7 @@ class FinanceTest extends TestCase
     use DatabaseTransactions;
     use OperationsFixtures;
 
-    private const MODULES = ['ORDENES_TRABAJO', 'CONTRATOS', 'FINANZAS'];
+    private const MODULES = ['ORDENES_TRABAJO', 'CONTRATOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD'];
 
     /** Finanzas: prepara, emite, cobra, concilia, reembolsa y exporta. */
     private const FINANCE = [

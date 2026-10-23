@@ -22,7 +22,7 @@ class AccountingTest extends TestCase
     use DatabaseTransactions;
     use OperationsFixtures;
 
-    private const MODULES = ['FINANZAS'];
+    private const MODULES = ['FINANZAS', 'COMPRAS', 'CONTABILIDAD'];
 
     private const ACCOUNTANT = [
         'accounting.view', 'accounting.create', 'accounting.manage', 'accounting.approve', 'accounting.export',

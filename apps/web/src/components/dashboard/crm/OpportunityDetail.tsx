@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { AlertCircle, ArrowLeft, Check, FileText, Pencil, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, FileText, Lock, Pencil, Users } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { QUOTATION_STATES, customerName, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { OPPORTUNITY_STATES, crmHistoryLabel, dateTime, firstError } from "@/lib/crm";
@@ -183,6 +183,7 @@ export default function OpportunityDetail() {
             >
               <span className="truncate">{stage.name}</span>
               <small className={`font-normal ${current ? "opacity-80" : "app-muted"}`}>{stage.probability}%</small>
+              {open && !current && !accessLoading && !canManage && <Lock size={12} className="app-muted shrink-0" aria-hidden="true" />}
             </button>
           );
         })}

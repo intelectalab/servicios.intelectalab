@@ -22,6 +22,7 @@ use App\Services\SpreadsheetImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -708,6 +709,10 @@ class TreasuryController extends Controller
             $this->audit($request, 'treasury.cash_count', 'CashCount', $id, [
                 'note' => "{$cash->name}: contado ".number_format($counted, 2).', en libros '.number_format($book, 2), 'difference' => $difference,
             ]);
+            if (abs($difference) > 0.009) {
+                Notifier::send('cash_count.difference', 'Diferencia en arqueo de caja', "{$cash->name}: ".($difference > 0 ? '+' : '').number_format($difference, 2)
+                    .' (contado '.number_format($counted, 2).', en libros '.number_format($book, 2).')', '/banks', Notifier::withPermission('treasury.view'));
+            }
 
             return ['id' => $id, 'book' => $book, 'counted' => $counted, 'difference' => $difference];
         });

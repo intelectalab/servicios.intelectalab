@@ -52,7 +52,7 @@ class CheckPermission
      * Un permiso "cotizaciones.algo" pertenece a los módulos del catálogo que declaran ese
      * prefijo. Si ninguno lo declara (usuarios, roles, ajustes…) no depende del plan.
      */
-    private static function moduleAvailable(string $tenantId, string $permissionCode): bool
+    public static function moduleAvailable(string $tenantId, string $permissionCode): bool
     {
         $prefix = strtolower(strtok($permissionCode, '.'));
 

@@ -21,7 +21,7 @@ class PurchasingTest extends TestCase
     use DatabaseTransactions;
     use OperationsFixtures;
 
-    private const MODULES = ['FINANZAS'];
+    private const MODULES = ['FINANZAS', 'COMPRAS', 'CONTABILIDAD'];
 
     private const BUYER = ['purchases.view', 'purchases.create', 'purchases.manage'];
 

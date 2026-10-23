@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Check, Clock, FileText, Pencil, Plus, Upload } from "lucide-react";
+import { ArrowLeft, Check, Clock, FileText, Lock, Pencil, Plus, Upload } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { customerName, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { dateTime, firstError } from "@/lib/crm";
@@ -13,10 +13,10 @@ import {
 } from "@/lib/operations";
 import { useAccess } from "@/lib/access-context";
 import {
-  Badge, Btn, Card, Kpi, Kpis, Kv, LoadError, Notice, PageHead, Screen, StateTrack, TD, TH, Tabs, Timeline, Who, useToasts,
+  Badge, Btn, Card, Kpi, Kpis, Kv, LoadError, Notice, PageHead, Screen, StateTrack, TD, TH, Tabs, Timeline, Who, deniedText, useToasts,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
-import { Kanban, type KanbanColumn } from "@/components/ui/kanban";
+import { Kanban, type KanbanColumn, MoveLocked } from "@/components/ui/kanban";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import { CostEntriesList, Locked, TimeEntriesList } from "@/components/dashboard/operations/Entries";
@@ -282,6 +282,11 @@ export default function ProjectDetail() {
                         <Pencil size={13} />
                       </button>
                     )}
+                    {!canManage && !accessLoading && open && task.status !== "DONE" && (
+                      <span title={deniedText("tasks.manage")} aria-label={deniedText("tasks.manage")} className="app-muted -mr-1 -mt-0.5 grid h-6 w-6 shrink-0 cursor-not-allowed place-items-center opacity-60">
+                        <Lock size={12} aria-hidden="true" />
+                      </span>
+                    )}
                   </div>
                   <div className="app-muted flex flex-wrap items-center justify-between gap-1.5 text-xs">
                     <PriorityChip priority={task.priority} />
@@ -314,6 +319,7 @@ export default function ProjectDetail() {
                       disabled={busy}
                     />
                   )}
+                  {!canManage && running && taskTargets(task).length > 0 && <MoveLocked permission="tasks.manage" />}
                 </>
               );
             }}

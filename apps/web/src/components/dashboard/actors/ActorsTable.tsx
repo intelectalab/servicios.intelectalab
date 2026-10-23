@@ -441,7 +441,19 @@ export function ActorsTable({
         } : undefined}
         onDoubleClick={canEdit && !isEditing ? startEdit : undefined}
       >
-        {canEdit && !isEditing ? (
+        {!editable && key !== "roles" ? (
+          // Sin permiso de edición el lápiz no desaparece: sale con candado y su motivo.
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">{content}</div>
+            <span
+              title={deniedText("core.manage")}
+              aria-label={deniedText("core.manage")}
+              className="app-muted shrink-0 cursor-not-allowed rounded p-1 opacity-0 group-hover/cell:opacity-60 max-sm:opacity-60"
+            >
+              <Lock size={12} aria-hidden="true" />
+            </span>
+          </div>
+        ) : canEdit && !isEditing ? (
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">{content}</div>
             <button
@@ -717,13 +729,15 @@ export function ActorsTable({
                     <button
                       type="button"
                       disabled={!editable}
+                      title={editable ? undefined : deniedText("core.manage")}
                       onClick={() => {
                         setAddMenuOpen(false);
                         onAddCustomField();
                       }}
-                      className={MENU_ITEM}
+                      className={`${MENU_ITEM} disabled:cursor-not-allowed disabled:opacity-45`}
                     >
                       <Plus size={14} className="app-muted" /> Agregar columna nueva
+                      {!editable && <Lock size={13} className="ml-auto shrink-0" aria-hidden="true" />}
                     </button>
                     <div className="my-1 border-t border-[color:var(--app-border)]" />
                     <p className="app-muted px-3 py-1 text-[10px] font-semibold uppercase tracking-wide">Columnas ocultas</p>

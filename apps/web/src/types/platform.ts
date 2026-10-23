@@ -80,3 +80,100 @@ export type PlatformAuditRow = {
   entity_type: string | null;
   user_name: string | null;
 };
+
+export type CatalogModule = {
+  code: string;
+  name: string;
+  description: string | null;
+  category: string;
+  is_core: boolean;
+  own_screens: boolean;
+  provided_by: string[];
+};
+
+export type PlatformSubscription = {
+  id: string;
+  plan_id: string;
+  plan: string;
+  plan_code: string;
+  currency: string;
+  monthly_price: number | string | null;
+  annual_price: number | string | null;
+  starts_at: string;
+  ends_at: string | null;
+  trial: boolean;
+  billing_period: string;
+};
+
+export type PlatformTenant = {
+  id: string;
+  code: string;
+  name: string;
+  legal_name: string | null;
+  trade_name: string | null;
+  ruc: string | null;
+  status: string;
+  created_at: string;
+  subscription: PlatformSubscription | null;
+  modules: string[];
+  users: number;
+  users_limit: number | null;
+  portal_users: number;
+  portal_users_limit: number | null;
+  customers: number;
+  customers_limit: number | null;
+  storage_mb: number;
+  storage_limit_gb: number | null;
+};
+
+export type PlatformTenantDetail = PlatformTenant & {
+  subscriptions: { id: string; plan: string; status: string; starts_at: string; ends_at: string | null; trial: boolean; billing_period: string }[];
+  status_log: { from: string | null; to: string; reason: string | null; at: string; user_name: string | null }[];
+  admins: { id: string; name: string; email: string; status: string; last_login_at: string | null }[];
+};
+
+export type PlatformPlanOption = {
+  id: string;
+  code: string;
+  name: string;
+  currency: string;
+  monthly_price: number | string | null;
+  annual_price: number | string | null;
+  has_trial: boolean;
+  trial_days: number | null;
+  default_billing_period: string;
+  modules: Record<string, boolean>;
+  users_limit: number | null;
+};
+
+export type PlatformSubscriptionRow = {
+  id: string;
+  tenant_id: string;
+  tenant_code: string;
+  tenant_name: string;
+  tenant_status: string;
+  plan: string;
+  currency: string;
+  status: string;
+  starts_at: string;
+  ends_at: string | null;
+  trial: boolean;
+  billing_period: string;
+  price: number | string | null;
+};
+
+export type PlatformAuditEntry = {
+  id: string;
+  created_at: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  before_data: Record<string, unknown> | null;
+  after_data: Record<string, unknown> | null;
+  metadata: Record<string, unknown> | null;
+  user_id: string | null;
+  user_name: string | null;
+  user_email: string | null;
+};

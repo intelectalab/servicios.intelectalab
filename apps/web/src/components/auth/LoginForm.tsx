@@ -56,7 +56,7 @@ export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { hom
     } else if (data.user?.portal) {
       router.push("/portal");
     } else {
-      router.push("/actors");
+      router.push("/dashboard");
     }
   }
 

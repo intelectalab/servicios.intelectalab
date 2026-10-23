@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useState, useSyncExternalStore, type ReactNode } from "react";
-import { List, SquareKanban } from "lucide-react";
-import type { Tone } from "@/components/ui/proto";
+import { List, Lock, SquareKanban } from "lucide-react";
+import { deniedText, type Tone } from "@/components/ui/proto";
 import { readView, saveView, type ViewMode } from "@/lib/crm";
 
 /**
@@ -118,6 +118,20 @@ export function Kanban<T>({
         );
       })}
     </div>
+  );
+}
+
+/** "Mover a…" de una tarjeta que el rol no puede mover: se ve, deshabilitado, con candado y su motivo. */
+export function MoveLocked({ permission }: { permission: string }) {
+  return (
+    <span
+      aria-disabled="true"
+      title={deniedText(permission)}
+      className="app-muted flex h-[30px] w-full cursor-not-allowed items-center justify-between rounded-md border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] px-2 text-xs opacity-60"
+    >
+      Mover a…
+      <Lock size={12} aria-hidden="true" />
+    </span>
   );
 }
 

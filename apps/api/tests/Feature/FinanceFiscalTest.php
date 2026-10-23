@@ -22,7 +22,7 @@ class FinanceFiscalTest extends TestCase
     use DatabaseTransactions;
     use OperationsFixtures;
 
-    private const MODULES = ['CONTRATOS', 'FINANZAS'];
+    private const MODULES = ['CONTRATOS', 'FINANZAS', 'COMPRAS', 'CONTABILIDAD'];
 
     private const FINANCE = [
         'billing.view', 'billing.create', 'billing.manage', 'billing.approve', 'receivables.view', 'receivables.manage',

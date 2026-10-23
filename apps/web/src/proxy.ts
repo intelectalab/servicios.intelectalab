@@ -6,14 +6,14 @@ import { SCOPE_COOKIE, TOKEN_COOKIE } from "@/lib/auth";
 const AUTH_ROUTES = ["/login", "/forgot-password", "/reset-password"];
 
 // Cada tipo de cuenta tiene su propia consola y no entra a la otra.
-const TENANT_PREFIXES = ["/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/checklist-templates", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/purchase-orders", "/supplier-invoices", "/payables", "/journal", "/ledger", "/financial-statements", "/budgets", "/chart-of-accounts", "/tickets", "/warranty-claims", "/sla-calendar", "/documents", "/audit", "/roles", "/users", "/portal-users", "/profile"];
+const TENANT_PREFIXES = ["/dashboard", "/notifications", "/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/checklist-templates", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/purchase-orders", "/supplier-invoices", "/payables", "/journal", "/ledger", "/financial-statements", "/budgets", "/chart-of-accounts", "/tickets", "/warranty-claims", "/sla-calendar", "/documents", "/audit", "/roles", "/users", "/portal-users", "/profile"];
 const PLATFORM_PREFIXES = ["/superadmin"];
 // Portal de clientes: experiencia aparte. "/portal" no coincide con "/portal-requests" ni "/portal-users".
 const PORTAL_PREFIXES = ["/portal"];
 // Activar la invitación al portal: sin sesión, como el inicio de sesión.
 const PORTAL_PUBLIC = ["/portal/activate"];
 const PORTAL_HOME = "/portal";
-const TENANT_HOME = "/actors";
+const TENANT_HOME = "/dashboard";
 // Módulos desconectados: sus pantallas siguen en el repo, pero las reemplaza Clientes y actores.
 // Para reconectarlos, vaciar esta lista y devolver sus ítems al menú (AppShell.tsx).
 const RETIRED_PREFIXES = ["/customers", "/suppliers", "/employees"];
@@ -95,6 +95,8 @@ export const config = {
     "/login/:path*",
     "/forgot-password/:path*",
     "/reset-password/:path*",
+    "/dashboard/:path*",
+    "/notifications/:path*",
     "/customers/:path*",
     "/suppliers/:path*",
     "/employees/:path*",

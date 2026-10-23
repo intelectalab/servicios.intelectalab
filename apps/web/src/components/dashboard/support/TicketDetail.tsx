@@ -267,6 +267,7 @@ export default function TicketDetail() {
                       <label className="relative inline-flex cursor-pointer items-center gap-2 text-[13px]">
                         <input type="checkbox" checked={internal} onChange={(e) => setInternal(e.target.checked)} disabled={!canAnswer} className="h-4 w-4 accent-[#1B8FC9]" />
                         <span>Nota interna</span>
+                        {!canAnswer && !accessLoading && <Lock size={12} className="app-muted" aria-label={deniedText("tickets.manage")} />}
                       </label>
                       <Btn onClick={send} permission="tickets.manage" disabled={busy}>Enviar</Btn>
                     </div>

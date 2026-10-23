@@ -259,6 +259,7 @@ export default function UsersList() {
   const [perPage, setPerPage] = useState(PAGE_SIZES[0]);
   const [editing, setEditing] = useState<CompanyUser | "new" | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState<CompanyUser | null>(null);
   const [exporting, setExporting] = useState(false);
   // Además de los usuarios, aquí se gestionan las sedes y los equipos a los que pertenecen.
   const [tab, setTab] = useState<"users" | OrgUnitKind>("users");
@@ -284,7 +285,8 @@ export default function UsersList() {
         method: "POST",
         body: JSON.stringify({ status: isActive(user) ? "INACTIVE" : "ACTIVE" }),
       });
-      toast("Usuario actualizado");
+      toast(isActive(user) ? "Usuario desactivado" : "Usuario activado");
+      setConfirming(null);
       setReload((n) => n + 1);
     } catch (err) {
       toast(firstError(err, "No se pudo actualizar el usuario."), "danger");
@@ -349,7 +351,7 @@ export default function UsersList() {
       render: (user) => (
         <div className="flex flex-wrap gap-1.5">
           <Btn variant="ghost" size="sm" onClick={() => setEditing(user)} permission="users.manage" disabled={busy}>Editar</Btn>
-          <Btn variant={isActive(user) ? "danger-ghost" : "secondary"} size="sm" onClick={() => toggleStatus(user)} permission="users.manage" disabled={busy}>
+          <Btn variant={isActive(user) ? "danger-ghost" : "secondary"} size="sm" onClick={() => setConfirming(user)} permission="users.manage" disabled={busy}>
             {isActive(user) ? "Desactivar" : "Activar"}
           </Btn>
         </div>
@@ -509,6 +511,28 @@ export default function UsersList() {
             else toast("Usuario guardado");
           }}
         />
+      )}
+      {/* Como en Usuarios del portal: quitar o devolver el acceso se confirma. */}
+      {confirming && (
+        <Modal
+          title={isActive(confirming) ? "Desactivar usuario" : "Activar usuario"}
+          size="sm"
+          onClose={() => setConfirming(null)}
+          footer={
+            <>
+              <Btn variant="secondary" onClick={() => setConfirming(null)} disabled={busy}>Volver</Btn>
+              <Btn variant={isActive(confirming) ? "danger" : "primary"} onClick={() => toggleStatus(confirming)} disabled={busy}>
+                {isActive(confirming) ? "Desactivar" : "Activar"}
+              </Btn>
+            </>
+          }
+        >
+          <p>
+            {isActive(confirming)
+              ? <><strong>{confirming.name}</strong> dejará de entrar a la empresa y se cerrarán sus sesiones. Su cuenta y su historial se conservan.</>
+              : <><strong>{confirming.name}</strong> podrá volver a entrar a la empresa con su rol actual.</>}
+          </p>
+        </Modal>
       )}
       {toasts}
     </Screen>

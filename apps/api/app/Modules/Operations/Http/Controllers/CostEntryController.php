@@ -11,6 +11,7 @@ use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -103,6 +104,9 @@ class CostEntryController extends Controller
                 ...($project->branch_id ? ['branch_id' => $project->branch_id] : []),
             ]);
             $this->audit($request, $cost, 'cost_entry.create', ['to' => 'SUBMITTED', 'amount' => (float) $cost->amount]);
+            Notifier::send('cost_entry.submitted', 'Costo por aprobar',
+                "{$project->code} · {$cost->description} · ".Notifier::money($cost->amount),
+                '/timesheets', Notifier::withPermission('cost_entries.approve', $cost));
 
             return $cost;
         });

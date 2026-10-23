@@ -14,7 +14,7 @@ import {
   SearchInput, SelectionBar, useRowSelection, useToasts, type Column,
   applySort, type SortState,
 } from "@/components/ui/proto";
-import { Kanban, ViewSwitch, useStoredView, type KanbanColumn } from "@/components/ui/kanban";
+import { Kanban, ViewSwitch, useStoredView, type KanbanColumn, MoveLocked } from "@/components/ui/kanban";
 import { PickSelect } from "@/components/ui/pick-select";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import { CampaignFormModal } from "@/components/dashboard/crm/CampaignModals";
@@ -324,6 +324,7 @@ export default function CampaignsList() {
                     disabled={busy}
                   />
                 )}
+                {!canManage && CAMPAIGN_OPEN.includes(campaign.status) && <MoveLocked permission="campaigns.manage" />}
               </>
             )}
           />

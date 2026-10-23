@@ -6,6 +6,7 @@ use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Crm\Support\CrmCatalog;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Services\AuditLogger;
+use App\Services\Notifier;
 use App\Services\SequentialNumberGenerator;
 use Illuminate\Support\Facades\DB;
 
@@ -51,6 +52,16 @@ class PortalRequests
                 tenantId: $tenantId, userId: $userId, action: 'portal_request.create', entityType: 'PortalRequest', entityId: $portalRequest->id,
                 metadata: array_filter(['request_number' => $number, 'to' => 'SUBMITTED', 'route' => $portalRequest->route, 'opportunity' => $opportunity?->opportunity_number]),
             );
+
+            // Con CRM, a quien lleva la oportunidad; si no tiene responsable o no hay CRM, a quien atiende la bandeja.
+            $customer = PortalCustomer::name($customerId);
+            if ($opportunity?->owner_user_id) {
+                Notifier::send('portal_request.opportunity', 'Solicitud del portal → oportunidad', "{$number} · {$customer}: {$subject}",
+                    "/crm/opportunities/{$opportunity->id}", [$opportunity->owner_user_id]);
+            } else {
+                Notifier::send('portal_request.created', 'Nueva solicitud del portal', "{$number} · {$customer}: {$subject}",
+                    '/portal-requests', Notifier::withPermission('portal.manage', $portalRequest));
+            }
 
             return $portalRequest;
         });

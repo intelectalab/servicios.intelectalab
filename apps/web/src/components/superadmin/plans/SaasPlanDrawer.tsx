@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Loader2, AlertCircle } from "lucide-react";
+import { X, Loader2, AlertCircle, Lock } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BillingPeriod, SaasPlan } from "@/types/saas-plan";
 
@@ -23,71 +23,29 @@ const TABS = [
   "7. Características",
 ];
 
-const MODULE_SECTIONS = [
-  {
-    title: "CORE — base del ERP",
-    modules: [
-      { key: "CLIENTES", name: "Clientes", desc: "Gestión de clientes" },
-      { key: "SERVICIOS", name: "Servicios", desc: "Catálogo y motor de servicios" },
-      { key: "COTIZACIONES", name: "Cotizaciones", desc: "Propuestas comerciales" },
-      { key: "CONTRATOS", name: "Contratos", desc: "Gestión contractual" },
-      { key: "ORDENES_TRABAJO", name: "Órdenes de trabajo", desc: "Operación y ejecución" },
-      { key: "PROYECTOS", name: "Proyectos", desc: "Planificación de proyectos" },
-      { key: "TAREAS", name: "Tareas", desc: "Actividades y seguimiento" },
-      { key: "CHECKLISTS", name: "Checklists", desc: "Listas de verificación" },
-      { key: "AGENDA", name: "Agenda", desc: "Citas y programación" },
-      { key: "RECURSOS", name: "Recursos", desc: "Personas y recursos" },
-      { key: "DOCUMENTOS", name: "Documentos", desc: "Gestión documental" },
-      { key: "ENTREGABLES", name: "Entregables", desc: "Control de entregas" },
-    ],
-  },
-  {
-    title: "Finanzas y facturación",
-    modules: [
-      { key: "FINANZAS", name: "Finanzas", desc: "Ingresos, gastos y control" },
-      { key: "FACTURACION_ELECTRONICA", name: "Facturación electrónica", desc: "Facturación / SUNAT" },
-      { key: "PAGOS_COBRANZAS", name: "Pagos y cobranzas", desc: "Gestión de pagos" },
-      { key: "RENTABILIDAD", name: "Rentabilidad", desc: "Costos y margen" },
-    ],
-  },
-  {
-    title: "Operaciones y servicio",
-    modules: [
-      { key: "PERSONAL", name: "Personal", desc: "Interno y externo" },
-      { key: "PROVEEDORES", name: "Proveedores", desc: "Gestión de proveedores" },
-      { key: "TIMESHEETS", name: "Timesheets", desc: "Horas trabajadas" },
-      { key: "SOPORTE", name: "Soporte", desc: "Tickets y atención" },
-      { key: "GARANTIAS", name: "Garantías", desc: "Control de garantías" },
-      { key: "CONDICIONES_ENTREGA", name: "Condiciones de entrega", desc: "Entrega y conformidad" },
-    ],
-  },
-  {
-    title: "Portal e integraciones",
-    modules: [
-      { key: "PORTAL_CLIENTE", name: "Portal del cliente", desc: "Acceso externo" },
-      { key: "API", name: "API", desc: "Integraciones externas" },
-      { key: "AUTOMATIZACIONES", name: "Automatizaciones", desc: "Workflows y triggers" },
-      { key: "REPORTES_AVANZADOS", name: "Reportes avanzados", desc: "BI y análisis" },
-    ],
-  },
-  {
-    title: "CRM — opcional",
-    modules: [
-      { key: "CRM", name: "CRM", desc: "Leads, oportunidades y pipeline" },
-    ],
-  },
-  {
-    title: "Módulos especializados",
-    modules: [
-      { key: "HOSTING", name: "Hosting", desc: "Servicios de hosting" },
-      { key: "DOMINIOS", name: "Dominios", desc: "Gestión de dominios" },
-      { key: "SERVIDORES", name: "Servidores", desc: "Infraestructura" },
-      { key: "CLOUD", name: "Cloud / Infraestructura", desc: "Servicios cloud" },
-      { key: "ECOMMERCE", name: "eCommerce", desc: "Comercio electrónico" },
-      { key: "OTROS", name: "Otros", desc: "Especialización por tenant" },
-    ],
-  },
-];
+/** Módulo del catálogo del ERP (module_catalog), con sus reglas. */
+type CatalogModule = {
+  code: string;
+  name: string;
+  description: string | null;
+  category: string;
+  is_core: boolean;
+  own_screens: boolean;
+  provided_by: string[];
+};
+
+const CATEGORY_TITLES: Record<string, string> = {
+  CORE: "Base del ERP",
+  COMERCIAL: "Comercial",
+  OPERACIONES: "Operaciones",
+  FINANZAS: "Finanzas",
+  COMPRAS: "Compras",
+  CONTABILIDAD: "Contabilidad",
+  SOPORTE: "Soporte",
+  CRM: "CRM",
+  PORTAL: "Portal de clientes",
+  CONTROL: "Control",
+};
 
 const initialFormState = {
   name: "",
@@ -152,7 +110,8 @@ function buildForm(plan?: SaasPlan | null): PlanForm {
     requires_payment_upfront: plan.requires_payment_upfront ?? false,
     auto_renew_default: plan.auto_renew_default ?? true,
     default_billing_period: plan.default_billing_period ?? "MONTHLY",
-    modules: { ...initialFormState.modules, ...(plan.modules || {}) },
+    // Al editar, solo los módulos del plan guardado (sin los marcados por defecto de un plan nuevo).
+    modules: { ...(plan.modules || {}) },
     limits: { ...initialFormState.limits, ...(plan.limits || {}) },
     consumption: { ...initialFormState.consumption, ...(plan.consumption || {}) },
     support_level: plan.support_level ?? "STANDARD",
@@ -178,6 +137,19 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState(() => buildForm(planToEdit));
+  const [catalog, setCatalog] = useState<CatalogModule[] | null>(null);
+  const [catalogError, setCatalogError] = useState(false);
+
+  useEffect(() => {
+    apiFetch<CatalogModule[]>("/v1/superadmin/modules").then(setCatalog).catch(() => setCatalogError(true));
+  }, []);
+
+  // Módulos del catálogo agrupados por categoría, en el orden del catálogo.
+  const moduleSections = useMemo(() => {
+    const groups = new Map<string, CatalogModule[]>();
+    (catalog ?? []).forEach((module) => groups.set(module.category, [...(groups.get(module.category) ?? []), module]));
+    return [...groups.entries()].map(([category, modules]) => ({ title: CATEGORY_TITLES[category] ?? category, modules }));
+  }, [catalog]);
 
   const handleChange = (field: keyof PlanForm, value: string | number | boolean) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -197,9 +169,13 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
       const endpoint = planToEdit ? `/v1/superadmin/plans/${planToEdit.id}` : "/v1/superadmin/plans";
       const method = planToEdit ? "PUT" : "POST";
 
+      // Solo módulos del catálogo; los obligatorios siempre van incluidos.
+      const modules = catalog
+        ? Object.fromEntries(catalog.filter((m) => m.is_core || form.modules[m.code]).map((m) => [m.code, true]))
+        : form.modules;
       await apiFetch(endpoint, {
         method,
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, modules }),
       });
       onSuccess();
       onClose();
@@ -217,7 +193,7 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
+            className="absolute inset-0 bg-[rgb(5_20_45/0.55)]"
           />
 
           <div className="absolute inset-y-0 right-0 flex max-w-full pl-10">
@@ -226,34 +202,33 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 200 }}
-              className="w-screen max-w-4xl bg-white shadow-2xl flex flex-col h-full"
+              className="app-text flex h-full w-screen max-w-4xl flex-col bg-[var(--app-surface)] shadow-[0_20px_50px_rgba(8,25,55,.28)]"
             >
               {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-200 px-8 py-6 shrink-0 bg-slate-50/50">
+              <div className="flex shrink-0 items-center justify-between gap-3 bg-[#1B8FC9] px-6 py-4 text-[#fff]">
                 <div>
-                  <h2 className="text-xl font-extrabold text-slate-900">
+                  <h2 className="text-base font-medium">
                     {planToEdit ? "Editar plan SaaS" : "Nuevo plan SaaS"}
                   </h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Define qué puede contratar y utilizar cada empresa.</p>
                 </div>
                 <button
                   onClick={onClose}
-                  className="rounded-full p-2 text-slate-400 hover:bg-slate-200/60 hover:text-slate-600 transition-colors cursor-pointer"
+                  className="grid h-9 w-9 cursor-pointer place-items-center rounded-[10px] text-[#fff] hover:bg-[rgb(255_255_255/0.12)]"
                 >
                   <X size={20} />
                 </button>
               </div>
 
               {/* Pestañas */}
-              <div className="flex shrink-0 border-b border-slate-200 bg-white px-8 overflow-x-auto">
+              <div className="flex shrink-0 overflow-x-auto border-b border-[color:var(--app-border)] bg-[var(--app-surface)] px-6">
                 {TABS.map((tab, idx) => (
                   <button
                     key={tab}
                     onClick={() => setActiveTabIdx(idx)}
-                    className={`border-b-2 py-4 px-3 text-xs font-bold transition-colors whitespace-nowrap cursor-pointer ${
+                    className={`-mb-px cursor-pointer whitespace-nowrap border-b-2 px-3 py-[11px] text-[13px] font-medium transition-colors ${
                       activeTabIdx === idx
-                        ? "border-[var(--app-brand-deep)] text-[var(--app-brand-deep)]"
-                        : "border-transparent text-slate-500 hover:text-slate-700"
+                        ? "border-[#1B8FC9] text-[color:var(--p-brand-text)]"
+                        : "app-muted border-transparent hover:text-[var(--app-text)]"
                     }`}
                   >
                     {tab}
@@ -262,78 +237,78 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
               </div>
 
               {/* Contenido scrolleable */}
-              <div className="flex-1 overflow-y-auto p-8 space-y-6 bg-slate-50/30">
+              <div className="app-page flex-1 space-y-[18px] overflow-y-auto p-6">
                 {error && (
-                  <div className="flex items-center gap-3 rounded-xl bg-red-50 p-4 text-sm text-red-800 border border-red-100">
-                    <AlertCircle size={20} className="text-red-500 shrink-0" />
+                  <div className="flex items-center gap-3 rounded-xl border border-[color:var(--p-danger-line)] bg-[var(--p-danger-soft)] p-4 text-sm text-[color:var(--p-danger-text)]">
+                    <AlertCircle size={20} className="text-[color:var(--p-danger-text)] shrink-0" />
                     <p>{error}</p>
                   </div>
                 )}
 
                 {/* 1. Información */}
                 {activeTabIdx === 0 && (
-                  <div className="space-y-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs">
+                  <div className="space-y-6 bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)]">
                     <div className="grid grid-cols-2 gap-5">
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Nombre del plan *</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Nombre del plan *</label>
                         <input
                           type="text"
                           placeholder="Ej. Professional"
                           value={form.name}
                           onChange={(e) => handleChange("name", e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Código interno *</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Código interno *</label>
                         <input
                           type="text"
                           placeholder="Ej. PRO"
                           value={form.code}
                           onChange={(e) => handleChange("code", e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="mb-1.5 block text-xs font-bold text-slate-700">Descripción</label>
+                      <label className="mb-1.5 block text-[12.5px] font-medium">Descripción</label>
                       <textarea
                         rows={3}
                         placeholder="Describe para qué tipo de empresa está pensado este plan."
                         value={form.description}
                         onChange={(e) => handleChange("description", e.target.value)}
-                        className="w-full rounded-xl border border-slate-300 p-3.5 text-xs text-slate-900 focus:outline-none"
+                        className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                       />
                     </div>
 
                     <div className="grid grid-cols-3 gap-5">
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Estado</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Estado</label>
                         <select
                           value={form.active ? "true" : "false"}
                           onChange={(e) => handleChange("active", e.target.value === "true")}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         >
                           <option value="true">Activo</option>
                           <option value="false">Inactivo</option>
                         </select>
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Orden de presentación</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Orden de presentación</label>
                         <input
                           type="number"
                           value={form.display_order}
                           onChange={(e) => handleChange("display_order", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Catálogo público</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Catálogo público</label>
                         <select
                           value={form.is_public ? "true" : "false"}
                           onChange={(e) => handleChange("is_public", e.target.value === "true")}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         >
                           <option value="true">Sí</option>
                           <option value="false">No</option>
@@ -346,35 +321,35 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                 {/* 2. Precio y suscripción */}
                 {activeTabIdx === 1 && (
                   <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Precio del plan</h3>
+                    <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                      <h3 className="text-[15px] font-semibold">Precio del plan</h3>
                       <div className="grid grid-cols-3 gap-5">
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">Precio mensual</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">Precio mensual</label>
                           <input
                             type="number"
                             step="0.01"
                             value={form.monthly_price}
                             onChange={(e) => handleChange("monthly_price", Number(e.target.value))}
-                            className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           />
                         </div>
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">Precio anual</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">Precio anual</label>
                           <input
                             type="number"
                             step="0.01"
                             value={form.annual_price}
                             onChange={(e) => handleChange("annual_price", Number(e.target.value))}
-                            className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           />
                         </div>
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">Moneda</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">Moneda</label>
                           <select
                             value={form.currency}
                             onChange={(e) => handleChange("currency", e.target.value)}
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           >
                             <option value="PEN">PEN - Sol peruano</option>
                             <option value="USD">USD - Dólar</option>
@@ -383,35 +358,35 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                       </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Prueba gratuita</h3>
+                    <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                      <h3 className="text-[15px] font-semibold">Prueba gratuita</h3>
                       <div className="grid grid-cols-3 gap-5">
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">¿Tiene prueba?</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">¿Tiene prueba?</label>
                           <select
                             value={form.has_trial ? "true" : "false"}
                             onChange={(e) => handleChange("has_trial", e.target.value === "true")}
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           >
                             <option value="true">Sí</option>
                             <option value="false">No</option>
                           </select>
                         </div>
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">Días de prueba</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">Días de prueba</label>
                           <input
                             type="number"
                             value={form.trial_days}
                             onChange={(e) => handleChange("trial_days", Number(e.target.value))}
-                            className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           />
                         </div>
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">¿Solicitar pago al iniciar?</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">¿Solicitar pago al iniciar?</label>
                           <select
                             value={form.requires_payment_upfront ? "true" : "false"}
                             onChange={(e) => handleChange("requires_payment_upfront", e.target.value === "true")}
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           >
                             <option value="true">Sí</option>
                             <option value="false">No</option>
@@ -420,26 +395,26 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                       </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Suscripción</h3>
+                    <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                      <h3 className="text-[15px] font-semibold">Suscripción</h3>
                       <div className="grid grid-cols-2 gap-5">
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">Renovación automática</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">Renovación automática</label>
                           <select
                             value={form.auto_renew_default ? "true" : "false"}
                             onChange={(e) => handleChange("auto_renew_default", e.target.value === "true")}
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           >
                             <option value="true">Sí</option>
                             <option value="false">No</option>
                           </select>
                         </div>
                         <div>
-                          <label className="mb-1.5 block text-xs font-bold text-slate-700">Periodo predeterminado</label>
+                          <label className="mb-1.5 block text-[12.5px] font-medium">Periodo predeterminado</label>
                           <select
                             value={form.default_billing_period}
                             onChange={(e) => handleChange("default_billing_period", e.target.value)}
-                            className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                            className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                           >
                             <option value="MONTHLY">Mensual</option>
                             <option value="ANNUAL">Anual</option>
@@ -453,28 +428,50 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                 {/* 3. Módulos */}
                 {activeTabIdx === 2 && (
                   <div className="space-y-6">
-                    {MODULE_SECTIONS.map((sec) => (
-                      <div key={sec.title} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-                        <h3 className="text-xs font-extrabold text-slate-800">{sec.title}</h3>
+                    {catalogError && (
+                      <p className="flex items-center gap-2 rounded-xl border border-[color:var(--p-danger-line)] bg-[var(--p-danger-soft)] px-4 py-3 text-xs text-[color:var(--p-danger-text)]">
+                        <AlertCircle size={14} /> No se pudo cargar el catálogo de módulos. Cierra y vuelve a abrir el plan.
+                      </p>
+                    )}
+                    {!catalog && !catalogError && <p className="text-xs app-muted">Cargando módulos…</p>}
+                    {moduleSections.map((sec) => (
+                      <div key={sec.title} className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-3">
+                        <h3 className="text-[15px] font-semibold">{sec.title}</h3>
                         <div className="grid grid-cols-3 gap-3">
                           {sec.modules.map((mod) => {
-                            const isChecked = Boolean(form.modules[mod.key]);
+                            const isChecked = mod.is_core || Boolean(form.modules[mod.code]);
+                            const shared = !mod.own_screens && !mod.is_core;
+                            const hint = mod.is_core
+                              ? "Toda empresa lo tiene, lo incluya o no el plan"
+                              : shared && mod.provided_by.length ? `Sus pantallas ya las da ${mod.provided_by.join(", ")}` : undefined;
                             return (
                               <label
-                                key={mod.key}
-                                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                                  isChecked ? "border-[var(--app-brand-deep)] bg-blue-50/30" : "border-slate-200 hover:bg-slate-50"
-                                }`}
+                                key={mod.code}
+                                title={hint}
+                                className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
+                                  mod.is_core ? "cursor-not-allowed" : "cursor-pointer"
+                                } ${isChecked ? "border-[#1B8FC9] bg-[var(--p-brand-soft)]" : "border-[color:var(--app-border)] hover:bg-[var(--app-surface-muted)]"}`}
                               >
                                 <input
                                   type="checkbox"
                                   checked={isChecked}
-                                  onChange={(e) => handleNestedChange("modules", mod.key, e.target.checked)}
-                                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[var(--app-brand-deep)] cursor-pointer"
+                                  disabled={mod.is_core}
+                                  onChange={(e) => handleNestedChange("modules", mod.code, e.target.checked)}
+                                  className="mt-0.5 h-4 w-4 rounded border-[color:var(--p-field-border)] accent-[#1B8FC9] cursor-pointer disabled:cursor-not-allowed"
                                 />
-                                <div>
-                                  <span className="text-xs font-bold text-slate-900 block leading-tight">{mod.name}</span>
-                                  <span className="text-[10px] text-slate-400 block mt-0.5 leading-tight">{mod.desc}</span>
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold app-text block leading-tight">{mod.name}</span>
+                                  {mod.description && <span className="text-[10px] app-muted block mt-0.5 leading-tight">{mod.description}</span>}
+                                  {mod.is_core && (
+                                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-[var(--p-brand-soft)] px-2 py-0.5 text-[10px] font-semibold text-[color:var(--p-brand-text)]">
+                                      <Lock size={10} /> Obligatorio
+                                    </span>
+                                  )}
+                                  {shared && (
+                                    <span className="mt-1 inline-flex rounded-full bg-[var(--app-surface-muted)] px-2 py-0.5 text-[10px] font-semibold app-muted">
+                                      {mod.provided_by.length ? "Sin pantallas propias" : "Sin pantallas todavía"}
+                                    </span>
+                                  )}
                                 </div>
                               </label>
                             );
@@ -488,8 +485,8 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                 {/* 4. Límites */}
                 {activeTabIdx === 3 && (
                   <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Límites principales del tenant</h3>
+                    <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                      <h3 className="text-[15px] font-semibold">Límites principales del tenant</h3>
                       <div className="grid grid-cols-2 gap-5">
                         {Object.entries({
                           users: "Usuarios", branches: "Sucursales",
@@ -499,33 +496,33 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                           documents: "Documentos", portal_users: "Usuarios externos / portal",
                         }).map(([key, label]) => (
                           <div key={key}>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">{label}</label>
+                            <label className="mb-1 block text-[12.5px] font-medium">{label}</label>
                             <input
                               type="number"
                               value={form.limits[key] ?? 0}
                               onChange={(e) => handleNestedChange("limits", key, Number(e.target.value))}
-                              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                              className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                             />
                           </div>
                         ))}
                       </div>
-                      <p className="text-[11px] text-slate-400 italic">Usa -1 para representar &quot;ilimitado&quot;.</p>
+                      <p className="text-[11px] app-muted italic">Usa -1 para representar &quot;ilimitado&quot;.</p>
                     </div>
 
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Límites por módulo</h3>
+                    <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                      <h3 className="text-[15px] font-semibold">Límites por módulo</h3>
                       <div className="grid grid-cols-2 gap-5">
                         {Object.entries({
                           timesheet_hours: "Horas de Timesheets / mes", project_users: "Usuarios por proyecto",
                           crm_leads: "Leads CRM", crm_opportunities: "Oportunidades CRM",
                         }).map(([key, label]) => (
                           <div key={key}>
-                            <label className="mb-1 block text-xs font-bold text-slate-700">{label}</label>
+                            <label className="mb-1 block text-[12.5px] font-medium">{label}</label>
                             <input
                               type="number"
                               value={form.limits[key] ?? 0}
                               onChange={(e) => handleNestedChange("limits", key, Number(e.target.value))}
-                              className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                              className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                             />
                           </div>
                         ))}
@@ -536,61 +533,61 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
 
                 {/* 5. Consumo */}
                 {activeTabIdx === 4 && (
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Consumo SaaS</h3>
+                  <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                    <h3 className="text-[15px] font-semibold">Consumo SaaS</h3>
                     <div className="grid grid-cols-2 gap-5">
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Almacenamiento (GB)</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Almacenamiento (GB)</label>
                         <input
                           type="number"
                           value={form.consumption.storage_gb}
                           onChange={(e) => handleNestedChange("consumption", "storage_gb", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Archivos</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Archivos</label>
                         <input
                           type="number"
                           value={form.consumption.files_count}
                           onChange={(e) => handleNestedChange("consumption", "files_count", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Documentos generados</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Documentos generados</label>
                         <input
                           type="number"
                           value={form.consumption.documents_generated}
                           onChange={(e) => handleNestedChange("consumption", "documents_generated", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Exportaciones / mes</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Exportaciones / mes</label>
                         <input
                           type="number"
                           value={form.consumption.exports_month}
                           onChange={(e) => handleNestedChange("consumption", "exports_month", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Solicitudes API / mes</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Solicitudes API / mes</label>
                         <input
                           type="number"
                           value={form.consumption.api_requests_month}
                           onChange={(e) => handleNestedChange("consumption", "api_requests_month", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Backups incluidos</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Backups incluidos</label>
                         <input
                           type="number"
                           value={form.consumption.backups_included}
                           onChange={(e) => handleNestedChange("consumption", "backups_included", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                     </div>
@@ -599,15 +596,15 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
 
                 {/* 6. Soporte */}
                 {activeTabIdx === 5 && (
-                  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Nivel de soporte</h3>
+                  <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                    <h3 className="text-[15px] font-semibold">Nivel de soporte</h3>
                     <div className="grid grid-cols-3 gap-5">
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Nivel</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Nivel</label>
                         <select
                           value={form.support_level}
                           onChange={(e) => handleChange("support_level", e.target.value)}
-                          className="w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         >
                           <option value="BASIC">Básico</option>
                           <option value="STANDARD">Estándar</option>
@@ -616,26 +613,26 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                         </select>
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">Tickets / mes</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">Tickets / mes</label>
                         <input
                           type="number"
                           value={form.support_tickets_month}
                           onChange={(e) => handleChange("support_tickets_month", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                       <div>
-                        <label className="mb-1.5 block text-xs font-bold text-slate-700">SLA inicial (horas)</label>
+                        <label className="mb-1.5 block text-[12.5px] font-medium">SLA inicial (horas)</label>
                         <input
                           type="number"
                           value={form.support_sla_hours}
                           onChange={(e) => handleChange("support_sla_hours", Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-xs text-slate-900 focus:outline-none"
+                          className="app-text w-full rounded-[9px] border border-[color:var(--p-field-border)] bg-[var(--app-surface)] px-2.5 py-2 text-[13px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)]"
                         />
                       </div>
                     </div>
 
-                    <h4 className="text-xs font-bold text-slate-700 pt-3">Canales incluidos</h4>
+                    <h4 className="text-xs font-bold app-text pt-3">Canales incluidos</h4>
                     <div className="grid grid-cols-2 gap-3">
                       {Object.entries({
                         portal: "Portal de soporte", email: "Correo electrónico",
@@ -643,14 +640,14 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                       }).map(([key, label]) => {
                         const checked = Boolean(form.support_channels[key]);
                         return (
-                          <label key={key} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
+                          <label key={key} className="flex items-center gap-3 p-3 rounded-xl border border-[color:var(--app-border)] cursor-pointer hover:bg-[var(--app-surface-muted)]">
                             <input
                               type="checkbox"
                               checked={checked}
                               onChange={(e) => handleNestedChange("support_channels", key, e.target.checked)}
-                              className="h-4 w-4 rounded border-slate-300 text-[var(--app-brand-deep)] cursor-pointer"
+                              className="h-4 w-4 rounded border-[color:var(--p-field-border)] accent-[#1B8FC9] cursor-pointer"
                             />
-                            <span className="text-xs font-bold text-slate-800">{label}</span>
+                            <span className="text-xs font-bold app-text">{label}</span>
                           </label>
                         );
                       })}
@@ -661,8 +658,8 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                 {/* 7. Características */}
                 {activeTabIdx === 6 && (
                   <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Características incluidas</h3>
+                    <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                      <h3 className="text-[15px] font-semibold">Características incluidas</h3>
                       <div className="grid grid-cols-2 gap-3">
                         {Object.entries({
                           multi_tenant: "Multi-tenant", roles_permissions: "Roles y permisos",
@@ -673,14 +670,14 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                         }).map(([key, label]) => {
                           const checked = Boolean(form.features[key]);
                           return (
-                            <label key={key} className="flex items-center gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-50">
+                            <label key={key} className="flex items-center gap-3 p-3 rounded-xl border border-[color:var(--app-border)] cursor-pointer hover:bg-[var(--app-surface-muted)]">
                               <input
                                 type="checkbox"
                                 checked={checked}
                                 onChange={(e) => handleNestedChange("features", key, e.target.checked)}
-                                className="h-4 w-4 rounded border-slate-300 text-[var(--app-brand-deep)] cursor-pointer"
+                                className="h-4 w-4 rounded border-[color:var(--p-field-border)] accent-[#1B8FC9] cursor-pointer"
                               />
-                              <span className="text-xs font-bold text-slate-800">{label}</span>
+                              <span className="text-xs font-bold app-text">{label}</span>
                             </label>
                           );
                         })}
@@ -688,34 +685,34 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                     </div>
 
                     {/* Vista previa del catálogo */}
-                    <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-2xs space-y-4">
-                      <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-500">Vista previa del catálogo</h3>
+                    <div className="bg-[var(--app-surface)] p-6 rounded-xl border border-[color:var(--app-border)] shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)] space-y-4">
+                      <h3 className="text-[15px] font-semibold">Vista previa del catálogo</h3>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="rounded-2xl border border-slate-200 p-5 space-y-3 bg-slate-50/50">
-                          <span className="text-xs font-bold text-slate-800 block">{form.name || "Nombre del plan"}</span>
+                        <div className="rounded-xl border border-[color:var(--app-border)] p-5 space-y-3 bg-[var(--app-surface-muted)]">
+                          <span className="text-xs font-bold app-text block">{form.name || "Nombre del plan"}</span>
                           <div>
-                            <span className="text-2xl font-extrabold text-slate-900">
+                            <span className="text-2xl font-semibold app-text">
                               {form.currency === "USD" ? "$" : "S/"} {form.monthly_price || 0}
                             </span>
-                            <span className="text-xs text-slate-500"> / mes</span>
+                            <span className="text-xs app-muted"> / mes</span>
                           </div>
-                          <p className="text-xs text-slate-500">{form.has_trial ? `${form.trial_days || 30} días gratis` : "Sin periodo de prueba"}</p>
-                          <div className="w-full bg-blue-600 text-white text-center py-2 rounded-xl text-xs font-bold shadow-sm">
+                          <p className="text-xs app-muted">{form.has_trial ? `${form.trial_days || 30} días gratis` : "Sin periodo de prueba"}</p>
+                          <div className="w-full rounded-[9px] bg-[#1B8FC9] py-2 text-center text-xs font-medium text-[#fff]">
                             Comenzar prueba
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 p-5 space-y-2 bg-slate-50/50">
-                          <span className="text-xs font-bold text-slate-800 block">Incluye</span>
-                          <p className="text-xs text-slate-600">✓ Módulos seleccionados</p>
-                          <p className="text-xs text-slate-600">✓ Límites configurados</p>
-                          <p className="text-xs text-slate-600">✓ Soporte según plan</p>
+                        <div className="rounded-xl border border-[color:var(--app-border)] p-5 space-y-2 bg-[var(--app-surface-muted)]">
+                          <span className="text-xs font-bold app-text block">Incluye</span>
+                          <p className="text-xs app-muted">✓ Módulos seleccionados</p>
+                          <p className="text-xs app-muted">✓ Límites configurados</p>
+                          <p className="text-xs app-muted">✓ Soporte según plan</p>
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 p-5 space-y-2 bg-slate-50/50">
-                          <span className="text-xs font-bold text-slate-800 block">Administración</span>
-                          <p className="text-xs text-slate-600 leading-relaxed">El plan determina las capacidades contratadas.</p>
-                          <p className="text-xs text-slate-600 leading-relaxed">Los permisos de cada usuario se gestionan por roles.</p>
+                        <div className="rounded-xl border border-[color:var(--app-border)] p-5 space-y-2 bg-[var(--app-surface-muted)]">
+                          <span className="text-xs font-bold app-text block">Administración</span>
+                          <p className="text-xs app-muted leading-relaxed">El plan determina las capacidades contratadas.</p>
+                          <p className="text-xs app-muted leading-relaxed">Los permisos de cada usuario se gestionan por roles.</p>
                         </div>
                       </div>
                     </div>
@@ -724,11 +721,11 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
               </div>
 
               {/* Footer */}
-              <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-8 py-4 flex items-center justify-end gap-3">
+              <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[color:var(--app-border)] bg-[var(--app-surface)] px-6 py-3">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="inline-flex h-[38px] cursor-pointer items-center rounded-[9px] border border-[color:var(--app-border)] bg-[var(--app-surface)] px-4 text-[13px] font-medium text-[color:var(--app-text)] transition-colors hover:border-[#1B8FC9] hover:bg-[var(--app-surface-muted)]"
                 >
                   Cancelar
                 </button>
@@ -736,7 +733,7 @@ function SaasPlanDrawerPanel({ onClose, onSuccess, planToEdit }: SaasPlanDrawerP
                   type="button"
                   disabled={isSaving}
                   onClick={handleSubmit}
-                  className="rounded-xl bg-[var(--app-brand-deep)] px-6 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[var(--app-brand)] disabled:opacity-50 flex items-center gap-2 cursor-pointer"
+                  className="inline-flex h-[38px] cursor-pointer items-center gap-[7px] rounded-[9px] border border-transparent bg-[#1B8FC9] px-4 text-[13px] font-medium text-[#fff] transition-colors hover:bg-[#1679AB] disabled:cursor-not-allowed disabled:opacity-45"
                 >
                   {isSaving ? <Loader2 size={14} className="animate-spin" /> : planToEdit ? "Actualizar plan" : "Guardar plan"}
                 </button>

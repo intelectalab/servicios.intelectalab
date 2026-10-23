@@ -137,7 +137,7 @@ Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones c
 - Detalle en [cambios/2026-10-22_portal-de-clientes.md](cambios/2026-10-22_portal-de-clientes.md). Módulo del plan "Portal de clientes" (`PORTAL`) en Base, Profesional y Enterprise; sin él, el cliente entra y ve "Portal desactivado".
 - El cliente entra por el mismo `/login`, siempre con verificación en dos pasos, y va a `/portal`, con su propia barra (no el menú del sistema). Una cuenta es del sistema **o** del portal (lo garantiza la base); una sesión del portal no abre ninguna ruta interna ni al revés.
 - El cliente y la empresa salen de la cuenta, nunca de lo que envíe el navegador. Lo de otro cliente "no existe" (404). Sin borradores, notas internas, credenciales ni auditoría.
-- Roles del portal del prototipo: Portal Admin, Portal Finanzas y Solo lectura. Una sección se abre si el rol la incluye y si la empresa tiene el módulo del que salen sus datos.
+- Roles del portal del prototipo: Portal Admin, Portal Finanzas y Solo lectura. Solo lectura ve sus tickets pero no los crea ni los responde (2026-10-23). Una sección se abre si el rol la incluye y si la empresa tiene el módulo del que salen sus datos.
 - Usuarios del portal: los invita la empresa o el Portal Admin del cliente, con un código de 8 caracteres válido 7 días; como mucho 10 vigentes por cliente; siempre un Portal Admin activo; nadie se desactiva ni cambia su rol. No se borran.
 - La empresa gestiona en Administración → Usuarios del portal (permisos `portal_users.*`: Administrador todo, Gerencia ve), donde también publica y retira **avisos** del portal (a un cliente o a todos).
 - El cliente aprueba o rechaza (con motivo) una cotización enviada y vigente; queda como decisión "desde el portal". La segregación de funciones no aplica al cliente.
@@ -158,6 +158,15 @@ Detalle en [cambios/2026-10-22_documentos.md](cambios/2026-10-22_documentos.md).
 - Un documento se vincula a un cliente o actor, un contrato, un proyecto o una OT. "Visible en el portal" exige gestionar documentos y un vínculo con algo de un cliente. El cliente ve los vinculados a él, a los contratos que ve en su portal, a sus proyectos y a sus OT. Archivado o en cuarentena, no lo ve.
 - Antivirus simulado mientras no haya uno real ([propuesta-antivirus.md](propuesta-antivirus.md)): reconoce solo archivos de prueba y marca cada archivo con el motor que lo analizó. Con amenaza: en Documentos queda "En cuarentena" y nunca se entrega; en los demás adjuntos se rechaza.
 - Archivar no tiene vuelta atrás: el documento ya no se edita ni recibe versiones, pero se puede descargar (salvo un archivo con amenaza). La base no deja borrar documentos, versiones, vínculos ni archivos.
+
+### Panel de control y Notificaciones (2026-10-23)
+
+Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/2026-10-23_panel-de-control-y-notificaciones.md).
+
+- El sistema abre en el **Panel de control**, salvo quien ejecuta órdenes de trabajo sin asignarlas, que entra a la App del técnico. Cada bloque del panel sigue el permiso, el alcance y el plan: sin permiso no sale; sin módulo en el plan, sale con candado.
+- Una notificación le llega a quien tiene el permiso para actuar y alcanza el registro, nunca según el nombre del rol, y no a quien hizo la operación. Todo aviso nuevo pasa por `App\Services\Notifier`.
+- Las preferencias de Mi perfil mandan: sin "En la aplicación" no hay campana; con "Correo" sale un correo después de guardar (si falla, la operación queda). WhatsApp no tiene proveedor.
+- Cada persona ve solo sus notificaciones; la base no deja cambiar su texto, borrarlas ni volver a "no leída". Los avisos por fecha se ven en "Requiere tu atención" del panel, no como notificación.
 
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
@@ -231,6 +240,8 @@ Detalle en [cambios/2026-10-22_documentos.md](cambios/2026-10-22_documentos.md).
 - Sesiones de 8 h, o 30 días con "Recordarme". Se permiten varias sesiones a la vez. Cada sesión guarda desde qué navegador se abrió y si pasó la verificación en dos pasos; en Mi perfil la persona ve las suyas y puede cerrar las demás (2026-10-08, [cambios/2026-10-08_mi-perfil.md](cambios/2026-10-08_mi-perfil.md)).
 - 5 contraseñas incorrectas bloquean la cuenta 15 minutos.
 - El superadmin es `users.is_super_admin` (no un rol), no puede pertenecer a un tenant (triggers) y tiene auditoría propia en `platform_audit_logs`.
+- Los módulos de un plan son los de `module_catalog`: uno por grupo de pantallas del menú del ERP (15, con Compras y Contabilidad aparte de Finanzas desde el 2026-10-23, [cambios/2026-10-23_planes-saas-y-modulos-del-erp.md](cambios/2026-10-23_planes-saas-y-modulos-del-erp.md)); el obligatorio (`is_core`: Clientes y actores) va siempre. Cambiar los módulos de un plan no cambia a las empresas que ya lo tienen: se aplica desde la ficha del tenant ("Aplicar módulos del plan"). Apagar un módulo no borra datos (2026-10-23).
+- Una empresa aprovisionada desde la consola nace "En alta"; al activarla, su administrador recibe un código para crear su contraseña (vale 3 días). Los cambios de estado, salvo Activar, piden motivo y quedan en `tenant_status_log` (2026-10-23).
 - La consola de plataforma solo abre con un superadmin activo y una sesión que pasó la verificación en dos pasos. Su panel no muestra datos de negocio de las empresas: solo totales y conteos. Quedan auditados los accesos rechazados y las exportaciones; abrir el panel no (2026-10-22).
 
 ## Pendientes
@@ -245,12 +256,12 @@ Detalle en [cambios/2026-10-22_documentos.md](cambios/2026-10-22_documentos.md).
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
 - Consola de plataforma: el panel ya lee con su usuario de base (`erp_console`, desde el 2026-10-22, [cambios/2026-10-22_panel-consola-de-plataforma.md](cambios/2026-10-22_panel-consola-de-plataforma.md)); faltan Planes y Tenants, que aún usan `erp_app`. Las pruebas de suscripción vencidas siguen en ACTIVE. Cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
-- El drawer de planes (`SaasPlanDrawer.tsx`) tiene su lista de módulos escrita a mano y no coincide con `module_catalog`.
 - Auditoría: casi ningún movimiento guarda antes y después (solo el detalle); la entidad se muestra con su identificador, no con su número; falta decidir cuánto tiempo se conserva. El filtro "hoy" usa el día del servidor (UTC), como en los demás listados.
-- No hay página para la auditoría de plataforma (`GET /v1/superadmin/audit`), ni comando para crear superadmins, ni contador de notificaciones.
-- Mi perfil: las preferencias de notificación se guardan pero aún no cambian nada (falta Notificaciones); no se cierra una sesión concreta, solo todas las demás.
+- No hay comando para crear superadmins. (La auditoría de plataforma tiene pantalla desde el 2026-10-23.)
+- Mi perfil: no se cierra una sesión concreta, solo todas las demás.
 - `php artisan tenants:sync-permissions` da a los tenants ya registrados los permisos de sus módulos. Falta confirmar si se corrió.
 - En local, el PHP de XAMPP tiene apagada la caché de código (OPcache): cada llamada tarda unos 0,33 s. Activarla en `C:\xampp\php\php.ini` aceleraría todo el sistema (propuesto el 2026-10-12, sin hacer).
+- Notificaciones: avisos por fecha con tarea programada; plantillas, bitácora y canales de la empresa (Administración → Notificaciones); WhatsApp (proveedor); avisos al cliente en el portal; correr la migración `2026_10_23_000300` en el VPS.
 - Correo real: falta configurar SMTP en `apps/api/.env` (hoy `MAIL_MAILER=log`).
 - El contenido de Planes SaaS y la landing sigue con el estilo anterior.
 - Identidades repetidas: en "Tenant A - Prueba" hay 5 documentos con dos registros cada uno, creados en los módulos separados. Clientes y actores no crea más, pero no une los que existen. Lista en [cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md](cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md).

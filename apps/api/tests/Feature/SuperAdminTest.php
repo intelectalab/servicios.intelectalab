@@ -114,8 +114,8 @@ class SuperAdminTest extends TestCase
         $this->assertSame('Plan renombrado', json_decode($update->after_data)->name);
         $this->assertSame($superAdmin->id, $update->user_id);
 
-        $this->getJson('/api/v1/superadmin/audit')->assertOk()
-            ->assertJsonFragment(['action' => 'plan.deactivated', 'user_email' => $superAdmin->email]);
+        // La pantalla de auditoría la lee el usuario de la consola: ve lo ya confirmado, no esta transacción.
+        $this->getJson('/api/v1/superadmin/audit')->assertOk()->assertJsonStructure(['data', 'total', 'last_page']);
 
         $this->assertFalse((bool) SaasPlan::find($planId)->active);
     }
