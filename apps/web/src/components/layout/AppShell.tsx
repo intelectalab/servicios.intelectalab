@@ -79,7 +79,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Reportes", icon: ChartLine, superModule: "Control", soon: true },
   { href: "/audit", label: "Auditoría", requiredPermission: "audit.view", icon: Eye, superModule: "Control" },
 
-  { label: "Configuración", icon: Settings, superModule: "Administración", soon: true },
+  { href: "/settings", label: "Configuración", requiredPermission: "tenant.manage", icon: Settings, superModule: "Administración" },
   { label: "Módulos y plan", icon: ToggleLeft, superModule: "Administración", soon: true },
   { href: "/users", label: "Usuarios", requiredPermission: "users.view", icon: UserCog, superModule: "Administración" },
   { href: "/roles", label: "Roles y permisos", requiredPermission: "users.view", icon: Key, superModule: "Administración" },

@@ -223,7 +223,7 @@ function SignCard({ pending, onDone }: { pending: Pending; onDone: (data: Data, 
             </Field>
           </div>
           <label className="flex cursor-pointer items-start gap-2.5">
-            <input type="checkbox" className="mt-0.5 h-[17px] w-[17px] accent-[#1B8FC9]" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
+            <input type="checkbox" className="mt-0.5 h-[17px] w-[17px] accent-[color:var(--p-accent,#1B8FC9)]" checked={accept} onChange={(e) => setAccept(e.target.checked)} />
             <span>Leí el contrato y acepto sus términos y condiciones</span>
           </label>
           {(errors.accept || errors.status) && <p className="text-[12.5px] text-[color:var(--p-danger-text)]">{errors.accept || errors.status}</p>}

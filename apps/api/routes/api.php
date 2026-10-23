@@ -138,6 +138,14 @@ Route::prefix('v1')->group(function () {
         Route::get('/tenant/settings', [TenantSettingsController::class, 'show']);
         Route::middleware('permission:tenant.manage')->put('/tenant/settings', [TenantSettingsController::class, 'update']);
 
+        // Marca de la empresa (Configuración): logo, colores y contacto de sus documentos. Leerla, cualquiera de la empresa.
+        Route::get('/branding', [\App\Http\Controllers\BrandingController::class, 'show']);
+        Route::middleware('permission:tenant.manage')->group(function () {
+            Route::put('/branding', [\App\Http\Controllers\BrandingController::class, 'update']);
+            Route::post('/branding/logo', [\App\Http\Controllers\BrandingController::class, 'uploadLogo'])->middleware('throttle:20,1,branding');
+            Route::delete('/branding/logo', [\App\Http\Controllers\BrandingController::class, 'removeLogo']);
+        });
+
         // Buscador global de la cabecera
         Route::middleware('permission:core.view')->get('/search', [SearchController::class, 'index']);
 
@@ -917,6 +925,8 @@ Route::prefix('v1')->group(function () {
     // portal.section:seccion exige el portal activo en la empresa y la sección en el rol del portal.
     Route::prefix('portal')->middleware(['auth:sanctum', 'portal.user', 'idempotency', 'record.version'])->group(function () {
         Route::get('/me', [PortalController::class, 'me']);
+        // La marca de la empresa, para la barra del portal y sus documentos.
+        Route::get('/branding', [\App\Http\Controllers\BrandingController::class, 'show']);
         Route::post('/me/password', [\App\Http\Controllers\Auth\AuthController::class, 'changePassword'])->middleware('throttle:5,1,password');
         Route::middleware('portal.section:home')->get('/home', [PortalController::class, 'home']);
 

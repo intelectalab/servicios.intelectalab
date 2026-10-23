@@ -19,7 +19,7 @@ const LIST_SMALL = "app-muted w-full text-xs";
 
 /** Tarjeta-enlace del inicio (el .p-tile del prototipo): borde izquierdo de color, ícono, texto y número. */
 function Tile({ href, label, value, icon, tone }: { href: string; label: string; value: ReactNode; icon: ReactNode; tone?: "warn" | "info" }) {
-  const border = tone === "warn" ? "border-l-[#B26E00]" : tone === "info" ? "border-l-[#1B8FC9]" : "border-l-[color:var(--p-brand-line)]";
+  const border = tone === "warn" ? "border-l-[#B26E00]" : tone === "info" ? "border-l-[color:var(--p-accent,#1B8FC9)]" : "border-l-[color:var(--p-brand-line)]";
   return (
     <Link href={href} className={`app-surface grid gap-1.5 rounded-xl border-l-4 p-4 transition-transform hover:-translate-y-px ${border} ${SHADOW}`}>
       <span className="grid h-[34px] w-[34px] place-items-center rounded-[10px] bg-[var(--p-brand-soft)] text-[color:var(--p-brand-soft-text)]">{icon}</span>

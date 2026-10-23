@@ -113,7 +113,7 @@ export function PortalDocuments() {
           footer={
             <>
               <Btn variant="ghost" onClick={() => setLink(null)}>Cerrar</Btn>
-              <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-[38px] items-center gap-[7px] rounded-[9px] bg-[#1B8FC9] px-4 text-[13px] font-medium text-[#fff] hover:bg-[#1679AB]">
+              <a href={link.url} target="_blank" rel="noopener noreferrer" className="inline-flex h-[38px] items-center gap-[7px] rounded-[9px] bg-[var(--p-accent,#1B8FC9)] px-4 text-[13px] font-medium text-[color:var(--p-on-accent,#fff)] hover:bg-[var(--p-accent-hover,#1679AB)]">
                 <Download size={15} /> Descargar
               </a>
             </>
@@ -224,7 +224,7 @@ export function PortalInvoices() {
         <input
           type="checkbox"
           aria-label={`Seleccionar ${row.invoice_number ?? "comprobante"}`}
-          className="h-4 w-4 cursor-pointer accent-[#1B8FC9]"
+          className="h-4 w-4 cursor-pointer accent-[color:var(--p-accent,#1B8FC9)]"
           checked={selected.has(row.id)}
           onChange={(e) => setSelected((current) => {
             const next = new Set(current);

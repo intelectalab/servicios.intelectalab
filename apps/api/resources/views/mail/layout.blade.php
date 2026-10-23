@@ -17,11 +17,18 @@
     <td align="center" style="padding:32px 16px;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:#FFFFFF;border-radius:14px;overflow:hidden;border:1px solid #DCE7EF;">
         <tr>
-          <td style="height:5px;line-height:5px;font-size:0;background-color:#1B8FC9;">&nbsp;</td>
+          <td style="height:5px;line-height:5px;font-size:0;background-color:{{ $accent ?? '#1B8FC9' }};">&nbsp;</td>
         </tr>
         <tr>
           <td align="center" style="padding:28px 32px 8px;">
+            {{-- Correos al cliente de una empresa: su logo (o su nombre); los demás, el de la plataforma. --}}
+            @if (! empty($brand['logo']))
+            <img src="{{ $message->embedData($brand['logo'], 'logo.png', 'image/png') }}" width="{{ $brand['logo_width'] }}" alt="{{ $brand['name'] }}" style="display:block;width:{{ $brand['logo_width'] }}px;max-width:100%;height:auto;border:0;">
+            @elseif (! empty($brand['name']))
+            <p style="margin:0;font-family:Poppins,'Segoe UI',Arial,sans-serif;font-size:20px;line-height:28px;font-weight:700;color:{{ $accent ?? '#1B8FC9' }};">{{ $brand['name'] }}</p>
+            @else
             <img src="{{ $message->embed(resource_path('mail/logo.png')) }}" width="190" alt="Grupo de Soluciones Creativas" style="display:block;width:190px;max-width:100%;height:auto;border:0;">
+            @endif
           </td>
         </tr>
         <tr>
@@ -48,7 +55,7 @@
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
         <tr>
           <td align="center" style="padding:16px 16px 0;font-family:Poppins,'Segoe UI',Arial,sans-serif;font-size:11.5px;line-height:17px;color:#8A949E;">
-            Mensaje automático: no respondas a este correo.
+            Mensaje automático: no respondas a este correo.@if (! empty($brand['name']))<br>Enviado por {{ $brand['name'] }}.@endif
           </td>
         </tr>
       </table>

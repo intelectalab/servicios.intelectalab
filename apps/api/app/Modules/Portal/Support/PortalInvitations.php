@@ -205,9 +205,9 @@ class PortalInvitations
         $url = rtrim((string) config('app.frontend_url'), '/').'/portal/activate';
 
         try {
-            Mail::to($email)->send(new PortalInvitationMail(
+            Mail::to($email)->send((new PortalInvitationMail(
                 $code, PortalCustomer::companyName($tenantId), PortalCustomer::name($portalUser->customer_id), self::INVITE_DAYS, $url,
-            ));
+            ))->withBrand($tenantId));
         } catch (Throwable $e) {
             Log::warning('No se pudo enviar la invitación al portal.', ['portal_user_id' => $portalUser->id, 'error' => $e->getMessage()]);
         }

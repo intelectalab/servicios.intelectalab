@@ -205,6 +205,17 @@ body {
 [data-theme="dark"] :is([class*="hover:text-red-"], [class*="hover:text-rose-"]):hover { color: var(--p-danger-text) !important; }
 [data-theme="dark"] :is([class*="text-amber-"], [class*="text-yellow-"]) { color: var(--p-warning-text) !important; }
 
+/* Marca de la empresa en el portal de clientes (Configuración → Marca de la empresa): el portal
+   pone en <body> la clase y las variables --bl-… (claro) y --bd-… (oscuro); aquí se elige la del tema. */
+.tenant-brand {
+  --p-brand: var(--bl-brand); --p-brand-text: var(--bl-brand-text); --p-brand-soft: var(--bl-brand-soft);
+  --p-brand-soft-text: var(--bl-brand-soft-text); --p-brand-line: var(--bl-brand-line);
+}
+[data-theme="dark"] .tenant-brand {
+  --p-brand: var(--bd-brand); --p-brand-text: var(--bd-brand-text); --p-brand-soft: var(--bd-brand-soft);
+  --p-brand-soft-text: var(--bd-brand-soft-text); --p-brand-line: var(--bd-brand-line);
+}
+
 /* Entrada suave de los modales del prototipo (fondo y cuadro). */
 @keyframes proto-fade-in { from { opacity: 0; } }
 @keyframes proto-pop-in { from { opacity: 0; transform: translateY(14px) scale(.97); } }

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -10,6 +10,7 @@ import {
 import { ApiError, apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
 import { poppins } from "@/lib/fonts";
+import { brandVars, loadBranding, readableOnWhite, type Branding } from "@/lib/branding";
 import { PORTAL_NAV, type PortalMe, type PortalSection } from "@/lib/portal";
 import { Btn, Field, INPUT, LoadError, Modal, useToasts } from "@/components/ui/proto";
 
@@ -35,6 +36,19 @@ export function usePortal() {
 }
 
 /** Iniciales de la empresa (dos palabras), como en la cabecera de los PDF. */
+const css = (rgb: [number, number, number]) => `rgb(${rgb.join(" ")})`;
+
+/** Barra del portal con el color de la empresa (si definió su marca); si no, la de siempre. */
+function brandBar(brand: Branding | null): CSSProperties | undefined {
+  if (!brand?.customized) return undefined;
+  const base = readableOnWhite(brand.primary_color);
+  const deep = base.map((v) => v * 0.72) as [number, number, number];
+  return {
+    backgroundImage: `linear-gradient(110deg, ${css(base)} 0%, ${css(deep)} 100%)`,
+    borderBottomColor: brand.secondary_color ?? css(deep),
+  };
+}
+
 const initials = (name: string) => name.split(/\s+/).filter((word) => /^[\p{L}\d]/u.test(word)).slice(0, 2).map((word) => word[0]).join("").toUpperCase() || "E";
 
 /** Título de cada pantalla del portal (el .p-h1 del prototipo). */
@@ -107,6 +121,28 @@ export default function PortalShell({ children }: { children: ReactNode }) {
     document.querySelector('nav[aria-label="Portal"] a[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [pathname, me]);
 
+  // Marca de la empresa (Configuración → Marca de la empresa): su logo y su color en la barra.
+  const [brand, setBrand] = useState<Branding | null>(null);
+  useEffect(() => {
+    if (!me) return;
+    let cancelled = false;
+    loadBranding().then((data) => { if (!cancelled) setBrand(data); });
+    return () => { cancelled = true; };
+  }, [me]);
+
+  // Todo el portal (también las ventanas, que se dibujan fuera de esta caja) toma el color de la empresa.
+  useEffect(() => {
+    if (!brand?.customized) return;
+    const vars = brandVars(brand.primary_color);
+    const body = document.body;
+    body.classList.add("tenant-brand");
+    Object.entries(vars).forEach(([name, value]) => body.style.setProperty(name, value));
+    return () => {
+      body.classList.remove("tenant-brand");
+      Object.keys(vars).forEach((name) => body.style.removeProperty(name));
+    };
+  }, [brand]);
+
   const reload = useCallback(() => setReloadKey((n) => n + 1), []);
   const can = useCallback((section: PortalSection) => Boolean(me?.sections.includes(section)), [me]);
 
@@ -151,12 +187,22 @@ export default function PortalShell({ children }: { children: ReactNode }) {
   return (
     <PortalContext.Provider value={{ me, reload, can, toast }}>
       <div className={`${poppins.className} app-text flex min-h-screen w-full flex-col bg-[var(--background)] text-sm leading-[1.45]`}>
-        <header className="flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b-[3px] border-[color:var(--portal-line)] bg-[image:var(--portal-top)] px-3 py-2 text-[#fff] sm:px-5">
+        <header
+          className="flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b-[3px] border-[color:var(--portal-line)] bg-[image:var(--portal-top)] px-3 py-2 text-[#fff] sm:px-5"
+          style={brandBar(brand)}
+        >
           <div className="flex min-w-0 items-center gap-2.5">
-            {/* La marca es la de la empresa (sus iniciales mientras no tenga logo guardado), no la de la plataforma. */}
-            <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#fff] text-[13px] font-bold text-[#0F5A82]">
-              {initials(me.company_name)}
-            </span>
+            {/* La marca es la de la empresa (su logo, o sus iniciales si no subió uno), no la de la plataforma. */}
+            {brand?.logo ? (
+              <span className="grid h-10 max-w-[150px] shrink-0 place-items-center rounded-[10px] bg-[#fff] px-2 py-1">
+                {/* eslint-disable-next-line @next/next/no-img-element -- data URL del logo limpio. */}
+                <img src={brand.logo} alt={`Logo de ${me.company_name}`} className="max-h-8 max-w-full object-contain" />
+              </span>
+            ) : (
+              <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-[#fff] text-[13px] font-bold" style={{ color: brand ? css(readableOnWhite(brand.primary_color)) : "#0F5A82" }}>
+                {initials(me.company_name)}
+              </span>
+            )}
             <div className="min-w-0 leading-tight">
               <strong className="block truncate text-[14.5px] font-semibold">{me.company_name}</strong>
               <small className="block text-[11.5px] text-[rgb(255_255_255/0.72)]">Portal de clientes</small>

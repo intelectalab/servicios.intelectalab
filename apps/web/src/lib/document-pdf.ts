@@ -1,9 +1,9 @@
 import { apiFetch } from "@/lib/api";
+import { DEFAULT_PRIMARY, hexToRgb, loadBranding, readableOnWhite, textOn, tint } from "@/lib/branding";
 
 type Rgb = [number, number, number];
 
-// Azul del logo, tinta y grises del documento.
-const BRAND: Rgb = [27, 143, 201];
+// Tinta y grises del documento; los colores de la marca salen de Configuración → Marca de la empresa.
 const INK: Rgb = [29, 29, 27];
 const MUTED: Rgb = [110, 120, 135];
 const LINE: Rgb = [215, 220, 228];
@@ -61,6 +61,10 @@ function loadScriptFont(): Promise<string | null> {
   return scriptFont;
 }
 
+/** Las primeras `max` líneas; si sobra texto, la última termina en "...". */
+const clip = (lines: string[], max: number) =>
+  lines.length <= max ? lines : [...lines.slice(0, max - 1), `${lines[max - 1].replace(/[\s,.;:]+$/, "")}...`];
+
 /** La fuente del PDF no trae estos signos: se cambian por su equivalente simple. */
 const plain = (text: unknown) =>
   String(text ?? "").replace(/[−–—]/g, "-").replace(/…/g, "...").replace(/[→]/g, "->").replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
@@ -71,140 +75,216 @@ export const pdfAmount = (value: string | number) =>
 export const pdfMoney = (value: string | number, currency: string) => `${currency === "USD" ? "US$" : "S/"} ${pdfAmount(value)}`;
 
 /**
- * Genera y descarga un documento en PDF con la composición del prototipo: cabecera de
- * la empresa, recuadro con el número, dos bloques de datos, tabla de líneas, totales,
- * notas, firmas, pie y marca de agua. Se arma en el navegador.
+ * Genera y descarga un documento en PDF con la marca de la empresa (Configuración → Marca de
+ * la empresa): franja de su color arriba, su logo (o sus iniciales) con razón social, RUC y
+ * dirección, el tipo de documento con su número, los datos en recuadros, la tabla de líneas con
+ * la cabecera de su color, totales, notas, firmas y un pie con sus datos de contacto. Se arma en
+ * el navegador; sin marca, sale con el azul de siempre.
  */
 export async function downloadDocumentPdf(spec: PdfDocument) {
-  // En el portal de clientes la empresa y la persona salen de /portal/me (las rutas internas no le responden).
+  // En el portal de clientes la persona sale de /portal/me (las rutas internas no le responden).
   const portal = typeof window !== "undefined" && /^\/portal(\/|$)/.test(window.location.pathname);
   // jsPDF pesa: se carga solo al descargar.
-  const [{ jsPDF }, { default: autoTable }, company, me] = await Promise.all([
+  const [{ jsPDF }, { default: autoTable }, branding, me] = await Promise.all([
     import("jspdf"),
     import("jspdf-autotable"),
-    apiFetch<Company>(portal ? "/v1/portal/me" : "/v1/me/access"),
+    loadBranding(),
     portal ? apiFetch<{ name: string }>("/v1/portal/me").catch(() => null) : apiFetch<{ name: string }>("/v1/me").catch(() => null),
   ]);
+  // Sin la marca (no se pudo leer), los datos de la empresa salen de la sesión, como antes.
+  const company = branding ? null : await apiFetch<Company>(portal ? "/v1/portal/me" : "/v1/me/access").catch(() => null);
 
-  const companyName = company.company?.legal_name || company.tenant?.legal_name || company.tenant?.name || "Empresa";
-  const ruc = company.company?.tax_identifier;
+  const companyName = branding?.name || company?.company?.legal_name || company?.tenant?.legal_name || company?.tenant?.name || "Empresa";
+  const ruc = branding?.tax_identifier ?? company?.company?.tax_identifier ?? null;
   const initials = companyName.split(" ").filter(Boolean).slice(0, 2).map((word) => word[0]).join("").toUpperCase();
 
+  // Colores de la marca: el principal para franjas y cabeceras; para textos y líneas, su versión legible sobre blanco.
+  const primaryHex = branding?.primary_color ?? DEFAULT_PRIMARY;
+  const PRIMARY = hexToRgb(primaryHex);
+  const ACCENT = readableOnWhite(primaryHex);
+  const ON_PRIMARY = textOn(primaryHex);
+  const SECONDARY = branding?.secondary_color ? hexToRgb(branding.secondary_color) : null;
+  const BOX = tint(primaryHex, 0.07);
+  const ROW = tint(primaryHex, 0.035);
+
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  doc.setProperties({ title: plain(`${spec.title} ${spec.number}`), subject: plain(spec.title), author: plain(companyName), creator: "ERP SaaS" });
+  doc.setProperties({ title: plain(`${spec.title} ${spec.number}`), subject: plain(spec.title), author: plain(companyName), creator: plain(companyName) });
 
-  // Cabecera: empresa a la izquierda, recuadro con el número a la derecha.
-  doc.setFillColor(...BRAND);
-  doc.roundedRect(MARGIN, 12, 16, 16, 2, 2, "F");
-  doc.setTextColor(255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  doc.text(plain(initials), MARGIN + 8, 22, { align: "center" });
+  // ---- Cabecera: logo y empresa a la izquierda; tipo de documento y número a la derecha.
+  const top = 11;
+  let textX = MARGIN;
+  let headerBottom = top + 16;
+  if (branding?.logo && branding.logo_width && branding.logo_height) {
+    const ratio = branding.logo_width / branding.logo_height;
+    const width = Math.min(46, 17 * ratio);
+    const height = width / ratio;
+    doc.addImage(branding.logo, "PNG", MARGIN, top, width, height, undefined, "FAST");
+    textX = MARGIN + width + 5;
+    headerBottom = top + height;
+  } else {
+    doc.setFillColor(...PRIMARY);
+    doc.roundedRect(MARGIN, top, 16, 16, 2, 2, "F");
+    doc.setTextColor(...ON_PRIMARY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(plain(initials), MARGIN + 8, top + 10, { align: "center" });
+    textX = MARGIN + 21;
+  }
+
+  const titleLeft = 124;
+  const textWidth = titleLeft - textX - 4;
   doc.setTextColor(...INK);
-  doc.setFontSize(12.5);
-  doc.text(plain(companyName), MARGIN + 20, 17.5);
+  doc.setFont("helvetica", "bold");
+  // La razón social completa: la letra se achica hasta que entre en dos líneas (tres como mucho).
+  let nameSize = 11.5;
+  doc.setFontSize(nameSize);
+  while (nameSize > 8.5 && (doc.splitTextToSize(plain(companyName), textWidth) as string[]).length > 2) doc.setFontSize(--nameSize);
+  const nameLines = clip(doc.splitTextToSize(plain(companyName), textWidth) as string[], 3);
+  doc.text(nameLines, textX, top + 4.5);
+  let textY = top + 4.5 + nameLines.length * nameSize * 0.42;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
+  doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  if (ruc) doc.text(plain(`RUC ${ruc}`), MARGIN + 20, 22.5);
-  doc.text("Perú", MARGIN + 20, ruc ? 26.5 : 22.5);
+  const details = [
+    ruc ? `RUC ${ruc}` : null,
+    ...clip(doc.splitTextToSize(plain(branding?.address ?? "Perú"), textWidth) as string[], 3),
+  ].filter(Boolean) as string[];
+  details.forEach((line) => {
+    doc.text(plain(line), textX, textY);
+    textY += 3.7;
+  });
+  headerBottom = Math.max(headerBottom, textY - 1);
 
-  const boxLeft = 128;
-  const boxWidth = PAGE_WIDTH - MARGIN - boxLeft;
-  doc.setDrawColor(...BRAND);
-  doc.setLineWidth(0.6);
-  doc.roundedRect(boxLeft, 10, boxWidth, 22, 2, 2);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...ACCENT);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(spec.title.length > 20 ? 10 : 12);
-  doc.text(plain(spec.title), boxLeft + boxWidth / 2, 19, { align: "center" });
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10.5);
-  doc.text(plain(spec.number), boxLeft + boxWidth / 2, 26.5, { align: "center" });
-  doc.setLineWidth(0.8);
-  doc.line(MARGIN, 36, PAGE_WIDTH - MARGIN, 36);
+  let titleSize = 16;
+  doc.setFontSize(titleSize);
+  while (titleSize > 10.5 && doc.getTextWidth(plain(spec.title)) > PAGE_WIDTH - MARGIN - titleLeft) doc.setFontSize(--titleSize);
+  doc.text(plain(spec.title), PAGE_WIDTH - MARGIN, top + 6, { align: "right" });
+  doc.setTextColor(...INK);
+  let numberSize = 10.5;
+  doc.setFontSize(numberSize);
+  while (numberSize > 7.5 && doc.getTextWidth(plain(`N.º ${spec.number}`)) > PAGE_WIDTH - MARGIN - titleLeft) doc.setFontSize(--numberSize);
+  doc.text(plain(`N.º ${spec.number}`), PAGE_WIDTH - MARGIN, top + 12.5, { align: "right" });
+  headerBottom = Math.max(headerBottom, top + 14) + 4;
 
-  // Dos bloques de datos.
-  const block = (rows: [string, string][], x: number, width: number) => {
-    let y = 42;
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN, headerBottom, PAGE_WIDTH - MARGIN, headerBottom);
+
+  // ---- Datos en dos recuadros del mismo alto, con un filo del color de la marca.
+  const leftX = MARGIN;
+  const leftWidth = 106;
+  const rightX = MARGIN + leftWidth + 4;
+  const rightWidth = PAGE_WIDTH - MARGIN - rightX;
+  const pad = 4;
+  const measure = (rows: [string, string][], width: number) => {
+    doc.setFontSize(9);
+    return rows.reduce((height, [, value]) => height + 3.4 + (doc.splitTextToSize(plain(value), width - 2 * pad - 1.5) as string[]).length * 4 + 2, 0);
+  };
+  const boxTop = headerBottom + 5;
+  const boxHeight = Math.max(measure(spec.left, leftWidth), measure(spec.right, rightWidth)) + pad + 1;
+  const drawBox = (rows: [string, string][], x: number, width: number) => {
+    doc.setFillColor(...BOX);
+    doc.roundedRect(x, boxTop, width, boxHeight, 1.8, 1.8, "F");
+    doc.setFillColor(...PRIMARY);
+    doc.rect(x, boxTop + 1.2, 1.1, boxHeight - 2.4, "F");
+    let y = boxTop + pad + 2;
     rows.forEach(([label, value]) => {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.5);
-      doc.setTextColor(...MUTED);
-      doc.text(plain(label).toUpperCase(), x, y);
+      doc.setFontSize(7);
+      doc.setTextColor(...ACCENT);
+      doc.text(plain(label).toUpperCase(), x + pad + 1.5, y);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(...INK);
-      const lines = doc.splitTextToSize(plain(value), width) as string[];
-      doc.text(lines, x, y + 4);
-      y += 4 + lines.length * 4 + 2.2;
+      const lines = doc.splitTextToSize(plain(value), width - 2 * pad - 1.5) as string[];
+      doc.text(lines, x + pad + 1.5, y + 3.9);
+      y += 3.4 + lines.length * 4 + 2;
     });
-    return y;
   };
+  drawBox(spec.left, leftX, leftWidth);
+  drawBox(spec.right, rightX, rightWidth);
 
-  let y = Math.max(block(spec.left, MARGIN, 100), block(spec.right, boxLeft, boxWidth)) + 2;
-
+  // ---- Líneas del documento.
   autoTable(doc, {
-    startY: y,
-    margin: { left: MARGIN, right: MARGIN },
+    startY: boxTop + boxHeight + 6,
+    margin: { left: MARGIN, right: MARGIN, top: 14, bottom: 20 },
     head: [spec.head],
     body: spec.rows.length
       ? spec.rows.map((row) => row.map(plain))
       : [[{ content: "Sin registros", colSpan: spec.head.length, styles: { halign: "center", textColor: MUTED } }]],
-    styles: { font: "helvetica", fontSize: 8.5, cellPadding: 2.2, textColor: INK, lineColor: LINE, lineWidth: 0.1 },
-    headStyles: { fillColor: BRAND, textColor: 255, fontStyle: "bold" },
-    alternateRowStyles: { fillColor: [246, 248, 251] },
+    styles: { font: "helvetica", fontSize: 8.5, cellPadding: { top: 2.4, bottom: 2.4, left: 2.4, right: 2.4 }, textColor: INK, lineColor: LINE, lineWidth: { bottom: 0.15 } },
+    headStyles: { fillColor: PRIMARY, textColor: ON_PRIMARY, fontStyle: "bold", lineWidth: 0 },
+    alternateRowStyles: { fillColor: ROW },
     columnStyles: {
       ...Object.fromEntries(spec.numCols.map((index) => [index, { halign: "right" as const }])),
-      ...(spec.head[0] === "#" ? { 0: { cellWidth: 9 } } : {}),
+      ...(spec.head[0] === "#" ? { 0: { cellWidth: 9, halign: "center" as const } } : {}),
     },
   });
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
+  let y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 4;
 
-  // Totales, con el marcado resaltado.
-  if (y + spec.totals.length * 6 + 6 > 270) {
+  // ---- Totales a la derecha; el marcado, con el color de la marca.
+  if (y + spec.totals.length * 7 + 6 > 268) {
     doc.addPage();
     y = 20;
   }
-  y += 4;
+  // El recuadro se ensancha hacia la izquierda si una etiqueta larga no cabe junto a su monto.
+  const needed = Math.max(...spec.totals.map(([label, value, strong]) => {
+    doc.setFont("helvetica", strong ? "bold" : "normal");
+    doc.setFontSize(strong ? 10 : 9);
+    return doc.getTextWidth(plain(label)) + doc.getTextWidth(plain(value)) + 14;
+  }), rightWidth);
+  const totalsWidth = Math.min(needed, PAGE_WIDTH - 2 * MARGIN);
+  const totalsX = PAGE_WIDTH - MARGIN - totalsWidth;
+  y += 2;
   spec.totals.forEach(([label, value, strong]) => {
     if (strong) {
-      doc.setFillColor(...BRAND);
-      doc.rect(120, y - 4, PAGE_WIDTH - MARGIN - 120, 6.4, "F");
-      doc.setTextColor(255);
+      doc.setFillColor(...PRIMARY);
+      doc.roundedRect(totalsX, y - 1, totalsWidth, 8, 1.4, 1.4, "F");
+      doc.setTextColor(...ON_PRIMARY);
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(plain(label), totalsX + 3, y + 4.4);
+      doc.text(plain(value), totalsX + totalsWidth - 3, y + 4.4, { align: "right" });
+      y += 9.5;
     } else {
-      doc.setTextColor(...INK);
       doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(...MUTED);
+      doc.text(plain(label), totalsX + 3, y + 3.8);
+      doc.setTextColor(...INK);
+      doc.text(plain(value), totalsX + totalsWidth - 3, y + 3.8, { align: "right" });
+      doc.setDrawColor(...LINE);
+      doc.setLineWidth(0.15);
+      doc.line(totalsX, y + 6, totalsX + totalsWidth, y + 6);
+      y += 6.8;
     }
-    doc.setFontSize(9);
-    doc.text(plain(label), 122, y);
-    doc.text(plain(value), PAGE_WIDTH - MARGIN - 2, y, { align: "right" });
-    y += 6.6;
   });
-  y += 3;
+  y += 4;
 
+  // ---- Notas.
   spec.notes.forEach(([label, text]) => {
     const lines = doc.splitTextToSize(plain(text), PAGE_WIDTH - 2 * MARGIN) as string[];
-    if (y + 6 + lines.length * 3.8 > 272) {
+    if (y + 6 + lines.length * 3.8 > 268) {
       doc.addPage();
       y = 20;
     }
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(...BRAND);
+    doc.setFontSize(7.5);
+    doc.setTextColor(...ACCENT);
     doc.text(plain(label).toUpperCase(), MARGIN, y);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8.5);
     doc.setTextColor(...INK);
     doc.text(lines, MARGIN, y + 4);
-    y += 6 + lines.length * 3.8;
+    y += 7 + lines.length * 3.8;
   });
 
-  // Firmas.
+  // ---- Firmas.
   const signatures = spec.signatures(companyName);
   const stamped = spec.stamps?.some(Boolean) ?? false;
-  if (y + (stamped ? 56 : 28) > 272) {
+  if (y + (stamped ? 56 : 28) > 268) {
     doc.addPage();
     y = 20;
   }
@@ -223,27 +303,27 @@ export async function downloadDocumentPdf(spec: PdfDocument) {
       // Sello: recuadro con el check y "Firmado electrónicamente", y el nombre en letra manuscrita.
       const boxWidth = Math.min(width - 6, 74);
       const left = x + (width - boxWidth) / 2;
-      const top = y - 27;
-      doc.setDrawColor(...BRAND);
+      const stampTop = y - 27;
+      doc.setDrawColor(...ACCENT);
       doc.setLineWidth(0.35);
-      doc.roundedRect(left, top, boxWidth, 24, 2, 2);
-      doc.setFillColor(...BRAND);
-      doc.circle(left + 5.5, top + 5, 2.4, "F");
+      doc.roundedRect(left, stampTop, boxWidth, 24, 2, 2);
+      doc.setFillColor(...ACCENT);
+      doc.circle(left + 5.5, stampTop + 5, 2.4, "F");
       doc.setDrawColor(255);
       doc.setLineWidth(0.55);
-      doc.line(left + 4.3, top + 5.1, left + 5.2, top + 6.1);
-      doc.line(left + 5.2, top + 6.1, left + 6.9, top + 3.9);
+      doc.line(left + 4.3, stampTop + 5.1, left + 5.2, stampTop + 6.1);
+      doc.line(left + 5.2, stampTop + 6.1, left + 6.9, stampTop + 3.9);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7.5);
-      doc.setTextColor(...BRAND);
-      doc.text("FIRMADO ELECTRÓNICAMENTE", left + 9.5, top + 6);
+      doc.setTextColor(...ACCENT);
+      doc.text("FIRMADO ELECTRÓNICAMENTE", left + 9.5, stampTop + 6);
       doc.setTextColor(...INK);
       if (script) doc.setFont("GreatVibes", "normal");
       else doc.setFont("times", "italic");
       let size = script ? 22 : 15;
       doc.setFontSize(size);
       while (size > 11 && doc.getTextWidth(plain(stamp)) > boxWidth - 8) doc.setFontSize(--size);
-      doc.text(plain(stamp), left + boxWidth / 2, top + 18.5, { align: "center" });
+      doc.text(plain(stamp), left + boxWidth / 2, stampTop + 18.5, { align: "center" });
       doc.setFont("helvetica", "normal");
     }
     doc.setDrawColor(...MUTED);
@@ -254,19 +334,37 @@ export async function downloadDocumentPdf(spec: PdfDocument) {
     doc.text(doc.splitTextToSize(plain(text), width) as string[], x + width / 2, y + 4, { align: "center" });
   });
 
-  // Pie y marca de agua en cada página.
+  // ---- En cada página: franja de la marca arriba, pie con contacto y número de página, marca de agua.
+  const contact = [branding?.phone, branding?.email, branding?.website].filter(Boolean).join("  ·  ");
   const generated = new Date().toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" });
   const pages = doc.getNumberOfPages();
   for (let page = 1; page <= pages; page++) {
     doc.setPage(page);
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.2);
-    doc.line(MARGIN, 284, PAGE_WIDTH - MARGIN, 284);
+    doc.setFillColor(...PRIMARY);
+    doc.rect(0, 0, PAGE_WIDTH, 3.2, "F");
+    if (SECONDARY) {
+      doc.setFillColor(...SECONDARY);
+      doc.rect(0, 3.2, PAGE_WIDTH, 0.9, "F");
+    }
+
+    doc.setDrawColor(...PRIMARY);
+    doc.setLineWidth(0.5);
+    doc.line(MARGIN, 281, PAGE_WIDTH - MARGIN, 281);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...INK);
+    const footerWidth = PAGE_WIDTH - 2 * MARGIN - 18;
+    doc.text((doc.splitTextToSize(plain([companyName, ruc ? `RUC ${ruc}` : null].filter(Boolean).join("  ·  ")), footerWidth) as string[])[0], MARGIN, 285.5);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...MUTED);
-    doc.text(plain(`Generado el ${generated}${me?.name ? ` por ${me.name}` : ""}`), MARGIN, 288.5);
-    doc.text(`${page} / ${pages}`, PAGE_WIDTH - MARGIN, 288.5, { align: "right" });
+    if (contact) doc.text((doc.splitTextToSize(plain(contact), footerWidth) as string[])[0], MARGIN, 289.3);
+    doc.setFontSize(6.5);
+    doc.text(plain(`Generado el ${generated}${me?.name ? ` por ${me.name}` : ""}`), MARGIN, contact ? 292.8 : 289.3);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...ACCENT);
+    doc.text(`${page} / ${pages}`, PAGE_WIDTH - MARGIN, 285.5, { align: "right" });
 
     if (spec.watermark) {
       doc.saveGraphicsState();

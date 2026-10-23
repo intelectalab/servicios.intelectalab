@@ -51,7 +51,7 @@ export function Card({
   return (
     <section
       className={`app-surface mb-[18px] min-w-0 overflow-hidden rounded-xl outline outline-2 transition-[box-shadow,outline-color,scale] duration-200 ease-out ${
-        drag?.dragging ? "scale-[1.012] outline-[#1B8FC9] shadow-[0_14px_34px_rgba(8,25,55,.22)]" : `outline-transparent ${SHADOW}`
+        drag?.dragging ? "scale-[1.012] outline-[color:var(--p-accent,#1B8FC9)] shadow-[0_14px_34px_rgba(8,25,55,.22)]" : `outline-transparent ${SHADOW}`
       } ${className}`}
     >
       {title && (
@@ -83,8 +83,8 @@ export type BtnVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-
 // Fondo, texto y borde van como utilidades (no con .app-surface / .app-muted): esas clases
 // ganan a las de "hover:" y el botón se quedaba sin reacción al pasar el cursor.
 const BTN_VARIANTS: Record<BtnVariant, string> = {
-  primary: "border-transparent bg-[#1B8FC9] text-[#fff] hover:bg-[#1679AB]",
-  secondary: "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] hover:border-[#1B8FC9] hover:bg-[var(--app-surface-muted)]",
+  primary: "border-transparent bg-[var(--p-accent,#1B8FC9)] text-[color:var(--p-on-accent,#fff)] hover:bg-[var(--p-accent-hover,#1679AB)]",
+  secondary: "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] hover:border-[color:var(--p-accent,#1B8FC9)] hover:bg-[var(--app-surface-muted)]",
   ghost: "border-transparent bg-transparent text-[color:var(--app-muted)] hover:bg-[var(--app-surface-muted)] hover:text-[color:var(--app-text)]",
   danger: "border-transparent bg-[#E5484D] text-[#fff] hover:bg-[#D93A40]",
   "danger-ghost": "border-[color:var(--p-danger-line)] bg-transparent text-[color:var(--p-danger-text)] hover:bg-[var(--p-danger-soft)]",
@@ -229,7 +229,7 @@ export function SearchInput({
   }, []);
 
   return (
-    <label className="app-muted flex h-10 flex-[1_1_260px] items-center sm:max-w-[360px] gap-2 rounded-[9px] border border-transparent bg-[var(--app-surface-muted)] px-2.5 focus-within:border-[#1B8FC9] focus-within:bg-[var(--app-surface)]">
+    <label className="app-muted flex h-10 flex-[1_1_260px] items-center sm:max-w-[360px] gap-2 rounded-[9px] border border-transparent bg-[var(--app-surface-muted)] px-2.5 focus-within:border-[color:var(--p-accent,#1B8FC9)] focus-within:bg-[var(--app-surface)]">
       <Search size={18} className="shrink-0" />
       <input
         type="search"
@@ -263,7 +263,7 @@ export function FilterSelect({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         aria-label={label}
-        className="app-surface app-text h-10 w-full cursor-pointer rounded-[9px] sm:w-auto sm:max-w-[220px] border border-[color:var(--app-border)] pl-2.5 pr-7 text-[13px] outline-none focus:border-[#1B8FC9]"
+        className="app-surface app-text h-10 w-full cursor-pointer rounded-[9px] sm:w-auto sm:max-w-[220px] border border-[color:var(--app-border)] pl-2.5 pr-7 text-[13px] outline-none focus:border-[color:var(--p-accent,#1B8FC9)]"
       >
         <option value="">{label}: todos</option>
         {options.map(([optionValue, optionLabel]) => (
@@ -289,12 +289,12 @@ export function Tabs({
             aria-selected={on}
             onClick={() => onChange(key)}
             className={`-mb-px cursor-pointer whitespace-nowrap border-b-2 px-3 py-[9px] font-medium ${
-              on ? "border-[#1B8FC9] text-[color:var(--p-brand-text)]" : "app-muted border-transparent hover:text-[var(--app-text)]"
+              on ? "border-[color:var(--p-accent,#1B8FC9)] text-[color:var(--p-brand-text)]" : "app-muted border-transparent hover:text-[var(--app-text)]"
             }`}
           >
             {label}
             {count != null && (
-              <span className={`ml-[5px] rounded-[9px] px-1.5 text-[11px] ${on ? "bg-[#1B8FC9] text-[#fff]" : "bg-[var(--app-surface-muted)]"}`}>
+              <span className={`ml-[5px] rounded-[9px] px-1.5 text-[11px] ${on ? "bg-[var(--p-accent,#1B8FC9)] text-[color:var(--p-on-accent,#fff)]" : "bg-[var(--app-surface-muted)]"}`}>
                 {count}
               </span>
             )}
@@ -308,7 +308,7 @@ export function Tabs({
 type KpiTone = "brand" | "warning" | "success" | "danger";
 
 const KPI_TONES: Record<KpiTone, [string, string]> = {
-  brand: ["border-l-[#1B8FC9]", "bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]"],
+  brand: ["border-l-[color:var(--p-accent,#1B8FC9)]", "bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]"],
   warning: ["border-l-[#B26E00]", "bg-[var(--p-warning-soft)] text-[color:var(--p-warning-text)]"],
   success: ["border-l-[#22A55A]", "bg-[var(--p-success-soft)] text-[color:var(--p-success)]"],
   danger: ["border-l-[#E5484D]", "bg-[var(--p-danger-soft)] text-[#E5484D]"],
@@ -371,7 +371,7 @@ export type Selection<T> = {
   onToggleAll: (rows: T[], checked: boolean) => void;
 };
 
-const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[color:var(--p-field-border)] accent-[#1B8FC9]";
+const CHECKBOX = "h-4 w-4 cursor-pointer rounded border-[color:var(--p-field-border)] accent-[color:var(--p-accent,#1B8FC9)]";
 
 export function DataTable<T>({
   cols, rows, rowKey, onRowClick, selection, loading = false, empty = "No hay registros con estos filtros.", dense = false, tableId,
@@ -481,7 +481,7 @@ const COL_MENU = "app-surface app-text fixed z-[250] w-56 rounded-xl border bord
 const COL_MENU_ITEM = "flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2 hover:bg-[var(--app-surface-muted)]";
 const CELL_BG = "bg-[var(--app-surface)]";
 const CELL_BG_HOVER = "bg-[var(--app-surface)] group-hover:bg-[var(--app-surface-muted)]";
-const CELL_BG_SELECTED = "bg-[color-mix(in_srgb,#1B8FC9_13%,var(--app-surface))]";
+const CELL_BG_SELECTED = "bg-[color-mix(in_srgb,var(--p-accent,#1B8FC9)_13%,var(--app-surface))]";
 const COL_SEP = "\u0000";
 
 function readStoredList(key: string): string[] {
@@ -733,7 +733,7 @@ function ColumnTable<T>({
                     </button>
                   </div>
                   {dropIndicator?.key === key && (
-                    <span aria-hidden="true" className={`pointer-events-none absolute top-0 z-[210] h-full w-1 rounded-full bg-[#1B8FC9] ${dropIndicator.side === "left" ? "left-0" : "right-0"}`} />
+                    <span aria-hidden="true" className={`pointer-events-none absolute top-0 z-[210] h-full w-1 rounded-full bg-[var(--p-accent,#1B8FC9)] ${dropIndicator.side === "left" ? "left-0" : "right-0"}`} />
                   )}
                   {openMenu === key && createPortal(
                     <div ref={menuRef} style={place} className={`${poppins.className} ${COL_MENU}`}>
@@ -860,7 +860,7 @@ export function SelectionBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--p-brand-line)] bg-[var(--p-brand-soft)] px-3.5 py-2 text-[13px] text-[color:var(--p-brand-soft-text)]">
-      <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[#1B8FC9] px-1.5 text-xs font-semibold text-[#fff]">{count}</span>
+      <span className="grid h-6 min-w-6 place-items-center rounded-full bg-[var(--p-accent,#1B8FC9)] px-1.5 text-xs font-semibold text-[color:var(--p-on-accent,#fff)]">{count}</span>
       <span className="mr-auto font-medium">{count === 1 ? "fila seleccionada" : "filas seleccionadas"}</span>
       <Btn size="sm" disabled={busy} onClick={() => onExport("xlsx")} permission={permission}>
         <Upload size={14} />
@@ -906,8 +906,8 @@ function pageNumbers(page: number, lastPage: number) {
 
 const PAGE_BTN = "grid h-8 min-w-8 cursor-pointer place-items-center rounded-lg border px-1.5 text-[12.5px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40";
 // Sin "app-surface": esa clase gana a las de hover y el botón no cambiaba al pasar el cursor.
-const PAGE_BTN_IDLE = "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] enabled:hover:border-[#1B8FC9] enabled:hover:bg-[rgb(27_143_201/0.14)] enabled:hover:text-[color:var(--p-brand)] enabled:active:scale-90";
-const PAGE_BTN_ON = "border-[#1B8FC9] bg-[#1B8FC9] text-[#fff]";
+const PAGE_BTN_IDLE = "border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] enabled:hover:border-[color:var(--p-accent,#1B8FC9)] enabled:hover:bg-[rgb(27_143_201/0.14)] enabled:hover:text-[color:var(--p-brand)] enabled:active:scale-90";
+const PAGE_BTN_ON = "border-[color:var(--p-accent,#1B8FC9)] bg-[var(--p-accent,#1B8FC9)] text-[color:var(--p-on-accent,#fff)]";
 
 /** Pie de un listado: exportar, "Mostrando X a Y de N", filas por página y páginas numeradas. */
 export function Pager({
@@ -955,7 +955,7 @@ export function Pager({
         <select
           value={perPage}
           onChange={(event) => onPerPage(Number(event.target.value))}
-          className="app-surface app-text h-8 cursor-pointer rounded-lg border border-[color:var(--app-border)] px-1.5 outline-none focus:border-[#1B8FC9]"
+          className="app-surface app-text h-8 cursor-pointer rounded-lg border border-[color:var(--app-border)] px-1.5 outline-none focus:border-[color:var(--p-accent,#1B8FC9)]"
         >
           {PAGE_SIZES.map((size) => (
             <option key={size} value={size}>{size}</option>
@@ -1007,7 +1007,7 @@ export function Modal({
         aria-label={title}
         className={`proto-pop-in app-surface app-text absolute left-1/2 top-[6vh] flex max-h-[88vh] -translate-x-1/2 flex-col overflow-hidden rounded-[14px] shadow-[0_20px_50px_rgba(8,25,55,.28)] ${width}`}
       >
-        <header className="flex items-center justify-between gap-2.5 bg-[#1B8FC9] px-[18px] py-3.5 text-[#fff]">
+        <header className="flex items-center justify-between gap-2.5 bg-[var(--p-accent,#1B8FC9)] px-[18px] py-3.5 text-[color:var(--p-on-accent,#fff)]">
           <h3 className="text-base font-medium">{title}</h3>
           <button
             type="button"
@@ -1027,7 +1027,7 @@ export function Modal({
   );
 }
 
-export const INPUT = "app-surface app-text min-h-10 w-full rounded-[9px] border border-[color:var(--p-field-border)] px-2.5 py-2 text-[13.5px] outline-none focus:border-[#1B8FC9] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)] disabled:bg-[var(--app-surface-muted)]";
+export const INPUT = "app-surface app-text min-h-10 w-full rounded-[9px] border border-[color:var(--p-field-border)] px-2.5 py-2 text-[13.5px] outline-none focus:border-[color:var(--p-accent,#1B8FC9)] focus:shadow-[0_0_0_3px_rgba(27,143,201,.18)] disabled:bg-[var(--app-surface-muted)]";
 
 export type SelectOption = { value: string; label: string; hint?: string; disabled?: boolean };
 
@@ -1287,7 +1287,7 @@ export function Timeline({ items, empty = "Sin movimientos." }: { items: Timelin
       {items.map((item, index) => (
         <li key={item.key} className="relative flex gap-2.5 pb-3">
           {index < items.length - 1 && <span className="absolute bottom-[-2px] left-1 top-3 w-px bg-[var(--app-border)]" />}
-          <span className="relative mt-1.5 h-[9px] w-[9px] shrink-0 rounded-full bg-[#1B8FC9]" />
+          <span className="relative mt-1.5 h-[9px] w-[9px] shrink-0 rounded-full bg-[var(--p-accent,#1B8FC9)]" />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">{item.head}</div>
             <div className="app-muted text-[12.5px]">{item.meta}</div>

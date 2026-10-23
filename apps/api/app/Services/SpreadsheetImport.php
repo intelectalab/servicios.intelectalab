@@ -141,21 +141,42 @@ class SpreadsheetImport
     }
 
     /** El libro de la plantilla, antes de enviarlo. */
+    /**
+     * Colores de la plantilla: los de la marca de la empresa de la sesión (Configuración → Marca
+     * de la empresa) o, sin marca, los del logo de siempre. En formato ARGB de Excel.
+     *
+     * @return array{brand: string, dark: string, soft: string, border: string}
+     */
+    private static function colors(): array
+    {
+        $tenantId = (string) request()->attributes->get('tenant_id');
+        $primary = $tenantId ? \Illuminate\Support\Facades\DB::table('company_branding')->where('tenant_id', $tenantId)->value('primary_color') : null;
+        if (! $primary) {
+            return ['brand' => self::BRAND, 'dark' => self::BRAND_DARK, 'soft' => self::SOFT, 'border' => self::BORDER];
+        }
+        $readable = Branding::readable($primary);
+        $dark = sprintf('#%02X%02X%02X', ...array_map(fn ($v) => (int) round($v * 0.78), sscanf($readable, '#%02x%02x%02x')));
+        $argb = fn (string $hex) => 'FF'.substr($hex, 1);
+
+        return ['brand' => $argb($readable), 'dark' => $argb($dark), 'soft' => $argb(Branding::tint($primary, 0.12)), 'border' => $argb(Branding::tint($primary, 0.25))];
+    }
+
     public static function templateBook(string $title, array $headers, array $examples, array $notes, array $lists = [], array $openLists = [], array $widths = []): Spreadsheet
     {
+        $colors = self::colors();
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Plantilla');
         $sheet->setShowGridlines(false);
 
         $last = Coordinate::stringFromColumnIndex(count($headers));
-        $border = ['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => self::BORDER]]]];
+        $border = ['borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['argb' => $colors['border']]]]];
 
         $sheet->mergeCells("A1:{$last}1");
         $sheet->setCellValue('A1', "# {$title}");
         $sheet->getStyle('A1')->applyFromArray([
             'font' => ['name' => 'Arial', 'size' => 14, 'bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::BRAND_DARK]],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $colors['dark']]],
             'alignment' => ['vertical' => Alignment::VERTICAL_CENTER, 'indent' => 1],
         ]);
         $sheet->getRowDimension(1)->setRowHeight(28);
@@ -165,8 +186,8 @@ class SpreadsheetImport
             $sheet->mergeCells("A{$line}:{$last}{$line}");
             $sheet->setCellValue("A{$line}", "# {$note}");
             $sheet->getStyle("A{$line}")->applyFromArray([
-                'font' => ['name' => 'Arial', 'size' => 9, 'color' => ['argb' => self::BRAND_DARK]],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::SOFT]],
+                'font' => ['name' => 'Arial', 'size' => 9, 'color' => ['argb' => $colors['dark']]],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $colors['soft']]],
                 'alignment' => ['vertical' => Alignment::VERTICAL_CENTER, 'indent' => 1],
             ]);
             $line++;
@@ -179,7 +200,7 @@ class SpreadsheetImport
         }
         $sheet->getStyle("A{$line}:{$last}{$line}")->applyFromArray([
             'font' => ['name' => 'Arial', 'size' => 10, 'bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => self::BRAND]],
+            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => $colors['brand']]],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
         ] + $border);
         $sheet->getRowDimension($line)->setRowHeight(24);

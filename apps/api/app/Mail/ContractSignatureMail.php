@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTenantBrand;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -9,6 +10,8 @@ use Illuminate\Mail\Mailables\Envelope;
 /** Aviso al cliente: tiene un contrato por firmar en su portal. */
 class ContractSignatureMail extends Mailable
 {
+    use UsesTenantBrand;
+
     /** @param array<string, string> $rows */
     public function __construct(
         public string $companyName,

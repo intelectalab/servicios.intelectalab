@@ -168,6 +168,12 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - Las preferencias de Mi perfil mandan: sin "En la aplicación" no hay campana; con "Correo" sale un correo después de guardar (si falla, la operación queda). WhatsApp no tiene proveedor.
 - Cada persona ve solo sus notificaciones; la base no deja cambiar su texto, borrarlas ni volver a "no leída". Los avisos por fecha se ven en "Requiere tu atención" del panel, no como notificación.
 
+### Marca de la empresa (2026-10-23)
+
+- Cada empresa define su marca en Configuración → Marca de la empresa (`tenant.manage`): logo, color principal y secundario y contacto del pie. Detalle en [cambios/2026-10-23_marca-de-la-empresa-y-documentos-corporativos.md](cambios/2026-10-23_marca-de-la-empresa-y-documentos-corporativos.md).
+- El logo nunca se guarda como llegó: el servidor lo vuelve a dibujar como PNG acotado; SVG no se acepta. Los colores se proponen desde el logo y se pueden cambiar.
+- La marca va en todos los PDF, en los Excel exportados, en la barra del portal y en los correos que recibe el cliente. Un color claro se oscurece donde hace falta para que se lea. Sin marca, todo sigue con el azul de siempre.
+
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
 - Permisos `audit.view` y `audit.export`, sin módulo del plan. Como en el prototipo, los tienen Administrador y Gerencia.

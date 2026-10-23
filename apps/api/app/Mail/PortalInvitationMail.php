@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTenantBrand;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -9,6 +10,8 @@ use Illuminate\Mail\Mailables\Envelope;
 /** Invitación al portal de clientes: el código para activar el acceso y crear la contraseña. */
 class PortalInvitationMail extends Mailable
 {
+    use UsesTenantBrand;
+
     public function __construct(
         public string $code,
         public string $companyName,

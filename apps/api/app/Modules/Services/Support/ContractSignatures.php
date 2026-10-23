@@ -133,11 +133,11 @@ class ContractSignatures
         });
 
         try {
-            Mail::to($signer->email)->send(new ContractSignatureMail(
+            Mail::to($signer->email)->send((new ContractSignatureMail(
                 PortalCustomer::companyName($contract->tenant_id), $contract->contract_number,
                 ['Contrato' => $contract->contract_number, 'Firmante' => $signer->name, 'Vence' => $expires->format('d/m/Y')],
                 rtrim((string) config('app.frontend_url'), '/').'/portal/signatures',
-            ));
+            ))->withBrand($contract->tenant_id));
         } catch (Throwable $e) {
             Log::warning('No se pudo avisar del contrato por firmar.', ['request_id' => $id, 'error' => $e->getMessage()]);
         }
@@ -152,7 +152,9 @@ class ContractSignatures
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
         Cache::put(self::codeKey($request->id, $user->id), ['hash' => Hash::make($code), 'attempts' => 0], now()->addMinutes(self::CODE_MINUTES));
         $number = DB::table('contracts')->where('id', $request->contract_id)->value('contract_number');
-        Mail::to($user->email)->send(new ContractSignatureCodeMail($code, self::CODE_MINUTES, $number));
+        $mail = new ContractSignatureCodeMail($code, self::CODE_MINUTES, $number);
+        // Al cliente le llega con la marca de la empresa; a quien firma por la empresa, con la de siempre.
+        Mail::to($user->email)->send($side === 'CLIENTE' ? $mail->withBrand($request->tenant_id) : $mail);
     }
 
     /**

@@ -85,6 +85,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-23 | Planes SaaS con tarjetas como el prototipo y la tabla como segunda vista; catálogo de módulos según el menú real del ERP, con Compras y Contabilidad aparte de Finanzas | [cambios/2026-10-23_planes-saas-y-modulos-del-erp.md](cambios/2026-10-23_planes-saas-y-modulos-del-erp.md) |
 | 2026-10-23 | Panel de control por rol (indicadores, Requiere tu atención, gráficos, actividad; inicio del sistema) y Notificaciones: campana con contador, centro de notificaciones, avisos por permiso y alcance, correo según Mi perfil | [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/2026-10-23_panel-de-control-y-notificaciones.md) |
 | 2026-10-23 | Hallazgos del inventario de botones: "Mover a…" y otros controles con candado, exportar con auditoría en Sedes, Equipos, Roles y versiones de documentos, "Ver planes" en lugar del enlace roto, Solo lectura del portal sin crear tickets, confirmar al desactivar usuarios | [cambios/2026-10-23_hallazgos-del-inventario-de-botones.md](cambios/2026-10-23_hallazgos-del-inventario-de-botones.md) |
+| 2026-10-23 | Configuración → Marca de la empresa: logo (limpiado en el servidor), colores sacados del logo y contacto del pie; PDF con diseño corporativo y la marca, y la marca también en Excel, portal y correos al cliente | [cambios/2026-10-23_marca-de-la-empresa-y-documentos-corporativos.md](cambios/2026-10-23_marca-de-la-empresa-y-documentos-corporativos.md) |
 
 ## Cómo se escribe cada entrada
 

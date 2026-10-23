@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import { loadBranding, readableOnWhite, rgbToHex, textOn, tint, type Rgb } from "@/lib/branding";
 import type { PaginatedResponse } from "@/types/customer";
 
 type CellTone = "success" | "danger" | "warning" | "info" | "neutral";
@@ -17,15 +18,28 @@ export type ExportColumn<T> = {
 
 const PAGE_SIZE = 200;
 
-// Colores del logo y de los estados, en formato ARGB de Excel.
-const BRAND = "FF1B8FC9";
-const BRAND_DARK = "FF0F5A82";
+// Colores en formato ARGB de Excel. Los de la marca salen de Configuración → Marca de la empresa
+// (sin marca, los del logo de siempre); tinta, blanco y estados son fijos.
 const INK = "FF1D1D1B";
 const SUBTITLE = "FF526778";
-const SUBTITLE_FILL = "FFE3F2FA";
-const BORDER = "FFCFE0E8";
-const STRIPE = "FFF4FAFD";
 const WHITE = "FFFFFFFF";
+const argb = (rgb: Rgb) => `FF${rgbToHex(rgb).slice(1)}`;
+
+/** Paleta de la hoja según la marca de la empresa. */
+async function sheetColors() {
+  const brand = await loadBranding();
+  const primary = brand?.primary_color ?? "#1B8FC9";
+  const deep = readableOnWhite(primary).map((v) => v * 0.78) as Rgb;
+  return {
+    company: brand?.name ?? null,
+    brand: argb(readableOnWhite(primary)),
+    brandText: argb(textOn(rgbToHex(readableOnWhite(primary)))),
+    brandDark: argb(deep),
+    subtitleFill: argb(tint(primary, 0.12)),
+    border: argb(tint(primary, 0.22)),
+    stripe: argb(tint(primary, 0.045)),
+  };
+}
 const TONES: Record<CellTone, { text: string; fill: string }> = {
   success: { text: "FF1B8E4B", fill: "FFE4F6EB" },
   danger: { text: "FFD93A40", fill: "FFFDECEC" },
@@ -88,8 +102,10 @@ const stamp = () => new Date().toISOString().slice(0, 10);
 export async function exportXlsx<T>(name: string, title: string, columns: ExportColumn<T>[], rows: T[]) {
   // exceljs pesa: se carga solo al exportar.
   const ExcelJS = (await import("exceljs")).default;
+  const colors = await sheetColors();
+  const { brand: BRAND, brandDark: BRAND_DARK, subtitleFill: SUBTITLE_FILL, border: BORDER, stripe: STRIPE } = colors;
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = "Creativas";
+  workbook.creator = colors.company ?? "Creativas";
   workbook.created = new Date();
   const ws = workbook.addWorksheet(title.slice(0, 31));
   const nCols = columns.length;
@@ -115,7 +131,7 @@ export async function exportXlsx<T>(name: string, title: string, columns: Export
   ws.mergeCells(2, 1, 2, nCols);
   const subCell = ws.getCell(2, 1);
   const today = new Date().toLocaleDateString("es-PE", { day: "numeric", month: "long", year: "numeric" });
-  subCell.value = `Exportado el ${today} · ${rows.length} ${rows.length === 1 ? "registro" : "registros"}`;
+  subCell.value = `${colors.company ? `${colors.company} · ` : ""}Exportado el ${today} · ${rows.length} ${rows.length === 1 ? "registro" : "registros"}`;
   subCell.font = { name: "Arial", size: 9, italic: true, color: { argb: SUBTITLE } };
   subCell.fill = solid(SUBTITLE_FILL);
   subCell.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
@@ -130,7 +146,7 @@ export async function exportXlsx<T>(name: string, title: string, columns: Export
   columns.forEach((column, index) => {
     const cell = ws.getCell(HEADER_ROW, index + 1);
     cell.value = column.label;
-    cell.font = { name: "Arial", size: 10.5, bold: true, color: { argb: WHITE } };
+    cell.font = { name: "Arial", size: 10.5, bold: true, color: { argb: colors.brandText } };
     cell.fill = solid(BRAND);
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     cell.border = thinBorder;
