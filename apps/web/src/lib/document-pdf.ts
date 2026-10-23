@@ -81,7 +81,7 @@ export const pdfMoney = (value: string | number, currency: string) => `${currenc
  * la cabecera de su color, totales, notas, firmas y un pie con sus datos de contacto. Se arma en
  * el navegador; sin marca, sale con el azul de siempre.
  */
-export async function downloadDocumentPdf(spec: PdfDocument) {
+export async function downloadDocumentPdf(spec: PdfDocument, options: { asBlob?: boolean } = {}): Promise<Blob | void> {
   // En el portal de clientes la persona sale de /portal/me (las rutas internas no le responden).
   const portal = typeof window !== "undefined" && /^\/portal(\/|$)/.test(window.location.pathname);
   // jsPDF pesa: se carga solo al descargar.
@@ -377,5 +377,7 @@ export async function downloadDocumentPdf(spec: PdfDocument) {
     }
   }
 
+  // Para mostrarlo en pantalla (vista previa): se devuelve el archivo en vez de descargarlo.
+  if (options.asBlob) return doc.output("blob");
   doc.save(`${spec.file}.pdf`);
 }

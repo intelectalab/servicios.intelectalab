@@ -142,6 +142,14 @@ Los demás correos del sistema siguen con la marca de GSCreativas.
   - Los procesos de pm2 de los otros proyectos siguen en línea.
 - No se probó con una cuenta real del VPS, porque las contraseñas no estaban en la sesión.
 
+## Ajuste: "PDF de ejemplo" después de guardar
+
+Reportaste que, tras pulsar Guardar, "PDF de ejemplo" no descargaba nada hasta refrescar la página.
+
+- **Causa:** el PDF se armaba bien, pero el navegador bloqueaba la descarga. Chrome deja que una página descargue un archivo por su cuenta, pero bloquea en silencio las siguientes si no vienen de un clic reciente. Armar el PDF tarda unos segundos (consulta la API), así que la segunda descarga ya no contaba como clic.
+- **Arreglo:** el PDF de ejemplo se muestra dentro de la pantalla, en una ventana con la vista previa y el botón "Descargar PDF". La descarga sale de tu propio clic y nunca se bloquea. `downloadDocumentPdf` acepta `{ asBlob: true }` para devolver el archivo en vez de descargarlo; los demás PDF del sistema siguen igual.
+- **Probado:** generar, cerrar, guardar y volver a generar en la misma página, sin recargar. Las dos veces se mostró el PDF con su botón de descarga.
+
 ## Pendiente
 
 - Que el Administrador de cada empresa suba su logo en Configuración → Marca de la empresa.

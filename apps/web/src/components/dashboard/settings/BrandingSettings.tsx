@@ -7,7 +7,7 @@ import { useAccess } from "@/lib/access-context";
 import { fieldErrors, firstError } from "@/lib/crm";
 import { DEFAULT_PRIMARY, contrast, hexToRgb, readableOnWhite, rgbToHex, setBranding, textOn, tint, type Branding } from "@/lib/branding";
 import { downloadDocumentPdf } from "@/lib/document-pdf";
-import { Btn, Card, Chip, Field, FormGrid, INPUT, LoadError, Notice, PageHead, Screen, deniedText, useToasts } from "@/components/ui/proto";
+import { Btn, Card, Chip, Field, FormGrid, INPUT, LoadError, Modal, Notice, PageHead, Screen, btnClass, deniedText, useToasts } from "@/components/ui/proto";
 
 type Form = { primary_color: string; secondary_color: string; address: string; phone: string; email: string; website: string };
 
@@ -144,6 +144,12 @@ export default function BrandingSettings() {
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   const [busy, setBusy] = useState<"logo" | "save" | "remove" | "pdf" | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  function closePreview() {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -231,7 +237,9 @@ export default function BrandingSettings() {
     };
     setBranding(draft);
     try {
-      await downloadDocumentPdf({
+      // Se muestra en una ventana con su botón de descarga: si se descargara solo al terminar
+      // (unos segundos después del clic), el navegador bloquearía la segunda descarga de la página.
+      const blob = await downloadDocumentPdf({
         file: "Ejemplo_documento",
         title: "COTIZACIÓN",
         number: "COT-2026-0001",
@@ -247,7 +255,8 @@ export default function BrandingSettings() {
         totals: [["Subtotal", "S/ 760.00"], ["IGV 18%", "S/ 136.80"], ["TOTAL", "S/ 896.80", true]],
         notes: [["Condiciones", "Documento de ejemplo para revisar el diseño con la marca de la empresa."]],
         signatures: (companyName) => ["Aceptación del cliente", `Por ${companyName}`],
-      });
+      }, { asBlob: true });
+      if (blob) setPreviewUrl(URL.createObjectURL(blob));
     } catch {
       toast("No se pudo generar el PDF de ejemplo.", "danger");
     } finally {
@@ -369,6 +378,24 @@ export default function BrandingSettings() {
           </p>
         </Card>
       </div>
+      {previewUrl && (
+        <Modal
+          title="PDF de ejemplo"
+          size="lg"
+          onClose={closePreview}
+          footer={
+            <>
+              <Btn variant="secondary" onClick={closePreview}>Cerrar</Btn>
+              <a href={previewUrl} download="Ejemplo_documento.pdf" className={btnClass("primary")}>
+                <FileDown size={16} />
+                <span>Descargar PDF</span>
+              </a>
+            </>
+          }
+        >
+          <iframe src={previewUrl} title="Vista previa del PDF de ejemplo" className="h-[70vh] w-full rounded-lg border border-[color:var(--app-border)] bg-[#fff]" />
+        </Modal>
+      )}
       {toasts}
     </Screen>
   );
