@@ -79,7 +79,16 @@ Solo se tocó este ERP: su `.env` y su PostgreSQL, que solo tiene la base `erp_s
    GRANT erp_platform TO erp_console;
    GRANT CONNECT ON DATABASE erp_saas TO erp_console;
    ```
-4. Después se volvió a desplegar con `deploy.sh`.
+4. Después se volvió a desplegar con `deploy.sh` (`b2ed51d`): la migración pasó. El script dijo "Sin cambios en la web" porque el intento fallido ya había traído el código, así que la web se compiló a mano con los mismos pasos del script (copia de `.next`, `npm run build`, `pm2 restart servicios-web`).
+5. Comprobado en el VPS:
+   - la consola lee con `erp_console` (9 empresas, 6 suscripciones vigentes, 0 pagadas) y ese usuario no puede leer `customers`;
+   - `/api/v1/superadmin/dashboard` sin sesión responde 401;
+   - `/login` 200;
+   - los demás sitios responden igual que en la medición del 21 (`estado.sh`).
+
+   No se abrió el panel con sesión porque el código llega al correo real.
+
+Pendiente de `deploy.sh`: si un despliegue falla después de traer el código, el siguiente no recompila la web. Debería comparar contra el último commit que compiló bien.
 
 ## Pendiente
 
