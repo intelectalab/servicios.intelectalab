@@ -14,7 +14,9 @@
 #      corrige permisos.
 #   6. Web: npm ci si cambió package-lock.json, build y reinicio de su proceso
 #      de pm2. Si el build falla, vuelve a dejar el anterior y no reinicia.
-#   7. Comprueba que la web y la API respondan.
+#   7. Comprueba que la web y la API respondan y anota el commit como desplegado.
+# Si se detiene a medias, volver a correrlo retoma lo que faltó (dependencias,
+# migraciones, compilación de la web) desde el último despliegue completo.
 # Solo toca esta carpeta y su proceso de pm2; los demás sitios del servidor no.
 set -euo pipefail
 
@@ -30,6 +32,11 @@ PM2_NAME="${PM2_NAME:-servicios-web}"
 SITE_URL="${DEPLOY_URL:-https://$(basename "$APP_DIR")}"
 MIGRATE_USER="${MIGRATE_USER:-erp_user}"
 NEXT_PREV="/var/tmp/erp-next-anterior"
+# Último commit desplegado de punta a punta (dentro de .git: nunca se sube).
+# Lo que cambió se mide desde ahí, no desde el commit que había en la carpeta:
+# si un despliegue falla después de traer el código, el siguiente retoma
+# dependencias, migraciones y la compilación de la web que quedaron sin hacer.
+OK_FILE="$APP_DIR/.git/erp-deploy-ok"
 YES=0
 [ "${1:-}" = "--si" ] && YES=1
 
@@ -60,22 +67,34 @@ paso "2. Buscando novedades en GitHub ($BRANCH)"
 git fetch -q origin "$BRANCH"
 OLD="$(git rev-parse HEAD)"
 NEW="$(git rev-parse "origin/$BRANCH")"
-if [ "$OLD" = "$NEW" ]; then
-  echo "Ya está al día (${OLD:0:7}). No hay nada que desplegar."
+git merge-base --is-ancestor "$OLD" "$NEW" || falla "La versión del servidor no es anterior a la de GitHub (¿historial reescrito?). Revísalo a mano."
+BASE="$OLD"
+# Primera vez con esta marca: lo que hay en la carpeta es el último despliegue completo.
+[ -s "$OK_FILE" ] || echo "$OLD" > "$OK_FILE"
+if [ -s "$OK_FILE" ]; then
+  last_ok="$(cat "$OK_FILE")"
+  if git cat-file -e "$last_ok^{commit}" 2>/dev/null && git merge-base --is-ancestor "$last_ok" "$OLD"; then
+    BASE="$last_ok"
+  fi
+fi
+if [ "$BASE" = "$NEW" ]; then
+  echo "Ya está al día (${NEW:0:7}). No hay nada que desplegar."
   exit 0
 fi
-git merge-base --is-ancestor "$OLD" "$NEW" || falla "La versión del servidor no es anterior a la de GitHub (¿historial reescrito?). Revísalo a mano."
-git log --oneline "$OLD..$NEW"
+if [ "$BASE" != "$OLD" ]; then
+  echo "El último despliegue (${OLD:0:7}) no terminó; se retoma desde ${BASE:0:7}, el último completo."
+fi
+git log --oneline "$BASE..$NEW"
 confirmar "¿Desplegar estos cambios?" || falla "Cancelado. No se cambió nada."
 
 paso "3. Respaldo antes de actualizar"
 APP_DIR="$APP_DIR" bash "$SCRIPT_DIR/backup.sh" "antes_deploy_${OLD:0:7}"
 
-trap 'echo; echo "✗ El despliegue se detuvo con un error. El código estaba en ${OLD:0:7}; para volver: cd $APP_DIR && git reset --hard ${OLD:0:7} y repetir los pasos de la web. El respaldo está en /root/backups/erp." >&2' ERR
+trap 'echo; echo "✗ El despliegue se detuvo con un error. Al corregirlo, vuelve a correr este script: retoma lo que faltó desde ${BASE:0:7}. Para volver atrás: cd $APP_DIR && git reset --hard ${BASE:0:7} y correr el script de nuevo; el respaldo está en /root/backups/erp." >&2' ERR
 
 paso "4. Trayendo el código"
 git merge --ff-only -q "origin/$BRANCH"
-CHANGED="$(git diff --name-only "$OLD" "$NEW")"
+CHANGED="$(git diff --name-only "$BASE" "$NEW")"
 cambio() { grep -qE "$1" <<<"$CHANGED"; }
 echo "$(wc -l <<<"$CHANGED") archivos cambiados. Ahora en ${NEW:0:7}."
 
@@ -122,7 +141,7 @@ if cambio '^apps/web/'; then
   echo "Compilando (tarda unos minutos)…"
   if ! npm run build; then
     if [ -d "$NEXT_PREV" ]; then rm -rf .next && mv "$NEXT_PREV" .next; fi
-    falla "El build de la web falló. Se dejó el anterior y la web sigue con la versión vieja (la API ya está en ${NEW:0:7})."
+    falla "El build de la web falló. Se dejó el anterior y la web sigue con la versión vieja (la API ya está en ${NEW:0:7}). Al corregirlo, vuelve a correr este script."
   fi
   pm2 restart "$PM2_NAME" --update-env > /dev/null
   rm -rf "$NEXT_PREV"
@@ -140,6 +159,7 @@ echo "Web /login → $web (esperado 200)"
 echo "API /api/v1/me → $api (esperado 401: responde y pide sesión)"
 trap - ERR
 if [ "$web" = "200" ] && [ "$api" = "401" ]; then
+  echo "$NEW" > "$OK_FILE"
   echo; echo "✓ Desplegado ${NEW:0:7}."
 else
   falla "El sitio no respondió como se esperaba. Revisa: tail -n 50 /var/log/nginx/error.log y pm2 logs $PM2_NAME --lines 50"

@@ -88,7 +88,14 @@ Solo se tocó este ERP: su `.env` y su PostgreSQL, que solo tiene la base `erp_s
 
    No se abrió el panel con sesión porque el código llega al correo real.
 
-Pendiente de `deploy.sh`: si un despliegue falla después de traer el código, el siguiente no recompila la web. Debería comparar contra el último commit que compiló bien.
+**Arreglo de `deploy.sh` (2026-10-23).** Antes, si un despliegue fallaba después de traer el código, el siguiente no recompilaba la web, ni instalaba dependencias que hubieran cambiado.
+
+Ahora el script guarda en `.git/erp-deploy-ok` el último commit desplegado de punta a punta. Lo que cambió se mide desde ese commit, así que al volver a correrlo retoma lo que faltó. Si un despliegue anterior quedó a medias, lo avisa ("se retoma desde …").
+
+La primera vez, la marca toma el commit que ya está en la carpeta. Se probó con un repositorio de juguete y las órdenes simuladas:
+- con la migración fallando, la marca se queda en el commit anterior;
+- al volver a correrlo, migra, compila y reinicia la web y mueve la marca;
+- una tercera corrida dice "Ya está al día".
 
 ## Pendiente
 
