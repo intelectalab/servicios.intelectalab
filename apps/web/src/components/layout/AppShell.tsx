@@ -278,9 +278,16 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
   ];
 
   const currentItem = MENU_ITEMS.find((item) => !item.soon && pathname?.startsWith(item.href));
+  const currentSection = currentItem?.label ?? (pathname?.startsWith("/profile") ? "Mi perfil" : pathname?.startsWith("/notifications") ? "Notificaciones" : "Inicio");
+  const pageTitle = tenantName ? `${currentSection} · ${tenantName}` : `${currentSection} · ERP SaaS`;
+
+  useEffect(() => {
+    document.title = pageTitle;
+  }, [pageTitle, pathname]);
 
   return (
     <div className="app-page flex h-screen min-h-0 overflow-hidden">
+      <title>{pageTitle}</title>
       {/* Sidebar desktop */}
       <aside
         className={`app-surface app-border hidden h-full min-h-0 shrink-0 overflow-visible border-r transition-[width] duration-300 md:block ${
@@ -328,7 +335,7 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header
           open={sidebarOpen || mobileOpen}
-          currentSection={currentItem?.label ?? (pathname?.startsWith("/profile") ? "Mi perfil" : pathname?.startsWith("/notifications") ? "Notificaciones" : "Inicio")}
+          currentSection={currentSection}
           currentGroup={currentItem?.superModule ?? (pathname?.startsWith("/profile") || pathname?.startsWith("/notifications") ? "Cuenta" : undefined)}
           onToggle={() => {
             setSidebarOpen((value) => !value);

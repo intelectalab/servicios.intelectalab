@@ -119,6 +119,9 @@ export default function PortalShell({ children }: { children: ReactNode }) {
   // En el teléfono la barra se desliza de lado: la sección abierta siempre queda a la vista.
   useEffect(() => {
     document.querySelector('nav[aria-label="Portal"] a[aria-current="page"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    if (!me) return;
+    const item = PORTAL_NAV.find(([href]) => (href === "/portal" ? pathname === "/portal" : pathname === href || pathname.startsWith(`${href}/`)));
+    document.title = `${item ? item[1] : "Portal"} · ${me.company_name}`;
   }, [pathname, me]);
 
   // Marca de la empresa (Configuración → Marca de la empresa): su logo y su color en la barra.
@@ -183,9 +186,12 @@ export default function PortalShell({ children }: { children: ReactNode }) {
 
   const nav = me.enabled ? PORTAL_NAV.filter(([, , section]) => me.sections.includes(section)) : [];
   const active = (href: string) => (href === "/portal" ? pathname === "/portal" : pathname === href || pathname.startsWith(`${href}/`));
+  const currentPortalItem = PORTAL_NAV.find(([href]) => active(href));
+  const portalTitle = `${currentPortalItem ? currentPortalItem[1] : "Portal"} · ${me.company_name}`;
 
   return (
     <PortalContext.Provider value={{ me, reload, can, toast }}>
+      <title>{portalTitle}</title>
       <div className={`${poppins.className} app-text flex min-h-screen w-full flex-col bg-[var(--background)] text-sm leading-[1.45]`}>
         <header
           className="flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b-[3px] border-[color:var(--portal-line)] bg-[image:var(--portal-top)] px-3 py-2 text-[#fff] sm:px-5"
