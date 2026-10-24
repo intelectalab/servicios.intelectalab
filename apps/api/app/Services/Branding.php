@@ -37,22 +37,25 @@ class Branding
         // Sin datos propios en la marca, el pie usa la dirección y el teléfono registrados de la empresa.
         $fallbackAddress = implode(', ', array_filter([$address['direccion'] ?? null, $address['distrito'] ?? null, $address['departamento'] ?? null]));
 
+        $primary = $row?->primary_color ?? self::DEFAULT_PRIMARY;
+        $hasLogo = (bool) ($row?->logo_sha256 ?? null);
+
         return [
             'name' => $company->legal_name ?? $tenant->legal_name ?? $tenant->name ?? 'Empresa',
             'trade_name' => $company->trade_name ?? $tenant->name ?? null,
             'tax_identifier' => $company->tax_identifier ?? null,
             'logo' => $withLogo && $row?->logo ? 'data:image/png;base64,'.base64_encode(self::bytes($row->logo)) : null,
-            'has_logo' => (bool) ($row?->logo_sha256 ?? null),
+            'has_logo' => $hasLogo,
             'logo_width' => $row?->logo_width,
             'logo_height' => $row?->logo_height,
-            'primary_color' => $row?->primary_color ?? self::DEFAULT_PRIMARY,
+            'primary_color' => $primary,
             'secondary_color' => $row?->secondary_color,
             'palette' => json_decode((string) ($row?->palette ?? '[]'), true) ?: [],
             'address' => $row?->address ?: ($fallbackAddress ?: null),
             'phone' => $row?->phone ?: ($address['telefono'] ?? null),
             'email' => $row?->email,
             'website' => $row?->website,
-            'customized' => (bool) $row,
+            'customized' => $hasLogo || strtoupper($primary) !== self::DEFAULT_PRIMARY || $row?->secondary_color !== null,
             'updated_at' => $row?->updated_at,
         ];
     }

@@ -44,9 +44,9 @@ type HeaderProps = {
   notifications?: boolean;
 };
 
-// Botón de ícono de la barra: azul del logo, igual en tema claro y oscuro.
+// Botón de ícono de la barra: color de la marca, igual en tema claro y oscuro.
 const ICON_BUTTON =
-  "relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[color:var(--p-brand)] transition-colors hover:bg-[rgb(27_143_201/0.1)] active:scale-95";
+  "relative flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] text-[color:var(--p-brand)] transition-colors hover:bg-[var(--p-brand-soft)] active:scale-95";
 
 function initials(name: string) {
   return name
@@ -83,7 +83,7 @@ export default function Header({
   const userRole = user?.role ?? "Administrador";
   const userEmail = user?.email ?? "online";
   const avatar = (
-    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#1B8FC9] text-[12.5px] font-semibold text-white">
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--p-accent,#1B8FC9)] text-[12.5px] font-semibold text-[color:var(--p-on-accent,#fff)]">
       {initials(userName)}
     </span>
   );
@@ -154,7 +154,7 @@ export default function Header({
             onClick={() => setMenuOpen((prev) => !prev)}
             aria-haspopup="true"
             aria-expanded={menuOpen}
-            className="flex cursor-pointer items-center gap-2.5 rounded-xl py-1 pl-2.5 pr-1.5 transition-colors hover:bg-[rgb(27_143_201/0.08)]"
+            className="flex cursor-pointer items-center gap-2.5 rounded-xl py-1 pl-2.5 pr-1.5 transition-colors hover:bg-[var(--p-brand-soft)]"
           >
             <span className="hidden text-right md:grid">
               <strong className="app-text text-[13px] font-medium leading-tight">{userName}</strong>

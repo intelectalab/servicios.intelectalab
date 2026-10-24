@@ -66,8 +66,13 @@ class BrandingTest extends TestCase
         $this->assertSame(['#0A7C3E', null, 'www.empresa.pe'], [$saved['primary_color'], $saved['secondary_color'], $saved['website']]);
         $this->assertTrue($saved['has_logo']);
 
-        // Quitar el logo deja los colores.
-        $this->deleteJson('/api/v1/branding/logo')->assertOk()->assertJsonPath('has_logo', false)->assertJsonPath('primary_color', '#0A7C3E');
+        // Quitar el logo devuelve los colores a los de GsCreativas (#1B8FC9) y limpia las muestras del logo.
+        $this->deleteJson('/api/v1/branding/logo')->assertOk()
+            ->assertJsonPath('has_logo', false)
+            ->assertJsonPath('primary_color', '#1B8FC9')
+            ->assertJsonPath('secondary_color', null)
+            ->assertJsonPath('palette', [])
+            ->assertJsonPath('customized', false);
     }
 
     public function test_only_images_are_accepted_and_only_the_admin_changes_the_brand(): void

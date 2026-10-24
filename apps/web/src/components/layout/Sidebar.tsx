@@ -46,6 +46,10 @@ type SidebarProps = {
   user?: { name: string; role?: string } | null;
   /** Empresa de la sesión, bajo la tarjeta de usuario. */
   tenantName?: string;
+  /** Logo de la empresa (Configuración → Marca de la empresa), si subió uno. */
+  tenantLogo?: string | null;
+  /** Si la empresa personalizó su marca (logo o colores), se muestra el sello "Powered by Creativas" abajo. */
+  tenantCustomized?: boolean;
   /** Ruta de "Mi perfil" (la consola de plataforma usa la suya). */
   profileHref?: string;
   /** Planes de la página pública, para "Ver planes" de un módulo fuera del plan. */
@@ -118,7 +122,15 @@ function initials(name: string) {
     .join("");
 }
 
-function Logo() {
+function Logo({ tenantLogo, tenantName }: { tenantLogo?: string | null; tenantName?: string }) {
+  if (tenantLogo) {
+    return (
+      <div className="flex h-11 w-full items-center justify-center rounded-[10px] bg-[#fff] px-3 py-1.5 shadow-[0_2px_8px_rgba(0,0,0,0.12)]">
+        {/* eslint-disable-next-line @next/next/no-img-element -- data URL del logo limpio de la empresa. */}
+        <img src={tenantLogo} alt={tenantName ? `Logo de ${tenantName}` : "Logo de la empresa"} className="max-h-8 max-w-full object-contain" />
+      </div>
+    );
+  }
   return (
     <div className="relative h-9 w-[164px]">
       <Image src="/logo-blanco.png" alt="Creativas" fill priority sizes="164px" className="object-contain object-left" />
@@ -136,6 +148,8 @@ export default function Sidebar({
   groupIcons = {},
   user,
   tenantName,
+  tenantLogo,
+  tenantCustomized = false,
   profileHref = "/profile",
   plansUrl = "/#plans",
 }: SidebarProps) {
@@ -218,8 +232,8 @@ export default function Sidebar({
       className={`${poppins.className} relative flex h-full flex-col text-white`}
       style={{ background: SIDEBAR_BACKGROUND }}
     >
-      <div className={`flex h-16 shrink-0 items-center ${compact ? "justify-center px-2" : "px-5"}`}>
-        {compact ? <CompactLogo /> : <Logo />}
+      <div className={`flex h-16 shrink-0 items-center ${compact ? "justify-center px-2" : tenantLogo ? "px-3.5 pt-1" : "px-5"}`}>
+        {compact ? <CompactLogo tenantLogo={tenantLogo} tenantName={tenantName} /> : <Logo tenantLogo={tenantLogo} tenantName={tenantName} />}
       </div>
 
       {!compact && user && (
@@ -557,12 +571,27 @@ export default function Sidebar({
             </span>
           )}
         </button>
+
+        {!compact && (Boolean(tenantLogo) || tenantCustomized) && (
+          <div className="mx-3.5 mt-2 flex items-center justify-center gap-1.5 rounded-lg bg-black/[0.16] px-2.5 py-1.5 text-[10.5px] text-white/70">
+            <span>Powered by</span>
+            <strong className="font-semibold tracking-wide text-white/90">GsCreativas</strong>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function CompactLogo() {
+function CompactLogo({ tenantLogo, tenantName }: { tenantLogo?: string | null; tenantName?: string }) {
+  if (tenantLogo) {
+    return (
+      <div className="grid h-9 w-9 place-items-center overflow-hidden rounded-lg bg-[#fff] p-1 shadow-sm">
+        {/* eslint-disable-next-line @next/next/no-img-element -- data URL del logo limpio de la empresa. */}
+        <img src={tenantLogo} alt={tenantName ? `Logo de ${tenantName}` : "Logo de la empresa"} className="max-h-7 max-w-7 object-contain" />
+      </div>
+    );
+  }
   return (
     <div className="relative h-9 w-9 overflow-hidden">
       <Image src="/favicon.jpg" alt="Creativas" fill priority sizes="36px" className="rounded object-contain" />

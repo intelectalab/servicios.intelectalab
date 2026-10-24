@@ -58,12 +58,16 @@ class BrandingController extends Controller
         return response()->json(Branding::of($tenantId));
     }
 
-    /** Quita el logo: los documentos vuelven a llevar las iniciales de la empresa. */
+    /** Quita el logo y devuelve los colores a los de GsCreativas (#1B8FC9). */
     public function removeLogo(Request $request)
     {
         $tenantId = $this->tenant($request);
         $updated = DB::table('company_branding')->where('tenant_id', $tenantId)->whereNotNull('logo_sha256')
-            ->update(['logo' => null, 'logo_sha256' => null, 'logo_width' => null, 'logo_height' => null, 'updated_by' => $request->user()->id, 'updated_at' => now()]);
+            ->update([
+                'logo' => null, 'logo_sha256' => null, 'logo_width' => null, 'logo_height' => null,
+                'palette' => '[]', 'primary_color' => Branding::DEFAULT_PRIMARY, 'secondary_color' => null,
+                'updated_by' => $request->user()->id, 'updated_at' => now(),
+            ]);
         if ($updated) {
             AuditLogger::log(tenantId: $tenantId, userId: $request->user()->id, action: 'branding.logo_removed', entityType: 'CompanyBranding', entityId: $tenantId);
         }

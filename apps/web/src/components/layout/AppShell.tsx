@@ -12,6 +12,7 @@ import {
 import { apiFetch } from "@/lib/api";
 import { clearAuthToken } from "@/lib/auth";
 import { AccessProvider, type Scope } from "@/lib/access-context";
+import { brandVars, loadBranding, subscribeToBranding, type Branding } from "@/lib/branding";
 import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type BuiltMenuItem, type MenuItem } from "@/components/layout/Sidebar";
 import { Card, LinkBtn, LoadError, Screen } from "@/components/ui/proto";
@@ -198,6 +199,31 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
     };
   }, [accessAttempt, router]);
 
+  const [brand, setBrand] = useState<Branding | null>(null);
+  useEffect(() => {
+    if (!accessLoaded) return;
+    let cancelled = false;
+    loadBranding().then((data) => { if (!cancelled) setBrand(data); });
+    const unsubscribe = subscribeToBranding((next) => { if (!cancelled) setBrand(next); });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [accessLoaded]);
+
+  // La barra lateral y el sistema usan el color principal de la empresa (si personalizó su marca).
+  useEffect(() => {
+    if (!brand?.customized) return;
+    const vars = brandVars(brand.primary_color);
+    const body = document.body;
+    body.classList.add("tenant-brand");
+    Object.entries(vars).forEach(([name, value]) => body.style.setProperty(name, value));
+    return () => {
+      body.classList.remove("tenant-brand");
+      Object.keys(vars).forEach((name) => body.style.removeProperty(name));
+    };
+  }, [brand]);
+
   async function handleLogout() {
     setLoggingOut(true);
     try {
@@ -272,6 +298,8 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
           groupIcons={GROUP_ICONS}
           user={sessionUser}
           tenantName={tenantName}
+          tenantLogo={brand?.logo}
+          tenantCustomized={brand?.customized}
         />
       </aside>
       {/* Sidebar mobile (drawer) */}
@@ -290,6 +318,8 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
               groupIcons={GROUP_ICONS}
               user={sessionUser}
               tenantName={tenantName}
+              tenantLogo={brand?.logo}
+              tenantCustomized={brand?.customized}
             />
           </aside>
         </div>

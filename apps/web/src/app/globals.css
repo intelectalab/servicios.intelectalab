@@ -205,16 +205,41 @@ body {
 [data-theme="dark"] :is([class*="hover:text-red-"], [class*="hover:text-rose-"]):hover { color: var(--p-danger-text) !important; }
 [data-theme="dark"] :is([class*="text-amber-"], [class*="text-yellow-"]) { color: var(--p-warning-text) !important; }
 
-/* Marca de la empresa en el portal de clientes (Configuración → Marca de la empresa): el portal
+/* Marca de la empresa en el ERP y en el portal de clientes (Configuración → Marca de la empresa):
    pone en <body> la clase y las variables --bl-… (claro) y --bd-… (oscuro); aquí se elige la del tema. */
 .tenant-brand {
   --p-brand: var(--bl-brand); --p-brand-text: var(--bl-brand-text); --p-brand-soft: var(--bl-brand-soft);
   --p-brand-soft-text: var(--bl-brand-soft-text); --p-brand-line: var(--bl-brand-line);
+  --background: var(--bl-page); --app-page: var(--bl-page); --app-surface-muted: var(--bl-surface-muted);
+  --app-border: var(--bl-border); --app-brand: var(--bl-brand-text); --app-brand-deep: var(--bl-brand-soft-text);
+  --app-brand-soft: var(--bl-brand-soft); --p-chart-1: var(--bl-chart-1); --p-chart-2: var(--bl-chart-2);
+  --side-bg: var(--bl-side-bg); --side-flyout: var(--bl-side-flyout); --side-ring: var(--bl-side-ring);
 }
 [data-theme="dark"] .tenant-brand {
   --p-brand: var(--bd-brand); --p-brand-text: var(--bd-brand-text); --p-brand-soft: var(--bd-brand-soft);
   --p-brand-soft-text: var(--bd-brand-soft-text); --p-brand-line: var(--bd-brand-line);
+  --background: var(--bd-page); --app-page: var(--bd-page); --app-surface: var(--bd-surface);
+  --app-surface-muted: var(--bd-surface-muted); --app-border: var(--bd-border); --p-field-border: var(--bd-field-border);
+  --app-muted: var(--bd-muted); --app-brand: var(--bd-brand); --app-brand-deep: var(--bd-brand-text);
+  --app-brand-soft: var(--bd-brand-soft); --p-toast-bg: var(--bd-toast-bg); --p-toast-line: var(--bd-toast-line);
+  --p-chart-1: var(--bd-chart-1); --p-chart-2: var(--bd-chart-2);
+  --side-bg: var(--bd-side-bg); --side-flyout: var(--bd-side-flyout);
+  --side-active: var(--bd-side-active); --side-group-active: var(--bd-side-group-active); --side-ring: var(--bd-side-ring);
 }
+/* Piezas que tenían el azul #1B8FC9 fijo (selectores Tabla/Kanban, avatar, casillas, bordes, contadores)
+   toman automáticamente el color de la empresa cuando hay marca activa. */
+.tenant-brand [class*="bg-[#1B8FC9]"] { background-color: var(--p-accent) !important; color: var(--p-on-accent) !important; }
+.tenant-brand [class*="hover:bg-[#1679AB]"]:hover,
+.tenant-brand [class*="hover:bg-[#1B8FC9]"]:hover { background-color: var(--p-accent-hover) !important; }
+.tenant-brand [class*="text-[#1B8FC9]"],
+.tenant-brand [class*="text-[#0F5A82]"] { color: var(--p-brand-text) !important; }
+.tenant-brand [class*="border-[#1B8FC9]"] { border-color: var(--p-accent) !important; }
+.tenant-brand [class*="border-l-[#1B8FC9]"] { border-left-color: var(--p-accent) !important; }
+.tenant-brand [class*="hover:border-[#1B8FC9]"]:hover { border-color: var(--p-accent) !important; }
+.tenant-brand [class*="focus:border-[#1B8FC9]"]:focus,
+.tenant-brand [class*="focus-within:border-[#1B8FC9]"]:focus-within { border-color: var(--p-accent) !important; }
+.tenant-brand [class*="accent-[#1B8FC9]"] { accent-color: var(--p-accent) !important; }
+.tenant-brand [class*="outline-[#1B8FC9]"] { outline-color: var(--p-accent) !important; }
 
 /* Entrada suave de los modales del prototipo (fondo y cuadro). */
 @keyframes proto-fade-in { from { opacity: 0; } }

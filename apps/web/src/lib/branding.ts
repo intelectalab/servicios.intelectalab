@@ -43,9 +43,20 @@ export function loadBranding(): Promise<Branding | null> {
   return cache;
 }
 
-/** Tras guardar la marca: lo siguiente que se genere ya la usa. */
+const BRANDING_EVENT = "erp-branding-change";
+
+/** Tras guardar la marca: lo siguiente que se genere ya la usa, y la barra lateral se actualiza al instante. */
 export function setBranding(branding: Branding) {
   cache = Promise.resolve(branding);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent<Branding>(BRANDING_EVENT, { detail: branding }));
+  }
+}
+
+export function subscribeToBranding(onChange: (branding: Branding) => void) {
+  const handler = (event: Event) => onChange((event as CustomEvent<Branding>).detail);
+  window.addEventListener(BRANDING_EVENT, handler);
+  return () => window.removeEventListener(BRANDING_EVENT, handler);
 }
 
 export function hexToRgb(hex: string): Rgb {
@@ -96,31 +107,68 @@ function lightOn(rgb: Rgb, bg: Rgb, ratio: number): Rgb {
   return color;
 }
 
-// Superficie del tema oscuro (--app-surface): base para los tonos de la marca en oscuro.
-const DARK_SURFACE: Rgb = [24, 43, 53];
+// Superficie base del tema oscuro (gris pizarra neutro, para teñirse suavemente con la marca sin chocar con cian).
+const DARK_BASE: Rgb = [22, 26, 34];
+const DARK_PAGE_BASE: Rgb = [14, 17, 23];
+const DARK_MUTED_BASE: Rgb = [32, 37, 48];
+const DARK_BORDER_BASE: Rgb = [52, 60, 76];
 const css = (rgb: Rgb) => `rgb(${rgb.map(Math.round).join(" ")})`;
 
 /**
- * Variables de color de la marca para una zona de la pantalla (el portal del cliente): las mismas
- * que usan las piezas de interfaz (--p-brand…, --p-accent…), en claro (--bl-…) y en oscuro
- * (--bd-…). La regla `.tenant-brand` de globals.css elige las del tema activo.
+ * Variables de color de la marca para el ERP y el portal del cliente: las mismas
+ * que usan las piezas de interfaz (--p-brand…, --p-accent…, --app-page, --app-surface…),
+ * en claro (--bl-…) y en oscuro (--bd-…). La regla `.tenant-brand` de globals.css elige las del tema activo.
  */
 export function brandVars(primaryHex: string): Record<string, string> {
   const primary = hexToRgb(primaryHex);
   const accent = readableOnWhite(primaryHex);
   const accentHover = accent.map((v) => v * 0.85) as Rgb;
-  const darkBrand = lightOn(primary, DARK_SURFACE, 4.5);
+  const darkSurface = mix(primary, DARK_BASE, 0.08);
+  const darkPage = mix(primary, DARK_PAGE_BASE, 0.06);
+  const darkSurfaceMuted = mix(primary, DARK_MUTED_BASE, 0.11);
+  const darkBorder = mix(primary, DARK_BORDER_BASE, 0.16);
+  const darkBrand = lightOn(primary, darkSurface, 4.5);
+  // Barra lateral teñida con el color de la empresa (oscurecido para garantizar contraste con texto blanco).
+  const sideTop = accent;
+  const sideMid = accent.map((v) => v * 0.85) as Rgb;
+  const sideBot = accent.map((v) => v * 0.63) as Rgb;
+  const darkTop = mix(accent, DARK_BASE, 0.68);
+  const darkMid = mix(accent, DARK_BASE, 0.52);
+  const darkBot = mix(accent, DARK_PAGE_BASE, 0.36);
   return {
     "--bl-brand": css(primary),
     "--bl-brand-text": css(accent),
     "--bl-brand-soft": css(tint(primaryHex, 0.12)),
     "--bl-brand-soft-text": css(accent.map((v) => v * 0.78) as Rgb),
     "--bl-brand-line": css(tint(primaryHex, 0.32)),
+    "--bl-page": css(tint(primaryHex, 0.055)),
+    "--bl-surface-muted": css(tint(primaryHex, 0.035)),
+    "--bl-border": css(mix(primary, [212, 218, 226], 0.16)),
+    "--bl-chart-1": css(accent),
+    "--bl-chart-2": css(accent.map((v) => v * 0.68) as Rgb),
     "--bd-brand": css(darkBrand),
-    "--bd-brand-text": css(lightOn(primary, DARK_SURFACE, 6.5)),
-    "--bd-brand-soft": css(mix(primary, DARK_SURFACE, 0.3)),
-    "--bd-brand-soft-text": css(lightOn(mix(primary, [255, 255, 255], 0.35), mix(primary, DARK_SURFACE, 0.3), 7)),
-    "--bd-brand-line": css(mix(primary, DARK_SURFACE, 0.5)),
+    "--bd-brand-text": css(lightOn(primary, darkSurface, 6.5)),
+    "--bd-brand-soft": css(mix(primary, darkSurface, 0.26)),
+    "--bd-brand-soft-text": css(lightOn(mix(primary, [255, 255, 255], 0.35), mix(primary, darkSurface, 0.26), 7)),
+    "--bd-brand-line": css(mix(primary, darkSurface, 0.45)),
+    "--bd-page": css(darkPage),
+    "--bd-surface": css(darkSurface),
+    "--bd-surface-muted": css(darkSurfaceMuted),
+    "--bd-border": css(darkBorder),
+    "--bd-field-border": css(mix(primary, [74, 84, 100], 0.18)),
+    "--bd-muted": css(mix(primary, [168, 178, 192], 0.12)),
+    "--bd-toast-bg": css(mix(primary, [38, 44, 56], 0.18)),
+    "--bd-toast-line": css(mix(primary, [86, 98, 118], 0.25)),
+    "--bd-chart-1": css(darkBrand),
+    "--bd-chart-2": css(mix(darkBrand, DARK_BASE, 0.65)),
+    "--bl-side-bg": `linear-gradient(180deg, ${css(sideTop)} 0%, ${css(sideMid)} 22%, ${css(sideBot)} 100%)`,
+    "--bl-side-flyout": `linear-gradient(180deg, ${css(sideMid)} 0%, ${css(sideBot)} 100%)`,
+    "--bl-side-ring": css(sideMid),
+    "--bd-side-bg": `linear-gradient(180deg, ${css(darkTop)} 0%, ${css(darkMid)} 22%, ${css(darkBot)} 100%)`,
+    "--bd-side-flyout": `linear-gradient(180deg, ${css(darkMid)} 0%, ${css(darkBot)} 100%)`,
+    "--bd-side-active": `rgb(${accent.map(Math.round).join(" ")} / 0.55)`,
+    "--bd-side-group-active": `rgb(${accent.map(Math.round).join(" ")} / 0.38)`,
+    "--bd-side-ring": css(darkMid),
     "--p-accent": css(accent),
     "--p-accent-hover": css(accentHover),
     "--p-on-accent": css(textOn(rgbToHex(accent))),
