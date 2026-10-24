@@ -66,7 +66,7 @@ function withCurrent(options: Option[], current?: Option | null): [string, strin
 
 function UserModal({
   user, options, onClose, onSaved,
-}: { user: CompanyUser | null; options: UsersResponse; onClose: () => void; onSaved: (created: boolean) => void }) {
+}: { user: CompanyUser | null; options: UsersResponse; onClose: () => void; onSaved: (created: boolean, invited: boolean) => void }) {
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [roleId, setRoleId] = useState(user?.role?.id ?? "");
@@ -103,7 +103,7 @@ function UserModal({
 
     setSaving(true);
     try {
-      await apiFetch(user ? `/v1/users/${user.id}` : "/v1/users", {
+      const saved = await apiFetch<{ id: string; invited?: boolean }>(user ? `/v1/users/${user.id}` : "/v1/users", {
         method: user ? "PUT" : "POST",
         body: JSON.stringify({
           name: name.trim(),
@@ -118,7 +118,7 @@ function UserModal({
           mfa,
         }),
       });
-      onSaved(!user);
+      onSaved(!user, saved?.invited !== false);
     } catch (err) {
       if (err instanceof ApiError && err.errors) {
         const [field, messages] = Object.entries(err.errors)[0];
@@ -260,6 +260,8 @@ export default function UsersList() {
   const [editing, setEditing] = useState<CompanyUser | "new" | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState<CompanyUser | null>(null);
+  // Invitación pendiente: usuario activo que nunca ha entrado.
+  const [resending, setResending] = useState<CompanyUser | null>(null);
   const [exporting, setExporting] = useState(false);
   // Además de los usuarios, aquí se gestionan las sedes y los equipos a los que pertenecen.
   const [tab, setTab] = useState<"users" | OrgUnitKind>("users");
@@ -290,6 +292,19 @@ export default function UsersList() {
       setReload((n) => n + 1);
     } catch (err) {
       toast(firstError(err, "No se pudo actualizar el usuario."), "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resendInvitation(user: CompanyUser) {
+    setBusy(true);
+    try {
+      await apiFetch(`/v1/users/${user.id}/invitation`, { method: "POST" });
+      toast("Invitación reenviada", "success", `Le enviamos a ${user.email} un código nuevo para crear su contraseña.`);
+      setResending(null);
+    } catch (err) {
+      toast(firstError(err, "No se pudo reenviar la invitación."), "danger");
     } finally {
       setBusy(false);
     }
@@ -351,6 +366,9 @@ export default function UsersList() {
       render: (user) => (
         <div className="flex flex-wrap gap-1.5">
           <Btn variant="ghost" size="sm" onClick={() => setEditing(user)} permission="users.manage" disabled={busy}>Editar</Btn>
+          {isActive(user) && !user.last_login_at && (
+            <Btn variant="secondary" size="sm" onClick={() => setResending(user)} permission="users.manage" disabled={busy}>Reenviar invitación</Btn>
+          )}
           <Btn variant={isActive(user) ? "danger-ghost" : "secondary"} size="sm" onClick={() => setConfirming(user)} permission="users.manage" disabled={busy}>
             {isActive(user) ? "Desactivar" : "Activar"}
           </Btn>
@@ -504,13 +522,31 @@ export default function UsersList() {
           user={editing === "new" ? null : editing}
           options={data}
           onClose={() => setEditing(null)}
-          onSaved={(created) => {
+          onSaved={(created, invited) => {
             setEditing(null);
             setReload((n) => n + 1);
-            if (created) toast("Usuario creado", "success", "Le enviamos un código para crear su contraseña.");
+            if (created && invited) toast("Usuario creado", "success", "Le enviamos por correo un código y un enlace para crear su contraseña.");
+            else if (created) toast("Usuario creado, pero no se pudo enviar el correo", "danger", "Usa \"Reenviar invitación\" en su fila.");
             else toast("Usuario guardado");
           }}
         />
+      )}
+      {resending && (
+        <Modal
+          title="Reenviar invitación"
+          size="sm"
+          onClose={() => setResending(null)}
+          footer={
+            <>
+              <Btn variant="secondary" onClick={() => setResending(null)} disabled={busy}>Volver</Btn>
+              <Btn onClick={() => resendInvitation(resending)} disabled={busy}>Reenviar</Btn>
+            </>
+          }
+        >
+          <p>
+            Le enviaremos a <strong>{resending.email}</strong> un código nuevo para crear su contraseña, válido por 7 días. El código anterior deja de servir.
+          </p>
+        </Modal>
       )}
       {/* Como en Usuarios del portal: quitar o devolver el acceso se confirma. */}
       {confirming && (

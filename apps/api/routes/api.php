@@ -119,6 +119,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/users', [UserController::class, 'store']);
             Route::put('/users/{user}', [UserController::class, 'update']);
             Route::post('/users/{user}/status', [UserController::class, 'setStatus']);
+            Route::post('/users/{user}/invitation', [UserController::class, 'resendInvitation']);
         });
 
         // Sedes y equipos: de ellos depende el alcance "Sede" y "Equipo" de los roles.

@@ -2,6 +2,7 @@
 
 namespace App\Mail;
 
+use App\Mail\Concerns\UsesTenantBrand;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -9,6 +10,8 @@ use Illuminate\Mail\Mailables\Envelope;
 /** Copia por correo de una notificación del sistema, para quien tiene el correo activado en Mi perfil. */
 class NotificationMail extends Mailable
 {
+    use UsesTenantBrand;
+
     public function __construct(
         public string $title,
         public string $body,

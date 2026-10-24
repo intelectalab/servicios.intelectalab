@@ -298,7 +298,8 @@ class PlatformTenantController extends Controller
         foreach (User::whereIn('id', $userIds)->whereNull('last_login_at')->where('status', 'ACTIVE')->get() as $user) {
             $code = PasswordResetController::issueCode($user, self::INVITATION_DAYS * 24 * 60);
             try {
-                Mail::to($user->email)->send(new TenantInvitationMail($company, $code, self::INVITATION_DAYS, $url));
+                // Con el correo en el enlace, la pantalla abre con él ya puesto.
+                Mail::to($user->email)->send(new TenantInvitationMail($company, $code, self::INVITATION_DAYS, $url.'?email='.rawurlencode($user->email)));
                 $sent[] = $user->email;
             } catch (Throwable $e) {
                 report($e);

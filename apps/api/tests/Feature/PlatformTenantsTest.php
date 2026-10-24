@@ -132,7 +132,7 @@ class PlatformTenantsTest extends TestCase
         Mail::assertSent(TenantInvitationMail::class, function (TenantInvitationMail $mail) use ($admin, &$code) {
             $code = $mail->code;
 
-            return $mail->hasTo($admin->email) && str_ends_with($mail->resetUrl, '/reset-password');
+            return $mail->hasTo($admin->email) && str_ends_with($mail->resetUrl, '/reset-password?email='.rawurlencode($admin->email));
         });
         $this->app['auth']->forgetGuards();
         $this->postJson('/api/v1/reset-password', ['email' => $admin->email, 'token' => $code, 'password' => 'NuevaClave2026'])->assertOk();

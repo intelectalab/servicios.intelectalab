@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\PasswordResetCodeMail;
+use App\Mail\UserInvitationMail;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
@@ -1191,7 +1192,33 @@ class ComercialTest extends TestCase
         $this->postJson('/api/v1/users', ['name' => 'Lucía Paredes', 'email' => $email])->assertStatus(422);
         $userId = $this->postJson('/api/v1/users', ['name' => 'Lucía Paredes', 'email' => strtoupper($email), 'role_id' => $salesRoleId])
             ->assertCreated()->json('id');
-        Mail::assertSent(PasswordResetCodeMail::class, fn ($mail) => $mail->hasTo($email));
+        // Recibe su propia invitación: empresa, rol, enlace con el correo puesto y un código por 7 días.
+        $code = null;
+        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use ($email, &$code) {
+            $code = $mail->code;
+
+            return $mail->hasTo($email) && $mail->roleName === 'Ventas' && $mail->days === 7
+                && str_ends_with($mail->resetUrl, '/reset-password?email='.rawurlencode($email));
+        });
+        Mail::assertNotSent(PasswordResetCodeMail::class);
+
+        // Reenviar: solo mientras no haya entrado; el código anterior deja de servir.
+        Mail::fake();
+        $this->postJson("/api/v1/users/{$userId}/invitation")->assertOk()->assertJsonPath('invited', true);
+        $newCode = null;
+        Mail::assertSent(UserInvitationMail::class, function (UserInvitationMail $mail) use (&$newCode) {
+            $newCode = $mail->code;
+
+            return true;
+        });
+        $this->assertDatabaseHas('audit_logs', ['tenant_id' => $tenantId, 'action' => 'user.invitation_sent', 'entity_id' => $userId]);
+        if ($newCode !== $code) {
+            $this->postJson('/api/v1/reset-password', ['email' => $email, 'token' => $code, 'password' => 'Nueva-Clave1'])->assertStatus(422);
+        }
+        $this->postJson('/api/v1/reset-password', ['email' => $email, 'token' => $newCode, 'password' => 'Nueva-Clave1'])->assertOk();
+        DB::table('users')->where('id', $userId)->update(['last_login_at' => now()]);
+        $this->postJson("/api/v1/users/{$userId}/invitation")->assertStatus(422)->assertJsonValidationErrors('status');
+        DB::table('users')->where('id', $userId)->update(['last_login_at' => null]);
         $this->postJson('/api/v1/users', ['name' => 'Otra', 'email' => $email, 'role_id' => $salesRoleId])
             ->assertStatus(422)->assertJsonValidationErrors('email');
         $this->postJson('/api/v1/users', ['name' => 'Otra', 'email' => 'x-'.$email, 'role_id' => (string) Str::uuid()])

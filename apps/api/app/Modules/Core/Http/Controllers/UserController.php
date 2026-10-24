@@ -4,13 +4,16 @@ namespace App\Modules\Core\Http\Controllers;
 
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Controller;
+use App\Mail\UserInvitationMail;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Usuarios de la empresa (Administración). Una cuenta (users) pertenece a la
@@ -19,6 +22,9 @@ use Illuminate\Validation\ValidationException;
  */
 class UserController extends Controller
 {
+    /** Días que vale el código de la invitación (como la del portal de clientes). */
+    private const INVITATION_DAYS = 7;
+
     /** Usuarios de la empresa y lo que el formulario necesita: roles, sedes y empleados por vincular. */
     public function index(Request $request)
     {
@@ -146,10 +152,10 @@ class UserController extends Controller
             metadata: ['email' => $user->email, 'role_id' => $data['role_id'], 'branch_id' => $data['branch_id'] ?? null, 'extra_branch_ids' => $data['extra_branch_ids'], 'team_id' => $data['team_id'] ?? null],
         );
 
-        // Mismo correo que "¿Olvidó su contraseña?": un código para crear la contraseña.
-        app(PasswordResetController::class)->forgotPassword(new Request(['email' => $user->email]));
+        // Invitación propia: código por días y botón para crear la contraseña.
+        $invited = $this->invite($tenantId, $user);
 
-        return response()->json(['id' => $user->id], 201);
+        return response()->json(['id' => $user->id, 'invited' => $invited], 201);
     }
 
     public function update(string $user, Request $request)
@@ -253,6 +259,60 @@ class UserController extends Controller
         );
 
         return response()->json(['id' => $member->user_id, 'status' => $data['status']]);
+    }
+
+    /** Reenvía la invitación: un código nuevo por otros días; el anterior deja de servir. */
+    public function resendInvitation(string $user, Request $request)
+    {
+        $tenantId = $request->attributes->get('tenant_id');
+        $member = $this->member($tenantId, $user);
+        $account = User::findOrFail($member->user_id);
+
+        if ($member->status !== 'ACTIVE' || $account->status !== 'ACTIVE') {
+            throw ValidationException::withMessages(['status' => ['Activa al usuario antes de reenviarle la invitación.']]);
+        }
+        if ($account->last_login_at) {
+            throw ValidationException::withMessages(['status' => ['Este usuario ya entró al sistema: puede usar "¿Olvidó su contraseña?".']]);
+        }
+
+        if (! $this->invite($tenantId, $account)) {
+            throw ValidationException::withMessages(['status' => ['No se pudo enviar el correo. Inténtalo de nuevo.']]);
+        }
+
+        AuditLogger::log(
+            tenantId: $tenantId,
+            userId: $request->user()->id,
+            action: 'user.invitation_sent',
+            entityType: 'User',
+            entityId: $account->id,
+            metadata: ['email' => $account->email],
+        );
+
+        return response()->json(['id' => $account->id, 'invited' => true]);
+    }
+
+    /**
+     * Manda el correo de invitación con un código para crear la contraseña (vale INVITATION_DAYS días)
+     * y el botón que abre esa pantalla con el correo ya puesto. Si el correo falla, se registra y
+     * se devuelve false: el usuario ya existe y se le puede reenviar.
+     */
+    private function invite(string $tenantId, User $user): bool
+    {
+        $company = (string) DB::table('tenants')->where('id', $tenantId)->value('name');
+        $role = (string) DB::table('user_roles')->join('roles', 'roles.id', '=', 'user_roles.role_id')
+            ->where('user_roles.tenant_id', $tenantId)->where('user_roles.user_id', $user->id)->value('roles.name');
+        $url = rtrim((string) config('app.frontend_url'), '/').'/reset-password?email='.rawurlencode($user->email);
+
+        $code = PasswordResetController::issueCode($user, self::INVITATION_DAYS * 24 * 60);
+        try {
+            Mail::to($user->email)->send((new UserInvitationMail($company, $role, $code, self::INVITATION_DAYS, $url))->withBrand($tenantId));
+
+            return true;
+        } catch (Throwable $e) {
+            report($e);
+
+            return false;
+        }
     }
 
     /** Deja a la persona exactamente con esas sedes adicionales. */

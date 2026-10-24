@@ -135,10 +135,10 @@ class Notifier
         $company = (string) DB::table('tenants')->where('id', $tenantId)->value('name');
         $url = $link ? rtrim((string) config('app.frontend_url'), '/').$link : null;
 
-        DB::afterCommit(fn () => app()->terminating(function () use ($emails, $title, $body, $company, $url) {
+        DB::afterCommit(fn () => app()->terminating(function () use ($tenantId, $emails, $title, $body, $company, $url) {
             foreach ($emails as $email) {
                 try {
-                    Mail::to($email)->send(new NotificationMail($title, $body, $company, $url));
+                    Mail::to($email)->send((new NotificationMail($title, $body, $company, $url))->withBrand($tenantId));
                 } catch (Throwable $e) {
                     report($e);
                 }

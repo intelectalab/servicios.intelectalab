@@ -88,6 +88,7 @@ class AuditCatalog
         'role.scopes.update' => 'Cambio de alcance del rol',
         'tenant.settings.update' => 'Cambio de reglas de la empresa',
         'user.status' => 'Cambio de acceso del usuario',
+        'user.invitation_sent' => 'Invitación al usuario reenviada',
         'user.notification_preferences' => 'Cambio de preferencias de notificación',
         'party.role.add' => 'Rol agregado',
         'party.supplier.update' => 'Cuenta de detracciones del proveedor',
