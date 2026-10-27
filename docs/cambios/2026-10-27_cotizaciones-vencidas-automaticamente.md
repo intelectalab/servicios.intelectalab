@@ -36,7 +36,9 @@ Sin migraciones.
 - Base local: antes de correrla, la única Enviada con fecha pasada era **COT-2026-0009** (Tenant A, válida hasta el 22 oct.); COT-2026-0013 no tiene fecha. `quotations:expire` → "tenant-a: 1 vencidas"; la segunda vez, nada. `schedule:list` muestra `10 5 * * *`.
 - Navegador, cuenta Ventas: COT-2026-0009 en Vencida, sin transiciones, con la línea de "Sistema" en el historial.
 
-## 7. Cron del VPS (preparado, sin activar)
+## 7. Cron del VPS (activado el 27/10 a las 05:51 UTC)
+
+**Desplegado `16d8129`** con `deploy.sh --si` (respaldo `/root/backups/erp/20261027_065049_antes_deploy_3a0344b`; llevó también `a56f1da`, fotos múltiples; sin migraciones). Web `/login` 200, API 401 como se espera, `schedule:list` con las tres tareas. Cron activado después del despliegue; como ya habían pasado las 05:00 y 05:10 UTC, la primera corrida real de las tareas es la madrugada del 28.
 
 Hasta hoy el VPS no ejecutaba ninguna tarea programada del ERP (ni esta, ni `recurring:run-cycles`, ni la limpieza de sesiones).
 
@@ -44,9 +46,9 @@ Hasta hoy el VPS no ejecutaba ninguna tarea programada del ERP (ni esta, ni `rec
 - **A quién afecta:** solo al ERP. Es un archivo propio en `/etc/cron.d/`; el crontab de root (donde están Tecsur y DemoTecsur) no se toca.
 - **Medido antes (05:46 UTC):** carga 0.09, 6,163 MB disponibles, cron activo, sitio 200. La línea corrida una vez a mano como `www-data`: "No scheduled commands are ready to run", y las huellas del cron no cambian.
 - **Qué cambiará la primera vez:** EMP-52F1DB "Empresa" tiene un ciclo mensual pendiente desde el 24/10 (S/ 130) → un evento por facturar a las 05:00 UTC. En el VPS ninguna cotización enviada está vencida.
-- **Activar (después de desplegar este cambio):** `install -o root -g root -m 644 /root/backups/erp_cron_20261027/servicios-erp /etc/cron.d/servicios-erp`. **Volver atrás:** `rm /etc/cron.d/servicios-erp`.
+- **Activado con:** `install -o root -g root -m 644 /root/backups/erp_cron_20261027/servicios-erp /etc/cron.d/servicios-erp`. **Volver atrás:** `rm /etc/cron.d/servicios-erp`.
 
 ## 8. Pendiente
 
-- Activar el cron en el VPS cuando esté desplegado.
+- Mirar el 28/10 que se haya creado el evento de EMP-52F1DB y que `laravel.log` no tenga errores del programador.
 - Aviso al responsable cuando su cotización vence (opcional).
