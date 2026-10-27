@@ -426,6 +426,43 @@ class ComercialTest extends TestCase
             ->assertJsonPath('quotations.0.unit_price', '100.0000');
     }
 
+    public function test_the_daily_command_expires_submitted_quotations_past_their_validity(): void
+    {
+        [$user, $tenantId] = $this->makeTenantUser();
+        Sanctum::actingAs($user);
+        $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
+        $payload = ['customer_id' => $customerId, 'items' => [['description' => 'X', 'quantity' => 1, 'unit_price' => 10]]];
+        $make = function (string $validUntil, bool $submit = true) use ($payload) {
+            $id = $this->postJson('/api/v1/quotations', [...$payload, 'valid_until' => $validUntil])->assertCreated()->json('id');
+            if ($submit) {
+                $this->postJson("/api/v1/quotations/{$id}/submit")->assertOk();
+            }
+
+            return $id;
+        };
+
+        $late = $make(now()->subDay()->toDateString());
+        $today = $make(now()->toDateString());
+        $draft = $make(now()->subDays(5)->toDateString(), submit: false);
+
+        $this->artisan('quotations:expire')->assertSuccessful();
+        DB::statement("SET app.tenant_id = '{$tenantId}'");
+
+        // Solo la enviada que ya pasó su fecha; la que vale hasta hoy y el borrador no cambian.
+        $this->assertSame(
+            ['EXPIRED', 'SUBMITTED', 'DRAFT'],
+            array_map(fn ($id) => DB::table('quotations')->where('id', $id)->value('status'), [$late, $today, $draft]),
+        );
+        $history = collect($this->getJson("/api/v1/quotations/{$late}")->assertOk()->json('history'));
+        $expire = $history->firstWhere('action', 'quotation.expire');
+        $this->assertSame('Vencida automáticamente', $expire['metadata']['note'] ?? null);
+
+        // Correrla otra vez no repite nada.
+        $this->artisan('quotations:expire')->assertSuccessful();
+        DB::statement("SET app.tenant_id = '{$tenantId}'");
+        $this->assertSame(1, DB::table('audit_logs')->where('entity_id', $late)->where('action', 'quotation.expire')->count());
+    }
+
     public function test_quotation_decisions_keep_who_decided_and_why(): void
     {
         [$seller, $tenantId] = $this->makeTenantUser();
