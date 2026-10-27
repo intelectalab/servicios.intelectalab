@@ -7,6 +7,7 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Tests\Feature\Concerns\OperationsFixtures;
 use Tests\TestCase;
 
@@ -121,16 +122,41 @@ class OperationsFieldTest extends TestCase
         $this->assertDatabaseHas('document_links', ['document_id' => $documentId, 'entity_type' => 'WorkOrderChecklistItem', 'entity_id' => $photoItem]);
         $this->assertDatabaseHas('audit_logs', ['entity_id' => $id, 'action' => 'work_order.checklist.evidence']);
 
-        // Otra foto del mismo ítem es una versión nueva; la ruta del técnico la muestra.
-        $this->post($url, ['file' => UploadedFile::fake()->image('equipo-2.png', 40, 30)], $json)->assertCreated();
-        $this->assertSame(2, DB::table('document_versions')->where('document_id', $documentId)->count());
+        // Otra foto del mismo ítem crea un documento independiente (v1); el detalle y la ruta muestran todas las fotos.
+        $second = $this->post($url, ['file' => UploadedFile::fake()->image('equipo-2.png', 40, 30)], $json)->assertCreated();
+        $this->assertSame(2, DB::table('document_links')->where('entity_type', 'WorkOrderChecklistItem')->where('entity_id', $photoItem)->count());
+        $detailItem = collect($second->json('checklist_items'))->firstWhere('id', $photoItem);
+        $this->assertEquals(['equipo.jpg', 'equipo-2.png'], array_column($detailItem['evidences'], 'file_name'));
+        $secondDocId = $detailItem['evidences'][1]['document_id'];
         $routeItem = collect($this->getJson('/api/v1/field/route')->json('orders.0.checklist_items'))->firstWhere('id', $photoItem);
-        $this->assertEquals([true, 'equipo-2.png', 2], [$routeItem['done'], $routeItem['evidence']['file_name'], $routeItem['evidence']['version']]);
+        $this->assertEquals([true, 'equipo-2.png', 1], [$routeItem['done'], $routeItem['evidence']['file_name'], $routeItem['evidence']['version']]);
+        $this->assertEquals(['equipo.jpg', 'equipo-2.png'], array_column($routeItem['evidences'], 'file_name'));
 
-        // Ver la foto: enlace temporal, con registro. Un ítem sin foto no tiene qué ver.
+        // Reemplazar la primera foto sube v2 en ese mismo documento sin crear un tercero.
+        $replaced = $this->post($url, ['file' => UploadedFile::fake()->image('equipo-1-corregida.jpg', 50, 40), 'document_id' => $documentId], $json)->assertCreated();
+        $replacedItem = collect($replaced->json('checklist_items'))->firstWhere('id', $photoItem);
+        $this->assertEquals(['equipo-1-corregida.jpg', 'equipo-2.png'], array_column($replacedItem['evidences'], 'file_name'));
+        $this->assertEquals([2, 1], array_column($replacedItem['evidences'], 'version'));
+
+        // Ver la foto (última o por documento): enlace temporal, con registro. Un ítem sin foto no tiene qué ver.
         $this->getJson("{$url}-url")->assertOk()->assertJsonStructure(['url', 'expires_in_minutes']);
+        $this->getJson("{$url}-url?document_id={$documentId}")->assertOk()->assertJsonStructure(['url', 'expires_in_minutes']);
+        $this->getJson("{$url}-url?document_id=".Str::uuid())->assertStatus(404);
         $plain = collect($order['checklist_items'])->firstWhere('label', 'Verificación inicial')['id'];
         $this->getJson("/api/v1/work-orders/{$id}/checklist-items/{$plain}/evidence-url")->assertStatus(404);
+
+        // Quitar una foto archiva su documento; quitar la última foto de un ítem con foto obligatoria lo desmarca.
+        $afterRemoveOne = $this->deleteJson("{$url}?document_id={$documentId}")->assertOk();
+        $this->assertDatabaseHas('documents', ['id' => $documentId, 'status' => 'ARCHIVED']);
+        $itemAfterOne = collect($afterRemoveOne->json('checklist_items'))->firstWhere('id', $photoItem);
+        $this->assertEquals([true, ['equipo-2.png']], [$itemAfterOne['done'], array_column($itemAfterOne['evidences'], 'file_name')]);
+
+        $afterRemoveAll = $this->deleteJson("{$url}?document_id={$secondDocId}")->assertOk();
+        $itemAfterAll = collect($afterRemoveAll->json('checklist_items'))->firstWhere('id', $photoItem);
+        $this->assertEquals([false, []], [$itemAfterAll['done'], $itemAfterAll['evidences']]);
+
+        // Vuelve a subir una foto para dejar el ítem marcado antes de cerrar la orden.
+        $this->post($url, ['file' => UploadedFile::fake()->image('equipo-final.jpg', 40, 30)], $json)->assertCreated();
 
         // Lo ajeno "no existe"; quien solo ve no adjunta.
         $this->as($other);
@@ -160,7 +186,7 @@ class OperationsFieldTest extends TestCase
         $this->postJson("/api/v1/work-orders/{$id}/complete")->assertOk();
         $this->post($url, ['file' => UploadedFile::fake()->image('tarde.jpg')], $json)->assertStatus(422);
 
-        foreach (['work_order.checklist.evidence', 'work_order.checklist.evidence_download', 'work_order.sync_rejected'] as $action) {
+        foreach (['work_order.checklist.evidence', 'work_order.checklist.evidence_replace', 'work_order.checklist.evidence_remove', 'work_order.checklist.evidence_download', 'work_order.sync_rejected'] as $action) {
             $this->assertNotSame($action, AuditCatalog::actionLabel($action), "Falta el texto de {$action}");
         }
     }

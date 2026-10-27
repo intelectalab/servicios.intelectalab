@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Camera, Clock, MapPin, Navigation, RefreshCw, Upload, Wifi, WifiOff } from "lucide-react";
+import { Camera, Clock, Image as ImageIcon, MapPin, Navigation, RefreshCw, Upload, Wifi, WifiOff } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
 import { dateTime, firstError } from "@/lib/crm";
 import { WORK_ORDER_STATES } from "@/lib/operations";
 import {
-  applyOp, effectiveStatus, enqueueOp, isNetworkError, newOp, offlineMode, queuedOps, savedRoute, saveRoute, setOfflineMode, syncLog, syncQueue,
+  applyOp, dropOp, effectiveStatus, enqueueOp, isNetworkError, newOp, offlineMode, queuedOps, savedRoute, saveRoute, setOfflineMode, syncLog, syncQueue,
   type FieldOp, type FieldOpKind, type SyncEntry,
 } from "@/lib/field-queue";
 import { Badge, Btn, Card, Chip, Filters, LoadError, PageHead, Screen, useToasts } from "@/components/ui/proto";
@@ -16,12 +16,13 @@ import { PickSelect } from "@/components/ui/pick-select";
 import { FieldMap } from "@/components/dashboard/operations/FieldMap";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import { TimeEntryFormModal } from "@/components/dashboard/operations/ProjectModals";
+import { EvidencePreviewModal, type EvidencePhotoItem } from "@/components/dashboard/operations/WorkOrderModals";
 import type { FieldOrder, FieldRoute, TimeEntryOptions } from "@/types/operations";
 
 const BLUE = "#1B8FC9";
 const DONE_TEXT: Record<FieldOpKind, string> = {
   start: "Visita iniciada", unblock: "Visita reanudada", block: "Visita bloqueada", complete: "Visita completada",
-  check: "Checklist actualizado", evidence: "Evidencia adjunta",
+  check: "Checklist actualizado", evidence: "Evidencia adjunta", evidence_remove: "Evidencia retirada",
 };
 
 /** Enlace para abrir la navegación del teléfono hacia la visita. */
@@ -311,7 +312,12 @@ export default function FieldApp() {
                   pending={pendingFor(order)}
                   offline={offline}
                   busy={busy}
+                  toast={toast}
                   onAct={(kind, extra) => perform(order, kind, extra)}
+                  onDropOp={async (opId) => {
+                    await dropOp(opId);
+                    await refreshQueue(viewerId);
+                  }}
                   onBlock={() => setBlocking(order)}
                   onHours={() => openLogging(order)}
                 />
@@ -396,29 +402,77 @@ export default function FieldApp() {
 
 /** Tarjeta de una visita: sus datos, su checklist mientras está en ejecución y sus acciones. */
 function VisitCard({
-  order, number, pending, offline, busy, onAct, onBlock, onHours,
+  order, number, pending, offline, busy, toast, onAct, onDropOp, onBlock, onHours,
 }: {
   order: FieldOrder;
   number: number;
   pending: FieldOp[];
   offline: boolean;
   busy: boolean;
-  onAct: (kind: FieldOpKind, extra?: Partial<FieldOp>) => void;
+  toast: (text: string, tone?: "success" | "danger" | "warning", detail?: string) => void;
+  onAct: (kind: FieldOpKind, extra?: Partial<FieldOp>) => Promise<boolean> | void;
+  onDropOp: (opId: string) => Promise<void>;
   onBlock: () => void;
   onHours: () => void;
 }) {
+  const [preview, setPreview] = useState<{ itemId: string; itemLabel: string; index: number } | null>(null);
   const status = effectiveStatus(order.status, pending);
   const [label, tone] = stateOf(WORK_ORDER_STATES, status);
 
   // El checklist tal como quedará al sincronizar: lo marcado y las fotos tomadas sin conexión.
   const items = order.checklist_items.map((item) => {
     const mine = pending.filter((op) => op.itemId === item.id);
-    const lastCheck = [...mine].reverse().find((op) => op.kind === "check" || op.kind === "evidence");
-    const photo = [...mine].reverse().find((op) => op.kind === "evidence");
+    const removedDocs = new Set(mine.filter((op) => op.kind === "evidence_remove" && op.documentId).map((op) => op.documentId as string));
+    const rawServer = item.evidences?.length
+      ? item.evidences
+      : item.evidence
+        ? [item.evidence]
+        : [];
+    const serverEntries: EvidencePhotoItem[] = rawServer
+      .filter((ev) => !ev.document_id || !removedDocs.has(ev.document_id))
+      .map((ev) => {
+        const replacement = [...mine].reverse().find((op) => op.kind === "evidence" && op.documentId && op.documentId === ev.document_id && op.fileName);
+        if (replacement) {
+          return {
+            document_id: ev.document_id,
+            file_name: replacement.fileName as string,
+            size_bytes: replacement.file?.size,
+            version: (ev.version ?? 1) + 1,
+            opId: replacement.id,
+            blob: replacement.file,
+            pendingSync: true,
+          };
+        }
+        return {
+          document_id: ev.document_id,
+          file_name: ev.file_name,
+          size_bytes: ev.size_bytes,
+          version: ev.version,
+        };
+      });
+    const pendingEntries: EvidencePhotoItem[] = mine
+      .filter((op) => op.kind === "evidence" && !op.documentId && op.fileName)
+      .map((op) => ({
+        file_name: op.fileName as string,
+        size_bytes: op.file?.size,
+        opId: op.id,
+        blob: op.file,
+        pendingSync: true,
+      }));
+    const photoEntries: EvidencePhotoItem[] = [...serverEntries, ...pendingEntries];
+    const lastCheck = [...mine].reverse().find((op) => op.kind === "check" || op.kind === "evidence" || op.kind === "evidence_remove");
+    const isDone = lastCheck
+      ? lastCheck.kind === "evidence"
+        ? true
+        : lastCheck.kind === "evidence_remove"
+          ? (photoEntries.length > 0 ? item.done : !item.evidence_required && item.done)
+          : Boolean(lastCheck.done)
+      : item.done;
     return {
       ...item,
-      done: lastCheck ? (lastCheck.kind === "evidence" ? true : Boolean(lastCheck.done)) : item.done,
-      photo: photo?.fileName ?? item.evidence?.file_name ?? null,
+      done: isDone,
+      photo: photoEntries[photoEntries.length - 1]?.file_name ?? null,
+      photoEntries,
       waiting: mine.length > 0,
     };
   });
@@ -430,13 +484,21 @@ function VisitCard({
   const evidenceItem = items.find((item) => item.evidence_required && !item.photo)
     ?? items.find((item) => /fotogr|foto|evid/i.test(item.label)) ?? items[0];
 
+  const uploadFiles = async (itemId: string, files: File[]) => {
+    for (const file of files) {
+      await onAct("evidence", { itemId, file, fileName: file.name });
+    }
+  };
+
   // Los campos de archivo van ocultos (sr-only) dentro de su etiqueta, que debe ser `relative`:
   // si no, quedan colocados respecto de la página y le añaden un desplazamiento vacío al final.
-  const pickPhoto = (itemId: string) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const pickPhoto = (itemId: string) => async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (file) onAct("evidence", { itemId, file, fileName: file.name });
+    await uploadFiles(itemId, files);
   };
+
+  const previewTarget = preview ? items.find((item) => item.id === preview.itemId) : null;
 
   return (
     <article className={`app-surface rounded-[14px] border-l-4 p-3 shadow-[0_1px_3px_rgba(8,25,55,.08)] ${status === "IN_PROGRESS" ? "border-l-[color:var(--p-warning-text)] outline outline-2 outline-[#1B8FC9]" : "border-l-[#1B8FC9]"}`}>
@@ -463,39 +525,68 @@ function VisitCard({
 
       {status === "IN_PROGRESS" && items.length > 0 && (
         <>
-          <ul className="mt-1.5 grid gap-1">
+          <ul className="mt-1.5 grid gap-1.5">
             {items.map((item) => (
-              <li key={item.id} className="flex items-stretch gap-1">
-                <label className={`flex min-h-11 flex-1 cursor-pointer items-start gap-2 rounded-lg bg-[var(--app-surface-muted)] px-2 py-2.5 text-[13px] ${item.waiting ? "outline outline-1 outline-[color:var(--p-notice-line)]" : ""}`}>
-                  <input
-                    type="checkbox" checked={item.done}
-                    // Con foto obligatoria, se marca al tomarla (botón de la cámara).
-                    disabled={busy || approved || (item.evidence_required && !item.photo && !item.done)}
-                    onChange={(event) => onAct("check", { itemId: item.id, done: event.target.checked })}
-                    className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#1B8FC9] disabled:cursor-not-allowed"
-                  />
-                  <span className="min-w-0 [overflow-wrap:anywhere]">
-                    {item.label}{item.required && <em className="not-italic text-[color:var(--p-danger-text)]" title="Obligatorio"> *</em>}
-                    {item.photo ? <small className="app-muted block text-xs">Foto: {item.photo}</small>
-                      : item.evidence_required && <small className="block text-xs text-[color:var(--p-warning-text)]">Foto obligatoria: tómala con la cámara para marcarlo</small>}
-                  </span>
-                </label>
-                <label
-                  title="Tomar foto de evidencia"
-                  className={`relative grid w-11 shrink-0 cursor-pointer place-items-center rounded-lg border border-[color:var(--app-border)] text-[color:var(--p-brand-text)] hover:bg-[var(--p-brand-soft)] ${busy || approved ? "pointer-events-none opacity-50" : ""}`}
-                >
-                  <Camera size={18} aria-hidden="true" />
-                  <span className="sr-only">Tomar foto de evidencia de {item.label}</span>
-                  <input type="file" accept="image/*" capture="environment" className="sr-only" disabled={busy || approved} onChange={pickPhoto(item.id)} />
-                </label>
+              <li
+                key={item.id}
+                className={`grid gap-1.5 rounded-lg bg-[var(--app-surface-muted)] px-2.5 py-2 ${item.waiting ? "outline outline-1 outline-[color:var(--p-notice-line)]" : ""}`}
+              >
+                <div className="flex items-start gap-2">
+                  <label className="flex min-h-8 flex-1 cursor-pointer items-start gap-2 pt-0.5 text-[13px]">
+                    <input
+                      type="checkbox" checked={item.done}
+                      // Con foto obligatoria, se marca al tomarla (botón de la cámara).
+                      disabled={busy || approved || (item.evidence_required && !item.photo && !item.done)}
+                      onChange={(event) => onAct("check", { itemId: item.id, done: event.target.checked })}
+                      className="mt-0.5 h-[18px] w-[18px] shrink-0 cursor-pointer accent-[#1B8FC9] disabled:cursor-not-allowed"
+                    />
+                    <span className="min-w-0 [overflow-wrap:anywhere]">
+                      {item.label}{item.required && <em className="not-italic text-[color:var(--p-danger-text)]" title="Obligatorio"> *</em>}
+                      {item.photoEntries.length === 0 && item.evidence_required && (
+                        <small className="block text-xs text-[color:var(--p-warning-text)]">Foto obligatoria: tómala con la cámara para marcarlo</small>
+                      )}
+                    </span>
+                  </label>
+                  <label
+                    title="Tomar o subir foto(s) de evidencia"
+                    className={`relative grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--p-brand-text)] hover:bg-[var(--p-brand-soft)] ${busy || approved ? "pointer-events-none opacity-50" : ""}`}
+                  >
+                    <Camera size={17} aria-hidden="true" />
+                    <span className="sr-only">Tomar foto de evidencia de {item.label}</span>
+                    <input type="file" accept="image/*" multiple capture="environment" className="sr-only" disabled={busy || approved} onChange={pickPhoto(item.id)} />
+                  </label>
+                </div>
+                {item.photoEntries.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pl-6">
+                    {item.photoEntries.map((entry, idx) => (
+                      <button
+                        key={`${entry.document_id ?? idx}-${entry.file_name}-${idx}`}
+                        type="button"
+                        onClick={() => setPreview({ itemId: item.id, itemLabel: item.label, index: idx })}
+                        title="Previsualizar foto de evidencia"
+                        className="inline-flex max-w-full cursor-pointer items-center gap-1.5 rounded-md border border-[color:var(--app-border)] bg-[var(--app-surface)] px-2 py-1 text-xs font-medium text-[color:var(--p-brand-text)] transition-colors hover:border-[#1B8FC9] hover:bg-[var(--p-brand-soft)]"
+                      >
+                        <ImageIcon size={13} className="shrink-0 text-[#1B8FC9]" />
+                        <span className="max-w-[180px] truncate">
+                          {item.photoEntries.length > 1 ? `Foto ${idx + 1}: ${entry.file_name}` : entry.file_name}
+                        </span>
+                        {entry.pendingSync && (
+                          <span className="rounded bg-[var(--p-warning-soft)] px-1 py-px text-[10px] text-[color:var(--p-warning-text)]">
+                            en teléfono
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
           {evidenceItem && (
             <label className={`relative mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-[#1B8FC9] p-2 text-[13px] text-[color:var(--p-brand-text)] ${busy || approved ? "pointer-events-none opacity-50" : ""}`}>
               <Upload size={16} aria-hidden="true" />
-              <span>Adjuntar foto de evidencia</span>
-              <input type="file" accept="image/*" className="sr-only" disabled={busy || approved} onChange={pickPhoto(evidenceItem.id)} />
+              <span>Adjuntar foto(s) de evidencia</span>
+              <input type="file" accept="image/*" multiple className="sr-only" disabled={busy || approved} onChange={pickPhoto(evidenceItem.id)} />
             </label>
           )}
         </>
@@ -532,6 +623,47 @@ function VisitCard({
       </div>
       {status === "IN_PROGRESS" && requiredLeft > 0 && (
         <p className="app-muted mt-1.5 text-xs">Faltan {requiredLeft} ítem(s) obligatorio(s) para completar.</p>
+      )}
+      {preview && previewTarget && previewTarget.photoEntries.length > 0 && (
+        <EvidencePreviewModal
+          workOrderId={order.id}
+          orderCode={order.code}
+          itemId={previewTarget.id}
+          itemLabel={previewTarget.label}
+          photos={previewTarget.photoEntries}
+          initialIndex={preview.index}
+          canUpload={!approved}
+          busy={busy}
+          onUpload={(files) => { void uploadFiles(previewTarget.id, files); }}
+          onReplace={async (photo, file) => {
+            if (photo.opId) {
+              await onDropOp(photo.opId);
+            }
+            await onAct("evidence", {
+              itemId: previewTarget.id,
+              documentId: photo.document_id,
+              file,
+              fileName: file.name,
+            });
+          }}
+          onRemove={async (photo) => {
+            if (photo.opId && !photo.document_id) {
+              await onDropOp(photo.opId);
+              toast("Foto descartada del teléfono");
+              return;
+            }
+            if (photo.opId) {
+              await onDropOp(photo.opId);
+            }
+            await onAct("evidence_remove", {
+              itemId: previewTarget.id,
+              documentId: photo.document_id,
+              fileName: photo.file_name,
+            });
+          }}
+          onClose={() => setPreview(null)}
+          toast={toast}
+        />
       )}
     </article>
   );

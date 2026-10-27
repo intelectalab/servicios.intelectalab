@@ -36,7 +36,13 @@ class FieldController extends Controller
 
         // Por su modelo: solo las órdenes que quien mira alcanza.
         $orders = WorkOrder::query()
-            ->with('customer.party.person', 'customer.party.organization', 'checklistItems.evidence.latestVersion.fileObject')
+            ->with(
+                'customer.party.person',
+                'customer.party.organization',
+                'checklistItems.evidence.latestVersion.fileObject',
+                'checklistItems.evidenceDocuments.latestVersion.fileObject',
+                'checklistItems.evidenceDocuments.versions.fileObject',
+            )
             ->where('assigned_user_id', $userId)
             ->whereIn('status', self::PENDING)
             ->orderByRaw('scheduled_start IS NULL')->orderBy('scheduled_start')->orderBy('created_at')
@@ -72,6 +78,7 @@ class FieldController extends Controller
                     'evidence_required' => (bool) $item->evidence_required,
                     'done' => (bool) $item->done,
                     'evidence' => $item->evidenceSummary(),
+                    'evidences' => $item->evidencesSummary(),
                 ])->values(),
                 'lock_version' => (int) $order->lock_version,
             ]),

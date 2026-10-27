@@ -101,6 +101,8 @@ const HISTORY_LABELS: Record<string, string> = {
   "work_order.checklist.approve": "Checklist aprobado",
   "work_order.checklist.return": "Checklist devuelto",
   "work_order.checklist.evidence": "Foto de evidencia adjuntada",
+  "work_order.checklist.evidence_replace": "Foto de evidencia actualizada",
+  "work_order.checklist.evidence_remove": "Foto de evidencia retirada",
   "work_order.checklist.evidence_download": "Foto de evidencia descargada",
   "work_order.sync_rejected": "Cambio sin conexión rechazado",
 };
@@ -134,13 +136,19 @@ export async function downloadWorkOrderPdf(order: WorkOrderDetail) {
       ["Estado", label(WORK_ORDER_STATES, order.status)],
     ],
     head: ["#", "Checklist", "Obligatorio", "Hecho", "Evidencia"],
-    rows: order.checklist_items.map((item, index) => [
-      String(index + 1),
-      item.label,
-      item.required ? "Sí" : "No",
-      item.done ? `Sí${item.done_by ? ` · ${item.done_by}` : ""}` : "No",
-      item.evidence_note ?? "",
-    ]),
+    rows: order.checklist_items.map((item, index) => {
+      const photos = item.evidences?.length ? item.evidences.map((ev) => ev.file_name) : (item.evidence ? [item.evidence.file_name] : []);
+      const photoText = photos.length > 1 ? `Fotos (${photos.length}): ${photos.join(", ")}` : photos.length === 1 ? `Foto: ${photos[0]}` : "";
+      const manualNote = item.evidence_note && !item.evidence_note.startsWith("Foto: ") ? item.evidence_note : "";
+      const evidenceText = [photoText, manualNote].filter(Boolean).join(" · ") || (item.evidence_note ?? "");
+      return [
+        String(index + 1),
+        item.label,
+        item.required ? "Sí" : "No",
+        item.done ? `Sí${item.done_by ? ` · ${item.done_by}` : ""}` : "No",
+        evidenceText,
+      ];
+    }),
     numCols: [],
     totals: [],
     notes: [

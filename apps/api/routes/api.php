@@ -414,6 +414,7 @@ Route::prefix('v1')->group(function () {
             Route::post('/work-orders/{workOrder}/cancel', [WorkOrderController::class, 'cancel']);
             Route::patch('/work-orders/{workOrder}/checklist-items/{item}', [WorkOrderController::class, 'checkItem']);
             Route::post('/work-orders/{workOrder}/checklist-items/{item}/evidence', [WorkOrderController::class, 'attachEvidence']);
+            Route::delete('/work-orders/{workOrder}/checklist-items/{item}/evidence', [WorkOrderController::class, 'removeEvidence']);
             // App del técnico: deja en el historial los cambios sin conexión que no se pudieron aplicar.
             Route::post('/field/sync-log', [FieldController::class, 'syncLog']);
         });

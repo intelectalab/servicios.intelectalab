@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { ArrowLeft, Check, Clock, FileText, MessageSquareText, Pencil, Upload, Users } from "lucide-react";
+import { ArrowLeft, Camera, Check, Clock, FileText, Image as ImageIcon, MessageSquareText, Pencil, Upload, Users } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { customerName, money, stateOf, takeFlash } from "@/lib/commercial";
 import { dateTime, firstError } from "@/lib/crm";
@@ -19,14 +19,14 @@ import {
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import { TimeEntryFormModal } from "@/components/dashboard/operations/ProjectModals";
-import { AssignWorkOrderModal, WorkOrderFormModal } from "@/components/dashboard/operations/WorkOrderModals";
+import { AssignWorkOrderModal, EvidencePreviewModal, WorkOrderFormModal } from "@/components/dashboard/operations/WorkOrderModals";
 import { PriorityChip } from "@/components/dashboard/operations/WorkOrdersList";
 import { DocumentDetailModal, DocumentStatusBadge, DocumentUploadModal, useRecordDocuments } from "@/components/dashboard/documents/DocumentModals";
-import { shortSha } from "@/lib/documents";
+import { sha256Of, shortSha } from "@/lib/documents";
 import type { ChecklistItem, TimeEntryOptions, WorkOrderDetail as WorkOrder, WorkOrderOptions } from "@/types/operations";
 
 const LINK = "text-[color:var(--p-brand-text)] hover:underline";
-const PHOTO_HINT = "Este ítem pide foto de evidencia: se marca al adjuntarla desde la App del técnico.";
+const PHOTO_HINT = "Este ítem pide foto de evidencia: se marca al adjuntarla.";
 
 /** Acción que pide un motivo antes de ejecutarse: un cambio de estado o devolver el checklist. */
 type Reasoned = { path: string; title: string; label: string; confirm: string; done: string };
@@ -51,6 +51,7 @@ export default function WorkOrderDetail() {
   const [timeOptions, setTimeOptions] = useState<TimeEntryOptions | null>(null);
   const [attaching, setAttaching] = useState(false);
   const [openDocument, setOpenDocument] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState<{ itemId: string; index: number } | null>(null);
   const evidences = useRecordDocuments("WorkOrder", id, order?.lock_version);
 
   useEffect(() => {
@@ -81,14 +82,75 @@ export default function WorkOrderDetail() {
     return () => { cancelled = true; };
   }, []);
 
-  /** Ejecuta una acción sobre la orden y refresca la ficha con lo que devuelve la API. */
-  /** Abre la foto de evidencia de un ítem con un enlace temporal que da la API. */
-  async function viewEvidence(itemId: string) {
+  /** Adjunta una o varias fotos de evidencia directamente a un ítem del checklist. */
+  async function attachItemEvidence(itemId: string, selected: File[]) {
+    if (!selected.length) return;
+    setBusy(true);
     try {
-      const { url } = await apiFetch<{ url: string }>(`/v1/work-orders/${id}/checklist-items/${itemId}/evidence-url`);
-      window.open(url, "_blank", "noopener,noreferrer");
+      let updated: WorkOrder | null = null;
+      for (const file of selected) {
+        const body = new FormData();
+        body.set("file", file);
+        const sha = await sha256Of(file);
+        if (sha) body.set("sha256", sha);
+        updated = await apiFetch<WorkOrder>(`/v1/work-orders/${id}/checklist-items/${itemId}/evidence`, {
+          method: "POST",
+          body,
+        });
+      }
+      if (updated) {
+        setOrder(updated);
+        evidences.refresh();
+      }
+      toast(selected.length > 1 ? `${selected.length} fotos de evidencia adjuntadas` : "Foto de evidencia adjuntada");
     } catch (err) {
-      toast(firstError(err, "No se pudo abrir la foto."), "danger");
+      toast(firstError(err, "No se pudo subir la foto de evidencia."), "danger");
+      if (err instanceof ApiError && err.status === 409) setReload((n) => n + 1);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Reemplaza una foto específica de un ítem del checklist (crea nueva versión en ese documento). */
+  async function replaceItemEvidence(itemId: string, documentId: string | undefined, file: File) {
+    setBusy(true);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      if (documentId) body.set("document_id", documentId);
+      const sha = await sha256Of(file);
+      if (sha) body.set("sha256", sha);
+      const updated = await apiFetch<WorkOrder>(`/v1/work-orders/${id}/checklist-items/${itemId}/evidence`, {
+        method: "POST",
+        body,
+      });
+      setOrder(updated);
+      evidences.refresh();
+      toast("Foto de evidencia actualizada");
+    } catch (err) {
+      toast(firstError(err, "No se pudo actualizar la foto de evidencia."), "danger");
+      if (err instanceof ApiError && err.status === 409) setReload((n) => n + 1);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Retira una foto específica de un ítem del checklist. */
+  async function removeItemEvidence(itemId: string, documentId: string | undefined) {
+    setBusy(true);
+    try {
+      const qs = documentId ? `?document_id=${documentId}` : "";
+      const updated = await apiFetch<WorkOrder>(`/v1/work-orders/${id}/checklist-items/${itemId}/evidence${qs}`, {
+        method: "DELETE",
+      });
+      setOrder(updated);
+      evidences.refresh();
+      toast("Foto de evidencia retirada");
+    } catch (err) {
+      toast(firstError(err, "No se pudo retirar la foto de evidencia."), "danger");
+      if (err instanceof ApiError && err.status === 409) setReload((n) => n + 1);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -260,8 +322,10 @@ export default function WorkOrderDetail() {
                     )}
                     <ul className="grid">
                       {items.map((item) => {
-                        // Con evidencia obligatoria, el ítem se da por hecho al adjuntar su foto (App del técnico).
-                        const needsPhoto = item.evidence_required && !item.evidence && !item.done;
+                        // Con evidencia obligatoria, el ítem se da por hecho al adjuntar su foto.
+                        const photos = item.evidences?.length ? item.evidences : (item.evidence ? [item.evidence] : []);
+                        const customNote = item.evidence_note && !item.evidence_note.startsWith("Foto: ") ? item.evidence_note : null;
+                        const needsPhoto = item.evidence_required && photos.length === 0 && !item.done;
                         return (
                         <li key={item.id} className="flex items-start gap-2.5 border-b border-[color:var(--app-border)] py-2 last:border-b-0">
                           <button
@@ -282,22 +346,64 @@ export default function WorkOrderDetail() {
                             <span className={item.done ? "app-muted line-through" : ""}>{item.label}</span>
                             {item.required && <em className="ml-1 not-italic text-[color:var(--p-danger-text)]" title="Obligatorio">*</em>}
                             {needsPhoto && <span className="ml-2" title={PHOTO_HINT}><Chip>Foto obligatoria</Chip></span>}
-                            {item.evidence ? (
-                              <button type="button" onClick={() => viewEvidence(item.id)} title="Ver la foto de evidencia" className={`${LINK} ml-2 cursor-pointer text-[12.5px]`}>
-                                Foto: {item.evidence.file_name}
+                            {photos.map((photo, idx) => (
+                              <button
+                                key={`${photo.document_id ?? photo.version}-${idx}`}
+                                type="button"
+                                onClick={() => setPreviewing({ itemId: item.id, index: idx })}
+                                title={`Previsualizar foto de evidencia${photos.length > 1 ? ` (${idx + 1} de ${photos.length})` : ""}`}
+                                className="ml-2 inline-flex cursor-pointer items-center gap-1 rounded-md border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] px-2 py-0.5 text-xs font-medium text-[color:var(--p-brand-text)] transition-colors hover:border-[#1B8FC9] hover:bg-[var(--p-brand-soft)]"
+                              >
+                                <ImageIcon size={12} className="shrink-0 text-[#1B8FC9]" />
+                                <span>{photos.length > 1 ? `Foto ${idx + 1}: ${photo.file_name}` : `Foto: ${photo.file_name}`}</span>
                               </button>
-                            ) : item.evidence_note && <span className="ml-2"><Chip>{item.evidence_note}</Chip></span>}
+                            ))}
+                            {customNote ? (
+                              <span className="ml-2"><Chip>{customNote}</Chip></span>
+                            ) : !photos.length && item.evidence_note ? (
+                              <span className="ml-2"><Chip>{item.evidence_note}</Chip></span>
+                            ) : null}
                             {item.done && item.done_at && (
                               <small className="app-muted block text-xs">{item.done_by ?? "—"} · {dateTime(item.done_at)}</small>
                             )}
                           </div>
+                          {checkable && !busy ? (
+                            <label
+                              title="Subir foto(s) de evidencia"
+                              className="app-muted relative grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]"
+                            >
+                              <Camera size={15} aria-hidden="true" />
+                              <span className="sr-only">Subir foto de evidencia: {item.label}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="sr-only"
+                                onChange={(e) => {
+                                  const selected = Array.from(e.target.files ?? []);
+                                  e.target.value = "";
+                                  void attachItemEvidence(item.id, selected);
+                                }}
+                              />
+                            </label>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled
+                              aria-label={`Subir foto de evidencia: ${item.label}`}
+                              title={checkHint}
+                              className="app-muted grid h-7 w-7 shrink-0 cursor-not-allowed place-items-center rounded-md opacity-45"
+                            >
+                              <Camera size={15} />
+                            </button>
+                          )}
                           <button
                             type="button"
                             aria-label={`Nota de evidencia: ${item.label}`}
                             title={!checkable ? checkHint : needsPhoto ? PHOTO_HINT : "Nota de evidencia"}
                             disabled={!checkable || busy || needsPhoto}
                             onClick={() => {
-                              setNote(item.evidence_note ?? "");
+                              setNote(customNote ?? "");
                               setNoting(item);
                             }}
                             className="app-muted grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-md hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)] disabled:cursor-not-allowed disabled:opacity-45"
@@ -536,6 +642,28 @@ export default function WorkOrderDetail() {
       {openDocument && (
         <DocumentDetailModal documentId={openDocument} toast={toast} onClose={() => setOpenDocument(null)} onChanged={evidences.refresh} />
       )}
+      {previewing && (() => {
+        const targetItem = items.find((entry) => entry.id === previewing.itemId);
+        const targetPhotos = targetItem ? (targetItem.evidences?.length ? targetItem.evidences : (targetItem.evidence ? [targetItem.evidence] : [])) : [];
+        if (!targetItem || !targetPhotos.length) return null;
+        return (
+          <EvidencePreviewModal
+            workOrderId={order.id}
+            orderCode={order.code}
+            itemId={targetItem.id}
+            itemLabel={targetItem.label}
+            photos={targetPhotos}
+            initialIndex={previewing.index}
+            canUpload={checkable}
+            busy={busy}
+            onUpload={(files) => { void attachItemEvidence(targetItem.id, files); }}
+            onReplace={(photo, file) => { void replaceItemEvidence(targetItem.id, photo.document_id, file); }}
+            onRemove={(photo) => { void removeItemEvidence(targetItem.id, photo.document_id); }}
+            onClose={() => setPreviewing(null)}
+            toast={toast}
+          />
+        );
+      })()}
       {toasts}
     </Screen>
   );

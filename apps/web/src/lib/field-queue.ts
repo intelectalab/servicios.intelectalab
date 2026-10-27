@@ -8,7 +8,7 @@ import type { FieldRoute, WorkOrderStatus } from "@/types/operations";
  * de la API: ella valida estado y permisos, y lo que ya no vale se rechaza sin frenar lo demás.
  */
 
-export type FieldOpKind = "start" | "block" | "unblock" | "complete" | "check" | "evidence";
+export type FieldOpKind = "start" | "block" | "unblock" | "complete" | "check" | "evidence" | "evidence_remove";
 
 export interface FieldOp {
   /** También es la clave de envío repetido: reintentar no aplica dos veces el cambio. */
@@ -17,6 +17,7 @@ export interface FieldOp {
   workOrderId: string;
   kind: FieldOpKind;
   itemId?: string;
+  documentId?: string;
   done?: boolean;
   reason?: string;
   file?: Blob;
@@ -124,7 +125,11 @@ async function send(op: FieldOp): Promise<void> {
   } else if (op.kind === "evidence") {
     const body = new FormData();
     body.set("file", op.file as Blob, op.fileName ?? "evidencia.jpg");
+    if (op.documentId) body.set("document_id", op.documentId);
     await apiFetch(`${base}/checklist-items/${op.itemId}/evidence`, { method: "POST", body, headers });
+  } else if (op.kind === "evidence_remove") {
+    const qs = op.documentId ? `?document_id=${op.documentId}` : "";
+    await apiFetch(`${base}/checklist-items/${op.itemId}/evidence${qs}`, { method: "DELETE", headers });
   } else {
     await apiFetch(`${base}/${op.kind}`, { method: "POST", body: op.reason ? JSON.stringify({ reason: op.reason }) : undefined, headers });
   }

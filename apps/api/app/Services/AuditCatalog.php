@@ -127,6 +127,8 @@ class AuditCatalog
         'project.task.check' => 'Control de tarea marcado',
         'project.task.uncheck' => 'Control de tarea desmarcado',
         'work_order.checklist.evidence' => 'Foto de evidencia adjuntada',
+        'work_order.checklist.evidence_replace' => 'Foto de evidencia actualizada',
+        'work_order.checklist.evidence_remove' => 'Foto de evidencia retirada',
         'work_order.checklist.evidence_download' => 'Foto de evidencia descargada',
         'work_order.sync_rejected' => 'Cambio sin conexión rechazado al sincronizar',
         'agenda.create' => 'Evento agendado',

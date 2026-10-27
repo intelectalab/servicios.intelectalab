@@ -64,8 +64,10 @@ export interface ChecklistItem {
   done_by: string | null;
   done_at: string | null;
   evidence_note: string | null;
-  /** Foto de evidencia del ítem; null si no tiene. */
-  evidence: { file_name: string; size_bytes: number; version: number } | null;
+  /** Foto de evidencia del ítem (último documento subido); null si no tiene. */
+  evidence: { document_id?: string; file_name: string; size_bytes: number; version: number } | null;
+  /** Todas las fotos de evidencia subidas al ítem (cada una como documento independiente). */
+  evidences?: { document_id?: string; file_name: string; size_bytes: number; version: number }[];
 }
 
 export interface WorkOrderDetail extends WorkOrder {
@@ -291,7 +293,15 @@ export interface FieldOrder {
   customer: string | null;
   blocked_reason: string | null;
   checklist_status: ChecklistStatus | null;
-  checklist_items: { id: string; label: string; required: boolean; evidence_required: boolean; done: boolean; evidence: { file_name: string; size_bytes: number; version: number } | null }[];
+  checklist_items: {
+    id: string;
+    label: string;
+    required: boolean;
+    evidence_required: boolean;
+    done: boolean;
+    evidence: { document_id?: string; file_name: string; size_bytes: number; version: number } | null;
+    evidences?: { document_id?: string; file_name: string; size_bytes: number; version: number }[];
+  }[];
   lock_version: number;
 }
 

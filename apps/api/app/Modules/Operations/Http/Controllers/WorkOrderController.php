@@ -357,6 +357,7 @@ class WorkOrderController extends Controller
         $data = $request->validate([
             'file' => ['required', 'file', 'image', 'max:'.DocumentStore::MAX_KB],
             'sha256' => ['nullable', 'regex:/^[0-9a-fA-F]{64}$/'],
+            'document_id' => ['nullable', 'uuid'],
         ], [...DocumentStore::fileMessages(), 'file.image' => 'La evidencia debe ser una foto (JPG, PNG o WebP).']);
 
         if (! in_array($order->status, self::CHECKABLE, true)) {
@@ -368,24 +369,35 @@ class WorkOrderController extends Controller
             throw ValidationException::withMessages(['checklist' => ['El checklist ya fue aprobado.']]);
         }
 
+        $replacingDoc = null;
+        if (! empty($data['document_id'])) {
+            $replacingDoc = $row->evidenceDocuments()
+                ->where('documents.id', $data['document_id'])
+                ->where('documents.status', 'ACTIVE')
+                ->firstOrFail();
+        }
+
         $version = DocumentStore::store(
             $order->tenant_id, $request->user()->id, $request->file('file'),
             ['title' => Str::limit("{$order->code} · {$row->label}", 250, ''), 'category' => 'Evidencia', 'visibility' => 'INTERNAL'],
-            $row->evidence, $data['sha256'] ?? null,
+            $replacingDoc, $data['sha256'] ?? null,
         );
 
-        DB::transaction(function () use ($request, $order, $row, $version) {
+        DB::transaction(function () use ($request, $order, $row, $version, $replacingDoc) {
             DocumentStore::link($version->document, 'WorkOrderChecklistItem', $row->id);
+            $note = ($row->evidence_note === null || str_starts_with($row->evidence_note, 'Foto: '))
+                ? 'Foto: '.$version->fileObject->original_name
+                : $row->evidence_note;
             $row->update([
                 'done' => true,
                 'done_by' => $request->user()->id,
                 'done_at' => now(),
                 'evidence_document_id' => $version->document_id,
-                'evidence_note' => 'Foto: '.$version->fileObject->original_name,
+                'evidence_note' => $note,
             ]);
             $order->update(['checklist_status' => $this->checklistStatus($order)]);
 
-            $this->audit($request, $order, 'work_order.checklist.evidence', [
+            $this->audit($request, $order, $replacingDoc ? 'work_order.checklist.evidence_replace' : 'work_order.checklist.evidence', [
                 'document_id' => $version->document_id, 'note' => "{$row->label}: {$version->fileObject->original_name}",
             ]);
         });
@@ -393,16 +405,94 @@ class WorkOrderController extends Controller
         return response()->json($this->detail($order), 201);
     }
 
-    /** Enlace temporal para ver la foto de evidencia de un ítem. */
+    /** Retira una foto de evidencia de un ítem del checklist (archiva el documento y desmarca si era obligatoria y no quedan fotos). */
+    public function removeEvidence(string $workOrder, string $item, Request $request)
+    {
+        $order = $this->find($workOrder);
+        abort_unless(Str::isUuid($item), 404);
+        $row = $order->checklistItems()->whereKey($item)->firstOrFail();
+
+        if (! in_array($order->status, self::CHECKABLE, true)) {
+            throw ValidationException::withMessages([
+                'status' => [$order->status === 'PLANNED' ? 'Asigna la orden para modificar su checklist.' : 'El checklist de una orden cerrada ya no se cambia.'],
+            ]);
+        }
+        if ($order->checklist_status === 'APPROVED') {
+            throw ValidationException::withMessages(['checklist' => ['El checklist ya fue aprobado.']]);
+        }
+
+        $docId = $request->validate(['document_id' => ['nullable', 'uuid']])['document_id'] ?? null;
+        $document = $docId
+            ? $row->evidenceDocuments()->where('documents.id', $docId)->where('documents.status', 'ACTIVE')->with('latestVersion.fileObject')->first()
+            : $row->evidence()->where('documents.status', 'ACTIVE')->with('latestVersion.fileObject')->first();
+        abort_unless($document, 404);
+
+        $removedName = $document->latestVersion?->fileObject?->original_name ?? $document->title;
+
+        DB::transaction(function () use ($request, $order, $row, $document, $removedName) {
+            $document->update([
+                'status' => 'ARCHIVED',
+                'archived_at' => now(),
+                'archived_by' => $request->user()->id,
+            ]);
+
+            $remaining = $row->evidenceDocuments()->where('documents.status', 'ACTIVE')->with('latestVersion.fileObject')->get();
+            $lastDoc = $remaining->last();
+            $lastFile = $lastDoc?->latestVersion?->fileObject;
+
+            $isAutoNote = $row->evidence_note === null || str_starts_with($row->evidence_note, 'Foto: ');
+            $nextNote = $lastFile
+                ? ($isAutoNote ? 'Foto: '.$lastFile->original_name : $row->evidence_note)
+                : ($isAutoNote ? null : $row->evidence_note);
+
+            $stillDone = ($lastDoc !== null || (! $row->evidence_required && $nextNote !== null)) ? $row->done : false;
+
+            $row->update([
+                'done' => $stillDone,
+                'done_by' => $stillDone ? $row->done_by : null,
+                'done_at' => $stillDone ? $row->done_at : null,
+                'evidence_document_id' => $lastDoc?->id,
+                'evidence_note' => $nextNote,
+            ]);
+            $order->update(['checklist_status' => $this->checklistStatus($order)]);
+
+            $this->audit($request, $order, 'work_order.checklist.evidence_remove', [
+                'document_id' => $document->id,
+                'note' => "{$row->label}: {$removedName}",
+            ]);
+        });
+
+        return response()->json($this->detail($order));
+    }
+
+    /** Enlace temporal para ver la foto de evidencia de un ítem (última o un documento/versión específico). */
     public function evidenceUrl(string $workOrder, string $item, Request $request)
     {
         $order = $this->find($workOrder);
         abort_unless(Str::isUuid($item), 404);
         $row = $order->checklistItems()->whereKey($item)->firstOrFail();
-        $url = $row->evidence ? DocumentStore::downloadUrl($row->evidence) : null;
+        $params = $request->validate([
+            'document_id' => ['nullable', 'uuid'],
+            'version' => ['nullable', 'integer', 'min:1'],
+        ]);
+        $docId = $params['document_id'] ?? null;
+        $verNum = $params['version'] ?? null;
+
+        $document = $docId
+            ? $row->evidenceDocuments()->where('documents.id', $docId)->with('latestVersion.fileObject')->first()
+            : $row->evidence;
+        abort_unless($document, 404);
+
+        $version = null;
+        if ($verNum !== null) {
+            $version = $document->versions()->where('version', (int) $verNum)->with('fileObject')->first();
+            abort_unless($version, 404);
+        }
+
+        $url = DocumentStore::downloadUrl($document, 5, $version);
         abort_unless($url, 404);
 
-        $this->audit($request, $order, 'work_order.checklist.evidence_download', ['document_id' => $row->evidence_document_id, 'note' => $row->label]);
+        $this->audit($request, $order, 'work_order.checklist.evidence_download', ['document_id' => $document->id, 'note' => $row->label]);
 
         return response()->json(['url' => $url, 'expires_in_minutes' => 5]);
     }
@@ -514,6 +604,8 @@ class WorkOrderController extends Controller
                 'creator:id,name',
                 'checklistItems.doneBy:id,name',
                 'checklistItems.evidence.latestVersion.fileObject',
+                'checklistItems.evidenceDocuments.latestVersion.fileObject',
+                'checklistItems.evidenceDocuments.versions.fileObject',
             )
             ->findOrFail($order->id);
 
@@ -545,6 +637,7 @@ class WorkOrderController extends Controller
                 'done_at' => $item->done_at?->toIso8601String(),
                 'evidence_note' => $item->evidence_note,
                 'evidence' => $item->evidenceSummary(),
+                'evidences' => $item->evidencesSummary(),
             ])->values(),
             'checklist_review' => $order->checklist_reviewed_at ? [
                 'by' => $this->userName($order->checklist_reviewed_by),
