@@ -66,6 +66,16 @@ class SuperAdminAccessTest extends TestCase
         Mail::assertSent(SuperAdminInvitationMail::class, 1);
     }
 
+    public function test_a_super_admin_changes_their_name_in_the_platform_audit(): void
+    {
+        $user = $this->superAdmin();
+        $this->signIn($user);
+
+        $this->putJson('/api/v1/me/name', ['name' => 'Ana Torres'])->assertOk()->assertJsonPath('name', 'Ana Torres');
+        $this->assertSame('Ana Torres', $user->fresh()->name);
+        $this->assertDatabaseHas('platform_audit_logs', ['user_id' => $user->id, 'action' => 'auth.name_changed']);
+    }
+
     public function test_revoking_deactivates_and_never_leaves_the_platform_without_one(): void
     {
         $by = $this->superAdmin();

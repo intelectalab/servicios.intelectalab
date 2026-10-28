@@ -96,6 +96,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/me/password', [AuthController::class, 'changePassword'])->middleware('throttle:5,1,password');
         // Mi perfil: cuenta, sesiones abiertas y preferencias de notificación (siempre las propias).
         Route::get('/me/profile', [AuthController::class, 'profile']);
+        Route::put('/me/name', [AuthController::class, 'updateName'])->middleware('throttle:10,1,profile-name');
         Route::post('/me/sessions/revoke-others', [AuthController::class, 'revokeOtherSessions']);
         Route::put('/me/notification-preferences', [AuthController::class, 'updateNotificationPreferences']);
         // Notificaciones (campana y centro de notificaciones): siempre las propias.

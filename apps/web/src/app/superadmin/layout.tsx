@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Building2, CreditCard, Eye, LayoutDashboard, Plus, Receipt, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { clearAuthToken } from "@/lib/auth";
+import { PROFILE_NAME_EVENT, clearAuthToken } from "@/lib/auth";
 import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type BuiltMenuItem } from "@/components/layout/Sidebar";
 
@@ -76,8 +76,15 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
     }
 
     loadUserData();
+    // Mi perfil avisa cuando la persona cambia su nombre: la cabecera lo toma sin recargar.
+    const renamed = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail;
+      setCurrentUser((current) => (current ? { ...current, name } : current));
+    };
+    window.addEventListener(PROFILE_NAME_EVENT, renamed);
     return () => {
       cancelled = true;
+      window.removeEventListener(PROFILE_NAME_EVENT, renamed);
     };
   }, []);
 

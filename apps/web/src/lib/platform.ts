@@ -24,6 +24,7 @@ export const TRANSITION_LABELS: Record<string, { label: string; danger: boolean 
 export const PLATFORM_ACTIONS: Record<string, string> = {
   "auth.login": "Inicio de sesión",
   "auth.logout": "Cierre de sesión",
+  "auth.name_changed": "Cambio de nombre en Mi perfil",
   "plan.created": "Plan creado",
   "plan.updated": "Plan editado",
   "plan.deactivated": "Plan desactivado",

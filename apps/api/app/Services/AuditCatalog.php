@@ -84,6 +84,7 @@ class AuditCatalog
         'auth.password_changed' => 'Cambio de contraseña',
         'auth.password_reset' => 'Restablecimiento de contraseña',
         'auth.sessions_revoked' => 'Cierre de las demás sesiones',
+        'auth.name_changed' => 'Cambio de nombre en Mi perfil',
         'role.permissions.update' => 'Cambio de permisos del rol',
         'role.scopes.update' => 'Cambio de alcance del rol',
         'tenant.settings.update' => 'Cambio de reglas de la empresa',

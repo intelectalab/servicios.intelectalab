@@ -36,6 +36,10 @@ Sin migraciones.
 - `php artisan test`: **294 pruebas pasan**. Nuevas en `SuperAdminAccessTest` (3): sin `--by` no hace nada; crea la cuenta, envía la invitación (destinatario, quién, 3 días, enlace), el código sirve para crear la contraseña y luego el login pide el segundo paso; no toma cuentas de empresas; reenvía solo antes del primer ingreso; quitar desactiva y cierra sesiones, y no deja la plataforma sin superadmin.
 - `tsc --noEmit` sin errores.
 
-## 7. Pendiente
+## 7. Despliegue e invitación (28/10)
 
-- Desplegar y enviar la invitación pedida.
+Desplegado `aadc242` con `deploy.sh --si` (sin migraciones; `/login` 200, API 401 como se espera). Invitación enviada a **nueva-superadmin@ejemplo.com** con `--by=superadmin@ejemplo.com`: cuenta activa, superadmin, con verificación en dos pasos, sin ingresos aún; queda en la auditoría de plataforma como "Super Administrador invitado". El código vence el 31/10; si no entra a tiempo, se corre el mismo comando y recibe otro.
+
+## 8. Pendiente
+
+- La cuenta quedó como "nueva-superadmin". Desde el 28/10 se puede cambiar el nombre en Mi perfil (`2026-10-28_editar-nombre-en-mi-perfil.md`).

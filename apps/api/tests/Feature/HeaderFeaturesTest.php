@@ -226,6 +226,32 @@ class HeaderFeaturesTest extends TestCase
         $this->using($desktop)->postJson('/api/v1/me/sessions/revoke-others')->assertOk()->assertJsonPath('closed', 0);
     }
 
+    public function test_user_changes_their_own_name_with_audit(): void
+    {
+        [$user, $tenantId] = $this->makeTenantUser();
+        [$other] = $this->makeTenantUser();
+        $token = $this->signIn($user, self::DESKTOP);
+
+        $this->using($token)->putJson('/api/v1/me/name', ['name' => '  '])->assertStatus(422)->assertJsonValidationErrors('name');
+        $this->using($token)->putJson('/api/v1/me/name', ['name' => str_repeat('a', 256)])->assertStatus(422)->assertJsonValidationErrors('name');
+        $this->using($token)->putJson('/api/v1/me/name', ['name' => '  Lucía   Paredes ', 'email' => 'otro@ejemplo.test', 'id' => $other->id])
+            ->assertOk()->assertJsonPath('name', 'Lucía Paredes');
+
+        // Solo su nombre: ni el correo ni otra persona.
+        $this->assertSame(['Lucía Paredes', $user->email], [$user->fresh()->name, $user->fresh()->email]);
+        $this->assertNotSame('Lucía Paredes', $other->fresh()->name);
+        $this->using($token)->getJson('/api/v1/me/profile')->assertOk()->assertJsonPath('name', 'Lucía Paredes');
+
+        DB::statement("SET app.tenant_id = '{$tenantId}'");
+        $log = DB::table('audit_logs')->where('tenant_id', $tenantId)->where('action', 'auth.name_changed')->first();
+        $this->assertSame($user->id, $log->user_id);
+        $this->assertSame('Lucía Paredes', json_decode($log->metadata, true)['to']);
+
+        // Sin cambio, no se registra otra vez.
+        $this->using($token)->putJson('/api/v1/me/name', ['name' => 'Lucía Paredes'])->assertOk();
+        $this->assertSame(1, DB::table('audit_logs')->where('tenant_id', $tenantId)->where('action', 'auth.name_changed')->count());
+    }
+
     public function test_user_chooses_the_notification_channels(): void
     {
         [$user, $tenantId] = $this->makeTenantUser();

@@ -10,7 +10,7 @@ import {
   TrendingUp, Upload, UserCog, UserRound, Wallet, Workflow, Wrench, Zap,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { clearAuthToken } from "@/lib/auth";
+import { PROFILE_NAME_EVENT, clearAuthToken } from "@/lib/auth";
 import { AccessProvider, type Scope } from "@/lib/access-context";
 import { brandVars, loadBranding, subscribeToBranding, type Branding } from "@/lib/branding";
 import Header, { type UserProfile } from "@/components/layout/Header";
@@ -194,8 +194,15 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
     }
 
     loadUserDataAndPermissions();
+    // Mi perfil avisa cuando la persona cambia su nombre: la cabecera lo toma sin recargar.
+    const renamed = (event: Event) => {
+      const name = (event as CustomEvent<string>).detail;
+      setCurrentUser((current) => (current ? { ...current, name } : current));
+    };
+    window.addEventListener(PROFILE_NAME_EVENT, renamed);
     return () => {
       cancelled = true;
+      window.removeEventListener(PROFILE_NAME_EVENT, renamed);
     };
   }, [accessAttempt, router]);
 

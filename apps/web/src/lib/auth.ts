@@ -36,4 +36,7 @@ export function clearAuthToken() {
   document.cookie = `${SCOPE_COOKIE}=; Path=/; Max-Age=0; SameSite=Lax`;
 }
 
+/** Evento que Mi perfil dispara al cambiar el nombre (detail: el nombre nuevo), para la cabecera. */
+export const PROFILE_NAME_EVENT = "erp-profile-name";
+
 export { TOKEN_COOKIE, SCOPE_COOKIE };

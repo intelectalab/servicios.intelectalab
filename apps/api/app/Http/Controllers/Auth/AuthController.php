@@ -439,6 +439,28 @@ class AuthController extends Controller
     }
 
     /** Cierra todas las sesiones de la cuenta menos la que hace la petición. */
+    /** Mi perfil: la persona cambia su propio nombre (el correo no: es su usuario). */
+    public function updateName(Request $request)
+    {
+        $data = $request->validate(
+            ['name' => ['required', 'string', 'max:255']],
+            ['name.required' => 'Escribe tu nombre.', 'name.max' => 'El nombre admite hasta 255 caracteres.'],
+        );
+        $name = trim(preg_replace('/\s+/u', ' ', $data['name']));
+        if (mb_strlen($name) < 2) {
+            throw ValidationException::withMessages(['name' => ['Escribe tu nombre.']]);
+        }
+
+        $user = $request->user();
+        $before = $user->name;
+        if ($name !== $before) {
+            $user->forceFill(['name' => $name])->save();
+            $this->audit($user, 'auth.name_changed', ['from' => $before, 'to' => $name]);
+        }
+
+        return response()->json(['name' => $user->name]);
+    }
+
     public function revokeOtherSessions(Request $request)
     {
         $user = $request->user();

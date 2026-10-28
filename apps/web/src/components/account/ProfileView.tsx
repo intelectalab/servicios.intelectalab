@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff, Globe, Smartphone } from "lucide-react";
+import { Eye, EyeOff, Globe, Pencil, Smartphone } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { PROFILE_NAME_EVENT } from "@/lib/auth";
 import { Btn, Card, Chip, Field, INPUT, Kv, LoadError, PageHead, Screen, useToasts } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 
@@ -86,6 +87,11 @@ export default function ProfileView() {
   const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>({});
   const [savingPassword, setSavingPassword] = useState(false);
 
+  // null: mostrando el nombre; texto: editándolo.
+  const [editingName, setEditingName] = useState<string | null>(null);
+  const [nameError, setNameError] = useState("");
+  const [savingName, setSavingName] = useState(false);
+
   const [closing, setClosing] = useState(false);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
@@ -127,6 +133,27 @@ export default function ProfileView() {
       toast(firstError(err, "No se pudo actualizar la contraseña."), "danger");
     } finally {
       setSavingPassword(false);
+    }
+  }
+
+  async function saveName(event: FormEvent) {
+    event.preventDefault();
+    const name = (editingName ?? "").trim().replace(/\s+/g, " ");
+    if (name.length < 2) {
+      setNameError("Escribe tu nombre.");
+      return;
+    }
+    setSavingName(true);
+    try {
+      const saved = await apiFetch<{ name: string }>("/v1/me/name", { method: "PUT", body: JSON.stringify({ name }) });
+      setProfile((current) => (current ? { ...current, name: saved.name } : current));
+      window.dispatchEvent(new CustomEvent(PROFILE_NAME_EVENT, { detail: saved.name }));
+      setEditingName(null);
+      toast("Nombre actualizado");
+    } catch (err) {
+      setNameError(firstError(err, "No se pudo guardar el nombre."));
+    } finally {
+      setSavingName(false);
     }
   }
 
@@ -208,8 +235,39 @@ export default function ProfileView() {
                   <span aria-hidden="true" className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-[#1B8FC9] text-lg font-semibold text-[#fff]">
                     {initials(profile.name)}
                   </span>
-                  <div className="min-w-0">
-                    <h3 className="truncate text-[17px] font-semibold">{profile.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    {editingName === null ? (
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <h3 className="truncate text-[17px] font-semibold">{profile.name}</h3>
+                        <button
+                          type="button"
+                          onClick={() => { setEditingName(profile.name); setNameError(""); }}
+                          aria-label="Editar nombre"
+                          title="Editar nombre"
+                          className="app-muted grid h-7 w-7 shrink-0 cursor-pointer place-items-center rounded-lg hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </div>
+                    ) : (
+                      <form onSubmit={saveName} className="grid gap-1.5" noValidate>
+                        <Field label="Nombre" required error={nameError}>
+                          <input
+                            className={INPUT}
+                            value={editingName}
+                            maxLength={255}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === "Escape") setEditingName(null); }}
+                            autoComplete="name"
+                            autoFocus
+                          />
+                        </Field>
+                        <div className="flex gap-1.5">
+                          <Btn type="submit" size="sm" disabled={savingName}>{savingName ? "Guardando…" : "Guardar"}</Btn>
+                          <Btn type="button" size="sm" variant="ghost" onClick={() => setEditingName(null)}>Cancelar</Btn>
+                        </div>
+                      </form>
+                    )}
                     <p className="app-muted truncate">{profile.email}</p>
                   </div>
                 </div>
