@@ -65,6 +65,8 @@ export type PortalQuotation = PortalQuotationRow & {
   }[];
   expired: boolean;
   can_decide: boolean;
+  /** La empresa bloquea aprobar sobre el límite de crédito: el cliente solo puede rechazar. */
+  credit_blocked?: boolean;
   approvals: PortalApproval[];
 };
 

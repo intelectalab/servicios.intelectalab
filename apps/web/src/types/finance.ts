@@ -101,6 +101,8 @@ export interface InvoiceDetail extends Invoice {
   detraction_account: string | null;
   /** La empresa está emitiendo en contingencia. */
   contingency_mode: boolean;
+  /** En borrador: el cliente supera su límite de crédito al emitirlo (solo aviso). */
+  credit?: import("./commercial").CreditWarning | null;
   void_request: { id: string; status: VoidStatus; ticket: string | null; reason: string; response: string | null; at: string } | null;
   /** null = procede la comunicación de baja; si no, por qué no. */
   void_blocked: string | null;

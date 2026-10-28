@@ -43,6 +43,17 @@ export interface ActorContact {
   is_primary: boolean;
 }
 
+/** Crédito del cliente: su deuda pendiente frente a su límite, en la moneda del cliente. */
+export interface CreditStatus {
+  limit: number;
+  currency: string;
+  debt: number;
+  available: number;
+  exceeds: boolean;
+  excess: number;
+  rate_missing: boolean;
+}
+
 /** Vista 360: la identidad y lo que cada área tiene de ella. */
 export interface ActorDetail extends Actor {
   address: string | null;
@@ -51,7 +62,7 @@ export interface ActorDetail extends Actor {
   contacts: ActorContact[];
   /** Personas con rol Contacto enlazadas a esta organización. */
   contact_people: { id: string; name: string; position: string | null; email: string | null; phone: string | null; phone_country_code: string | null; status: string }[];
-  finance: { outstanding: number; overdue: number; open_documents: number } | null;
+  finance: { outstanding: number; overdue: number; open_documents: number; credit: CreditStatus | null } | null;
   quotations: { id: string; quotation_number: string; created_at: string; total: string; currency: string; status: string }[];
   contracts: { id: string; contract_number: string; start_date: string | null; end_date: string | null; total_value: string; currency: string; status: string }[];
   work_orders: { id: string; code: string; description: string | null; scheduled_start: string | null; status: string; technician: string | null }[];

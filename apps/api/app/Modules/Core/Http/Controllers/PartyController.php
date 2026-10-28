@@ -596,6 +596,8 @@ class PartyController extends Controller
                 'outstanding' => (float) $receivables()->sum('balance_amount'),
                 'overdue' => (float) $receivables()->where('due_date', '<', now()->toDateString())->sum('balance_amount'),
                 'open_documents' => $receivables()->count(),
+                // Crédito usado y disponible: la deuda de todo el cliente frente a su límite (null sin límite).
+                'credit' => $party->customer ? \App\Modules\Finance\Support\CreditLimit::status($party->customer) : null,
             ] : null,
             'quotations' => $ofCustomerInScope(Quotation::class, 'quotations.view')->orderByDesc('created_at')->limit(100)
                 ->get(['id', 'quotation_number', 'created_at', 'total', 'currency', 'status']),

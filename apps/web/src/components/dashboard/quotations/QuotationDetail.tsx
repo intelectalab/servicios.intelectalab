@@ -79,6 +79,8 @@ export default function QuotationDetail() {
   const [confirming, setConfirming] = useState<Confirm | null>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
+  const [creditReason, setCreditReason] = useState("");
+  const [creditError, setCreditError] = useState("");
   const [busy, setBusy] = useState(false);
   const [printing, setPrinting] = useState(false);
 
@@ -123,6 +125,8 @@ export default function QuotationDetail() {
   function ask(confirm: Confirm) {
     setReason("");
     setReasonError("");
+    setCreditReason("");
+    setCreditError("");
     setConfirming(confirm);
   }
 
@@ -133,7 +137,17 @@ export default function QuotationDetail() {
       setReasonError("Este dato es obligatorio.");
       return;
     }
-    run(confirming.path, confirming.done, "No se pudo completar la acción.", confirming.reason && text ? { [confirming.reason.field]: text } : undefined);
+    // Sobre el límite de crédito, aprobar pide su propio motivo.
+    const overLimit = confirming.path === "approve" && Boolean(quotation?.credit);
+    const why = creditReason.trim();
+    if (overLimit && !why) {
+      setCreditError("Indica por qué se aprueba aunque supere el límite.");
+      return;
+    }
+    const body: Record<string, string> = {};
+    if (confirming.reason && text) body[confirming.reason.field] = text;
+    if (overLimit) body.credit_reason = why;
+    run(confirming.path, confirming.done, "No se pudo completar la acción.", Object.keys(body).length ? body : undefined);
   }
 
   /** Orden directa desde la cotización aprobada; como el prototipo, lleva al listado de órdenes. */
@@ -219,9 +233,11 @@ export default function QuotationDetail() {
   const status = quotation.status;
   const expired = quotation.valid_until !== null && new Date(`${quotation.valid_until.slice(0, 10)}T23:59:59`) < new Date();
   // Motivo por el que no se puede aprobar aunque el rol tenga el permiso.
+  const creditBlocked = Boolean(quotation.credit?.blocked);
   const approveBlocked = ownBlocked
     ? "Segregación de funciones: no puedes aprobar tu propia cotización"
-    : expired ? "Vencida: no se puede aprobar" : undefined;
+    : expired ? "Vencida: no se puede aprobar"
+    : creditBlocked ? "Supera el límite de crédito: la aprueba quien tenga el permiso de aprobar sobre el límite" : undefined;
   const currency = quotation.currency;
   const gross = Number(quotation.subtotal) + Number(quotation.discount_total);
   const history = quotation.history ?? [];
@@ -257,7 +273,7 @@ export default function QuotationDetail() {
                 <Btn
                   onClick={() => ask(CONFIRMS.approve)}
                   permission="quotations.approve"
-                  disabled={busy || expired || ownBlocked}
+                  disabled={busy || expired || ownBlocked || creditBlocked}
                   title={approveBlocked}
                 >
                   <Check size={16} />
@@ -319,6 +335,16 @@ export default function QuotationDetail() {
       )}
       {expired && status === "SUBMITTED" && (
         <Notice tone="warn">Esta cotización ya pasó su fecha de validez: no se puede aprobar. Puedes marcarla vencida o crear una nueva versión.</Notice>
+      )}
+      {quotation.credit && (
+        <Notice tone="warn">
+          {quotation.credit.message}{" "}
+          {quotation.credit.blocked
+            ? "La empresa no deja aprobarla sobre el límite: debe hacerlo quien tenga el permiso de aprobar sobre el límite de crédito."
+            : quotation.credit.mode === "BLOCK"
+              ? "La empresa bloquea aprobar sobre el límite, pero tienes el permiso para autorizarlo: se pedirá el motivo."
+              : "Al aprobarla se pedirá el motivo."}
+        </Notice>
       )}
 
       <SortableBoard
@@ -421,7 +447,7 @@ export default function QuotationDetail() {
                         variant="secondary"
                         onClick={() => ask(CONFIRMS.approve)}
                         permission="quotations.approve"
-                        disabled={busy || expired || ownBlocked}
+                        disabled={busy || expired || ownBlocked || creditBlocked}
                         title={approveBlocked}
                       >
                         Aprobar
@@ -576,6 +602,21 @@ export default function QuotationDetail() {
           }
         >
           <p className="text-[15px]">{confirming.text}</p>
+          {confirming.path === "approve" && quotation.credit && (
+            <div className="mt-3">
+              <Notice tone="warn">{quotation.credit.message}</Notice>
+              <Field label="Motivo para aprobar sobre el límite de crédito" required error={creditError}>
+                <textarea
+                  className={INPUT}
+                  rows={2}
+                  maxLength={500}
+                  value={creditReason}
+                  onChange={(e) => setCreditReason(e.target.value)}
+                  placeholder="Queda en el historial de la cotización"
+                />
+              </Field>
+            </div>
+          )}
           {confirming.reason && (
             <div className="mt-3">
               <Field label={confirming.reason.label} required={confirming.reason.required} error={reasonError}>

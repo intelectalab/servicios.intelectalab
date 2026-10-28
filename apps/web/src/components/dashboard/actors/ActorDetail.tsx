@@ -20,7 +20,7 @@ import { PriorityTag } from "@/components/dashboard/support/SupportParts";
 import { ActorForm } from "./ActorForm";
 import { ContactForm } from "./ActorModals";
 import { DocumentDetailModal, DocumentStatusBadge } from "@/components/dashboard/documents/DocumentModals";
-import type { ActorContact, ActorDetail as Actor } from "@/types/actor";
+import type { ActorContact, ActorDetail as Actor, CreditStatus } from "@/types/actor";
 import type { CustomFieldDefinition } from "@/types/custom-field";
 import type { TicketPriority } from "@/types/support";
 
@@ -29,6 +29,31 @@ type Row<K extends keyof Actor> = Actor[K] extends (infer T)[] ? T : never;
 const CONTACT_TYPES: Record<string, string> = { EMAIL: "Correo", PHONE: "Teléfono", WHATSAPP: "WhatsApp", ADDRESS: "Dirección", OTHER: "Otro" };
 
 const raw = (status: string) => <Badge tone="neutral">{status}</Badge>;
+
+/** Crédito usado y disponible del cliente, con su barra; en rojo si la deuda ya pasa el límite. */
+function CreditUse({ credit }: { credit: CreditStatus }) {
+  const used = credit.limit > 0 ? Math.min(100, (credit.debt / credit.limit) * 100) : credit.debt > 0 ? 100 : 0;
+  return (
+    <div className="mt-3 grid gap-1.5 text-[12.5px]">
+      <div className="flex flex-wrap justify-between gap-2">
+        <span>Crédito usado <strong className="font-semibold tabular-nums">{money(credit.debt, credit.currency)}</strong></span>
+        <span className={credit.available < 0 ? "font-semibold text-[color:var(--p-danger-text)]" : "app-muted"}>
+          {credit.available < 0 ? `Excedido por ${money(-credit.available, credit.currency)}` : `Disponible ${money(credit.available, credit.currency)}`}
+        </span>
+      </div>
+      <div
+        className="h-2 overflow-hidden rounded-full bg-[var(--app-surface-muted)]"
+        role="meter" aria-label="Crédito usado" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(used)}
+      >
+        <div
+          className={`h-full rounded-full ${credit.available < 0 ? "bg-[color:var(--p-danger-text)]" : "bg-[var(--p-accent,#1B8FC9)]"}`}
+          style={{ width: `${used}%` }}
+        />
+      </div>
+      {credit.rate_missing && <small className="app-muted">No incluye la deuda en otra moneda: no hay tipo de cambio registrado.</small>}
+    </div>
+  );
+}
 
 const QUOTATION_COLUMNS: Column<Row<"quotations">>[] = [
   { label: "Número", render: (row) => <strong className="font-semibold">{row.quotation_number}</strong> },
@@ -413,12 +438,13 @@ export default function ActorDetail() {
                 <Card title="Condiciones comerciales (cliente)">
                   <Kv
                     rows={[
-                      ["Días de crédito", actor.customer.payment_terms_days == null ? "—" : `${actor.customer.payment_terms_days} días`],
-                      ["Límite de crédito", actor.customer.credit_limit == null ? "—" : money(actor.customer.credit_limit, actor.customer.preferred_currency)],
+                      ["Días de crédito", actor.customer.payment_terms_days == null ? "—" : actor.customer.payment_terms_days === 0 ? "Contado" : `${actor.customer.payment_terms_days} días`],
+                      ["Límite de crédito", actor.customer.credit_limit == null ? "Sin límite" : money(actor.customer.credit_limit, actor.customer.preferred_currency)],
                       ["Moneda", actor.customer.preferred_currency === "USD" ? "USD ($)" : "PEN (S/)"],
                       ["Agente de retención", actor.customer.retention_agent ? "Sí (retiene el 3 % del IGV)" : "No"],
                     ]}
                   />
+                  {actor.finance?.credit && <CreditUse credit={actor.finance.credit} />}
                 </Card>
               ),
             }] : []),

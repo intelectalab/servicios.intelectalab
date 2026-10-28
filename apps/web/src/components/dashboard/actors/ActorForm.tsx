@@ -87,12 +87,12 @@ export function ActorForm({
   // Campos que dependen de un rol: las condiciones comerciales piden Cliente;
   // "Contacto de", Contacto; el cargo, Empleado o Contacto.
   const isCustomer = roles.includes("CUSTOMER");
-  // Los plazos habituales, más el que ya tuviera el cliente si es otro.
+  // Los plazos habituales (0 = al contado), más el que ya tuviera el cliente si es otro.
   const dayOptions: [string, string][] = [
     ["", "---"],
-    ...[...new Set(["15", "30", "45", "60", ...(terms.days ? [terms.days] : [])])]
+    ...[...new Set(["0", "15", "30", "45", "60", ...(terms.days ? [terms.days] : [])])]
       .sort((a, b) => Number(a) - Number(b))
-      .map((days): [string, string] => [days, `${days} días`]),
+      .map((days): [string, string] => [days, days === "0" ? "Contado" : `${days} días`]),
   ];
   const isContact = roles.includes("CONTACT");
   const isSupplier = roles.includes("SUPPLIER");

@@ -4,6 +4,7 @@ namespace App\Modules\Services\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Core\Http\Controllers\TenantSettingsController;
+use App\Modules\Finance\Support\CreditLimit;
 use App\Modules\Operations\Models\ContractedService;
 use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Contract;
@@ -226,6 +227,8 @@ class ContractController extends Controller
                 'status' => ['El contrato debe estar firmado por el cliente y la empresa antes de activarse. Envíalo a firma.'],
             ]);
         }
+        // Límite de crédito del cliente: según la regla de la empresa, motivo obligatorio o bloqueo.
+        $credit = CreditLimit::guard($request, $contract->customer, (float) $contract->total_value, $contract->currency);
 
         $generated = DB::transaction(function () use ($contract, $tenantId, $data) {
             $contract->update(['status' => 'ACTIVE']);
@@ -271,7 +274,7 @@ class ContractController extends Controller
         $this->audit($request, $contract, 'contract.activate', array_filter([
             'from' => 'DRAFT',
             'to' => 'ACTIVE',
-            'note' => $generated ? "Servicios contratados generados: {$generated}" : null,
+            'note' => implode(' · ', array_filter([$generated ? "Servicios contratados generados: {$generated}" : null, $credit])) ?: null,
         ]));
 
         return response()->json($this->detail($contract));
@@ -415,6 +418,10 @@ class ContractController extends Controller
                 ? \App\Modules\Services\Support\ContractSignatures::present($latest)
                 : null,
             'signature_required' => TenantSettingsController::settings($contract->tenant_id)['require_signature'],
+            // Límite de crédito: aviso mientras el contrato está en borrador (al activar se controla).
+            'credit' => $contract->status === 'DRAFT'
+                ? CreditLimit::warning(request(), $contract->customer, (float) $contract->total_value, $contract->currency)
+                : null,
             'signature_signers' => \App\Modules\Services\Support\ContractSignatures::signers($contract->customer_id),
         ];
     }

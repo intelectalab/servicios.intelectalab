@@ -225,6 +225,32 @@ class PortalTest extends TestCase
         $this->assertDatabaseHas('audit_logs', ['entity_id' => $approved, 'action' => 'quotation.approve', 'user_id' => $client->id]);
     }
 
+    public function test_over_the_credit_limit_the_customer_approves_only_if_the_company_allows_it(): void
+    {
+        $this->portalTenant();
+        $customerId = $this->makeCustomer();
+        // Límite 0: al contado, cualquier cotización lo supera.
+        DB::table('customers')->where('id', $customerId)->update(['credit_limit' => 0]);
+        $client = $this->portalUser($customerId);
+        $warned = $this->quotation($customerId);
+        $blocked = $this->quotation($customerId);
+
+        // "Solo avisar": el cliente aprueba y la empresa lo ve en el historial.
+        $this->as($client);
+        $this->getJson("/api/v1/portal/quotations/{$warned}")->assertOk()->assertJsonPath('credit_blocked', false);
+        $this->postJson("/api/v1/portal/quotations/{$warned}/decision", ['decision' => 'APPROVED'])->assertOk()->assertJsonPath('status', 'APPROVED');
+        $note = json_decode(DB::table('audit_logs')->where('entity_id', $warned)->where('action', 'quotation.approve')->value('metadata'), true)['note'];
+        $this->assertStringContainsString('Sobre el límite de crédito', $note);
+
+        // "Bloquear": no aprueba (sin ver su deuda) y puede rechazar.
+        DB::table('tenants')->where('id', $this->tenantId)->update(['configuration' => json_encode(['credit_limit_mode' => 'BLOCK'])]);
+        $this->getJson("/api/v1/portal/quotations/{$blocked}")->assertOk()->assertJsonPath('credit_blocked', true);
+        $this->postJson("/api/v1/portal/quotations/{$blocked}/decision", ['decision' => 'APPROVED'])->assertStatus(422)
+            ->assertJsonPath('errors.status.0', 'Para aprobar esta cotización comunícate con tu ejecutivo de cuenta.');
+        $this->postJson("/api/v1/portal/quotations/{$blocked}/decision", ['decision' => 'REJECTED', 'comment' => 'Lo vemos el próximo mes'])
+            ->assertOk()->assertJsonPath('status', 'REJECTED');
+    }
+
     public function test_requests_go_to_the_inbox_or_to_the_crm_and_renewals_are_not_repeated(): void
     {
         $this->portalTenant();

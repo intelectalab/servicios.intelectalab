@@ -223,6 +223,11 @@ class DashboardController extends Controller
             $summary = $this->receivables();
             $items[] = $item('receivables', 'danger', 'coins', Receivable::whereIn('status', Receivable::OPEN)->whereRaw(Receivable::DAYS_OVERDUE.' > 0')->count(),
                 'cuentas vencidas por '.self::money($summary['overdue']), '/receivables');
+            // Clientes cuya deuda pendiente ya pasa su límite de crédito (entre los que la persona alcanza).
+            $reached = Receivable::whereIn('status', Receivable::OPEN)->distinct()->pluck('customer_id');
+            $overLimit = \App\Modules\Core\Models\Customer::whereIn('id', $reached)->whereNotNull('credit_limit')->get()
+                ->filter(fn ($customer) => \App\Modules\Finance\Support\CreditLimit::status($customer)['exceeds'] ?? false)->count();
+            $items[] = $item('credit_limit', 'warning', 'coins', $overLimit, 'clientes sobre su límite de crédito', '/receivables');
         }
         if ($this->on('billing.view')) {
             $items[] = $item('billable', 'info', 'bolt', BillableEvent::where('status', 'PENDING')->count(), 'eventos facturables por facturar', '/billable-events');

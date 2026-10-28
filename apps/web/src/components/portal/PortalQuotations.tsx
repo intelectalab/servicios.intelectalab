@@ -172,6 +172,11 @@ export function PortalQuotationDetail({ id }: { id: string }) {
                 <p className="app-muted">Tu rol de portal no puede aprobar cotizaciones.</p>
               ) : quotation.expired ? (
                 <Notice tone="warn">La cotización venció y ya no se puede aprobar. Solicita una nueva versión.</Notice>
+              ) : quotation.credit_blocked ? (
+                <>
+                  <Notice tone="warn">Para aprobar esta cotización comunícate con tu ejecutivo de cuenta.</Notice>
+                  <Btn variant="danger-ghost" onClick={() => { setComment(""); setCommentError(""); setDeciding("REJECTED"); }}>Rechazar</Btn>
+                </>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   <Btn onClick={() => { setComment(""); setCommentError(""); setDeciding("APPROVED"); }}><Check size={15} /> Aprobar cotización</Btn>

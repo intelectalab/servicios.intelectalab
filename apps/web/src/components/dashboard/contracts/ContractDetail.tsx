@@ -9,7 +9,7 @@ import { customerName, historyLabel, money, setFlash, shortDate, stateOf, takeFl
 import { CONTRACT_STATES, SLA_LEVELS, billingOf, downloadContractPdf, slaLabel, validity } from "@/lib/contracts";
 import { ORDER_STATES } from "@/lib/orders";
 import {
-  Badge, Btn, Card, Chip, DataTable, Field, INPUT, Kv, LoadError, Modal, PageHead, Screen, StateTrack, TD, TH, Timeline, Who,
+  Badge, Btn, Card, Chip, DataTable, Field, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, StateTrack, TD, TH, Timeline, Who,
   useToasts, type Column, type Tone,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
@@ -165,6 +165,8 @@ export default function ContractDetail() {
   const [editing, setEditing] = useState(false);
   const [activating, setActivating] = useState(false);
   const [generate, setGenerate] = useState(true);
+  const [creditReason, setCreditReason] = useState("");
+  const [creditError, setCreditError] = useState("");
   const [confirming, setConfirming] = useState<Confirm | null>(null);
   const [reason, setReason] = useState("");
   const [reasonError, setReasonError] = useState("");
@@ -301,7 +303,25 @@ export default function ContractDetail() {
         ? "El cliente rechazó la firma: anula la solicitud antes de activar"
         : contract.signature_required && contract.signature_status !== "SIGNED"
       ? "Requiere la firma del cliente y de la empresa"
+      : contract.credit?.blocked
+      ? "Supera el límite de crédito: lo activa quien tenga el permiso de aprobar sobre el límite"
       : undefined;
+
+  function openActivate() {
+    setCreditReason("");
+    setCreditError("");
+    setActivating(true);
+  }
+
+  /** Activar; sobre el límite de crédito pide su motivo. */
+  function activate() {
+    const why = creditReason.trim();
+    if (contract?.credit && !why) {
+      setCreditError("Indica por qué se activa aunque supere el límite.");
+      return;
+    }
+    run("activate", "Contrato vigente", { generate_services: generate, ...(contract?.credit ? { credit_reason: why } : {}) });
+  }
 
   /** Anular la solicitud de firma (pendiente o rechazada). */
   async function cancelSignature() {
@@ -351,7 +371,7 @@ export default function ContractDetail() {
                     <span>Firmar por la empresa</span>
                   </Btn>
                 )}
-                <Btn onClick={() => setActivating(true)} permission="contracts.approve" disabled={busy || Boolean(notActivable)} title={notActivable}>
+                <Btn onClick={openActivate} permission="contracts.approve" disabled={busy || Boolean(notActivable)} title={notActivable}>
                   <Check size={16} />
                   <span>Activar contrato</span>
                 </Btn>
@@ -379,6 +399,17 @@ export default function ContractDetail() {
           </>
         }
       />
+
+      {contract.credit && (
+        <Notice tone="warn">
+          {contract.credit.message}{" "}
+          {contract.credit.blocked
+            ? "La empresa no deja activarlo sobre el límite: debe hacerlo quien tenga el permiso de aprobar sobre el límite de crédito."
+            : contract.credit.mode === "BLOCK"
+              ? "La empresa bloquea activar sobre el límite, pero tienes el permiso para autorizarlo: se pedirá el motivo."
+              : "Al activarlo se pedirá el motivo."}
+        </Notice>
+      )}
 
       <SortableBoard
         storageKey="erp.cards.contract-detail"
@@ -472,7 +503,7 @@ export default function ContractDetail() {
                       {status === "DRAFT" && (
                         <Btn
                           variant="secondary"
-                          onClick={() => setActivating(true)}
+                          onClick={openActivate}
                           permission="contracts.approve"
                           disabled={busy || Boolean(notActivable)}
                           title={notActivable}
@@ -611,7 +642,7 @@ export default function ContractDetail() {
           footer={
             <>
               <Btn variant="ghost" onClick={() => setActivating(false)}>Cancelar</Btn>
-              <Btn disabled={busy} onClick={() => run("activate", "Contrato vigente", { generate_services: generate })}>Activar</Btn>
+              <Btn disabled={busy} onClick={activate}>Activar</Btn>
             </>
           }
         >
@@ -628,6 +659,21 @@ export default function ContractDetail() {
               <small className="app-muted block text-[12.5px]">Operaciones los recibe en estado PENDIENTE.</small>
             </span>
           </label>
+          {contract.credit && (
+            <div className="mt-3">
+              <Notice tone="warn">{contract.credit.message}</Notice>
+              <Field label="Motivo para activar sobre el límite de crédito" required error={creditError}>
+                <textarea
+                  className={INPUT}
+                  rows={2}
+                  maxLength={500}
+                  value={creditReason}
+                  onChange={(e) => setCreditReason(e.target.value)}
+                  placeholder="Queda en el historial del contrato"
+                />
+              </Field>
+            </div>
+          )}
         </Modal>
       )}
 

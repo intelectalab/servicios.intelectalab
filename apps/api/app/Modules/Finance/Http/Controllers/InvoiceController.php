@@ -13,6 +13,7 @@ use App\Modules\Finance\Models\Payment;
 use App\Modules\Finance\Models\Receivable;
 use App\Modules\Finance\Models\ReceivableMovement;
 use App\Modules\Finance\Support\Billing;
+use App\Modules\Finance\Support\CreditLimit;
 use App\Modules\Finance\Support\FiscalSettings;
 use App\Modules\Finance\Support\Treasury;
 use App\Modules\Finance\Support\Withholding;
@@ -159,7 +160,8 @@ class InvoiceController extends Controller
                 'series' => FiscalSettings::seriesFor(FiscalSettings::for($tenantId), $data['type'])[1],
                 'status' => 'DRAFT',
                 'currency' => $first->currency,
-                'due_date' => now()->addDays((int) ($customer->payment_terms_days ?: Billing::DEFAULT_TERMS_DAYS))->toDateString(),
+                // 0 días = al contado: vence hoy (solo sin días registrados se usan los de siempre).
+                'due_date' => now()->addDays((int) ($customer->payment_terms_days ?? Billing::DEFAULT_TERMS_DAYS))->toDateString(),
                 'subtotal' => $subtotal,
                 'tax_total' => round($total - $subtotal, 2),
                 'total' => $total,
@@ -658,6 +660,10 @@ class InvoiceController extends Controller
                 ? collect(Withholding::CODES)->map(fn (array $code, string $key) => ['code' => $key, 'name' => $code[0], 'rate' => $code[1]])->values()
                 : [],
             'detraction_account' => $settings['detraction']['account'],
+            // Límite de crédito: al emitir solo se avisa (el servicio ya se prestó; facturar es obligatorio).
+            'credit' => $draft && $invoice->invoice_type !== 'CREDIT_NOTE'
+                ? CreditLimit::warning($request, $invoice->customer, (float) $invoice->total, $invoice->currency)
+                : null,
             'contingency_mode' => $settings['mode'] === 'CONTINGENCY',
             'void_request' => $void ? [
                 'id' => $void->id, 'status' => $void->status, 'ticket' => $void->ticket, 'reason' => $void->reason, 'response' => $void->response,

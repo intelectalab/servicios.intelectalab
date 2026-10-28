@@ -249,6 +249,8 @@ export default function InvoiceDetail() {
         }
       />
 
+      {invoice.credit && <Notice tone="warn">{invoice.credit.message} Igual se puede emitir: el servicio ya se prestó.</Notice>}
+
       <SortableBoard
         storageKey="erp.cards.invoice-detail"
         className="grid grid-cols-1 gap-x-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
@@ -510,6 +512,7 @@ export default function InvoiceDetail() {
             <Notice tone="warn">No hay un proveedor de facturación electrónica conectado: el comprobante queda emitido en el sistema y <strong className="font-semibold">sin enviar a SUNAT</strong>.</Notice>
           )}
           {currency === "USD" && <p className="app-muted">Se emite con el tipo de cambio de venta vigente.</p>}
+          {invoice.credit && <Notice tone="warn">{invoice.credit.message} Igual se puede emitir: el servicio ya se prestó.</Notice>}
         </Modal>
       )}
       {discarding && (

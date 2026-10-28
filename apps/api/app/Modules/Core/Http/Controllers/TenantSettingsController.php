@@ -24,7 +24,10 @@ class TenantSettingsController extends Controller
             'require_signature' => ['sometimes', 'boolean'],
             // Cruce de 3 vías de Compras: diferencia máxima entre lo facturado y lo recibido.
             'match_tolerance' => ['sometimes', 'numeric', 'min:0', 'max:10'],
+            // Límite de crédito del cliente al aprobar o activar: solo avisar (con motivo) o bloquear.
+            'credit_limit_mode' => ['sometimes', 'in:WARN,BLOCK'],
         ], [
+            'credit_limit_mode.in' => 'Elige "Solo avisar" o "Bloquear".',
             'match_tolerance.max' => 'La tolerancia del cruce va de 0 % a 10 %.',
             'match_tolerance.min' => 'La tolerancia del cruce va de 0 % a 10 %.',
         ]);
@@ -32,7 +35,11 @@ class TenantSettingsController extends Controller
         $configuration = self::configuration($tenantId);
         $before = self::settings($tenantId);
         foreach ($data as $key => $value) {
-            $configuration[$key] = $key === 'match_tolerance' ? round((float) $value, 1) : (bool) $value;
+            $configuration[$key] = match ($key) {
+                'match_tolerance' => round((float) $value, 1),
+                'credit_limit_mode' => $value,
+                default => (bool) $value,
+            };
         }
 
         DB::table('tenants')->where('id', $tenantId)->update([
@@ -67,6 +74,8 @@ class TenantSettingsController extends Controller
             'require_signature' => (bool) ($configuration['require_signature'] ?? false),
             // Tolerancia del cruce de 3 vías, en porcentaje (2 % si la empresa no la cambió).
             'match_tolerance' => (float) ($configuration['match_tolerance'] ?? 2),
+            // Límite de crédito: "Solo avisar" si la empresa no eligió otra cosa.
+            'credit_limit_mode' => ($configuration['credit_limit_mode'] ?? 'WARN') === 'BLOCK' ? 'BLOCK' : 'WARN',
         ];
     }
 

@@ -36,7 +36,12 @@ type RolesResponse = { roles: Role[]; permissions: Permission[]; scope_resources
 // Pestaña del rol del cliente (no es un rol de la empresa).
 const CUSTOMER_TAB = "__customer";
 
-type Settings = { segregation: boolean; direct_order: boolean; require_signature: boolean; match_tolerance: number };
+type Settings = {
+  segregation: boolean; direct_order: boolean; require_signature: boolean; match_tolerance: number; credit_limit_mode: "WARN" | "BLOCK";
+};
+
+// Qué pasa al aprobar una cotización o activar un contrato de un cliente sobre su límite de crédito.
+const CREDIT_MODES: [Settings["credit_limit_mode"], string][] = [["WARN", "Solo avisar (pide motivo)"], ["BLOCK", "Bloquear"]];
 
 // Reglas de la empresa que se activan o desactivan desde esta pantalla.
 const RULES: { key: "segregation" | "direct_order" | "require_signature"; label: string; hint: string; on: string; off: string }[] = [
@@ -107,6 +112,7 @@ const RESOURCES: Record<string, string> = {
   users: "Usuarios y roles",
   portal_users: "Usuarios del portal",
   tenant: "Empresa",
+  credit: "Límite de crédito de clientes",
 };
 
 // Acciones de la matriz, en el orden en que se muestran.
@@ -331,6 +337,18 @@ export default function RolesPermissions() {
     }
   }
 
+  async function saveCreditMode(mode: Settings["credit_limit_mode"]) {
+    const before = settings;
+    setSettings((current) => current && { ...current, credit_limit_mode: mode });
+    try {
+      await apiFetch("/v1/tenant/settings", { method: "PUT", body: JSON.stringify({ credit_limit_mode: mode }) });
+      toast(mode === "BLOCK" ? "Límite de crédito: se bloquea" : "Límite de crédito: solo se avisa");
+    } catch (err) {
+      setSettings(before);
+      toast(firstError(err, "No se pudo guardar el ajuste."), "danger");
+    }
+  }
+
   async function toggleRule(rule: (typeof RULES)[number], on: boolean) {
     const before = settings;
     setSettings((current) => current && { ...current, [rule.key]: on });
@@ -545,6 +563,25 @@ export default function RolesPermissions() {
                     <Btn size="sm" variant="secondary" permission="tenant.manage" disabled={savingTolerance || tolerance === null} onClick={saveTolerance}>
                       {savingTolerance ? "Guardando…" : "Guardar"}
                     </Btn>
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-start gap-2.5 border-t border-[color:var(--app-border)] pt-3">
+                  <label className="relative min-w-0 flex-[1_1_260px]">
+                    Cliente sobre su límite de crédito
+                    <small className="app-muted block text-[12.5px]">
+                      Al aprobar una cotización o activar un contrato que deja la deuda del cliente por encima de su límite. &quot;Solo avisar&quot; deja seguir con un motivo; &quot;Bloquear&quot; solo lo permite a quien tenga el permiso de aprobar sobre el límite. Emitir comprobantes nunca se bloquea.
+                    </small>
+                  </label>
+                  <span className="inline-flex items-center gap-1.5">
+                    <PickSelect
+                      ariaLabel="Cliente sobre su límite de crédito"
+                      className={`${INPUT} h-9 w-[220px]`}
+                      value={settings.credit_limit_mode}
+                      onChange={(value) => saveCreditMode(value as Settings["credit_limit_mode"])}
+                      options={CREDIT_MODES}
+                      disabled={!can("tenant.manage")}
+                    />
+                    {!can("tenant.manage") && <Lock size={12} className="app-muted" aria-label={deniedText("tenant.manage")} />}
                   </span>
                 </div>
               </div>

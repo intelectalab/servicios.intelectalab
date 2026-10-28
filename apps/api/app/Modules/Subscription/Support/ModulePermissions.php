@@ -7,9 +7,10 @@ use Illuminate\Support\Facades\DB;
 class ModulePermissions
 {
     /**
-     * Permisos de administración del propio tenant; no dependen de ningún módulo.
+     * Permisos de administración del propio tenant; no dependen de ningún módulo. Aprobar sobre
+     * el límite de crédito tampoco: el límite vive en la ficha del cliente.
      */
-    public const BASE = ['users.view', 'users.manage', 'users.export', 'tenant.manage', 'audit.view', 'audit.export'];
+    public const BASE = ['users.view', 'users.manage', 'users.export', 'tenant.manage', 'audit.view', 'audit.export', 'credit.approve'];
 
     /**
      * Códigos de permiso para el administrador de un tenant con esos módulos:

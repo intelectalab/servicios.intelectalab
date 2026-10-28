@@ -8,6 +8,7 @@ use App\Modules\Core\Http\Controllers\TenantSettingsController;
 use App\Modules\Core\Models\Customer;
 use App\Modules\Crm\Models\CrmOpportunity;
 use App\Modules\Finance\Models\ExchangeRate;
+use App\Modules\Finance\Support\CreditLimit;
 use App\Modules\Services\Http\Requests\StoreQuotationRequest;
 use App\Modules\Services\Models\Quotation;
 use App\Modules\Services\Models\QuotationApproval;
@@ -292,11 +293,15 @@ class QuotationController extends Controller
 
         $data = $request->validate(['comment' => ['nullable', 'string', 'max:1000']]);
 
+        // Límite de crédito del cliente: según la regla de la empresa, motivo obligatorio o bloqueo.
+        $credit = CreditLimit::guard($request, $quotation->customer, (float) $quotation->total, $quotation->currency);
+        $comment = implode(' · ', array_filter([trim((string) ($data['comment'] ?? '')), $credit])) ?: null;
+
         // Outbox pendiente aquí también: este es el punto exacto donde,
         // según la arquitectura, debería dispararse un evento
         // "quotation.approved". No lo invento sin definición confirmada.
 
-        return $this->decide($request, $quotation, 'APPROVED', 'quotation.approve', $data['comment'] ?? null);
+        return $this->decide($request, $quotation, 'APPROVED', 'quotation.approve', $comment);
     }
 
     public function reject(string $quotation, Request $request)
@@ -627,6 +632,10 @@ class QuotationController extends Controller
             'direct_order_enabled' => TenantSettingsController::settings($quotation->tenant_id)['direct_order'],
             // Para que la ficha avise antes de intentar aprobar.
             'own_approval_blocked' => $this->ownApprovalBlocked($quotation, request()),
+            // Límite de crédito: aviso mientras la cotización espera decisión (al aprobar se controla).
+            'credit' => in_array($quotation->status, ['DRAFT', 'SUBMITTED'], true)
+                ? CreditLimit::warning(request(), $quotation->customer, (float) $quotation->total, $quotation->currency)
+                : null,
             // Oportunidad de origen, si la persona puede verla y la alcanza.
             'source_opportunity' => $quotation->source_type === 'OPPORTUNITY' && CheckPermission::granted(request(), 'opportunities.view')
                 ? CrmOpportunity::query()->whereKey($quotation->source_id)->first(['id', 'opportunity_number', 'name'])

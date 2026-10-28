@@ -115,6 +115,23 @@ export interface Quotation {
   customer_contact?: { address: string | null; email: string | null };
   /** Segregación de funciones: quien la creó no puede aprobarla. Solo en el detalle. */
   own_approval_blocked?: boolean;
+  /** El cliente supera su límite de crédito con esta cotización. Solo en el detalle. */
+  credit?: CreditWarning | null;
+}
+
+/**
+ * Aviso de límite de crédito en una ficha. "blocked": la empresa bloquea y la persona no tiene
+ * el permiso de aprobar sobre el límite. Los montos solo llegan a quien ve las cuentas por cobrar.
+ */
+export interface CreditWarning {
+  exceeds: true;
+  mode: "WARN" | "BLOCK";
+  blocked: boolean;
+  message: string;
+  limit?: number;
+  debt?: number;
+  excess?: number;
+  currency?: string;
 }
 
 export type ContractStatus = "DRAFT" | "ACTIVE" | "SUSPENDED" | "TERMINATED" | "EXPIRED";
@@ -179,6 +196,8 @@ export interface Contract {
   signature?: SignatureRequest | null;
   /** La empresa exige la firma de las dos partes para activar. */
   signature_required?: boolean;
+  /** En borrador: el cliente supera su límite de crédito al activarlo. Solo en el detalle. */
+  credit?: CreditWarning | null;
   /** Portal Admin activos del cliente: quienes pueden firmar por él. */
   signature_signers?: { id: string; name: string; email: string }[];
 }

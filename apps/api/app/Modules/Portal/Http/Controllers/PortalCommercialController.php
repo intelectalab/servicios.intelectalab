@@ -3,6 +3,7 @@
 namespace App\Modules\Portal\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Finance\Support\CreditLimit;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Modules\Portal\Support\PortalAccess;
 use App\Modules\Portal\Support\PortalContracts;
@@ -67,8 +68,15 @@ class PortalCommercialController extends Controller
         if ($data['decision'] === 'REJECTED' && ! $comment) {
             throw ValidationException::withMessages(['comment' => ['Cuéntanos el motivo del rechazo.']]);
         }
+        // Límite de crédito: con la regla "Bloquear" el cliente no aprueba (sin mostrarle su deuda);
+        // con "Solo avisar" aprueba y la empresa lo ve en el historial.
+        $credit = $data['decision'] === 'APPROVED' ? $this->credit($quotation) : null;
+        if ($credit && $credit['blocked']) {
+            throw ValidationException::withMessages(['status' => ['Para aprobar esta cotización comunícate con tu ejecutivo de cuenta.']]);
+        }
+        $creditNote = $credit ? 'Sobre el límite de crédito ('.\App\Services\Notifier::money($credit['excess'], $credit['currency']).' de exceso)' : null;
 
-        DB::transaction(function () use ($request, $quotation, $data, $comment) {
+        DB::transaction(function () use ($request, $quotation, $data, $comment, $creditNote) {
             QuotationApproval::create([
                 'tenant_id' => $quotation->tenant_id, 'quotation_id' => $quotation->id, 'approver_user_id' => $request->user()->id,
                 'decision' => $data['decision'], 'comments' => $comment, 'decided_at' => now(), 'channel' => 'PORTAL',
@@ -79,7 +87,8 @@ class PortalCommercialController extends Controller
                 tenantId: $quotation->tenant_id, userId: $request->user()->id,
                 action: $data['decision'] === 'APPROVED' ? 'quotation.approve' : 'quotation.reject',
                 entityType: 'Quotation', entityId: $quotation->id,
-                metadata: array_filter(['from' => 'SUBMITTED', 'to' => $data['decision'], 'channel' => 'PORTAL', 'note' => $comment ? "Desde el portal: {$comment}" : 'Desde el portal']),
+                metadata: array_filter(['from' => 'SUBMITTED', 'to' => $data['decision'], 'channel' => 'PORTAL',
+                    'note' => implode(' · ', array_filter([$comment ? "Desde el portal: {$comment}" : 'Desde el portal', $creditNote]))]),
             );
             \App\Modules\Services\Http\Controllers\QuotationController::notifyDecision($quotation, $data['decision'], $comment, portal: true);
         });
@@ -345,6 +354,18 @@ class PortalCommercialController extends Controller
         return $validUntil !== '' && $validUntil < now()->toDateString();
     }
 
+    /** Exceso sobre el límite de crédito si aprobara la cotización; null si no lo supera. */
+    private function credit(Quotation $quotation): ?array
+    {
+        $customer = \App\Modules\Core\Models\Customer::find($quotation->customer_id);
+        $status = $customer ? CreditLimit::status($customer, (float) $quotation->total, $quotation->currency) : null;
+        if (! $status || ! $status['exceeds']) {
+            return null;
+        }
+
+        return [...$status, 'blocked' => CreditLimit::mode($quotation->tenant_id) === CreditLimit::BLOCK];
+    }
+
     private function detail(Quotation $quotation, Request $request): array
     {
         $items = DB::table('quotation_items')->leftJoin('services', 'services.id', '=', 'quotation_items.service_id')
@@ -389,6 +410,8 @@ class PortalCommercialController extends Controller
             ]),
             'expired' => $this->expired($quotation),
             'can_decide' => $quotation->status === 'SUBMITTED' && PortalAccess::can($request, 'approve'),
+            // Con la regla "Bloquear" y el cliente sobre su límite, no puede aprobar (solo rechazar).
+            'credit_blocked' => $quotation->status === 'SUBMITTED' && (bool) ($this->credit($quotation)['blocked'] ?? false),
             // Solo la decisión y su canal; el comentario, solo si lo escribió el cliente.
             'approvals' => DB::table('quotation_approvals')->where('quotation_id', $quotation->id)->orderBy('decided_at')
                 ->get(['decision', 'channel', 'comments', 'decided_at'])
