@@ -67,4 +67,10 @@ Ni el prototipo ni el kit tienen esta regla: el campo venía del sistema origina
 
 - En tu base hay clientes de prueba con límite **0.00** escrito a mano: con esta regla son "sin crédito" y cualquier cotización suya pedirá motivo. Si eran "sin límite", hay que dejar el campo vacío.
 - "Comercial nose" tiene **0 días**: sus comprobantes nuevos vencerán el mismo día (antes, 30).
-- Desplegar en el VPS.
+- **Tenant B - Prueba** y **Yadi SAC** (VPS) no tienen ningún rol creado: nadie recibió el permiso. Se reparte desde Roles cuando creen sus roles.
+
+## 8. Despliegue (28/10)
+
+Desplegado `550021b` con `deploy.sh --si` (respaldo `/root/backups/erp/20261028_072349_antes_deploy_16d8129`). Migración `2026_10_27_000100` corrida; el permiso quedó en Administrador y Gerencia de cada empresa que los tiene. `/login` 200, API 401 como se espera; el cron de los demás proyectos sin cambios.
+
+Ese día se revisó también la **primera corrida del cron** (nota del 27/10 sobre cotizaciones vencidas): a las 05:00 UTC `recurring:run-cycles` completó el ciclo 2026-10 de EMP-52F1DB y dejó su evento por facturar de S/ 153.40 (130 + IGV); la instancia pasó al 24/11. `laravel.log` sin errores nuevos.
