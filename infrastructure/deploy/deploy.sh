@@ -111,7 +111,12 @@ chown -R www-data:www-data "$API/storage" "$API/bootstrap/cache"
 chmod -R a+rX "$API/vendor"
 chown root:www-data "$API/.env" && chmod 640 "$API/.env"
 
-artisan optimize:clear > /dev/null
+# Limpia solo el código compilado (configuración, rutas, vistas y eventos) sin vaciar
+# la memoria de caché (Redis), para no borrar invitaciones ni códigos activos.
+artisan config:clear > /dev/null
+artisan route:clear > /dev/null
+artisan view:clear > /dev/null
+artisan event:clear > /dev/null
 pendientes="$(artisan migrate:status --pending --no-ansi || true)"
 if grep -q "Pending" <<<"$pendientes"; then
   echo "$pendientes"
