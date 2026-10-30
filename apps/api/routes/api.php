@@ -917,6 +917,10 @@ Route::prefix('v1')->group(function () {
         // Suscripciones de todas las empresas
         Route::get('/subscriptions', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformAuditController::class, 'subscriptions']);
 
+        // Configuración global de la plataforma (soporte, canales, etc.)
+        Route::get('/settings', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformSettingsController::class, 'show']);
+        Route::put('/settings', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformSettingsController::class, 'update']);
+
         // Auditoría de plataforma (acciones del super admin)
         Route::get('/audit', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformAuditController::class, 'index']);
         Route::get('/audit/options', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformAuditController::class, 'options']);

@@ -75,6 +75,7 @@ export type PlatformUsageRow = {
 };
 
 export type PlatformAuditRow = {
+  id?: string;
   created_at: string;
   action: string;
   entity_type: string | null;
@@ -191,4 +192,14 @@ export type PlatformAuditEntry = {
   user_id: string | null;
   user_name: string | null;
   user_email: string | null;
+};
+
+export type PlatformSupportSettings = {
+  whatsapp: string;
+  email: string;
+  schedule?: string;
+};
+
+export type PlatformSettings = {
+  support: PlatformSupportSettings;
 };

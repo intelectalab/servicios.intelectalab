@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Building2, CreditCard, Eye, LayoutDashboard, Plus, Receipt, ShieldCheck } from "lucide-react";
+import { Building2, CreditCard, Eye, LayoutDashboard, Plus, Receipt, Settings, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { PROFILE_NAME_EVENT, clearAuthToken } from "@/lib/auth";
 import Header, { type UserProfile } from "@/components/layout/Header";
@@ -21,6 +21,7 @@ const ADMIN_MENU_ITEMS: BuiltMenuItem[] = [
   { href: "/superadmin/subscriptions", label: "Suscripciones", icon: Receipt, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
   { href: "/superadmin/tenants", label: "Tenants / Empresas", icon: Building2, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
   { href: "/superadmin/tenants/new", label: "Aprovisionar tenant", icon: Plus, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
+  { href: "/superadmin/settings", label: "Configuración", icon: Settings, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
   { href: "/superadmin/audit", label: "Auditoría de plataforma", icon: Eye, superModule: GROUP, module: "PLATAFORMA", requiredPermission: "platform" },
 ];
 

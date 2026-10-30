@@ -388,7 +388,7 @@ export function DataTable<T>({
   tableId?: string;
   cols: Column<T>[];
   rows: T[];
-  rowKey: (row: T) => string;
+  rowKey: (row: T, index?: number) => string;
   onRowClick?: (row: T) => void;
   selection?: Selection<T>;
   loading?: boolean;
@@ -416,7 +416,7 @@ export function DataTable<T>({
     );
   }
 
-  const allSelected = selection ? rows.every((row) => selection.ids.has(rowKey(row))) : false;
+  const allSelected = selection ? rows.every((row, i) => selection.ids.has(rowKey(row, i))) : false;
 
   return (
     <div className="proto-tbl-wrap overflow-x-auto">
@@ -440,8 +440,8 @@ export function DataTable<T>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const key = rowKey(row);
+          {rows.map((row, index) => {
+            const key = rowKey(row, index);
             const selected = selection?.ids.has(key) ?? false;
             return (
               <tr

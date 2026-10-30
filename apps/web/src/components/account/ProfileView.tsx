@@ -44,6 +44,11 @@ type Profile = {
     ends_at: string | null;
     is_trial: boolean;
   } | null;
+  support?: {
+    whatsapp: string;
+    email: string;
+    schedule?: string;
+  } | null;
 };
 
 const STATUS_LABELS: Record<string, string> = { ACTIVE: "Activo", INVITED: "Invitado", SUSPENDED: "Suspendido", DISABLED: "Deshabilitado" };
@@ -466,79 +471,91 @@ export default function ProfileView() {
         ]}
       />
 
-      {showSupportModal && (
-        <Modal
-          title="Extender plan o contactar con soporte"
-          size="md"
-          onClose={() => setShowSupportModal(false)}
-          footer={
-            <Btn variant="secondary" onClick={() => setShowSupportModal(false)}>
-              Cerrar
-            </Btn>
-          }
-        >
-          <div className="space-y-4 text-xs">
-            <div className="rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3">
-              <span className="app-muted block text-[11px] font-medium uppercase tracking-wider">Tu empresa y plan</span>
-              <div className="mt-1 flex items-center justify-between">
-                <span className="text-sm font-semibold">{profile.tenant}</span>
-                <Chip tone={profile.subscription?.is_trial ? "warning" : "success"}>
-                  {profile.subscription?.plan_name ?? "Sin plan"}
-                </Chip>
+      {showSupportModal && (() => {
+        const whatsappRaw = profile.support?.whatsapp || "+51999999999";
+        const whatsappClean = whatsappRaw.replace(/[^0-9]/g, "");
+        const supportEmail = profile.support?.email || "soporte@erp-saas.com";
+
+        return (
+          <Modal
+            title="Extender plan o contactar con soporte"
+            size="md"
+            onClose={() => setShowSupportModal(false)}
+            footer={
+              <Btn variant="secondary" onClick={() => setShowSupportModal(false)}>
+                Cerrar
+              </Btn>
+            }
+          >
+            <div className="space-y-4 text-xs">
+              <div className="rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3">
+                <span className="app-muted block text-[11px] font-medium uppercase tracking-wider">Tu empresa y plan</span>
+                <div className="mt-1 flex items-center justify-between">
+                  <span className="text-sm font-semibold">{profile.tenant}</span>
+                  <Chip tone={profile.subscription?.is_trial ? "warning" : "success"}>
+                    {profile.subscription?.plan_name ?? "Sin plan"}
+                  </Chip>
+                </div>
+                {profile.subscription?.ends_at && (
+                  <p className="app-muted mt-1 text-[11.5px]">
+                    Vigencia actual: <strong className="text-[color:var(--app-text)]">{shortDate(profile.subscription.ends_at)}</strong>
+                  </p>
+                )}
               </div>
-              {profile.subscription?.ends_at && (
-                <p className="app-muted mt-1 text-[11.5px]">
-                  Vigencia actual: <strong className="text-[color:var(--app-text)]">{shortDate(profile.subscription.ends_at)}</strong>
-                </p>
-              )}
-            </div>
 
-            <p className="app-muted text-xs leading-relaxed">
-              Para coordinar la extensión de tu periodo (1, 3, 6 o 12 meses), registrar transferencias bancarias o consultar sobre planes superiores, ponte en contacto con nosotros:
-            </p>
+              <p className="app-muted text-xs leading-relaxed">
+                Para coordinar la extensión de tu periodo (1, 3, 6 o 12 meses), registrar transferencias bancarias o consultar sobre planes superiores, ponte en contacto con nosotros:
+              </p>
 
-            <div className="grid gap-2.5">
-              <a
-                href={`https://wa.me/51999999999?text=${encodeURIComponent(
-                  `Hola Soporte, me comunico desde la empresa ${profile.tenant ?? ""} (${profile.subscription?.plan_name ?? "Plan"}). Quisiera consultar sobre la extensión o renovación de nuestro plan.`
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3 transition hover:border-[color:var(--p-brand)] hover:bg-[var(--app-surface-muted)]"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                    <MessageSquare size={16} />
-                  </div>
-                  <div>
-                    <strong className="block text-xs font-semibold text-[color:var(--app-text)]">WhatsApp de Soporte</strong>
-                    <span className="app-muted text-[11px]">Coordinación rápida de renovaciones y pagos</span>
-                  </div>
-                </div>
-                <span className="text-xs font-medium text-[color:var(--p-brand)]">Iniciar chat →</span>
-              </a>
-
-              <div className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
-                    <Mail size={16} />
-                  </div>
-                  <div>
-                    <strong className="block text-xs font-semibold text-[color:var(--app-text)]">Correo de Soporte y Facturación</strong>
-                    <span className="app-muted text-[11px]">soporte@erp-saas.com</span>
-                  </div>
-                </div>
+              <div className="grid gap-2.5">
                 <a
-                  href={`mailto:soporte@erp-saas.com?subject=${encodeURIComponent(`Solicitud de extensión de plan - ${profile.tenant ?? ""}`)}&body=${encodeURIComponent(`Hola equipo de soporte,\n\nDeseo coordinar la extensión del plan ${profile.subscription?.plan_name ?? ""} para la empresa ${profile.tenant ?? ""}.\n\nSaludos,\n${profile.name}`)}`}
-                  className="text-xs font-medium text-[color:var(--p-brand)] hover:underline"
+                  href={`https://wa.me/${whatsappClean}?text=${encodeURIComponent(
+                    `Hola Soporte, me comunico desde la empresa ${profile.tenant ?? ""} (${profile.subscription?.plan_name ?? "Plan"}). Quisiera consultar sobre la extensión o renovación de nuestro plan.`
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3 transition hover:border-[color:var(--p-brand)] hover:bg-[var(--app-surface-muted)]"
                 >
-                  Enviar correo →
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                      <MessageSquare size={16} />
+                    </div>
+                    <div>
+                      <strong className="block text-xs font-semibold text-[color:var(--app-text)]">WhatsApp de Soporte</strong>
+                      <span className="app-muted text-[11px]">{whatsappRaw}</span>
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-[color:var(--p-brand)]">Iniciar chat →</span>
                 </a>
+
+                <div className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                      <Mail size={16} />
+                    </div>
+                    <div>
+                      <strong className="block text-xs font-semibold text-[color:var(--app-text)]">Correo de Soporte y Facturación</strong>
+                      <span className="app-muted text-[11px]">{supportEmail}</span>
+                    </div>
+                  </div>
+                  <a
+                    href={`mailto:${supportEmail}?subject=${encodeURIComponent(`Solicitud de extensión de plan - ${profile.tenant ?? ""}`)}&body=${encodeURIComponent(`Hola equipo de soporte,\n\nDeseo coordinar la extensión del plan ${profile.subscription?.plan_name ?? ""} para la empresa ${profile.tenant ?? ""}.\n\nSaludos,\n${profile.name}`)}`}
+                    className="text-xs font-medium text-[color:var(--p-brand)] hover:underline"
+                  >
+                    Enviar correo →
+                  </a>
+                </div>
+
+                {profile.support?.schedule && (
+                  <p className="app-muted text-[11px] text-center pt-1">
+                    Horario de atención: {profile.support.schedule}
+                  </p>
+                )}
               </div>
             </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
       {toasts}
     </Screen>

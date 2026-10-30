@@ -368,6 +368,8 @@ class AuthController extends Controller
             'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->first(['name', 'code', 'legal_name']) : null,
             // Suscripción y vigencia de la empresa para alertas preventivas de renovación.
             'subscription' => $subData,
+            // Canales de contacto y soporte de la plataforma SaaS (configurables por superadmin).
+            'support' => \App\Modules\Subscription\Support\PlatformSettings::support(),
             // Razón social y RUC de la empresa, para los documentos que se descargan (cotización en PDF).
             'company' => $tenantId
                 ? DB::table('companies')->where('tenant_id', $tenantId)->orderBy('created_at')->first(['legal_name', 'tax_identifier'])
@@ -480,6 +482,7 @@ class AuthController extends Controller
                 : [],
             'team' => $member?->team,
             'subscription' => $subData,
+            'support' => \App\Modules\Subscription\Support\PlatformSettings::support(),
             'mfa' => $this->requiresMfa($user, $tenantId),
             'sessions' => $user->tokens()
                 ->where(fn ($open) => $open->whereNull('expires_at')->orWhere('expires_at', '>', now()))

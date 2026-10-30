@@ -269,4 +269,37 @@ class PlatformTenantsTest extends TestCase
         }
         $this->assertSame('ACTIVE', DB::table('tenants')->where('id', $this->tenantId)->value('status'));
     }
+
+    public function test_superadmin_can_manage_platform_settings(): void
+    {
+        $super = $this->superAdmin();
+        $this->signIn($super);
+
+        $getRes = $this->getJson('/api/v1/superadmin/settings')->assertOk();
+        $this->assertArrayHasKey('support', $getRes->json());
+
+        $putRes = $this->putJson('/api/v1/superadmin/settings', [
+            'support' => [
+                'whatsapp' => '+51987654321',
+                'email' => 'ayuda@erp-saas.com',
+                'schedule' => 'L-V 9:00 a 19:00',
+            ],
+        ])->assertOk();
+
+        $this->assertSame('+51987654321', $putRes->json('support.whatsapp'));
+        $this->assertSame('ayuda@erp-saas.com', $putRes->json('support.email'));
+
+        // Client tenant gets updated settings in /me/access and /me/profile
+        $this->makeTenant(['CRM']);
+        $user = $this->makeUser('Administrador', ['core.view']);
+        $this->signIn($user);
+
+        $accessRes = $this->getJson('/api/v1/me/access')->assertOk();
+        $this->assertSame('+51987654321', $accessRes->json('support.whatsapp'));
+        $this->assertSame('ayuda@erp-saas.com', $accessRes->json('support.email'));
+
+        $profileRes = $this->getJson('/api/v1/me/profile')->assertOk();
+        $this->assertSame('+51987654321', $profileRes->json('support.whatsapp'));
+        $this->assertSame('ayuda@erp-saas.com', $profileRes->json('support.email'));
+    }
 }

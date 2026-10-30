@@ -51,7 +51,7 @@ function ExportableTable<T>({
   file: string;
   cols: Column<T>[];
   rows: T[];
-  rowKey: (row: T) => string;
+  rowKey: (row: T, index?: number) => string;
   exportCols: ExportColumn<T>[];
   empty: string;
   toast: Toast;
@@ -320,7 +320,7 @@ export function PlatformDashboardView() {
         <Card title="Actividad reciente de la plataforma" flush>
           <ExportableTable
             table="audit" title="Actividad reciente de la plataforma" file="actividad-de-la-plataforma" cols={AUDIT_COLS} rows={data.audit}
-            rowKey={(a) => `${a.created_at}-${a.action}-${a.user_name}`} exportCols={AUDIT_EXPORT} empty="Sin acciones todavía." toast={toast}
+            rowKey={(a, index) => (a as any).id ?? `${a.created_at}-${a.action}-${a.user_name}-${index ?? 0}`} exportCols={AUDIT_EXPORT} empty="Sin acciones todavía." toast={toast}
           />
         </Card>
       </div>

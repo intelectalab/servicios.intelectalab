@@ -28,10 +28,18 @@ Fecha: 2026-10-29.
     - Adjunta el listado de cobros `payments` a la respuesta del tenant para alimentar la ficha de Superadmin.
 - `routes/api.php`:
   - `POST /v1/superadmin/tenants/{tenant}/extend-subscription` registrado bajo el middleware de plataforma.
+  - `GET /v1/superadmin/settings` y `PUT /v1/superadmin/settings` para consultar y actualizar la configuración global de canales de soporte (WhatsApp y correo).
+- `app/Modules/Subscription/Support/PlatformSettings.php` y `app/Modules/Subscription/Http/Controllers/SuperAdmin/PlatformSettingsController.php`:
+  - Gestiona la configuración global de la plataforma con persistencia en `platform_settings` y auditoría (`platform.settings_updated`).
 - `app/Http/Controllers/Auth/AuthController.php`:
-  - En el endpoint `access()` de sesión, ahora se incluye el bloque `subscription` con `ends_at`, `plan_name`, `plan_code` e `is_trial` para que el armazón del ERP (`AppShell`) conozca la vigencia en tiempo real.
+  - En los endpoints `access()` y `profile()`, ahora se incluye el bloque `support` dinámico con `whatsapp`, `email` y `schedule`.
 
 ### Web (Frontend)
+- `src/app/superadmin/settings/page.tsx` y `src/components/superadmin/settings/PlatformSettingsView.tsx`:
+  - Nueva pantalla **"Configuración de la plataforma"** accesible desde el menú lateral de Superadmin.
+  - Permite configurar el WhatsApp oficial de soporte, correo de facturación y horario de atención, con vista previa interactiva en tiempo real.
+- `src/components/superadmin/dashboard/PlatformDashboardView.tsx` y `src/components/ui/proto.tsx`:
+  - Corrección del warning de React (`Encountered two children with the same key`): ahora se asegura clave única basada en ID o índice para eventos con el mismo timestamp y usuario.
 - `src/types/platform.ts`:
   - Se define el tipo `SubscriptionPayment` y se agrega `payments?: SubscriptionPayment[]` al detalle de la empresa (`PlatformTenantDetail`).
 - `src/components/superadmin/tenants/TenantDetail.tsx`:
