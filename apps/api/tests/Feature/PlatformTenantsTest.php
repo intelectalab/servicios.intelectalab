@@ -209,7 +209,7 @@ class PlatformTenantsTest extends TestCase
         $this->assertEqualsCanonicalizing(['tenant', 'transitions', 'catalog', 'plans'], array_keys($tenant));
         $this->assertEqualsCanonicalizing([
             'id', 'code', 'name', 'legal_name', 'trade_name', 'ruc', 'status', 'created_at', 'subscription', 'modules', 'users', 'users_limit',
-            'portal_users', 'portal_users_limit', 'customers', 'customers_limit', 'storage_mb', 'storage_limit_gb', 'subscriptions', 'status_log', 'admins',
+            'portal_users', 'portal_users_limit', 'customers', 'customers_limit', 'storage_mb', 'storage_limit_gb', 'subscriptions', 'status_log', 'admins', 'payments',
         ], array_keys($tenant['tenant']));
 
         $this->getJson('/api/v1/superadmin/tenants/'.Str::uuid())->assertNotFound();
@@ -217,6 +217,33 @@ class PlatformTenantsTest extends TestCase
         $this->getJson('/api/v1/superadmin/subscriptions')->assertOk()->assertJsonStructure(['data']);
         $this->getJson('/api/v1/superadmin/audit?action=auth.login&per_page=5')->assertOk()->assertJsonStructure(['data', 'total', 'last_page']);
         $this->getJson('/api/v1/superadmin/audit/options')->assertOk()->assertJsonStructure(['actions', 'users']);
+    }
+
+    public function test_superadmin_can_extend_tenant_subscription_with_custom_amount_and_date(): void
+    {
+        $this->signIn($this->superAdmin());
+        $list = $this->getJson('/api/v1/superadmin/tenants')->assertOk()->json('data');
+        $tenantId = $list[0]['id'];
+
+        $newEndsAt = now()->addMonths(4)->format('Y-m-d');
+
+        $response = $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/extend-subscription", [
+            'ends_at' => $newEndsAt,
+            'amount' => 1250.00,
+            'payment_method' => 'Transferencia BCP',
+            'reference' => 'OPE-94819284',
+            'notes' => 'Acordado por WhatsApp con 4 meses',
+            'months' => 4,
+        ])->assertOk()->json();
+
+        $this->assertEquals(1250.00, $response['payment']['amount']);
+        $this->assertEquals('Transferencia BCP', $response['payment']['payment_method']);
+        $this->assertEquals('OPE-94819284', $response['payment']['reference']);
+        $this->assertEquals(4, $response['payment']['months']);
+
+        $detail = $this->getJson("/api/v1/superadmin/tenants/{$tenantId}")->assertOk()->json();
+        $this->assertNotEmpty($detail['tenant']['payments']);
+        $this->assertEquals(1250.00, $detail['tenant']['payments'][0]['amount']);
     }
 
     public function test_company_and_portal_accounts_cannot_use_the_console(): void

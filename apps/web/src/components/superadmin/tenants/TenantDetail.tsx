@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, RefreshCw } from "lucide-react";
+import { ArrowLeft, Calendar, Mail, Minus, Pencil, Plus, RefreshCw } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { money, shortDate } from "@/lib/commercial";
 import { dateTimeText } from "@/lib/portal";
@@ -79,6 +79,67 @@ export function TenantDetail({ id }: { id: string }) {
   const [confirmModules, setConfirmModules] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
+  const [openPaymentModal, setOpenPaymentModal] = useState(false);
+  const [paymentMonths, setPaymentMonths] = useState<number>(3);
+  const [paymentAmount, setPaymentAmount] = useState<string>("0");
+  const [paymentEndDate, setPaymentEndDate] = useState<string>("");
+  const [paymentMethod, setPaymentMethod] = useState<string>("Transferencia BCP");
+  const [paymentRef, setPaymentRef] = useState<string>("");
+  const [paymentNotes, setPaymentNotes] = useState<string>("");
+
+  const formatIsoDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  const initPaymentModal = (months = 3) => {
+    setFormError("");
+    setPaymentMonths(months);
+    const base = sub?.ends_at ? new Date(sub.ends_at) : new Date();
+    const effectiveBase = base.getTime() < Date.now() ? new Date() : base;
+    effectiveBase.setMonth(effectiveBase.getMonth() + months);
+    setPaymentEndDate(formatIsoDate(effectiveBase));
+
+    const price = currentPlan?.monthly_price ? Number(currentPlan.monthly_price) : 0;
+    const suggested = months === 12 && currentPlan?.annual_price ? Number(currentPlan.annual_price) : price * months;
+    setPaymentAmount(suggested > 0 ? suggested.toFixed(2) : "0.00");
+    setPaymentMethod("Transferencia BCP");
+    setPaymentRef("");
+    setPaymentNotes("");
+    setOpenPaymentModal(true);
+  };
+
+  const handleMonthsChange = (m: number) => {
+    const months = Math.max(1, Math.min(120, m));
+    setPaymentMonths(months);
+    const base = sub?.ends_at ? new Date(sub.ends_at) : new Date();
+    const effectiveBase = base.getTime() < Date.now() ? new Date() : base;
+    effectiveBase.setMonth(effectiveBase.getMonth() + months);
+    setPaymentEndDate(formatIsoDate(effectiveBase));
+
+    const price = currentPlan?.monthly_price ? Number(currentPlan.monthly_price) : 0;
+    const suggested = months === 12 && currentPlan?.annual_price ? Number(currentPlan.annual_price) : price * months;
+    setPaymentAmount(suggested > 0 ? suggested.toFixed(2) : "0.00");
+  };
+
+  const handleDateChange = (val: string) => {
+    setPaymentEndDate(val);
+    if (!val) return;
+    const parts = val.split("-");
+    const picked = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+    const base = sub?.ends_at ? new Date(sub.ends_at) : new Date();
+    const effectiveBase = base.getTime() < Date.now() ? new Date() : base;
+    const diffDays = Math.ceil((picked.getTime() - effectiveBase.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays > 0) {
+      const approxMonths = Math.max(1, Math.round(diffDays / 30));
+      setPaymentMonths(approxMonths);
+      const price = currentPlan?.monthly_price ? Number(currentPlan.monthly_price) : 0;
+      const suggested = Math.round((diffDays / 30) * price);
+      setPaymentAmount(suggested.toFixed(2));
+    }
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -195,6 +256,9 @@ export function TenantDetail({ id }: { id: string }) {
                 <PickSelect value={period} onChange={setPeriod} ariaLabel="Periodo" options={Object.entries(PERIODS)} className={INPUT} />
               </label>
             )}
+            <Btn variant="primary" disabled={!sub} onClick={() => initPaymentModal(3)}>
+              Registrar pago / Extender
+            </Btn>
             <Btn variant="secondary" disabled={!planId || planId === sub?.plan_id} onClick={() => { setFormError(""); setConfirmPlan(true); }}>
               {sub ? "Cambiar plan" : "Asignar plan"}
             </Btn>
@@ -339,6 +403,248 @@ export function TenantDetail({ id }: { id: string }) {
           {formError && <p className="mt-2 text-[13px] text-[color:var(--p-danger-text)]">{formError}</p>}
         </Modal>
       )}
+            <Card title="Historial de pagos (renovaciones)" flush>
+        {tenant.payments && tenant.payments.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="border-b border-[color:var(--app-border)] bg-[var(--app-surface-muted)] text-[11.5px] font-semibold text-[color:var(--app-text-muted)]">
+                <tr>
+                  <th className="px-4 py-2.5">Fecha</th>
+                  <th className="px-4 py-2.5">Monto</th>
+                  <th className="px-4 py-2.5">Periodo</th>
+                  <th className="px-4 py-2.5">Método / Ref</th>
+                  <th className="px-4 py-2.5">Nueva vigencia</th>
+                  <th className="px-4 py-2.5">Registrado por</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[color:var(--app-border)]">
+                {tenant.payments.map((p) => (
+                  <tr key={p.id} className="hover:bg-[var(--app-surface-muted)]">
+                    <td className="whitespace-nowrap px-4 py-2.5 font-medium">{shortDate(p.created_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      {money(p.amount, p.currency)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2.5">{p.months ? `+${p.months} meses` : "Personalizado"}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="font-medium">{p.payment_method}</span>
+                      {p.reference && <small className="block font-mono text-[11px] text-[color:var(--app-text-muted)]">Ref: {p.reference}</small>}
+                      {p.notes && <small className="block text-[11px] italic text-[color:var(--app-text-muted)]">{p.notes}</small>}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono">{shortDate(p.new_ends_at)}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-[color:var(--app-text-muted)]">{p.created_by_name ?? "Superadmin"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="app-muted p-4 text-xs">Sin cobros registrados aún (la empresa inició con periodo de prueba o activación directa).</p>
+        )}
+      </Card>
+
+      {openPaymentModal && (
+        <Modal
+          title="Registrar Pago y Extender Vigencia"
+          size="md"
+          onClose={() => setOpenPaymentModal(false)}
+          footer={<>
+            <Btn variant="secondary" onClick={() => setOpenPaymentModal(false)}>Cancelar</Btn>
+            <Btn
+              variant="primary"
+              disabled={busy || !paymentEndDate || !paymentAmount}
+              onClick={() => void act(async () => {
+                await apiFetch(`/v1/superadmin/tenants/${id}/extend-subscription`, {
+                  method: "POST",
+                  body: JSON.stringify({
+                    ends_at: paymentEndDate,
+                    amount: parseFloat(paymentAmount) || 0,
+                    payment_method: paymentMethod,
+                    reference: paymentRef || null,
+                    notes: paymentNotes || null,
+                    months: paymentMonths,
+                  }),
+                });
+                setOpenPaymentModal(false);
+              }, "Pago y vigencia registrados con éxito")}
+            >
+              Guardar y extender vigencia
+            </Btn>
+          </>}
+        >
+          <div className="space-y-4 text-xs">
+            {/* Cabecera resumen del plan */}
+            <div className="flex items-center justify-between rounded-[10px] border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3.5">
+              <div>
+                <span className="app-muted block text-[11px] font-medium uppercase tracking-wider">Plan actual</span>
+                <div className="mt-0.5 flex items-baseline gap-2">
+                  <strong className="text-base font-semibold">{currentPlan?.name ?? sub?.plan}</strong>
+                  <span className="font-mono text-xs text-[color:var(--app-text-muted)]">
+                    ({money(currentPlan?.monthly_price ?? sub?.monthly_price ?? 0, currentPlan?.currency ?? sub?.currency ?? "PEN")}/mes)
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="app-muted block text-[11px]">Vigencia actual</span>
+                <span className="font-mono text-xs font-medium">
+                  {sub?.ends_at ? shortDate(sub.ends_at) : "Sin fecha"}
+                </span>
+              </div>
+            </div>
+
+            {/* Atajos de periodo y selector de meses personalizado */}
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-[12.5px] font-medium text-[color:var(--app-text)]">Periodo a extender</label>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="app-muted text-[11px]">Personalizado:</span>
+                  <button
+                    type="button"
+                    onClick={() => handleMonthsChange(paymentMonths - 1)}
+                    className="flex h-6 w-6 items-center justify-center rounded border border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] hover:bg-[var(--app-surface-muted)] transition cursor-pointer"
+                    title="Restar un mes"
+                  >
+                    <Minus size={12} />
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={paymentMonths}
+                    onChange={(e) => handleMonthsChange(parseInt(e.target.value, 10) || 1)}
+                    className="h-6 w-12 rounded border border-[color:var(--app-border)] bg-[var(--app-surface)] text-center font-mono text-xs font-bold"
+                  />
+                  <span className="text-[11px] text-[color:var(--app-text-muted)]">meses</span>
+                  <button
+                    type="button"
+                    onClick={() => handleMonthsChange(paymentMonths + 1)}
+                    className="flex h-6 w-6 items-center justify-center rounded border border-[color:var(--app-border)] bg-[var(--app-surface)] text-[color:var(--app-text)] hover:bg-[var(--app-surface-muted)] transition cursor-pointer"
+                    title="Sumar un mes"
+                  >
+                    <Plus size={12} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { m: 1, label: "+1 Mes", sub: "Mensual" },
+                  { m: 3, label: "+3 Meses", sub: "Trimestral" },
+                  { m: 6, label: "+6 Meses", sub: "Semestral" },
+                  { m: 12, label: "+12 Meses", sub: "Anual" },
+                ].map(({ m, label, sub: subText }) => {
+                  const active = paymentMonths === m;
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => handleMonthsChange(m)}
+                      className={`rounded-[10px] border px-2.5 py-2 text-center transition cursor-pointer ${
+                        active
+                          ? "border-[var(--p-accent,#1B8FC9)] bg-[var(--p-accent,#1B8FC9)] text-white shadow-xs font-medium"
+                          : "border-[color:var(--app-border)] bg-[var(--app-surface)] hover:bg-[var(--app-surface-muted)] text-[color:var(--app-text)]"
+                      }`}
+                    >
+                      <span className="block text-xs font-semibold">{label}</span>
+                      <span className={`block text-[10.5px] ${active ? "text-white/80" : "app-muted"}`}>{subText}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Fecha fin de vigencia con selector de calendario */}
+            <Field
+              label="Fecha fin de vigencia"
+              hint="Calculada según los meses o seleccionable directamente en el calendario para cualquier día exacto."
+            >
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="date"
+                    value={paymentEndDate}
+                    onChange={(e) => handleDateChange(e.target.value)}
+                    className={`${INPUT} font-mono cursor-pointer`}
+                  />
+                </div>
+                {paymentEndDate && (
+                  <Badge tone="info">
+                    <span className="inline-flex items-center gap-1 font-mono text-[11px]">
+                      <Calendar size={12} />
+                      {shortDate(paymentEndDate)}
+                    </span>
+                  </Badge>
+                )}
+              </div>
+            </Field>
+
+            {/* Monto editable con icono de edición */}
+            <Field
+              label="Monto total cobrado"
+              hint="Sugerido según el plan. Puedes editarlo libremente si acordaste un descuento o importe específico."
+            >
+              <div className="relative flex items-center">
+                <span className="pointer-events-none absolute left-3 font-mono font-semibold text-xs text-[color:var(--app-text-muted)]">
+                  {sub?.currency ?? "PEN"}
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  className={`${INPUT} pl-12 pr-20 font-mono text-sm font-semibold`}
+                />
+                <span className="pointer-events-none absolute right-3 inline-flex items-center gap-1 text-[11px] text-[color:var(--app-text-muted)]">
+                  <Pencil size={11} />
+                  Editable
+                </span>
+              </div>
+            </Field>
+
+            {/* Método de pago y Nº de Operación */}
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Método de pago" required>
+                <select
+                  value={paymentMethod}
+                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  className={INPUT}
+                >
+                  <option>Transferencia BCP</option>
+                  <option>Transferencia BBVA</option>
+                  <option>Transferencia Interbank</option>
+                  <option>Transferencia Scotiabank</option>
+                  <option>Yape / Plin</option>
+                  <option>Depósito / Efectivo</option>
+                  <option>Tarjeta de crédito</option>
+                  <option>Otro</option>
+                </select>
+              </Field>
+              <Field label="Nº de Operación / Ref.">
+                <input
+                  type="text"
+                  placeholder="Ej. OPE-94819284"
+                  value={paymentRef}
+                  onChange={(e) => setPaymentRef(e.target.value)}
+                  className={`${INPUT} font-mono`}
+                />
+              </Field>
+            </div>
+
+            {/* Notas comerciales internas */}
+            <Field label="Notas internas (opcional)">
+              <textarea
+                placeholder="Ej. Pago por 4 meses acordado por WhatsApp con descuento comercial"
+                value={paymentNotes}
+                onChange={(e) => setPaymentNotes(e.target.value)}
+                rows={2}
+                className={INPUT}
+              />
+            </Field>
+
+            {formError && <p className="text-[12.5px] text-[color:var(--p-danger-text)]">{formError}</p>}
+          </div>
+        </Modal>
+      )}
+
       {toasts}
     </Screen>
   );

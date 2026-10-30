@@ -328,6 +328,37 @@ class AuthController extends Controller
     {
         $tenantId = $request->attributes->get('tenant_id');
 
+        $activeSub = $tenantId ? DB::table('tenant_subscriptions')
+            ->join('saas_plans', 'saas_plans.id', '=', 'tenant_subscriptions.plan_id')
+            ->where('tenant_subscriptions.tenant_id', $tenantId)
+            ->where('tenant_subscriptions.status', 'ACTIVE')
+            ->orderByDesc('tenant_subscriptions.starts_at')
+            ->first([
+                'tenant_subscriptions.id',
+                'tenant_subscriptions.plan_id',
+                'saas_plans.name as plan_name',
+                'saas_plans.code as plan_code',
+                'tenant_subscriptions.starts_at',
+                'tenant_subscriptions.ends_at',
+                'tenant_subscriptions.configuration',
+            ]) : null;
+
+        $subData = null;
+        if ($activeSub) {
+            $config = $activeSub->configuration
+                ? (is_array($activeSub->configuration) ? $activeSub->configuration : json_decode($activeSub->configuration, true))
+                : [];
+            $subData = [
+                'id' => $activeSub->id,
+                'plan_id' => $activeSub->plan_id,
+                'plan_name' => $activeSub->plan_name,
+                'plan_code' => $activeSub->plan_code,
+                'starts_at' => $activeSub->starts_at,
+                'ends_at' => $activeSub->ends_at,
+                'is_trial' => (bool) ($config['is_trial'] ?? false),
+            ];
+        }
+
         return response()->json([
             'modules' => $tenantId ? TenantModules::enabledCodes($tenantId) : [],
             'permissions' => $request->user()->permissionCodes(),
@@ -335,6 +366,8 @@ class AuthController extends Controller
             'scopes' => (object) AccessScope::all(),
             // Para la cabecera: a qué empresa pertenece la sesión y con qué rol.
             'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->first(['name', 'code', 'legal_name']) : null,
+            // Suscripción y vigencia de la empresa para alertas preventivas de renovación.
+            'subscription' => $subData,
             // Razón social y RUC de la empresa, para los documentos que se descargan (cotización en PDF).
             'company' => $tenantId
                 ? DB::table('companies')->where('tenant_id', $tenantId)->orderBy('created_at')->first(['legal_name', 'tax_identifier'])
@@ -401,6 +434,31 @@ class AuthController extends Controller
                 ->first(['branches.name as branch', 'teams.name as team'])
             : null;
 
+        $activeSub = $tenantId ? DB::table('tenant_subscriptions')
+            ->join('saas_plans', 'saas_plans.id', '=', 'tenant_subscriptions.plan_id')
+            ->where('tenant_subscriptions.tenant_id', $tenantId)
+            ->where('tenant_subscriptions.status', 'ACTIVE')
+            ->orderByDesc('tenant_subscriptions.starts_at')
+            ->first([
+                'saas_plans.name as plan_name',
+                'tenant_subscriptions.starts_at',
+                'tenant_subscriptions.ends_at',
+                'tenant_subscriptions.configuration',
+            ]) : null;
+
+        $subData = null;
+        if ($activeSub) {
+            $config = is_array($activeSub->configuration)
+                ? $activeSub->configuration
+                : (json_decode($activeSub->configuration, true) ?: []);
+            $subData = [
+                'plan_name' => $activeSub->plan_name,
+                'starts_at' => $activeSub->starts_at,
+                'ends_at' => $activeSub->ends_at,
+                'is_trial' => (bool) ($config['is_trial'] ?? false),
+            ];
+        }
+
         return response()->json([
             'name' => $user->name,
             'email' => $user->email,
@@ -421,6 +479,7 @@ class AuthController extends Controller
                     ->orderBy('branches.name')->pluck('branches.name')
                 : [],
             'team' => $member?->team,
+            'subscription' => $subData,
             'mfa' => $this->requiresMfa($user, $tenantId),
             'sessions' => $user->tokens()
                 ->where(fn ($open) => $open->whereNull('expires_at')->orWhere('expires_at', '>', now()))

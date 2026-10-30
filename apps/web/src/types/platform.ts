@@ -126,10 +126,25 @@ export type PlatformTenant = {
   storage_limit_gb: number | null;
 };
 
+export type SubscriptionPayment = {
+  id: string;
+  amount: number;
+  currency: string;
+  payment_method: string;
+  reference: string | null;
+  notes: string | null;
+  months: number | null;
+  previous_ends_at: string | null;
+  new_ends_at: string;
+  created_at: string;
+  created_by_name?: string | null;
+};
+
 export type PlatformTenantDetail = PlatformTenant & {
   subscriptions: { id: string; plan: string; status: string; starts_at: string; ends_at: string | null; trial: boolean; billing_period: string }[];
   status_log: { from: string | null; to: string; reason: string | null; at: string; user_name: string | null }[];
   admins: { id: string; name: string; email: string; status: string; last_login_at: string | null }[];
+  payments?: SubscriptionPayment[];
 };
 
 export type PlatformPlanOption = {

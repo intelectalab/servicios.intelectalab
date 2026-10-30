@@ -910,6 +910,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/tenants/{tenant}', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'show']);
         Route::post('/tenants/{tenant}/transitions', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'transition']);
         Route::put('/tenants/{tenant}/plan', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'changePlan']);
+        Route::post('/tenants/{tenant}/extend-subscription', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'extendSubscription']);
         Route::post('/tenants/{tenant}/apply-plan-modules', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'applyPlanModules']);
         Route::post('/tenants/{tenant}/admins/{user}/invitation', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'resendInvitation'])->middleware('throttle:10,1,platform-invite');
 

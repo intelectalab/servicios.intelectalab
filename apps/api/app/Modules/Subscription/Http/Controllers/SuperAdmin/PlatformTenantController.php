@@ -53,6 +53,16 @@ class PlatformTenantController extends Controller
         $data = $this->console('SELECT platform_tenant(?) AS data', [$tenant]);
         abort_if($data === null, 404);
 
+        $sub = DB::table('tenant_subscriptions')
+            ->where('tenant_id', $tenant)
+            ->where('status', 'ACTIVE')
+            ->orderByDesc('starts_at')
+            ->first();
+        $config = $sub && $sub->configuration
+            ? (is_array($sub->configuration) ? $sub->configuration : json_decode($sub->configuration, true))
+            : [];
+        $data['payments'] = $config['payments'] ?? [];
+
         return response()->json([
             'tenant' => $data,
             'transitions' => self::TRANSITIONS[$data['status']] ?? [],
@@ -177,6 +187,100 @@ class PlatformTenantController extends Controller
         $invited = $invite ? $this->inviteAdmins($tenant, $userId) : [];
 
         return response()->json(['status' => $data['to'], 'invited' => $invited]);
+    }
+
+    public function extendSubscription(Request $request, string $tenant): JsonResponse
+    {
+        abort_unless(Str::isUuid($tenant), 404);
+        $data = $request->validate([
+            'ends_at' => ['required', 'date'],
+            'amount' => ['required', 'numeric', 'min:0'],
+            'payment_method' => ['required', 'string', 'max:100'],
+            'reference' => ['nullable', 'string', 'max:100'],
+            'notes' => ['nullable', 'string', 'max:1000'],
+            'months' => ['nullable', 'integer', 'min:1', 'max:120'],
+        ]);
+
+        $userId = $request->user()->id;
+
+        $result = DB::transaction(function () use ($tenant, $data, $userId, $request) {
+            abort_unless(DB::table('tenants')->where('id', $tenant)->lockForUpdate()->exists(), 404);
+            $this->enterTenant($tenant);
+
+            $sub = DB::table('tenant_subscriptions')
+                ->where('tenant_id', $tenant)
+                ->where('status', 'ACTIVE')
+                ->orderByDesc('starts_at')
+                ->lockForUpdate()
+                ->first();
+
+            $plan = $sub ? SaasPlan::find($sub->plan_id) : null;
+            $newEndsAt = \Illuminate\Support\Carbon::parse($data['ends_at']);
+
+            $config = $sub && $sub->configuration
+                ? (is_array($sub->configuration) ? $sub->configuration : json_decode($sub->configuration, true))
+                : [];
+
+            $payments = $config['payments'] ?? [];
+
+            $paymentRecord = [
+                'id' => (string) Str::uuid(),
+                'amount' => (float) $data['amount'],
+                'currency' => $plan->currency ?? 'PEN',
+                'payment_method' => $data['payment_method'],
+                'reference' => $data['reference'] ?? null,
+                'notes' => $data['notes'] ?? null,
+                'months' => isset($data['months']) ? (int) $data['months'] : null,
+                'previous_ends_at' => $sub?->ends_at,
+                'new_ends_at' => $newEndsAt->toIso8601String(),
+                'created_at' => now()->toIso8601String(),
+                'created_by' => $userId,
+                'created_by_name' => $request->user()->name,
+            ];
+
+            array_unshift($payments, $paymentRecord);
+            $config['payments'] = $payments;
+            $config['is_trial'] = false;
+
+            if ($sub) {
+                DB::table('tenant_subscriptions')->where('id', $sub->id)->update([
+                    'ends_at' => $newEndsAt,
+                    'configuration' => json_encode($config),
+                    'updated_at' => now(),
+                ]);
+            } else {
+                $defaultPlan = SaasPlan::where('active', true)->orderBy('display_order')->first();
+                $subId = (string) Str::uuid();
+                DB::table('tenant_subscriptions')->insert([
+                    'id' => $subId,
+                    'tenant_id' => $tenant,
+                    'plan_id' => $defaultPlan->id,
+                    'status' => 'ACTIVE',
+                    'starts_at' => now(),
+                    'ends_at' => $newEndsAt,
+                    'configuration' => json_encode($config),
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            PlatformAuditLogger::log(
+                $userId,
+                'tenant.subscription_extended',
+                'Tenant',
+                $tenant,
+                beforeData: ['ends_at' => $sub?->ends_at],
+                afterData: ['ends_at' => $newEndsAt->toIso8601String(), 'amount' => (float) $data['amount']],
+                metadata: $paymentRecord
+            );
+
+            return [
+                'payment' => $paymentRecord,
+                'ends_at' => $newEndsAt->toIso8601String(),
+            ];
+        });
+
+        return response()->json($result);
     }
 
     public function changePlan(Request $request, string $tenant): JsonResponse

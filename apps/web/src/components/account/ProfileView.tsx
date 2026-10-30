@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Eye, EyeOff, Globe, Pencil, Smartphone } from "lucide-react";
+import { Eye, EyeOff, Globe, LifeBuoy, Mail, MessageSquare, Pencil, Smartphone } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { PROFILE_NAME_EVENT } from "@/lib/auth";
-import { Btn, Card, Chip, Field, INPUT, Kv, LoadError, PageHead, Screen, useToasts } from "@/components/ui/proto";
+import { Btn, Card, Chip, Field, INPUT, Kv, LoadError, Modal, PageHead, Screen, useToasts } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
+import { shortDate } from "@/lib/commercial";
 
 type Session = {
   id: number;
@@ -37,6 +38,12 @@ type Profile = {
   sessions: Session[];
   /** null en la cuenta de plataforma, que no pertenece a ninguna empresa. */
   notification_preferences: Preferences | null;
+  subscription?: {
+    plan_name: string;
+    starts_at: string;
+    ends_at: string | null;
+    is_trial: boolean;
+  } | null;
 };
 
 const STATUS_LABELS: Record<string, string> = { ACTIVE: "Activo", INVITED: "Invitado", SUSPENDED: "Suspendido", DISABLED: "Deshabilitado" };
@@ -95,6 +102,7 @@ export default function ProfileView() {
   const [closing, setClosing] = useState(false);
   const [preferences, setPreferences] = useState<Preferences | null>(null);
   const [savingPreferences, setSavingPreferences] = useState(false);
+  const [showSupportModal, setShowSupportModal] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -278,6 +286,45 @@ export default function ProfileView() {
                     profile.is_super_admin ? null : [profile.extra_branches.length ? "Sede principal" : "Sede", profile.branch ?? "—"],
                     profile.extra_branches.length ? ["Sedes adicionales", profile.extra_branches.join(", ")] : null,
                     profile.team ? ["Equipo", profile.team] : null,
+                    profile.tenant && !profile.is_super_admin
+                      ? [
+                          "Plan de la empresa",
+                          profile.subscription ? (
+                            <span className="flex items-center gap-2">
+                              <strong className="font-medium">{profile.subscription.plan_name}</strong>
+                              <Chip tone={profile.subscription.is_trial ? "warning" : "success"}>
+                                {profile.subscription.is_trial ? "Prueba gratuita" : "Activo"}
+                              </Chip>
+                            </span>
+                          ) : (
+                            <span className="app-muted">Sin plan asignado</span>
+                          ),
+                        ]
+                      : null,
+                    profile.tenant && !profile.is_super_admin && profile.subscription?.ends_at
+                      ? [
+                          "Vigencia",
+                          <span className="flex flex-wrap items-center gap-1.5">
+                            <span>Hasta el {shortDate(profile.subscription.ends_at)}</span>
+                            {(() => {
+                              const diffDays = Math.ceil(
+                                (new Date(profile.subscription.ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+                              );
+                              if (diffDays < 0) return <span className="font-medium text-[color:var(--p-danger-text)]">(Vencido)</span>;
+                              if (diffDays === 0) return <span className="font-medium text-amber-600">(Vence hoy)</span>;
+                              if (diffDays <= 7) return <span className="font-medium text-amber-600">({diffDays} días restantes)</span>;
+                              return null;
+                            })()}
+                            <button
+                              type="button"
+                              onClick={() => setShowSupportModal(true)}
+                              className="ml-1 cursor-pointer text-xs font-medium text-[color:var(--p-brand)] hover:underline"
+                            >
+                              Extender
+                            </button>
+                          </span>,
+                        ]
+                      : null,
                     [
                       "Verificación en dos pasos",
                       <span key="mfa" title={profile.mfa ? "Al iniciar sesión se pide un código enviado a tu correo." : undefined}>
@@ -289,6 +336,33 @@ export default function ProfileView() {
                     ["Cuenta creada", dateTime(profile.created_at)],
                   ]}
                 />
+
+                {/* Banner de soporte / extensión de plan */}
+                {profile.tenant && !profile.is_super_admin && (
+                  <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3 text-xs">
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]">
+                        <LifeBuoy size={15} />
+                      </div>
+                      <div>
+                        <strong className="block text-xs font-semibold text-[color:var(--app-text)]">
+                          ¿Quieres extender o renovar tu plan?
+                        </strong>
+                        <p className="app-muted mt-0.5 text-[11.5px] leading-relaxed">
+                          Contacta con soporte para renovar tu suscripción, agregar meses o consultar opciones de pago.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSupportModal(true)}
+                      className="cursor-pointer shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--app-text)] shadow-2xs hover:bg-[var(--app-surface-muted)] hover:border-[color:var(--p-brand)] transition"
+                    >
+                      <LifeBuoy size={13} className="text-[color:var(--p-brand)]" />
+                      <span>Contactar con soporte</span>
+                    </button>
+                  </div>
+                )}
               </Card>
             ),
           },
@@ -391,6 +465,81 @@ export default function ProfileView() {
             : []),
         ]}
       />
+
+      {showSupportModal && (
+        <Modal
+          title="Extender plan o contactar con soporte"
+          size="md"
+          onClose={() => setShowSupportModal(false)}
+          footer={
+            <Btn variant="secondary" onClick={() => setShowSupportModal(false)}>
+              Cerrar
+            </Btn>
+          }
+        >
+          <div className="space-y-4 text-xs">
+            <div className="rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3">
+              <span className="app-muted block text-[11px] font-medium uppercase tracking-wider">Tu empresa y plan</span>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-sm font-semibold">{profile.tenant}</span>
+                <Chip tone={profile.subscription?.is_trial ? "warning" : "success"}>
+                  {profile.subscription?.plan_name ?? "Sin plan"}
+                </Chip>
+              </div>
+              {profile.subscription?.ends_at && (
+                <p className="app-muted mt-1 text-[11.5px]">
+                  Vigencia actual: <strong className="text-[color:var(--app-text)]">{shortDate(profile.subscription.ends_at)}</strong>
+                </p>
+              )}
+            </div>
+
+            <p className="app-muted text-xs leading-relaxed">
+              Para coordinar la extensión de tu periodo (1, 3, 6 o 12 meses), registrar transferencias bancarias o consultar sobre planes superiores, ponte en contacto con nosotros:
+            </p>
+
+            <div className="grid gap-2.5">
+              <a
+                href={`https://wa.me/51999999999?text=${encodeURIComponent(
+                  `Hola Soporte, me comunico desde la empresa ${profile.tenant ?? ""} (${profile.subscription?.plan_name ?? "Plan"}). Quisiera consultar sobre la extensión o renovación de nuestro plan.`
+                )}`}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3 transition hover:border-[color:var(--p-brand)] hover:bg-[var(--app-surface-muted)]"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                    <MessageSquare size={16} />
+                  </div>
+                  <div>
+                    <strong className="block text-xs font-semibold text-[color:var(--app-text)]">WhatsApp de Soporte</strong>
+                    <span className="app-muted text-[11px]">Coordinación rápida de renovaciones y pagos</span>
+                  </div>
+                </div>
+                <span className="text-xs font-medium text-[color:var(--p-brand)]">Iniciar chat →</span>
+              </a>
+
+              <div className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                    <Mail size={16} />
+                  </div>
+                  <div>
+                    <strong className="block text-xs font-semibold text-[color:var(--app-text)]">Correo de Soporte y Facturación</strong>
+                    <span className="app-muted text-[11px]">soporte@erp-saas.com</span>
+                  </div>
+                </div>
+                <a
+                  href={`mailto:soporte@erp-saas.com?subject=${encodeURIComponent(`Solicitud de extensión de plan - ${profile.tenant ?? ""}`)}&body=${encodeURIComponent(`Hola equipo de soporte,\n\nDeseo coordinar la extensión del plan ${profile.subscription?.plan_name ?? ""} para la empresa ${profile.tenant ?? ""}.\n\nSaludos,\n${profile.name}`)}`}
+                  className="text-xs font-medium text-[color:var(--p-brand)] hover:underline"
+                >
+                  Enviar correo →
+                </a>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
       {toasts}
     </Screen>
   );
