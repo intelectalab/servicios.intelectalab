@@ -120,6 +120,10 @@ const ACTIONS: Record<string, string> = {
   view: "Ver", create: "Crear", manage: "Gestionar", configure: "Configurar", approve: "Aprobar", pay: "Pagar", export: "Exportar", use: "Usar", reveal: "Revelar", delete: "Eliminar",
 };
 
+// Una acción que en un recurso se llama distinto que en la columna común (en el Vault no se elimina: se revoca).
+const ROW_ACTIONS: Record<string, string> = { "credentials.delete": "Revocar" };
+const actionLabel = (resource: string, action: string) => ROW_ACTIONS[`${resource}.${action}`] ?? ACTIONS[action];
+
 // Alcances que se pueden elegir, de menor a mayor.
 const SCOPE_OPTIONS = (["OWN", "TEAM", "BRANCH", "TENANT"] as Scope[]).map((scope): [string, string] => [scope, SCOPE_LABELS[scope]]);
 
@@ -457,21 +461,24 @@ export default function RolesPermissions() {
                         {actions.map((action) => {
                           const code = `${resource}.${action}`;
                           return (
-                            <td key={action} className={`${TD} text-center`} data-label={ACTIONS[action]}>
+                            <td key={action} className={`${TD} text-center`} data-label={actionLabel(resource, action)}>
                               {codes.has(code) ? (
-                                <input
-                                  type="checkbox"
-                                  className="h-[17px] w-[17px] cursor-pointer accent-[#1B8FC9] disabled:cursor-not-allowed"
-                                  checked={role.permissions.includes(code)}
-                                  disabled={!canEdit || saving}
-                                  onChange={(event) => toggle(code, event.target.checked)}
-                                  aria-label={`${ACTIONS[action]} ${RESOURCES[resource] ?? resource}`}
-                                  title={
-                                    can("users.manage")
-                                      ? data.permissions.find((permission) => permission.code === code)?.name
-                                      : deniedText("users.manage")
-                                  }
-                                />
+                                <span className="inline-flex flex-col items-center gap-0.5">
+                                  <input
+                                    type="checkbox"
+                                    className="h-[17px] w-[17px] cursor-pointer accent-[#1B8FC9] disabled:cursor-not-allowed"
+                                    checked={role.permissions.includes(code)}
+                                    disabled={!canEdit || saving}
+                                    onChange={(event) => toggle(code, event.target.checked)}
+                                    aria-label={`${actionLabel(resource, action)} ${RESOURCES[resource] ?? resource}`}
+                                    title={
+                                      can("users.manage")
+                                        ? data.permissions.find((permission) => permission.code === code)?.name
+                                        : deniedText("users.manage")
+                                    }
+                                  />
+                                  {ROW_ACTIONS[code] && <small aria-hidden="true" className="app-muted hidden text-[11px] leading-none sm:block">{ROW_ACTIONS[code]}</small>}
+                                </span>
                               ) : (
                                 <span className="app-muted">—</span>
                               )}

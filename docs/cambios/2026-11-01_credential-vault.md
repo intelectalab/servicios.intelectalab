@@ -60,6 +60,7 @@ Construir el submódulo **Credential Vault** de Control según el prototipo, con
 | Operaciones y Técnico | Ver y usar |
 
 - Los permisos del Vault entran en `ModulePermissions::BASE`, así que el administrador de una empresa nueva los recibe y se pueden asignar en Roles y permisos.
+- En la matriz de Roles y permisos, la casilla del Vault en la columna común "Eliminar" lleva debajo la palabra **"Revocar"**. En el móvil, en la tarjeta, aparece como "Revocar". Las demás filas no cambian.
 
 ## 3. Qué NO se tocó
 
