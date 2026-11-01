@@ -19,8 +19,24 @@ export type WebhookEndpoint = {
   created_at: string | null;
 };
 
+/** Tarjeta de Conexiones (formato del prototipo), con datos reales. */
+export type Connection = {
+  key: string;
+  name: string;
+  status: "ACTIVE" | "PENDING_SETUP" | "PENDING_PROVIDER" | "DISABLED";
+  provider: string;
+  events: string[];
+  credential: string | null;
+  /** Llamadas y errores de las últimas 24 h; null si no aplica. */
+  calls: number | null;
+  errors: number | null;
+  note: string | null;
+  link: { href: string; label: string } | null;
+  endpoint_id?: string;
+};
+
 export type IntegrationsData = {
-  connections: { key: string; name: string; status: "ACTIVE" | "PENDING_SETUP" | "PENDING_PROVIDER"; detail: string }[];
+  connections: Connection[];
   endpoints: WebhookEndpoint[];
   events: { key: string; label: string }[];
   counts: Record<DeliveryStatus, number>;
@@ -57,8 +73,9 @@ export const DELIVERY_STATES: [DeliveryStatus, string, Tone][] = [
   ["DEAD", "Fallido", "danger"],
 ];
 
-export const CONNECTION_STATES: Record<IntegrationsData["connections"][number]["status"], [string, Tone]> = {
+export const CONNECTION_STATES: Record<Connection["status"], [string, Tone]> = {
   ACTIVE: ["Activa", "success"],
   PENDING_SETUP: ["Sin configurar", "warning"],
-  PENDING_PROVIDER: ["Proveedor por definir", "muted"],
+  PENDING_PROVIDER: ["Por definir", "muted"],
+  DISABLED: ["Desactivada", "muted"],
 };

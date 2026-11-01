@@ -228,20 +228,48 @@ export default function IntegrationsView() {
           <Tabs tabs={tabs} value={tab} onChange={(key) => setTab(key as Tab)} />
 
           {tab === "connections" && (
-            <div className="grid gap-3 md:grid-cols-2">
+            // Formato del prototipo: nombre y estado, proveedor, eventos, credencial y últimas 24 h.
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {data.connections.map((connection) => {
                 const [label, tone] = CONNECTION_STATES[connection.status];
+                const pending = connection.status === "PENDING_PROVIDER";
                 return (
-                  <section key={connection.key} className="app-surface rounded-xl p-4 shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)]">
+                  <section key={connection.key} className="app-surface flex flex-col rounded-xl p-4 shadow-[0_1px_2px_rgba(16,24,40,.05),0_2px_8px_rgba(16,24,40,.06)]">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="grid h-9 w-9 place-items-center rounded-lg bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]">{CONNECTION_ICONS[connection.key]}</span>
-                        <strong className="font-semibold">{connection.name}</strong>
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]">{CONNECTION_ICONS[connection.key] ?? <Webhook size={18} />}</span>
+                        <strong className="min-w-0 font-semibold [overflow-wrap:anywhere]">{connection.name}</strong>
                       </div>
                       <Badge tone={tone}>{label}</Badge>
                     </div>
-                    <p className="app-muted mt-2 text-[13px]">{connection.detail}</p>
-                    {connection.key === "fiscal" && <Link href="/fiscal" className="mt-2 inline-block text-xs font-semibold text-[color:var(--p-brand-text)] hover:underline">Ir a Facturación electrónica →</Link>}
+                    <p className="app-muted mt-1.5 text-xs">{connection.provider}</p>
+                    <dl className="mt-3 grid grid-cols-[96px_1fr] gap-x-2 gap-y-1.5 text-[12.5px]">
+                      <dt className="app-muted">Eventos</dt>
+                      <dd className="flex min-w-0 flex-wrap gap-1">
+                        {connection.events.length ? connection.events.map((event) => <code key={event} className="rounded bg-[var(--app-surface-muted)] px-1.5 py-0.5 text-[11.5px]">{event}</code>) : <span className="app-muted">—</span>}
+                      </dd>
+                      <dt className="app-muted">Credencial</dt>
+                      <dd>{connection.credential ?? <span className="app-muted">—</span>}</dd>
+                      <dt className="app-muted">Últimas 24 h</dt>
+                      <dd>
+                        {connection.calls === null ? <span className="app-muted">—</span> : (
+                          <>
+                            {connection.calls} {connection.key === "mail" ? (connection.calls === 1 ? "correo" : "correos") : connection.calls === 1 ? "llamada" : "llamadas"}
+                            {connection.errors !== null && <> · <span className={connection.errors ? "font-semibold text-[color:var(--p-danger-text)]" : ""}>{connection.errors} {connection.errors === 1 ? "error" : "errores"}</span></>}
+                          </>
+                        )}
+                      </dd>
+                    </dl>
+                    {connection.note && <p className={`mt-3 text-xs ${pending ? "app-muted" : "text-[color:var(--p-warning-text)]"}`}>{connection.note}</p>}
+                    <div className="mt-auto flex flex-wrap gap-1.5 pt-3">
+                      {connection.link && <Link href={connection.link.href} className="text-xs font-semibold text-[color:var(--p-brand-text)] hover:underline">Ir a {connection.link.label} →</Link>}
+                      {connection.endpoint_id && (
+                        <>
+                          <Btn size="sm" variant="ghost" onClick={() => setTab("webhooks")}>Configurar</Btn>
+                          <Btn size="sm" variant="ghost" onClick={() => setTab("queue")}>Ver envíos</Btn>
+                        </>
+                      )}
+                    </div>
                   </section>
                 );
               })}

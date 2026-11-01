@@ -21,11 +21,12 @@ Decisiones tomadas:
 
 **Pantalla** (`/integrations`, menú Control → Integraciones; `components/dashboard/integrations/`), con 4 pestañas:
 
-- **Conexiones**, una tarjeta por integración con su estado real:
-  - **Facturación electrónica (SUNAT):** conectada con su proveedor, o "Sin configurar", con enlace a Facturación electrónica.
-  - **Correo:** activo si la plataforma tiene servidor de correo.
-  - **Pasarela de pagos y WhatsApp:** "Proveedor por definir".
-  - Sin botones de simulación.
+- **Conexiones**, con **el formato de tarjeta del prototipo** (nombre y estado, proveedor, Eventos, Credencial y Últimas 24 h), pero con datos reales:
+  - **Emisión electrónica SUNAT:** proveedor y ambiente (o "OSE/PSE por configurar"), eventos `invoice.issued` y `credit_note.issued`, y en las últimas 24 h los comprobantes enviados y los rechazados. Tiene enlace a Facturación electrónica.
+  - **Email transaccional:** servidor de la plataforma, `notification.email` y los avisos por correo de las últimas 24 h.
+  - **Pasarela de pagos y WhatsApp Business:** "Proveedor por definir", sin datos.
+  - **Cada webhook es una conexión más** ("Webhook · Contabilidad externa", como en el prototipo): sus eventos, "Clave de webhook (Vault)", los intentos y errores de las últimas 24 h, y los botones Configurar y Ver envíos.
+  - Sin los botones de simulación del prototipo ("Simular caída", "Deshabilitar" de mentira).
 - **Webhooks salientes:** una tarjeta por webhook con su nombre, dirección, descripción, eventos y lo entregado, en cola y fallido.
   - Botones: "Enviar prueba" (envía en el momento y dice qué respondió el otro sistema), Editar, Rotar clave, y Activar o Desactivar.
   - "Nuevo webhook": nombre, dirección https, descripción y los 12 eventos de Workflows, a elegir.

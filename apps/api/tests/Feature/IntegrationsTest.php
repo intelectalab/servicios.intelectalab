@@ -195,8 +195,12 @@ class IntegrationsTest extends TestCase
         $endpoint = $this->webhook()->assertCreated()->json();
 
         $index = $this->getJson('/api/v1/integrations')->assertOk();
-        $this->assertSame(['fiscal', 'mail', 'payments', 'whatsapp'], array_column($index->json('connections'), 'key'));
-        $this->assertSame('PENDING_PROVIDER', $index->json('connections.2.status'));
+        // Las conexiones fijas y, como en el prototipo, cada webhook como una conexión más.
+        $this->assertSame(['fiscal', 'mail', 'payments', 'whatsapp', "webhook:{$endpoint['id']}"], array_column($index->json('connections'), 'key'));
+        $this->assertSame(['PENDING_PROVIDER', 'Proveedor por definir'], [$index->json('connections.2.status'), $index->json('connections.2.provider')]);
+        $this->assertSame(['ACTIVE', ['ticket.created'], 'Clave de webhook (Vault)', 0], [
+            $index->json('connections.4.status'), $index->json('connections.4.events'), $index->json('connections.4.credential'), $index->json('connections.4.calls'),
+        ]);
         $this->assertCount(12, $index->json('events'));
         foreach (['integration.webhook_create', 'integration.webhook_rotate', 'integration.delivery_retry'] as $action) {
             $this->assertArrayHasKey($action, AuditCatalog::ACTIONS);

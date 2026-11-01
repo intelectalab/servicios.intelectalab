@@ -44,15 +44,63 @@ class IntegrationController extends Controller
 
         $counts = DB::table('webhook_deliveries')->where('tenant_id', $tenantId)->selectRaw('status, count(*) AS n')->groupBy('status')->pluck('n', 'status');
 
-        return response()->json([
-            'connections' => [
-                ['key' => 'fiscal', 'name' => 'Facturación electrónica (SUNAT)', 'status' => $fiscal['connected'] ? 'ACTIVE' : 'PENDING_SETUP',
-                    'detail' => $fiscal['connected'] ? "Conectada con {$fiscal['name']}" : 'Sin proveedor (OSE/PSE) conectado: los comprobantes se emiten sin enviar a SUNAT.'],
-                ['key' => 'mail', 'name' => 'Correo', 'status' => in_array($mailer, ['log', 'array'], true) ? 'PENDING_SETUP' : 'ACTIVE',
-                    'detail' => in_array($mailer, ['log', 'array'], true) ? 'La plataforma no tiene un servidor de correo configurado: los correos no salen.' : 'Lo envía la plataforma (códigos, avisos e invitaciones).'],
-                ['key' => 'payments', 'name' => 'Pasarela de pagos', 'status' => 'PENDING_PROVIDER', 'detail' => 'Proveedor por definir. Los cobros se registran a mano en Finanzas.'],
-                ['key' => 'whatsapp', 'name' => 'WhatsApp Business', 'status' => 'PENDING_PROVIDER', 'detail' => 'Para enviar avisos y comprobantes por WhatsApp. Se conectará cuando se elija un proveedor.'],
+        // Actividad real de las últimas 24 horas (como "Últimas 24 h" del prototipo).
+        $since = now()->subDay();
+        $fiscal24 = DB::table('invoices')->where('tenant_id', $tenantId)->where('updated_at', '>=', $since)
+            ->whereIn('fiscal_status', ['PENDING', 'ACCEPTED', 'REJECTED'])
+            ->selectRaw("count(*) AS calls, count(*) FILTER (WHERE fiscal_status = 'REJECTED') AS errors")->first();
+        $mail24 = DB::table('notifications')->where('tenant_id', $tenantId)->where('created_at', '>=', $since)
+            ->whereRaw("metadata->>'email' = 'true'")->count();
+        $mailOn = ! in_array($mailer, ['log', 'array'], true);
+        $environment = DB::table('fiscal_configurations')->where('tenant_id', $tenantId)->where('active', true)->value('environment');
+
+        $connections = [
+            [
+                'key' => 'fiscal', 'name' => 'Emisión electrónica SUNAT', 'status' => $fiscal['connected'] ? 'ACTIVE' : 'PENDING_SETUP',
+                'provider' => $fiscal['connected'] ? "{$fiscal['name']}".($environment ? ' · '.($environment === 'PRODUCTION' ? 'producción' : 'pruebas') : '') : 'OSE/PSE por configurar',
+                'events' => ['invoice.issued', 'credit_note.issued'], 'credential' => $fiscal['connected'] ? 'Certificado digital del proveedor' : null,
+                'calls' => (int) $fiscal24->calls, 'errors' => (int) $fiscal24->errors,
+                'note' => $fiscal['connected'] ? null : 'Sin proveedor conectado: los comprobantes se emiten sin enviar a SUNAT.',
+                'link' => ['href' => '/fiscal', 'label' => 'Facturación electrónica'],
             ],
+            [
+                'key' => 'mail', 'name' => 'Email transaccional', 'status' => $mailOn ? 'ACTIVE' : 'PENDING_SETUP',
+                'provider' => $mailOn ? 'Servidor de correo de la plataforma' : 'Sin servidor de correo',
+                'events' => ['notification.email'], 'credential' => $mailOn ? 'SMTP (lo administra la plataforma)' : null,
+                'calls' => $mail24, 'errors' => null,
+                'note' => $mailOn ? null : 'La plataforma no tiene un servidor de correo configurado: los correos no salen.',
+                'link' => null,
+            ],
+            [
+                'key' => 'payments', 'name' => 'Pasarela de pagos', 'status' => 'PENDING_PROVIDER', 'provider' => 'Proveedor por definir',
+                'events' => [], 'credential' => null, 'calls' => null, 'errors' => null,
+                'note' => 'Los cobros se registran a mano en Finanzas.', 'link' => null,
+            ],
+            [
+                'key' => 'whatsapp', 'name' => 'WhatsApp Business', 'status' => 'PENDING_PROVIDER', 'provider' => 'Proveedor por definir',
+                'events' => [], 'credential' => null, 'calls' => null, 'errors' => null,
+                'note' => 'Para enviar avisos y comprobantes por WhatsApp.', 'link' => null,
+            ],
+        ];
+
+        // Cada webhook es una conexión más ("Webhook · Contabilidad externa" en el prototipo).
+        $attempts24 = DB::table('integration_attempts as a')->join('webhook_deliveries as d', 'd.id', '=', 'a.delivery_id')
+            ->where('a.tenant_id', $tenantId)->where('a.attempted_at', '>=', $since)
+            ->selectRaw("d.endpoint_id, count(*) AS calls, count(*) FILTER (WHERE a.status <> 'SUCCESS') AS errors")
+            ->groupBy('d.endpoint_id')->get()->keyBy('endpoint_id');
+        foreach ($endpoints as $endpoint) {
+            $stats = $attempts24->get($endpoint->id);
+            $connections[] = [
+                'key' => "webhook:{$endpoint->id}", 'name' => "Webhook · {$endpoint->name}", 'status' => $endpoint->active ? 'ACTIVE' : 'DISABLED',
+                'provider' => 'Webhook saliente firmado (HMAC)',
+                'events' => json_decode((string) $endpoint->event_types, true) ?: [], 'credential' => 'Clave de webhook (Vault)',
+                'calls' => (int) ($stats->calls ?? 0), 'errors' => (int) ($stats->errors ?? 0),
+                'note' => null, 'link' => null, 'endpoint_id' => $endpoint->id,
+            ];
+        }
+
+        return response()->json([
+            'connections' => $connections,
             'endpoints' => $endpoints->map(fn ($endpoint) => $this->endpointRow($endpoint)),
             'events' => collect(Workflows::TRIGGERS)->map(fn (array $t, string $key) => ['key' => $key, 'label' => $t[0]])->values(),
             'counts' => collect(self::STATES)->map(fn ($label, $key) => (int) ($counts[$key] ?? 0)),
