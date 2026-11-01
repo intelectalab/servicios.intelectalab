@@ -94,6 +94,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-29 | Suscripciones: registrar pagos por transferencia y extender la vigencia, aviso de vencimiento, plan y soporte en Mi perfil y Configuración de la plataforma (canales de soporte) | [cambios/2026-10-29_suscripciones-vigencia-pagos-offline-y-renovacion-whatsapp.md](cambios/2026-10-29_suscripciones-vigencia-pagos-offline-y-renovacion-whatsapp.md) |
 | 2026-10-31 | Correcciones de lo del 29: historial de pagos visible y en su propia tabla, extender sin fechas pasadas, configuración de plataforma solo para la consola y sin datos de ejemplo, aviso solo para quien administra y colores del sistema | [cambios/2026-10-31_correcciones-suscripciones-y-configuracion.md](cambios/2026-10-31_correcciones-suscripciones-y-configuracion.md) |
 | 2026-11-01 | Página de ingreso con la marca de cada empresa (/e/{nombre-corto}): logo, color y bienvenida; se configura en Marca y en la consola; invitaciones con el enlace | [cambios/2026-11-01_pagina-de-ingreso-por-empresa.md](cambios/2026-11-01_pagina-de-ingreso-por-empresa.md) |
+| 2026-11-01 | Repo pública de la empresa sin secretos, librerías sin vulnerabilidades (PhpSpreadsheet, Symfony…) y prueba automática de GitHub con la base actual | [cambios/2026-11-01_prueba-automatica-de-github.md](cambios/2026-11-01_prueba-automatica-de-github.md) |
 
 ## Cómo se escribe cada entrada
 

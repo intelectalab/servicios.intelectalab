@@ -304,22 +304,21 @@ export function EvidencePreviewModal({
   const [prevCount, setPrevCount] = useState(photos.length);
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
-  // Si se sube una nueva foto desde el modal, salta automáticamente a la recién subida.
-  useEffect(() => {
-    if (photos.length === 0) {
-      onClose();
-      return;
-    }
-    if (photos.length > prevCount) {
-      setIndex(photos.length - 1);
-    } else if (index >= photos.length) {
-      setIndex(photos.length - 1);
-    }
+  // Al cambiar la cantidad de fotos (se ajusta durante el render, sin efecto): si se subió una
+  // nueva salta a ella; si se quitó la que se veía, queda en la última.
+  if (photos.length !== prevCount) {
     setPrevCount(photos.length);
     setConfirmingRemove(false);
-  }, [photos.length, prevCount, index, onClose]);
+    if (photos.length > prevCount) setIndex(Math.max(photos.length - 1, 0));
+  }
+  if (photos.length > 0 && index >= photos.length) setIndex(photos.length - 1);
 
-  const current = photos[index];
+  // Sin fotos, el modal se cierra.
+  useEffect(() => {
+    if (photos.length === 0) onClose();
+  }, [photos.length, onClose]);
+
+  const current = photos[Math.min(index, Math.max(photos.length - 1, 0))];
   const cacheKey = current
     ? current.blob
       ? `blob-${current.opId ?? index}-${current.file_name}-${current.size_bytes ?? 0}`
@@ -330,8 +329,10 @@ export function EvidencePreviewModal({
   useEffect(() => {
     if (!current || activeUrl) return;
 
+    // Una foto aún sin sincronizar se ve desde el propio archivo del teléfono.
     if (current.blob) {
       const objectUrl = URL.createObjectURL(current.blob);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- dirección creada para un archivo del navegador
       setUrls((prev) => ({ ...prev, [cacheKey]: objectUrl }));
       return;
     }

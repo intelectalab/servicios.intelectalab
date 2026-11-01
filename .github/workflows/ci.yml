@@ -41,20 +41,26 @@ jobs:
           cp .env.example .env
           php artisan key:generate
 
-      - name: Restaurar el esquema de 113 tablas (owner=postgres)
+      # Los mismos roles que en el servidor: dueño de las tablas, app (respeta RLS) y consola de plataforma.
+      # Las contraseñas solo existen en esta base temporal de GitHub.
+      - name: Crear los roles de la base
         env:
           PGPASSWORD: ci_password
         run: |
-          psql -h 127.0.0.1 -U postgres -d erp_saas -f database/schema_reference.sql
+          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE erp_user WITH LOGIN NOSUPERUSER PASSWORD 'ci_owner_password';
+          CREATE ROLE erp_app WITH LOGIN PASSWORD 'erp_app_password';
+          CREATE ROLE erp_platform NOLOGIN;
+          CREATE ROLE erp_console WITH LOGIN PASSWORD 'ci_console_password' IN ROLE erp_platform;
+          SQL
 
-      - name: Crear el rol de aplicación erp_app (respeta RLS)
+      # Estructura completa (tablas, RLS, funciones y permisos de cada rol) y catálogos de las migraciones.
+      - name: Restaurar el esquema y los catálogos
         env:
           PGPASSWORD: ci_password
         run: |
-          psql -h 127.0.0.1 -U postgres -d erp_saas -c "CREATE ROLE erp_app WITH LOGIN PASSWORD 'erp_app_password';"
-          psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT USAGE ON SCHEMA public TO erp_app;"
-          psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO erp_app;"
-          psql -h 127.0.0.1 -U postgres -d erp_saas -c "GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO erp_app;"
+          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f apps/api/database/schema_reference.sql
+          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f .github/ci-fixture.sql
 
       - name: Análisis de dependencias (SAST básico)
         working-directory: apps/api
@@ -69,6 +75,8 @@ jobs:
           DB_DATABASE: erp_saas
           DB_USERNAME: erp_app
           DB_PASSWORD: erp_app_password
+          DB_PLATFORM_USERNAME: erp_console
+          DB_PLATFORM_PASSWORD: ci_console_password
         run: php artisan test
 
   frontend-build:
