@@ -38,8 +38,8 @@ Sin migraciones.
 
 ## 7. Despliegue e invitación (28/10)
 
-Desplegado `aadc242` con `deploy.sh --si` (sin migraciones; `/login` 200, API 401 como se espera). Invitación enviada a **nueva-superadmin@ejemplo.com** con `--by=superadmin@ejemplo.com`: cuenta activa, superadmin, con verificación en dos pasos, sin ingresos aún; queda en la auditoría de plataforma como "Super Administrador invitado". El código vence el 31/10; si no entra a tiempo, se corre el mismo comando y recibe otro.
+Desplegado `aadc242` con `deploy.sh --si` (sin migraciones; `/login` 200, API 401 como se espera). Invitación enviada a la nueva superadmin, autorizada por la superadmin principal (`--by=`): cuenta activa, superadmin, con verificación en dos pasos, sin ingresos aún; queda en la auditoría de plataforma como "Super Administrador invitado". El código vence el 31/10; si no entra a tiempo, se corre el mismo comando y recibe otro.
 
 ## 8. Pendiente
 
-- La cuenta quedó como "nueva-superadmin". Desde el 28/10 se puede cambiar el nombre en Mi perfil (`2026-10-28_editar-nombre-en-mi-perfil.md`).
+- La cuenta quedó con la parte del correo antes de la @ como nombre. Desde el 28/10 se puede cambiar el nombre en Mi perfil (`2026-10-28_editar-nombre-en-mi-perfil.md`).

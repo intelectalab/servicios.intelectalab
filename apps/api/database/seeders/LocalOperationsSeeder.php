@@ -20,11 +20,11 @@ class LocalOperationsSeeder extends Seeder
 
     private const MODULES = ['ORDENES_TRABAJO', 'PROYECTOS', 'TIMESHEETS', 'AGENDA'];
 
-    // Contraseñas de prueba, solo para la base local. Solo se usan al crear la cuenta:
-    // si después se cambian desde la aplicación, el seeder no las pisa.
+    // Las contraseñas de prueba salen de TestPassword (SEED_TEST_PASSWORD o al azar). Solo se usan al
+    // crear la cuenta: si después se cambian desde la aplicación, el seeder no las pisa.
     private const ACCOUNTS = [
-        'OPERACIONES' => ['operaciones@erp-saas.test', 'Óscar Ramos (Operaciones)', 'contrasena-de-prueba'],
-        'TECNICO' => ['tecnico@erp-saas.test', 'Tomás Quispe (Técnico)', 'contrasena-de-prueba'],
+        'OPERACIONES' => ['operaciones@erp-saas.test', 'Óscar Ramos (Operaciones)'],
+        'TECNICO' => ['tecnico@erp-saas.test', 'Tomás Quispe (Técnico)'],
     ];
 
     /** Rol => [nombre, descripción, permisos, alcance, recursos con ese alcance]. */
@@ -109,11 +109,10 @@ class LocalOperationsSeeder extends Seeder
                 DB::table('role_scopes')->insertOrIgnore(['role_id' => $roleId, 'tenant_id' => $tenantId, 'resource' => $resource, 'scope' => $scope]);
             }
 
-            [$email, $userName, $password] = self::ACCOUNTS[$code];
-            $user = User::firstOrCreate(
-                ['email' => $email],
-                ['password_hash' => bcrypt($password), 'name' => $userName, 'status' => 'ACTIVE'],
-            );
+            [$email, $userName] = self::ACCOUNTS[$code];
+            $user = User::where('email', $email)->first() ?? User::create([
+                'email' => $email, 'password_hash' => bcrypt(TestPassword::for($email, $this->command)), 'name' => $userName, 'status' => 'ACTIVE',
+            ]);
 
             if (! DB::table('tenant_users')->where('tenant_id', $tenantId)->where('user_id', $user->id)->exists()) {
                 DB::table('tenant_users')->insert([

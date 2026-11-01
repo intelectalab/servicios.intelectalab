@@ -20,14 +20,11 @@ class LocalApproverSeeder extends Seeder
 
     private const EMAIL = 'gerencia@erp-saas.test';
 
-    // Contraseña de prueba, solo para la base local. Solo se usa al crear la cuenta:
-    // si después se cambia desde la aplicación, el seeder no la pisa.
-    private const PASSWORD = 'contrasena-de-prueba';
+    // La contraseña de prueba sale de TestPassword (SEED_TEST_PASSWORD o al azar). Solo se usa al
+    // crear la cuenta: si después se cambia desde la aplicación, el seeder no la pisa.
 
     // Usuario del rol Ventas (cotiza pero no aprueba), para probar botones sin permiso.
     private const SALES_EMAIL = 'ventas@erp-saas.test';
-
-    private const SALES_PASSWORD = 'contrasena-de-prueba';
 
     // Gerencia en la matriz del prototipo: ve y edita cotizaciones y las aprueba; gestiona contratos.
     private const PERMISSIONS = [
@@ -68,10 +65,10 @@ class LocalApproverSeeder extends Seeder
             DB::table('role_permissions')->insertOrIgnore(['role_id' => $roleId, 'permission_id' => $permissionId]);
         }
 
-        $user = User::firstOrCreate(
-            ['email' => self::EMAIL],
-            ['password_hash' => bcrypt(self::PASSWORD), 'name' => 'Gerencia de Prueba', 'status' => 'ACTIVE'],
-        );
+        $user = User::where('email', self::EMAIL)->first() ?? User::create([
+            'email' => self::EMAIL, 'password_hash' => bcrypt(TestPassword::for(self::EMAIL, $this->command)),
+            'name' => 'Gerencia de Prueba', 'status' => 'ACTIVE',
+        ]);
 
         DB::table('tenant_users')->insertOrIgnore([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'user_id' => $user->id,
@@ -86,9 +83,11 @@ class LocalApproverSeeder extends Seeder
         }
 
         // La cuenta de Ventas se crea desde la pantalla Usuarios (nace sin contraseña conocida);
-        // aquí solo se le pone la de prueba mientras nunca haya iniciado sesión.
-        User::where('email', self::SALES_EMAIL)->whereNull('last_login_at')
-            ->update(['password_hash' => bcrypt(self::SALES_PASSWORD)]);
+        // aquí solo se le pone la de prueba (la de SEED_TEST_PASSWORD) mientras nunca haya iniciado sesión.
+        if (TestPassword::configured()) {
+            User::where('email', self::SALES_EMAIL)->whereNull('last_login_at')
+                ->update(['password_hash' => bcrypt(TestPassword::for(self::SALES_EMAIL))]);
+        }
 
         DB::statement("SELECT set_config('app.tenant_id', '', false)");
 

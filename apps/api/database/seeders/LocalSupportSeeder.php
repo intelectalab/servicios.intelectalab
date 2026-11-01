@@ -23,9 +23,9 @@ class LocalSupportSeeder extends Seeder
 
     private const TEAM = 'Mesa de ayuda';
 
-    // Contraseña de prueba, solo para la base local. Solo se usa al crear la cuenta:
-    // si después se cambia desde la aplicación, el seeder no la pisa.
-    private const ACCOUNT = ['soporte@erp-saas.test', 'Sofía Vargas (Soporte)', 'contrasena-de-prueba'];
+    // La contraseña de prueba sale de TestPassword (SEED_TEST_PASSWORD o al azar). Solo se usa al
+    // crear la cuenta: si después se cambia desde la aplicación, el seeder no la pisa.
+    private const ACCOUNT = ['soporte@erp-saas.test', 'Sofía Vargas (Soporte)'];
 
     /** Reparto del rol Soporte en la matriz del prototipo. */
     private const PERMISSIONS = [
@@ -85,8 +85,9 @@ class LocalSupportSeeder extends Seeder
             DB::table('teams')->insert(['id' => $teamId, 'tenant_id' => $tenantId, 'name' => self::TEAM, 'status' => 'ACTIVE', 'created_at' => now(), 'updated_at' => now()]);
         }
 
-        [$email, $name, $password] = self::ACCOUNT;
-        $user = User::firstOrCreate(['email' => $email], ['password_hash' => bcrypt($password), 'name' => $name, 'status' => 'ACTIVE']);
+        [$email, $name] = self::ACCOUNT;
+        $user = User::where('email', $email)->first()
+            ?? User::create(['email' => $email, 'password_hash' => bcrypt(TestPassword::for($email, $this->command)), 'name' => $name, 'status' => 'ACTIVE']);
         $branchId = DB::table('branches')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->orderBy('created_at')->value('id');
 
         if (! DB::table('tenant_users')->where('tenant_id', $tenantId)->where('user_id', $user->id)->exists()) {

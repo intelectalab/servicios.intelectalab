@@ -20,9 +20,9 @@ class LocalFinanceSeeder extends Seeder
 
     private const ROLE = 'FINANZAS';
 
-    // Contraseña de prueba, solo para la base local. Solo se usa al crear la cuenta:
-    // si después se cambia desde la aplicación, el seeder no la pisa.
-    private const ACCOUNT = ['finanzas@erp-saas.test', 'Fabiola Núñez (Finanzas)', 'contrasena-de-prueba'];
+    // La contraseña de prueba sale de TestPassword (SEED_TEST_PASSWORD o al azar). Solo se usa al
+    // crear la cuenta: si después se cambia desde la aplicación, el seeder no la pisa.
+    private const ACCOUNT = ['finanzas@erp-saas.test', 'Fabiola Núñez (Finanzas)'];
 
     // Finanzas: factura eventos, emite comprobantes y gestiona cuentas por cobrar, cobros, reembolsos, recurrencia, bancos y caja.
     private const PERMISSIONS = [
@@ -78,11 +78,10 @@ class LocalFinanceSeeder extends Seeder
             DB::table('role_scopes')->insertOrIgnore(['role_id' => $roleId, 'tenant_id' => $tenantId, 'resource' => $resource, 'scope' => 'TENANT']);
         }
 
-        [$email, $userName, $password] = self::ACCOUNT;
-        $user = User::firstOrCreate(
-            ['email' => $email],
-            ['password_hash' => bcrypt($password), 'name' => $userName, 'status' => 'ACTIVE'],
-        );
+        [$email, $userName] = self::ACCOUNT;
+        $user = User::where('email', $email)->first() ?? User::create([
+            'email' => $email, 'password_hash' => bcrypt(TestPassword::for($email, $this->command)), 'name' => $userName, 'status' => 'ACTIVE',
+        ]);
 
         if (! DB::table('tenant_users')->where('tenant_id', $tenantId)->where('user_id', $user->id)->exists()) {
             DB::table('tenant_users')->insert([

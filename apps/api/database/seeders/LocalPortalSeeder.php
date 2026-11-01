@@ -28,9 +28,9 @@ class LocalPortalSeeder extends Seeder
     /** RUC del cliente de prueba (Minera Prueba CRM S.A.C.). */
     private const CUSTOMER_TAX_ID = '20601234561';
 
-    // Contraseña de prueba, solo para la base local. Solo se usa al crear la cuenta:
-    // si después se cambia desde el portal, el seeder no la pisa.
-    private const ACCOUNT = ['rosa.portal@minera-prueba.test', 'Rosa Quispe (prueba portal)', 'contrasena-de-prueba'];
+    // La contraseña de prueba sale de TestPassword (SEED_TEST_PASSWORD o al azar). Solo se usa al
+    // crear la cuenta: si después se cambia desde el portal, el seeder no la pisa.
+    private const ACCOUNT = ['rosa.portal@minera-prueba.test', 'Rosa Quispe (prueba portal)'];
 
     public function run(): void
     {
@@ -64,9 +64,9 @@ class LocalPortalSeeder extends Seeder
             return;
         }
 
-        [$email, $name, $password] = self::ACCOUNT;
+        [$email, $name] = self::ACCOUNT;
         $user = User::where('email', $email)->first() ?? User::create([
-            'email' => $email, 'name' => $name, 'password_hash' => Hash::make($password), 'status' => 'ACTIVE', 'mfa_enabled' => true,
+            'email' => $email, 'name' => $name, 'password_hash' => Hash::make(TestPassword::for($email, $this->command)), 'status' => 'ACTIVE', 'mfa_enabled' => true,
         ]);
 
         if (! DB::table('portal_users')->where('user_id', $user->id)->exists()) {

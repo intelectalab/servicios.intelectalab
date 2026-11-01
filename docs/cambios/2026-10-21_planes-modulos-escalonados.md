@@ -44,7 +44,7 @@ Ella pidió agregar a cada empresa los módulos que ahora trae su plan, sin quit
 - **Respaldo:** en el VPS, `/root/backups/erp/…_antes_modulos_empresas`.
 - **Comprobación:** módulos encendidos por empresa, idénticos en la PC y en el VPS: Empresa Ejemplo SAC 22, Yadi SAC 9, Empresa 3 9, Empresa A 9, tenant-a 10, tenant-b 0; en el VPS además "Empresa" 14.
 
-## Después: precios y la usuaria registrada a Enterprise
+## Después: precios y la empresa EMP-52F1DB a Enterprise
 
 - **Precios** (PC y VPS, con respaldo en el VPS): el anual equivale a 10 meses, es decir, 2 meses gratis. El Plan 6 no se tocó (S/ 200 y S/ 400).
 
@@ -55,7 +55,7 @@ Ella pidió agregar a cada empresa los módulos que ahora trae su plan, sin quit
   | Enterprise | S/ 35 / 1,400.50 | S/ 349 / 3,490 |
 
   La API pública `/api/v1/saas-plans` del VPS ya devuelve estos precios.
-- **la usuaria registrada** (`usuaria@ejemplo.com`, empresa "Empresa", EMP-52F1DB): solo existe en el VPS. Su suscripción activa pasó del Plan Base al Enterprise; sigue en prueba gratis de 30 días y con las mismas fechas. Se le agregaron 8 módulos (CRM, Facturación electrónica, Finanzas, Pagos y cobranzas, Rentabilidad, Soporte, Tickets y Timesheets), quedó con los 22, y su rol Administrador recibió los permisos con `tenants:sync-permissions`.
+- **Empresa de una usuaria registrada** (empresa "Empresa", EMP-52F1DB): solo existe en el VPS. Su suscripción activa pasó del Plan Base al Enterprise; sigue en prueba gratis de 30 días y con las mismas fechas. Se le agregaron 8 módulos (CRM, Facturación electrónica, Finanzas, Pagos y cobranzas, Rentabilidad, Soporte, Tickets y Timesheets), quedó con los 22, y su rol Administrador recibió los permisos con `tenants:sync-permissions`.
 
 - **Plan 6 oculto** (PC y VPS): `is_public = false`. Sigue activo y no se borró; ya no aparece en la lista pública (`/api/v1/saas-plans` devuelve Base, Profesional y Enterprise). Desde Superadmin se sigue viendo.
 

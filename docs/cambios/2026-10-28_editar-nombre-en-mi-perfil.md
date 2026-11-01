@@ -4,7 +4,7 @@ Fecha: 2026-10-28.
 
 ## 1. Qué se pidió
 
-Mi perfil solo mostraba el nombre: no se podía cambiar (la cuenta de superadmin nueva quedó como "nueva-superadmin"). Se pidió poder editarlo, en el ERP y en la consola de plataforma.
+Mi perfil solo mostraba el nombre: no se podía cambiar (la cuenta de superadmin nueva quedó con la parte del correo antes de la @). Se pidió poder editarlo, en el ERP y en la consola de plataforma.
 
 ## 2. Qué se cambió
 
