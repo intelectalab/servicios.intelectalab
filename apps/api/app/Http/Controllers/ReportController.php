@@ -104,7 +104,193 @@ class ReportController extends Controller
         $page = $query->paginate(min(max($request->integer('per_page', 20), 1), 200));
         $page->getCollection()->transform($spec['row']);
 
-        return response()->json([...$page->toArray(), 'summary' => $request->boolean('export') ? null : ($spec['summary'] ?? fn () => null)($base)]);
+        if ($request->boolean('export')) {
+            return response()->json([...$page->toArray(), 'summary' => null, 'kpis' => null, 'period' => null]);
+        }
+
+        $period = $this->period($request);
+
+        return response()->json([
+            ...$page->toArray(),
+            'summary' => ($spec['summary'] ?? fn () => null)($base),
+            'kpis' => $this->{'kpis'.ucfirst($report)}($base, $period),
+            'period' => $period,
+        ]);
+    }
+
+    /**
+     * Periodo de los indicadores que se comparan: el rango elegido (sin "hasta", hasta hoy; sin
+     * "desde", los 30 días previos) o, sin rango, lo que va del mes. El anterior es un periodo de la
+     * misma cantidad de días justo antes (sin rango: los mismos días del mes anterior).
+     *
+     * @return array{from: string, to: string, prev_from: string, prev_to: string, custom: bool}
+     */
+    private function period(Request $request): array
+    {
+        $from = $this->date($request->query('from'));
+        $to = $this->date($request->query('to'));
+        $today = now('America/Lima')->startOfDay();
+
+        if (! $from && ! $to) {
+            $start = $today->copy()->startOfMonth();
+            $prevStart = $start->copy()->subMonthNoOverflow();
+            $prevEnd = $prevStart->copy()->addDays(min($today->day, $prevStart->daysInMonth) - 1);
+
+            return ['from' => $start->toDateString(), 'to' => $today->toDateString(), 'prev_from' => $prevStart->toDateString(), 'prev_to' => $prevEnd->toDateString(), 'custom' => false];
+        }
+
+        $end = $to ? Carbon::parse($to, 'America/Lima') : $today;
+        $start = $from ? Carbon::parse($from, 'America/Lima') : $end->copy()->subDays(29);
+
+        // Meses completos (p. ej. octubre): se comparan con los mismos meses justo antes (septiembre).
+        if ($start->day === 1 && $end->isSameDay($end->copy()->endOfMonth()) && $start->lte($end)) {
+            $months = ($end->year - $start->year) * 12 + $end->month - $start->month + 1;
+
+            return [
+                'from' => $start->toDateString(), 'to' => $end->toDateString(),
+                'prev_from' => $start->copy()->subMonthsNoOverflow($months)->toDateString(), 'prev_to' => $start->copy()->subDay()->toDateString(),
+                'custom' => true,
+            ];
+        }
+
+        $days = (int) $start->diffInDays($end) + 1;
+
+        return [
+            'from' => $start->toDateString(), 'to' => $end->toDateString(),
+            'prev_from' => $start->copy()->subDays($days)->toDateString(), 'prev_to' => $start->copy()->subDay()->toDateString(),
+            'custom' => true,
+        ];
+    }
+
+    /** Un indicador: cifra, formato y, si se compara, la del periodo anterior. */
+    private static function kpi(string $label, float|int|null $value, string $format, float|int|null $previous = null, ?string $hint = null): array
+    {
+        return ['label' => $label, 'value' => $value, 'format' => $format, 'previous' => $previous, 'hint' => $hint];
+    }
+
+    private static function pct(float|int $part, float|int $whole): ?int
+    {
+        return $whole > 0 ? (int) round($part / $whole * 100) : null;
+    }
+
+    // --- Indicadores de cada reporte (sobre el alcance de quien mira) ---------------------------
+
+    private function kpisVentas($base, array $period): array
+    {
+        $day = sprintf(self::LIMA_DAY, 'quotations.created_at');
+        $pen = $this->inPen('quotations.total', 'quotations.currency', 'quotations.exchange_rate');
+        $stats = function (string $from, string $to) use ($day, $pen) {
+            $row = Quotation::query()->whereRaw("{$day} BETWEEN ? AND ?", [$from, $to])->where('quotations.status', '<>', 'CANCELLED')
+                ->toBase()->selectRaw("count(*) AS n, coalesce(sum({$pen}), 0) AS amount,
+                    count(*) FILTER (WHERE quotations.status = 'APPROVED') AS approved,
+                    count(*) FILTER (WHERE quotations.status IN ('SUBMITTED', 'APPROVED', 'REJECTED', 'EXPIRED')) AS sent")->first();
+
+            return [(float) $row->amount, (int) $row->n, self::pct((int) $row->approved, (int) $row->sent)];
+        };
+        [$amount, $count, $rate] = $stats($period['from'], $period['to']);
+        [$prevAmount, $prevCount, $prevRate] = $stats($period['prev_from'], $period['prev_to']);
+
+        return [
+            self::kpi('Total cotizado', round($amount, 2), 'money', round($prevAmount, 2), 'En soles, sin las canceladas'),
+            self::kpi('Cotizaciones', $count, 'count', $prevCount),
+            self::kpi('Aprobación', $rate, 'percent', $prevRate, 'Aprobadas sobre las enviadas'),
+        ];
+    }
+
+    private function kpisPipeline($base, array $period): array
+    {
+        $rate = (float) (ExchangeRate::current('USD')?->sell ?? 0);
+        $pen = "CASE WHEN crm_opportunities.currency = 'USD' THEN crm_opportunities.expected_value * {$rate} ELSE crm_opportunities.expected_value END";
+        $row = $base->toBase()->select(DB::raw("
+            count(*) FILTER (WHERE crm_opportunities.status = 'OPEN') AS open_count,
+            coalesce(sum({$pen}) FILTER (WHERE crm_opportunities.status = 'OPEN'), 0) AS open_amount,
+            coalesce(sum({$pen} * crm_opportunities.probability / 100) FILTER (WHERE crm_opportunities.status = 'OPEN'), 0) AS weighted,
+            count(*) FILTER (WHERE crm_opportunities.status = 'WON') AS won,
+            count(*) FILTER (WHERE crm_opportunities.status = 'LOST') AS lost"))->first();
+
+        return [
+            self::kpi('Pipeline abierto', round((float) $row->open_amount, 2), 'money', null, "{$row->open_count} oportunidades abiertas"),
+            self::kpi('Ponderado', round((float) $row->weighted, 2), 'money', null, 'Monto por probabilidad de cierre'),
+            self::kpi('Tasa de cierre', self::pct((int) $row->won, (int) $row->won + (int) $row->lost), 'percent', null, 'Ganadas sobre las cerradas'),
+        ];
+    }
+
+    private function kpisCobranza($base, array $period): array
+    {
+        $summary = app(ReceivableController::class)->summary()->getData(true);
+
+        return [
+            self::kpi('Saldo por cobrar', $summary['outstanding'], 'money', null, "{$summary['open_count']} cuentas con saldo"),
+            self::kpi('Vencido', $summary['overdue'], 'money', null, "{$summary['overdue_customers']} clientes con deuda vencida"),
+            self::kpi('Vencido sobre el saldo', self::pct($summary['overdue'], $summary['outstanding']), 'percent'),
+        ];
+    }
+
+    private function kpisRentabilidad($base, array $period): array
+    {
+        $t = ProjectController::totals();
+        $row = $base->toBase()->where('projects.status', '<>', 'CANCELLED')->select(DB::raw("
+            coalesce(sum(projects.budget_revenue), 0) AS revenue,
+            coalesce(sum(({$t['labor_cost']}) + ({$t['other_cost']})), 0) AS cost"))->first();
+        $revenue = (float) $row->revenue;
+        $cost = (float) $row->cost;
+        $pct = self::pct($revenue - $cost, $revenue);
+
+        return [
+            self::kpi('Ingreso presupuestado', round($revenue, 2), 'money', null, 'Proyectos no cancelados'),
+            self::kpi('Costo real', round($cost, 2), 'money', null, 'Horas y costos aprobados'),
+            self::kpi('Margen', round($revenue - $cost, 2), 'money', null, $pct !== null ? "{$pct} % del ingreso" : null),
+        ];
+    }
+
+    private function kpisSla($base, array $period): array
+    {
+        $sla = SupportTicket::SLA_SQL;
+        $counts = (clone $base)->toBase()->select(DB::raw("({$sla}) AS state"), DB::raw('count(*) AS total'))->groupByRaw('1')->pluck('total', 'state');
+        $with = $counts->except('none')->sum();
+        $onTime = (int) ($counts['met'] ?? 0) + (int) ($counts['ok'] ?? 0);
+
+        return [
+            self::kpi('Cumplimiento', self::pct($onTime, $with), 'percent', null, 'A tiempo o cumplidos sobre los que tienen SLA'),
+            self::kpi('Vencidos', (int) ($counts['breached'] ?? 0), 'count'),
+            self::kpi('En riesgo', (int) ($counts['risk'] ?? 0), 'count', null, '75 % del plazo consumido'),
+        ];
+    }
+
+    private function kpisRenovaciones($base, array $period): array
+    {
+        $amount = 'recurring_service_instances.unit_price * recurring_service_instances.quantity';
+        $row = $base->toBase()->select(DB::raw("
+            count(*) FILTER (WHERE recurring_service_instances.end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30) AS n30,
+            coalesce(sum({$amount}) FILTER (WHERE recurring_service_instances.end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30), 0) AS a30,
+            count(*) FILTER (WHERE recurring_service_instances.end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 90) AS n90,
+            count(*) FILTER (WHERE recurring_service_instances.end_date < CURRENT_DATE) AS overdue"))->first();
+
+        return [
+            self::kpi('Vencen en 30 días', (int) $row->n30, 'count', null, 'S/ '.number_format((float) $row->a30, 2).' por ciclo'),
+            self::kpi('Vencen en 90 días', (int) $row->n90, 'count'),
+            self::kpi('Vigencia pasada sin renovar', (int) $row->overdue, 'count', null, 'Siguen activas con la fecha de fin ya pasada'),
+        ];
+    }
+
+    private function kpisOperaciones($base, array $period): array
+    {
+        $day = sprintf(self::LIMA_DAY, 'work_orders.completed_at');
+        $stats = function (string $from, string $to) use ($day) {
+            $row = WorkOrder::query()->where('work_orders.status', 'COMPLETED')->whereRaw("{$day} BETWEEN ? AND ?", [$from, $to])
+                ->toBase()->selectRaw('count(*) AS n, avg(extract(epoch FROM work_orders.completed_at - work_orders.started_at)) / 3600 AS hours')->first();
+
+            return [(int) $row->n, $row->hours !== null ? round((float) $row->hours, 1) : null];
+        };
+        [$done, $hours] = $stats($period['from'], $period['to']);
+        [$prevDone, $prevHours] = $stats($period['prev_from'], $period['prev_to']);
+        $open = WorkOrder::query()->whereIn('work_orders.status', WorkOrder::OPEN)->count();
+
+        return [
+            self::kpi('Completadas', $done, 'count', $prevDone),
+            self::kpi('Tiempo promedio de atención', $hours, 'hours', $prevHours, 'Del inicio al cierre'),
+            self::kpi('Abiertas hoy', $open, 'count', null, 'Planificadas, asignadas, en ejecución o bloqueadas'),
+        ];
     }
 
     // ------------------------------------------------------------------------------------------

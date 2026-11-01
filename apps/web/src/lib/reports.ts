@@ -17,7 +17,38 @@ export type ReportPage = {
     sla?: Record<string, number>;
     states?: Record<string, number>;
   } | null;
+  kpis: ReportKpi[] | null;
+  period: { from: string; to: string; prev_from: string; prev_to: string; custom: boolean } | null;
 };
+
+/** Indicador de arriba del reporte; `previous` es la cifra del periodo anterior (si se compara). */
+export type ReportKpi = {
+  label: string;
+  value: number | null;
+  format: "money" | "count" | "percent" | "hours";
+  previous: number | null;
+  hint: string | null;
+};
+
+/** Ficha que abre una fila (o null si se abre en una ventana de la propia pantalla). */
+export const RECORD_PATHS: Record<ReportKey, ((id: string) => string) | null> = {
+  ventas: (id) => `/quotations/${id}`,
+  pipeline: (id) => `/crm/opportunities/${id}`,
+  cobranza: null,
+  rentabilidad: (id) => `/projects/${id}`,
+  sla: (id) => `/tickets/${id}`,
+  renovaciones: (id) => `/recurring/${id}`,
+  operaciones: (id) => `/work-orders/${id}`,
+};
+
+/** "1–15 nov. 2026" o "28 oct.–3 nov. 2026". */
+export function periodLabel(from: string, to: string) {
+  const day = (value: string, withYear: boolean) => {
+    const [y, m, d] = value.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString("es-PE", { day: "numeric", month: "short", ...(withYear ? { year: "numeric" } : {}) });
+  };
+  return from === to ? day(to, true) : `${day(from, false)} – ${day(to, true)}`;
+}
 
 export type ReportsIndex = {
   reports: { key: ReportKey; label: string }[];

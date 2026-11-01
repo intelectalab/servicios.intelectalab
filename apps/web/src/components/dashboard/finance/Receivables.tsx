@@ -325,7 +325,7 @@ export default function Receivables() {
 }
 
 /** Ficha de una cuenta por cobrar, sobre el listado: de dónde sale su saldo. */
-function ReceivableModal({ id, version, seesInvoices, onClose }: { id: string; version: number; seesInvoices: boolean; onClose: () => void }) {
+export function ReceivableModal({ id, version, seesInvoices, onClose }: { id: string; version: number; seesInvoices: boolean; onClose: () => void }) {
   const [receivable, setReceivable] = useState<ReceivableDetail | null>(null);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);

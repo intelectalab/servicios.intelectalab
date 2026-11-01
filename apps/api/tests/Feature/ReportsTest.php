@@ -133,6 +133,43 @@ class ReportsTest extends TestCase
         $this->assertSame(['CURRENT', 'D30', 'D60', 'D90', 'OVER'], array_column($this->getJson('/api/v1/reports/cobranza')->json('summary.aging'), 'key'));
     }
 
+    public function test_indicators_compare_with_the_previous_period(): void
+    {
+        $this->makeTenant(self::MODULES);
+        $manager = $this->makeUser('Gerencia', self::ALL);
+        $this->scope($manager, 'quotations', 'TENANT');
+        $this->quotation($manager, now()->subDays(3)->toDateTimeString(), 1000);
+        $this->quotation($manager, now()->subDays(4)->toDateTimeString(), 300, 'PEN', 'CANCELLED');
+        $this->quotation($manager, now()->subDays(15)->toDateTimeString(), 500, 'PEN', 'APPROVED');
+        $this->as($manager);
+
+        // Últimos 11 días frente a los 11 anteriores; las canceladas no cuentan.
+        $from = now('America/Lima')->subDays(10)->toDateString();
+        $to = now('America/Lima')->toDateString();
+        $response = $this->getJson("/api/v1/reports/ventas?from={$from}&to={$to}")->assertOk();
+        $this->assertSame(['from' => $from, 'to' => $to, 'prev_from' => now('America/Lima')->subDays(21)->toDateString(), 'prev_to' => now('America/Lima')->subDays(11)->toDateString(), 'custom' => true], $response->json('period'));
+        $kpis = $response->json('kpis');
+        $this->assertSame(['Total cotizado', 'Cotizaciones', 'Aprobación'], array_column($kpis, 'label'));
+        $this->assertEquals([1000, 500], [$kpis[0]['value'], $kpis[0]['previous']]);
+        $this->assertSame([1, 1], [$kpis[1]['value'], $kpis[1]['previous']]);
+        $this->assertSame([0, 100], [$kpis[2]['value'], $kpis[2]['previous']]);
+
+        // Un mes completo se compara con el mes anterior.
+        $this->assertSame(['2026-09-01', '2026-09-30'], array_values(array_intersect_key(
+            $this->getJson('/api/v1/reports/ventas?from=2026-10-01&to=2026-10-31')->json('period'), array_flip(['prev_from', 'prev_to'])
+        )));
+
+        // Sin rango: lo que va del mes frente a los mismos días del mes anterior.
+        $this->assertFalse($this->getJson('/api/v1/reports/ventas')->json('period.custom'));
+        $this->assertSame(now('America/Lima')->startOfMonth()->toDateString(), $this->getJson('/api/v1/reports/ventas')->json('period.from'));
+
+        // Cada reporte trae sus tres indicadores; al exportar, ninguno.
+        foreach (array_keys(\App\Http\Controllers\ReportController::REPORTS) as $key) {
+            $this->assertCount(3, $this->getJson("/api/v1/reports/{$key}")->assertOk()->json('kpis'), $key);
+        }
+        $this->getJson('/api/v1/reports/ventas?export=1')->assertJsonPath('kpis', null);
+    }
+
     public function test_new_tenants_get_reports_with_the_base_plan(): void
     {
         $codes = \App\Modules\Subscription\Support\ModulePermissions::codesFor([]);

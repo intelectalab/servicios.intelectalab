@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { BarChart3, Clock, Coins, FileText, Filter, LifeBuoy, Repeat, TrendingUp, Wrench } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowDownRight, ArrowUpRight, BarChart3, Clock, Coins, FileText, Filter, LifeBuoy, Repeat, TrendingUp, Wrench } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "@/lib/api";
 import { FREQUENCIES, QUOTATION_STATES, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
@@ -10,10 +11,14 @@ import { AGING, RECEIVABLE_STATES } from "@/lib/finance";
 import { PRIORITIES, PROJECT_STATES, WORK_ORDER_STATES } from "@/lib/operations";
 import { PRIORITY_LABELS, TICKET_STATES } from "@/lib/support";
 import { kfmt } from "@/lib/accounting";
-import { DATED, QUOTATION_SOURCES, SLA_STATES, monthLabel, type ReportKey, type ReportPage, type ReportRow, type ReportsIndex } from "@/lib/reports";
+import {
+  DATED, QUOTATION_SOURCES, RECORD_PATHS, SLA_STATES, monthLabel, periodLabel, type ReportKey, type ReportKpi, type ReportPage, type ReportRow, type ReportsIndex,
+} from "@/lib/reports";
+import { useAccess } from "@/lib/access-context";
+import { ReceivableModal } from "@/components/dashboard/finance/Receivables";
 import { exportCsv, exportXlsx, fetchAllPages, recordExport, type ExportColumn } from "@/lib/export-table";
 import {
-  Badge, Card, DataTable, ExportButtons, INPUT, LoadError, Notice, PAGE_SIZES, PageHead, Pager, Screen, SelectionBar, TD, TH,
+  Badge, Card, DataTable, ExportButtons, INPUT, Kpi, Kpis, LoadError, Notice, PAGE_SIZES, PageHead, Pager, Screen, SelectionBar, TD, TH,
   applySort, useRowSelection, useToasts, type Column, type SortState, type Tone,
 } from "@/components/ui/proto";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
@@ -284,8 +289,75 @@ function ReportChart({ report, page }: { report: ReportKey; page: ReportPage }) 
 const rowKey = (row: ReportRow) => str(row.id);
 
 /** Un reporte: rango de fechas, gráfico, tabla con orden y filtros por columna, y exportación. */
+const KPI_VALUE: Record<ReportKpi["format"], (value: number) => string> = {
+  money: (value) => kfmt(value),
+  count: (value) => value.toLocaleString("es-PE"),
+  percent: (value) => `${value} %`,
+  hours: (value) => `${value.toLocaleString("es-PE")} h`,
+};
+
+/** Cambio frente al periodo anterior: en % (en puntos si la cifra ya es un %). En horas, bajar es bueno. */
+function KpiDelta({ kpi }: { kpi: ReportKpi }) {
+  if (kpi.previous === null || kpi.value === null) return null;
+  if (kpi.previous === kpi.value) return <span className="app-muted">igual que el periodo anterior</span>;
+  const diff = kpi.format === "percent" ? kpi.value - kpi.previous : kpi.previous ? ((kpi.value - kpi.previous) / Math.abs(kpi.previous)) * 100 : null;
+  if (diff === null) return <span className="app-muted">sin datos del periodo anterior</span>;
+  const rounded = Math.round(diff);
+  if (rounded === 0) return <span className="app-muted">igual que el periodo anterior</span>;
+  const good = kpi.format === "hours" ? rounded < 0 : rounded > 0;
+  const Arrow = rounded > 0 ? ArrowUpRight : ArrowDownRight;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 font-semibold ${good ? "text-[color:var(--p-success-text)]" : "text-[color:var(--p-danger-text)]"}`}
+      title={`Periodo anterior: ${KPI_VALUE[kpi.format](kpi.previous)}`}
+    >
+      <Arrow size={13} aria-hidden="true" />
+      {Math.abs(rounded)}{kpi.format === "percent" ? " pts" : " %"}
+      <span className="app-muted font-normal">&nbsp;vs anterior</span>
+    </span>
+  );
+}
+
+function ReportKpis({ page }: { page: ReportPage }) {
+  if (!page.kpis?.length) return null;
+  const compares = page.kpis.some((kpi) => kpi.previous !== null);
+  return (
+    <>
+      {compares && page.period && (
+        <p className="app-muted mb-2 text-xs">
+          {page.period.custom ? "Rango elegido" : "Lo que va del mes"}: {periodLabel(page.period.from, page.period.to)}, comparado con {periodLabel(page.period.prev_from, page.period.prev_to)}.
+        </p>
+      )}
+      <Kpis row>
+        {page.kpis.map((kpi) => (
+          <Kpi
+            key={kpi.label}
+            label={kpi.label}
+            value={kpi.value === null ? "—" : <span title={kpi.format === "money" ? money(kpi.value) : undefined}>{KPI_VALUE[kpi.format](kpi.value)}</span>}
+            sub={(kpi.previous !== null || kpi.hint) && (
+              <span className="grid gap-0.5">
+                {kpi.previous !== null && <KpiDelta kpi={kpi} />}
+                {kpi.hint && <span>{kpi.hint}</span>}
+              </span>
+            )}
+          />
+        ))}
+      </Kpis>
+    </>
+  );
+}
+
 function ReportPanel({ report, label, onExported }: { report: ReportKey; label: string; onExported: () => void }) {
   const { toast, toasts } = useToasts();
+  const router = useRouter();
+  const { can } = useAccess();
+  // Cobranza abre la cuenta en una ventana (no tiene página propia); los demás, su ficha.
+  const [receivableId, setReceivableId] = useState<string | null>(null);
+  const openRecord = (row: ReportRow) => {
+    const path = RECORD_PATHS[report];
+    if (path) router.push(path(str(row.id)));
+    else setReceivableId(str(row.id));
+  };
   const def = REPORTS[report];
   const dated = DATED[report];
   const [from, setFrom] = useState("");
@@ -385,6 +457,7 @@ function ReportPanel({ report, label, onExported }: { report: ReportKey; label: 
               }}
             />
           </div>
+          {data && <ReportKpis page={data} />}
           {data && <ReportChart report={report} page={data} />}
           {data && <p className="app-muted mb-2 text-[12.5px]">{data.total} {data.total === 1 ? "fila" : "filas"} dentro de tu alcance.</p>}
         </div>
@@ -396,6 +469,7 @@ function ReportPanel({ report, label, onExported }: { report: ReportKey; label: 
             <DataTable
               tableId={`report-${report}`} sort={sort} onSort={(next) => { setSort(next); setPage(1); }} refreshing={loading}
               onFilter={(column) => addColumnFilter(columnFilters, column)}
+              onRowClick={openRecord}
               cols={cols}
               rows={data?.data ?? []}
               rowKey={rowKey}
@@ -418,6 +492,7 @@ function ReportPanel({ report, label, onExported }: { report: ReportKey; label: 
           </>
         )}
       </Card>
+      {receivableId && <ReceivableModal id={receivableId} version={0} seesInvoices={can("billing.view")} onClose={() => setReceivableId(null)} />}
       {toasts}
     </>
   );
@@ -436,7 +511,11 @@ export default function ReportsView() {
         if (cancelled) return;
         setIndex(data);
         setError("");
-        setCurrent((selected) => (selected && data.reports.some((report) => report.key === selected) ? selected : data.reports[0]?.key ?? null));
+        // El reporte elegido va en la dirección (?r=): al volver de una ficha se abre el mismo.
+        setCurrent((selected) => {
+          const wanted = selected ?? (new URLSearchParams(window.location.search).get("r") as ReportKey | null);
+          return wanted && data.reports.some((report) => report.key === wanted) ? wanted : data.reports[0]?.key ?? null;
+        });
       })
       .catch(() => { if (!cancelled) setError("No se pudieron cargar los reportes."); });
     return () => { cancelled = true; };
@@ -463,7 +542,10 @@ export default function ReportsView() {
                   key={report.key}
                   type="button"
                   aria-current={on ? "page" : undefined}
-                  onClick={() => setCurrent(report.key)}
+                  onClick={() => {
+                    setCurrent(report.key);
+                    window.history.replaceState(window.history.state, "", `/reports?r=${report.key}`);
+                  }}
                   className={`flex cursor-pointer items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px] font-medium ${
                     on ? "bg-[var(--p-brand-soft)] text-[color:var(--p-brand-text)]" : "app-muted hover:bg-[var(--app-surface-muted)] hover:text-[var(--app-text)]"
                   }`}
