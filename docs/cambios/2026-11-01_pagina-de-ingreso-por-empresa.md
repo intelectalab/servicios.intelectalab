@@ -68,7 +68,11 @@ La migración de arriba. Ninguna empresa pierde datos; en el VPS cada empresa re
 - **Correo de bienvenida** del registro público: el botón y una fila "Tu enlace de ingreso" llevan a `/e/…`.
 - Probado: **302 pruebas pasan** (nuevas: envío del enlace solo a administradores activos y no con la empresa suspendida; bienvenida con el enlace). El HTML que entrega el servidor ya trae la marca en las cuatro pantallas con `?empresa=` o `/e/…`, y la de GsCreativas sin ella o con un enlace inexistente; los enlaces conservan la empresa. El botón de la consola no se probó en el navegador (el superadmin pide código por correo y el correo local está en smtp): lo cubre la prueba automática.
 
-## 8. Pendiente
+## 8. Despliegue (01/11)
+
+Commiteado por Yadira en `96542d8` y desplegado con `deploy.sh --si` (respaldo `/root/backups/erp/20261101_032511_antes_deploy_abd2a14`; migración `2026_11_01_000100` corrida, lote 10). Enlaces generados en el VPS: `tenant-a-prueba`, `tenant-b-prueba`, `yadi`, `empresa-ejemplo`, `empresa-3`, `empresa-a`, `empresa` (EMP-52F1DB), `empresa-2` (EMP-C873F2) y `empresa-prueba`. Comprobado: `/e/empresa-3` sale con la marca desde el servidor; `/e/no-existe-zz9` y `/login`, con la de GsCreativas; sin errores nuevos en el log.
+
+## 9. Pendiente
 
 - Desplegar en el VPS y pasar a cada cliente su enlace.
 - Si más adelante quieren subdominios (`empresa.intelectalab.com`), se reutiliza todo: solo cambia cómo se averigua la empresa.
