@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Finance\Models\RecurringInstance;
 use App\Modules\Finance\Support\Recurrence;
+use App\Modules\Subscription\Support\TenantModules;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
@@ -20,6 +21,11 @@ class RunRecurringCycles extends Command
         foreach ($tenants as $tenant) {
             // Las instancias están bajo RLS: hay que entrar al contexto de la empresa.
             DB::statement("SELECT set_config('app.tenant_id', ?, false)", [(string) $tenant->id]);
+
+            // Con Finanzas apagado (por su plan o por la empresa), los ciclos esperan: no se facturan a escondidas.
+            if (! TenantModules::isEnabled((string) $tenant->id, 'FINANZAS')) {
+                continue;
+            }
 
             $ids = RecurringInstance::query()->where('tenant_id', $tenant->id)->where('status', 'ACTIVE')
                 ->whereNotNull('next_cycle_date')->where('next_cycle_date', '<=', today()->toDateString())

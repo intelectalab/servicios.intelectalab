@@ -361,6 +361,9 @@ class AuthController extends Controller
 
         return response()->json([
             'modules' => $tenantId ? TenantModules::enabledCodes($tenantId) : [],
+            // Módulos del plan que la propia empresa apagó (Módulos y plan): el menú dice "Apagado", no "Plan".
+            'modules_off' => $tenantId ? DB::table('tenant_modules')->where('tenant_id', $tenantId)->where('enabled', false)
+                ->whereRaw("configuration->>'disabled_by' = 'tenant'")->pluck('module_code')->map(fn ($code) => strtoupper($code))->values() : [],
             'permissions' => $request->user()->permissionCodes(),
             // Qué alcanza la persona en cada recurso con alcance (lo propio, equipo, sede, empresa).
             'scopes' => (object) AccessScope::all(),

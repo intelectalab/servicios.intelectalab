@@ -1,4 +1,4 @@
-export type CredentialType = "SERVIDOR" | "DNS" | "HOSTING" | "CLOUD" | "API_KEY" | "SMTP" | "CERTIFICADO" | "BASE_DATOS";
+export type CredentialType = "SERVIDOR" | "DNS" | "HOSTING" | "CLOUD" | "API_KEY" | "SMTP" | "CERTIFICADO" | "BASE_DATOS" | "WEBHOOK";
 export type CredentialStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 /** Datos generales de una credencial: el valor nunca viene en el listado ni en la ficha. */

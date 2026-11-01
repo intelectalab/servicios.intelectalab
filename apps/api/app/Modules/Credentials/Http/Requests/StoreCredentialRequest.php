@@ -17,7 +17,7 @@ class StoreCredentialRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:150'],
-            'credential_type' => ['required', Rule::in(array_keys(CredentialRecord::TYPES))],
+            'credential_type' => ['required', Rule::in(array_diff(array_keys(CredentialRecord::TYPES), CredentialRecord::SYSTEM_TYPES))],
             'owner_label' => ['nullable', 'string', 'max:150'],
             'secret' => ['required', 'string', 'max:10000'],
             // Vence al terminar ese día; hoy ya no sirve.

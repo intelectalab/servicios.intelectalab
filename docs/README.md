@@ -101,6 +101,8 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Reportes: tres indicadores por reporte comparados con el periodo anterior, y el clic en la fila abre la ficha | [cambios/2026-11-01_reportes-indicadores-y-fichas.md](cambios/2026-11-01_reportes-indicadores-y-fichas.md) |
 | 2026-11-01 | Reportes en PDF con la marca de la empresa: indicadores, resumen y la tabla filtrada | [cambios/2026-11-01_reportes-en-pdf.md](cambios/2026-11-01_reportes-en-pdf.md) |
 | 2026-11-01 | Workflows (Control): reglas cuando-si-entonces con 12 disparadores, avisos a rol, responsable o portal, plantillas e historial | [cambios/2026-11-01_workflows.md](cambios/2026-11-01_workflows.md) |
+| 2026-11-01 | Módulos y plan (Administración): plan y vigencia, apagar o encender módulos del plan, uso frente a límites, pagos y pedido de cambio | [cambios/2026-11-01_modulos-y-plan.md](cambios/2026-11-01_modulos-y-plan.md) |
+| 2026-11-01 | Integraciones (Control): estado real de las conexiones y webhooks salientes firmados con cola, reintentos, fallidos y protección de direcciones | [cambios/2026-11-01_integraciones.md](cambios/2026-11-01_integraciones.md) |
 
 ## Cómo se escribe cada entrada
 

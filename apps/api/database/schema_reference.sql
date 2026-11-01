@@ -2112,7 +2112,7 @@ CREATE TABLE public.credential_records (
     owner_label character varying(150),
     CONSTRAINT chk_credential_expiry CHECK (((expires_at IS NULL) OR (expires_at > created_at))),
     CONSTRAINT credential_records_status_check CHECK (((status)::text = ANY (ARRAY[('ACTIVE'::character varying)::text, ('EXPIRED'::character varying)::text, ('REVOKED'::character varying)::text, ('ROTATION_REQUIRED'::character varying)::text]))),
-    CONSTRAINT credential_records_type_check CHECK (((credential_type)::text = ANY ((ARRAY['SERVIDOR'::character varying, 'DNS'::character varying, 'HOSTING'::character varying, 'CLOUD'::character varying, 'API_KEY'::character varying, 'SMTP'::character varying, 'CERTIFICADO'::character varying, 'BASE_DATOS'::character varying])::text[])))
+    CONSTRAINT credential_records_type_check CHECK (((credential_type)::text = ANY ((ARRAY['SERVIDOR'::character varying, 'DNS'::character varying, 'HOSTING'::character varying, 'CLOUD'::character varying, 'API_KEY'::character varying, 'SMTP'::character varying, 'CERTIFICADO'::character varying, 'BASE_DATOS'::character varying, 'WEBHOOK'::character varying])::text[])))
 );
 
 
@@ -2874,7 +2874,9 @@ CREATE TABLE public.integration_attempts (
     response_code integer,
     response_body text,
     error_code character varying(100),
-    attempted_at timestamp with time zone DEFAULT now() NOT NULL
+    attempted_at timestamp with time zone DEFAULT now() NOT NULL,
+    delivery_id uuid,
+    duration_ms integer
 );
 
 
@@ -3234,6 +3236,7 @@ CREATE TABLE public.outbox_events (
     published_at timestamp with time zone,
     status character varying(30) DEFAULT 'PENDING'::character varying NOT NULL,
     attempts integer DEFAULT 0 NOT NULL,
+    event_key character varying(100),
     CONSTRAINT outbox_events_status_check CHECK (((status)::text = ANY (ARRAY[('PENDING'::character varying)::text, ('PUBLISHED'::character varying)::text, ('FAILED'::character varying)::text])))
 );
 
@@ -4972,7 +4975,11 @@ CREATE TABLE public.webhook_deliveries (
     next_attempt_at timestamp with time zone,
     delivered_at timestamp with time zone,
     last_error text,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    event_type character varying(60),
+    entity_label character varying(255),
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT webhook_deliveries_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RETRY'::character varying, 'SENT'::character varying, 'DEAD'::character varying])::text[])))
 );
 
 
@@ -4990,7 +4997,11 @@ CREATE TABLE public.webhook_endpoints (
     secret_credential_id uuid,
     active boolean DEFAULT true NOT NULL,
     event_types jsonb DEFAULT '[]'::jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    description character varying(300),
+    created_by uuid,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT webhook_endpoints_https CHECK ((url ~~ 'https://%'::text))
 );
 
 
@@ -6197,6 +6208,14 @@ ALTER TABLE ONLY public.organizations
 
 
 --
+-- Name: outbox_events outbox_events_event_unique; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.outbox_events
+    ADD CONSTRAINT outbox_events_event_unique UNIQUE (tenant_id, event_key);
+
+
+--
 -- Name: outbox_events outbox_events_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -7146,6 +7165,14 @@ ALTER TABLE ONLY public.warranty_policies
 
 ALTER TABLE ONLY public.webhook_deliveries
     ADD CONSTRAINT webhook_deliveries_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: webhook_deliveries webhook_deliveries_unique; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.webhook_deliveries
+    ADD CONSTRAINT webhook_deliveries_unique UNIQUE (endpoint_id, event_id);
 
 
 --
@@ -8287,6 +8314,13 @@ CREATE INDEX idx_work_orders_tenant_status ON public.work_orders USING btree (te
 
 
 --
+-- Name: integration_attempts_delivery_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX integration_attempts_delivery_idx ON public.integration_attempts USING btree (delivery_id, attempted_at DESC);
+
+
+--
 -- Name: jobs_queue_index; Type: INDEX; Schema: public; Owner: erp_user
 --
 
@@ -8564,6 +8598,20 @@ CREATE UNIQUE INDEX ux_teams_tenant_name ON public.teams USING btree (tenant_id,
 --
 
 CREATE UNIQUE INDEX warranty_claims_ticket_key ON public.warranty_claims USING btree (ticket_id) WHERE (ticket_id IS NOT NULL);
+
+
+--
+-- Name: webhook_deliveries_due_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX webhook_deliveries_due_idx ON public.webhook_deliveries USING btree (next_attempt_at) WHERE ((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RETRY'::character varying])::text[]));
+
+
+--
+-- Name: webhook_deliveries_recent_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX webhook_deliveries_recent_idx ON public.webhook_deliveries USING btree (tenant_id, created_at DESC);
 
 
 --
@@ -11108,6 +11156,14 @@ ALTER TABLE ONLY public.integration_attempts
 
 
 --
+-- Name: integration_attempts integration_attempts_delivery_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.integration_attempts
+    ADD CONSTRAINT integration_attempts_delivery_id_fkey FOREIGN KEY (delivery_id) REFERENCES public.webhook_deliveries(id) ON DELETE CASCADE;
+
+
+--
 -- Name: integration_attempts integration_attempts_outbox_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -13193,6 +13249,14 @@ ALTER TABLE ONLY public.webhook_deliveries
 
 ALTER TABLE ONLY public.webhook_deliveries
     ADD CONSTRAINT webhook_deliveries_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: webhook_endpoints webhook_endpoints_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.webhook_endpoints
+    ADD CONSTRAINT webhook_endpoints_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -15908,7 +15972,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.idempotency_keys TO erp_app;
 -- Name: TABLE integration_attempts; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.integration_attempts TO erp_app;
+GRANT SELECT,INSERT ON TABLE public.integration_attempts TO erp_app;
 
 
 --
@@ -16028,7 +16092,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.organizations TO erp_app;
 -- Name: TABLE outbox_events; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.outbox_events TO erp_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.outbox_events TO erp_app;
 
 
 --
@@ -16586,14 +16650,14 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.warranty_policies TO erp_app;
 -- Name: TABLE webhook_deliveries; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.webhook_deliveries TO erp_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.webhook_deliveries TO erp_app;
 
 
 --
 -- Name: TABLE webhook_endpoints; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.webhook_endpoints TO erp_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.webhook_endpoints TO erp_app;
 
 
 --
@@ -16743,6 +16807,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 78	2026_11_01_000200_credential_vault_screen	68
 79	2026_11_01_000300_reports_permissions	69
 80	2026_11_01_000400_workflows	70
+81	2026_11_01_000500_integrations	71
 \.
 
 
@@ -16776,6 +16841,7 @@ a05e0c34-3a29-446a-8961-07bfdaa9869b	FACTURACION_ELECTRONICA	Facturación electr
 d49b65d8-5553-4bd4-b41b-45ccc995bf5b	PAGOS_COBRANZAS	Pagos y cobranzas	Gestión de pagos	FINANZAS_FACTURACION	f	f	99	2026-10-05 15:32:17+00	2026-10-23 00:59:03+00	["billing"]
 97c75295-123b-4816-b0c0-6a50b081420b	RENTABILIDAD	Rentabilidad	Costos y margen	FINANZAS_FACTURACION	f	f	99	2026-10-05 15:32:17+00	2026-10-23 00:59:03+00	[]
 291bb136-32f7-4112-be46-a24041ced2ae	TICKETS	Tickets	Gestión de tickets de soporte	SOPORTE_ATENCION_CLIENTE	f	f	99	2026-10-05 15:32:17+00	2026-10-23 00:59:03+00	["tickets"]
+6ae2ed7c-c219-4130-b3c5-4308cd34917b	INTEGRACIONES	Integraciones	Webhooks salientes firmados hacia otros sistemas, con reintentos, y el estado de las conexiones (SUNAT, correo, pagos).	CONTROL	f	t	16	\N	\N	["integrations"]
 \.
 
 
@@ -16804,8 +16870,6 @@ e3120c60-673f-4670-873d-a4e9e16eae76	operations.view	Ver operaciones	\N	2026-09-
 52e49ae0-f34b-4da8-be41-e857cd15ab16	operations.manage	Gestionar operaciones	\N	2026-09-07 16:33:36.858468+00
 eb786dd3-6c11-401a-8fb0-f952b80c4fa6	finance.view	Ver finanzas	\N	2026-09-07 16:33:36.858468+00
 37bb68d4-eb5d-4318-836f-1fa21b3e9d97	finance.manage	Gestionar finanzas	\N	2026-09-07 16:33:36.858468+00
-94fa567f-08cd-49f2-9285-7c097f549532	integrations.view	Ver integraciones	\N	2026-09-07 16:33:36.858468+00
-a55994c4-8449-44dc-b07c-4b9b2c4089ff	integrations.manage	Gestionar integraciones	\N	2026-09-07 16:33:36.858468+00
 5b720aa4-e4ef-4195-a301-6b8211bb7430	portal.manage	Gestionar portal	\N	2026-09-07 16:33:36.858468+00
 b65cd0f0-66da-47c1-afdd-144e3ba37849	audit.view	Ver auditoría	\N	2026-09-07 16:33:36.858468+00
 de9f79fd-2a81-46fb-a48d-ea2942d9fff1	quotations.approve	Aprobar cotizaciones	Aprobar o rechazar cotizaciones enviadas a aprobación.	2026-10-06 03:45:20.371524+00
@@ -16845,6 +16909,8 @@ a8aff9af-acc8-4fc0-b800-a3fce584ecd0	work_orders.view	Ver órdenes de trabajo	Ó
 facf4dc5-76a0-46ec-9631-876dce52337b	credentials.view	Ver credenciales	Ver los datos generales de las credenciales y su historial, nunca el valor.	2026-09-07 16:33:36.858468+00
 96713678-973d-4351-a884-3365bffd14fc	reports.view	Ver reportes	Ver los reportes de los módulos que el rol puede ver, con su mismo alcance.	2026-09-07 16:33:36.858468+00
 5f7e41b0-4003-4fcc-a979-94d006f4ccbf	reports.export	Exportar reportes	Exportar un reporte a Excel o CSV. Queda en auditoría.	2026-09-07 16:33:36.858468+00
+94fa567f-08cd-49f2-9285-7c097f549532	integrations.view	Ver integraciones	Ver las conexiones, los webhooks y sus envíos.	2026-09-07 16:33:36.858468+00
+a55994c4-8449-44dc-b07c-4b9b2c4089ff	integrations.manage	Gestionar integraciones	Crear, editar, activar y desactivar webhooks, rotar su clave y reprocesar envíos fallidos.	2026-09-07 16:33:36.858468+00
 364b75ac-bb6c-4ec4-86a1-1f991250cc47	work_orders.create	Crear órdenes de trabajo	Crear una orden de trabajo desde un servicio contratado activo.	2026-10-13 03:48:11.334326+00
 a4b1d2a4-aded-4a4d-aa88-24398c52b961	work_orders.manage	Gestionar órdenes de trabajo	Editar, iniciar, bloquear, completar y cancelar órdenes de trabajo, y marcar su checklist.	2026-10-13 03:48:11.334326+00
 dad650bd-85e8-49bb-819c-afefd92d523b	work_orders.approve	Asignar órdenes de trabajo y aprobar checklists	Asignar o reasignar el técnico y la fecha, y aprobar o devolver el checklist.	2026-10-13 03:48:11.334326+00
@@ -16942,6 +17008,7 @@ a2d3bf4f-51c7-4db2-9d3a-29cda5ee5d2a	credentials.reveal	Revelar credenciales	Ver
 e7087eb0-9640-4b34-81fb-a82239ff0bda	workflows.view	Ver workflows	Ver las reglas automáticas de la empresa y sus ejecuciones.	2026-11-01 22:40:20.245348+00
 f54f981d-b953-418d-8e9e-8cbb2635ce3e	workflows.manage	Gestionar workflows	Crear, editar, activar y desactivar reglas automáticas.	2026-11-01 22:40:20.245348+00
 e5c1383d-c3cb-4909-98fc-78f1a83f067c	workflows.export	Exportar workflows	Exportar el historial de ejecuciones.	2026-11-01 22:40:20.245348+00
+0a1311a1-d10d-4f69-9bb1-b63d3e694f4d	integrations.export	Exportar integraciones	Exportar la cola de envíos de los webhooks.	2026-11-01 23:33:07.566227+00
 \.
 
 
@@ -16953,7 +17020,7 @@ COPY public.saas_plans (id, code, name, active, limits, modules, created_at, upd
 88caead2-f8c5-4782-bb8e-400d54335c13	BASE	Plan Base	t	{"sites": 3, "users": 10, "clients": 100, "branches": 1, "products": 100, "projects": 10, "services": 50, "crm_leads": 500, "documents": 1000, "max_users": 20, "work_orders": 100, "portal_users": 20, "project_users": 20, "timesheet_hours": 1000, "crm_opportunities": 200}	{"AGENDA": true, "PORTAL": true, "CLIENTES": true, "CONTRATOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "COTIZACIONES": true}	2026-09-07 16:33:36.858468+00	2026-10-23 00:59:03+00	Para pequeños emprendedores.	1	t	99.0000	990.0000	PEN	t	30	f	t	MONTHLY	{"api": false, "mfa": false, "audit": true, "automations": false, "integrations": false, "multi_tenant": true, "client_portal": false, "advanced_reports": false, "roles_permissions": true, "electronic_billing": false}	STANDARD	10	24	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{"storage_gb": 20, "files_count": 5000, "exports_month": 100, "backups_included": 7, "api_requests_month": 10000, "documents_generated": 3000}
 bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AGENDA": true, "PORTAL": true, "COMPRAS": true, "CLIENTES": true, "FINANZAS": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "TIMESHEETS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "ORDENES_TRABAJO": true}	2026-09-07 16:33:36.858468+00	2026-10-23 00:59:03+00	Para empresas en constante crecimiento y optimización.	2	t	199.0000	1990.0000	PEN	f	0	f	t	MONTHLY	{}	STANDARD	\N	\N	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{}
 01a0f803-8fd8-7127-86f5-c4bdfe64100d	Plan6	Plan 6	t	{"sites": 3, "users": 18, "clients": 100, "branches": 1, "products": 100, "projects": 10, "services": 50, "crm_leads": 500, "documents": 1000, "work_orders": 100, "portal_users": 20, "project_users": 20, "timesheet_hours": 1000, "crm_opportunities": 200}	{"AGENDA": true, "COMPRAS": true, "CLIENTES": true, "FINANZAS": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "ORDENES_TRABAJO": true}	2026-10-01 15:09:38+00	2026-10-23 00:59:03+00	Plan Enterprise	1	f	200.0000	400.0000	PEN	t	30	f	t	MONTHLY	{"api": false, "mfa": true, "audit": true, "automations": false, "integrations": false, "multi_tenant": true, "client_portal": false, "advanced_reports": false, "roles_permissions": true, "electronic_billing": false}	STANDARD	100	24	{"email": true, "portal": true, "whatsapp": false, "priority_attention": false}	{}
-4eb52f95-87a2-40d9-bc7f-f210a23acde1	ENTERPRISE	Plan Enterprise	t	{}	{"CRM": true, "AGENDA": true, "PORTAL": true, "COMPRAS": true, "SOPORTE": true, "CLIENTES": true, "FINANZAS": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "TIMESHEETS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "ORDENES_TRABAJO": true}	2026-09-07 16:33:36.858468+00	2026-10-23 00:59:03+00	Para empresas ya consolidadas.	3	t	349.0000	3490.0000	PEN	t	15	t	t	MONTHLY	{}	STANDARD	\N	\N	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{}
+4eb52f95-87a2-40d9-bc7f-f210a23acde1	ENTERPRISE	Plan Enterprise	t	{}	{"CRM": true, "AGENDA": true, "PORTAL": true, "COMPRAS": true, "SOPORTE": true, "CLIENTES": true, "FINANZAS": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "TIMESHEETS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "INTEGRACIONES": true, "ORDENES_TRABAJO": true}	2026-09-07 16:33:36.858468+00	2026-11-01 23:33:07.566227+00	Para empresas ya consolidadas.	3	t	349.0000	3490.0000	PEN	t	15	t	t	MONTHLY	{}	STANDARD	\N	\N	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{}
 \.
 
 
@@ -16961,7 +17028,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 80, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 81, true);
 
 
 --

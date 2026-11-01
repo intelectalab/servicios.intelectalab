@@ -78,13 +78,13 @@ const MENU_ITEMS: MenuItem[] = [
 
   { href: "/documents", label: "Documentos", module: "DOCUMENTOS", requiredPermission: "documents.view", icon: Folder, superModule: "Control" },
   { href: "/credentials", label: "Credential Vault", requiredPermission: "credentials.view", icon: KeyRound, superModule: "Control" },
-  { label: "Integraciones", icon: Plug, superModule: "Control", soon: true },
+  { href: "/integrations", label: "Integraciones", module: "INTEGRACIONES", requiredPermission: "integrations.view", icon: Plug, superModule: "Control" },
   { href: "/workflows", label: "Workflows", requiredPermission: "workflows.view", icon: Workflow, superModule: "Control" },
   { href: "/reports", label: "Reportes", requiredPermission: "reports.view", icon: ChartLine, superModule: "Control" },
   { href: "/audit", label: "Auditoría", requiredPermission: "audit.view", icon: Eye, superModule: "Control" },
 
   { href: "/settings", label: "Configuración", requiredPermission: "tenant.manage", icon: Settings, superModule: "Administración" },
-  { label: "Módulos y plan", icon: ToggleLeft, superModule: "Administración", soon: true },
+  { href: "/plan", label: "Módulos y plan", requiredPermission: "tenant.manage", icon: ToggleLeft, superModule: "Administración" },
   { href: "/users", label: "Usuarios", requiredPermission: "users.view", icon: UserCog, superModule: "Administración" },
   { href: "/roles", label: "Roles y permisos", requiredPermission: "users.view", icon: Key, superModule: "Administración" },
   { label: "Seguridad y aislamiento", icon: Lock, superModule: "Administración", soon: true },
@@ -130,6 +130,7 @@ type AccessSubscription = {
 
 type AccessResponse = {
   modules: string[];
+  modules_off?: string[];
   permissions: string[];
   scopes?: Record<string, Scope>;
   tenant: { name: string; code: string } | null;
@@ -147,6 +148,8 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
   const [permissions, setPermissions] = useState<string[]>([]);
   const [scopes, setScopes] = useState<Record<string, Scope>>({});
   const [modules, setModules] = useState<string[]>([]);
+  // Módulos del plan que la empresa apagó: candado "Apagado" en vez de "Plan".
+  const [modulesOff, setModulesOff] = useState<string[]>([]);
   const [tenantName, setTenantName] = useState<string | undefined>(undefined);
   const [roleName, setRoleName] = useState<string | undefined>(undefined);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
@@ -191,6 +194,7 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
         const access = await apiFetch<AccessResponse>("/v1/me/access");
         if (!cancelled) {
           setModules(access.modules);
+          setModulesOff(access.modules_off ?? []);
           setPermissions(access.permissions);
           setScopes(access.scopes ?? {});
           setTenantName(access.tenant?.name);
@@ -265,7 +269,11 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
   //  - lo tiene, pero el rol del usuario no lo incluye → se oculta.
   const menuWithLockState = MENU_ITEMS.map((item) =>
     // Sin "module" la pantalla es de administración de la empresa: no depende del plan.
-    item.soon ? item : { ...item, locked: item.module !== undefined && !modules.includes(item.module) },
+    item.soon ? item : {
+      ...item,
+      locked: item.module !== undefined && !modules.includes(item.module),
+      lockReason: item.module !== undefined && modulesOff.includes(item.module) ? "off" as const : "plan" as const,
+    },
   ).filter((item) => item.soon || item.locked || !item.requiredPermission || permissions.includes(item.requiredPermission));
 
   // Un rol que no abre la pantalla de inicio (p. ej. un técnico, sin Clientes y actores) no se
@@ -285,7 +293,7 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
   );
   const routeDenied = accessLoaded && routeItem && !homeDenied
     ? routeItem.module !== undefined && !modules.includes(routeItem.module)
-      ? "plan"
+      ? modulesOff.includes(routeItem.module) ? "off" : "plan"
       : routeItem.requiredPermission && !permissions.includes(routeItem.requiredPermission) ? "role" : null
     : null;
 
@@ -426,7 +434,9 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
                     <Lock size={28} className="app-muted mb-2" aria-hidden="true" />
                     <p className="font-semibold">{routeItem.label}</p>
                     <p className="app-muted mt-1 max-w-[52ch]">
-                      {routeDenied === "plan"
+                      {routeDenied === "off"
+                        ? "Este módulo está apagado en tu empresa. El administrador puede encenderlo en Administración → Módulos y plan."
+                        : routeDenied === "plan"
                         ? "Esta pantalla no está incluida en el plan de tu empresa."
                         : "Tu rol no tiene permiso para abrir esta pantalla. Si la necesitas, pídeselo al administrador de tu empresa."}
                     </p>

@@ -22,7 +22,11 @@ class CredentialRecord extends Model
         'SMTP' => 'SMTP',
         'CERTIFICADO' => 'Certificado',
         'BASE_DATOS' => 'Base de datos',
+        'WEBHOOK' => 'Clave de webhook',
     ];
+
+    /** Tipos que crea el propio sistema (no se eligen al guardar una credencial a mano). */
+    public const SYSTEM_TYPES = ['WEBHOOK'];
 
     public const STATES = ['ACTIVE' => 'Activa', 'EXPIRED' => 'Expirada', 'REVOKED' => 'Revocada'];
 

@@ -19,6 +19,8 @@ export type BuiltMenuItem = {
   requiredPermission: string;
   icon: MenuIcon;
   locked?: boolean;
+  /** Por qué tiene candado: fuera del plan, o apagado por la propia empresa (Módulos y plan). */
+  lockReason?: "plan" | "off";
   superModule?: string;
   soon?: false;
 };
@@ -379,7 +381,7 @@ export default function Sidebar({
                           {locked && (
                             <span className="ml-auto flex shrink-0 items-center gap-1 rounded-[5px] bg-[rgb(255_255_255/0.15)] px-1.5 text-[10px] font-semibold leading-[18px] text-white">
                               <Lock size={10} />
-                              Plan
+                              {item.lockReason === "off" ? "Apagado" : "Plan"}
                             </span>
                           )}
                         </Link>
@@ -453,7 +455,7 @@ export default function Sidebar({
                   {locked && (
                     <span className="ml-auto flex shrink-0 items-center gap-1 rounded-[5px] bg-[rgb(255_255_255/0.15)] px-1.5 text-[10px] font-semibold leading-[18px] text-white">
                       <Lock size={10} />
-                      Plan
+                      {item.lockReason === "off" ? "Apagado" : "Plan"}
                     </span>
                   )}
                 </Link>

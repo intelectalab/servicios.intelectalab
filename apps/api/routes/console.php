@@ -20,3 +20,7 @@ Illuminate\Support\Facades\Schedule::command('quotations:expire')->dailyAt('00:1
 // Cada madrugada, las credenciales del Vault cuya fecha de vencimiento pasó quedan Expiradas
 // (la pantalla ya las muestra así desde que vencen; esto deja el cambio en la base y en auditoría).
 Illuminate\Support\Facades\Schedule::command('credentials:expire')->dailyAt('00:15')->timezone('America/Lima');
+
+// Cada minuto, los webhooks salientes pendientes y los reintentos que ya toca (Control → Integraciones).
+// Sin solaparse: si un envío lento demora, el minuto siguiente no lo repite.
+Illuminate\Support\Facades\Schedule::command('webhooks:deliver')->everyMinute()->withoutOverlapping(10);

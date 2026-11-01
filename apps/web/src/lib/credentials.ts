@@ -45,7 +45,13 @@ export const ACCESS_LABELS: Record<string, string> = {
 /** Segundos que se ve un valor revelado. */
 export const REVEAL_SECONDS = 20;
 
-export const typeLabel = (type: string) => CREDENTIAL_TYPES.find(([key]) => key === type)?.[1] ?? type;
+/** Tipos que crea el propio sistema (la clave de un webhook): se muestran, pero no se eligen a mano. */
+const SYSTEM_TYPES: [string, string][] = [["WEBHOOK", "Clave de webhook"]];
+
+export const typeLabel = (type: string) => [...CREDENTIAL_TYPES, ...SYSTEM_TYPES].find(([key]) => key === type)?.[1] ?? type;
+
+/** Para el filtro del listado: también los tipos del sistema. */
+export const CREDENTIAL_FILTER_TYPES: [string, string][] = [...CREDENTIAL_TYPES, ...SYSTEM_TYPES];
 
 /** Fecha en hora de Lima: "Expira el 15/12" vale todo ese día. */
 export const limaDate = (value: string) => new Date(value).toLocaleDateString("es-PE", { timeZone: "America/Lima", day: "2-digit", month: "short", year: "numeric" });

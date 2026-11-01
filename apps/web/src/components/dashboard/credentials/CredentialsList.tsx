@@ -7,7 +7,7 @@ import { excelTone, stateOf } from "@/lib/commercial";
 import { dateTime } from "@/lib/crm";
 import { useAccess } from "@/lib/access-context";
 import {
-  ACTION_PERMISSION, CREDENTIAL_STATES, CREDENTIAL_TYPES, REVEAL_SECONDS, VAULT_PERMISSIONS, blockedBy, expiresSoon, limaDate, typeLabel,
+  ACTION_PERMISSION, CREDENTIAL_FILTER_TYPES, CREDENTIAL_STATES, REVEAL_SECONDS, VAULT_PERMISSIONS, blockedBy, expiresSoon, limaDate, typeLabel,
 } from "@/lib/credentials";
 import { exportCsv, exportXlsx, fetchAllPages, recordExport, type ExportColumn } from "@/lib/export-table";
 import {
@@ -236,7 +236,7 @@ export default function CredentialsList() {
 
       <Filters>
         <SearchInput value={searchInput} onChange={setSearchInput} placeholder="Buscar nombre o a quién pertenece" />
-        <FilterSelect label="Tipo" value={type} onChange={(value) => { setType(value); setPage(1); }} options={CREDENTIAL_TYPES} />
+        <FilterSelect label="Tipo" value={type} onChange={(value) => { setType(value); setPage(1); }} options={CREDENTIAL_FILTER_TYPES} />
         <FilterSelect label="Estado" value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={CREDENTIAL_STATES.map(([key, label]) => [key, label])} />
         <ColumnFilterBar
           filters={columnFilters}

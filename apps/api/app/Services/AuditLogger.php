@@ -36,5 +36,7 @@ class AuditLogger
 
         // Si la acción dispara reglas de la empresa (Control → Workflows), corren al guardar.
         Workflows::audited($tenantId, $userId, $action, $entityType, $entityId, $id);
+        // Y los webhooks salientes suscritos a esa acción (Control → Integraciones).
+        Webhooks::audited($tenantId, $action, $entityId, $id);
     }
 }

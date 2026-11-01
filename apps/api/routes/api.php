@@ -4,6 +4,7 @@ use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\WorkflowController;
+use App\Http\Controllers\IntegrationController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Subscription\Http\Controllers\SaasPlanController;
 use App\Modules\Subscription\Http\Controllers\TenantRegisterController;
@@ -143,6 +144,13 @@ Route::prefix('v1')->group(function () {
         // Ajustes de la empresa (segregación de funciones)
         Route::get('/tenant/settings', [TenantSettingsController::class, 'show']);
         Route::middleware('permission:tenant.manage')->put('/tenant/settings', [TenantSettingsController::class, 'update']);
+
+        // Administración → Módulos y plan (el administrador de la empresa).
+        Route::middleware('permission:tenant.manage')->group(function () {
+            Route::get('/tenant/plan', [\App\Modules\Subscription\Http\Controllers\TenantPlanController::class, 'show']);
+            Route::post('/tenant/plan/request', [\App\Modules\Subscription\Http\Controllers\TenantPlanController::class, 'requestChange'])->middleware('throttle:10,1,plan-request');
+            Route::put('/tenant/modules/{module}', [\App\Modules\Subscription\Http\Controllers\TenantPlanController::class, 'toggle']);
+        });
 
         // Marca de la empresa (Configuración): logo, colores y contacto de sus documentos. Leerla, cualquiera de la empresa.
         Route::get('/branding', [\App\Http\Controllers\BrandingController::class, 'show']);
@@ -813,6 +821,21 @@ Route::prefix('v1')->group(function () {
             Route::post('/workflows', [WorkflowController::class, 'store']);
             Route::put('/workflows/{workflow}', [WorkflowController::class, 'update']);
             Route::post('/workflows/{workflow}/toggle', [WorkflowController::class, 'toggle']);
+        });
+
+        // Control: Integraciones (módulo INTEGRACIONES). Los webhooks no se borran: se desactivan.
+        Route::middleware('permission:integrations.view')->group(function () {
+            Route::get('/integrations', [IntegrationController::class, 'index']);
+            Route::get('/integration-deliveries', [IntegrationController::class, 'deliveries']);
+            Route::get('/integration-deliveries/{delivery}', [IntegrationController::class, 'delivery']);
+        });
+        Route::middleware('permission:integrations.manage')->group(function () {
+            Route::post('/integrations/webhooks', [IntegrationController::class, 'store']);
+            Route::put('/integrations/webhooks/{endpoint}', [IntegrationController::class, 'update']);
+            Route::post('/integrations/webhooks/{endpoint}/toggle', [IntegrationController::class, 'toggle']);
+            Route::post('/integrations/webhooks/{endpoint}/rotate', [IntegrationController::class, 'rotate']);
+            Route::post('/integrations/webhooks/{endpoint}/test', [IntegrationController::class, 'test'])->middleware('throttle:10,1,webhook-test');
+            Route::post('/integration-deliveries/{delivery}/retry', [IntegrationController::class, 'retry']);
         });
 
         // Control: Credential Vault (plan base). Cada acción es un permiso distinto.
