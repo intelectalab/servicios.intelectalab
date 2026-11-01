@@ -56,6 +56,9 @@ class Branding
             'email' => $row?->email,
             'website' => $row?->website,
             'customized' => $hasLogo || strtoupper($primary) !== self::DEFAULT_PRIMARY || $row?->secondary_color !== null,
+            // Página de ingreso propia: /e/{login_slug} con su bienvenida.
+            'login_slug' => DB::table('tenants')->where('id', $tenantId)->value('login_slug'),
+            'login_welcome' => $row?->login_welcome,
             'updated_at' => $row?->updated_at,
         ];
     }

@@ -202,7 +202,9 @@ class PortalInvitations
     private static function sendInvitation(string $tenantId, object $portalUser, string $code): void
     {
         $email = DB::table('users')->where('id', $portalUser->user_id)->value('email');
-        $url = rtrim((string) config('app.frontend_url'), '/').'/portal/activate';
+        // Con el enlace de la empresa: la pantalla para activar el acceso sale con su marca.
+        $slug = \App\Services\LoginSlug::of($tenantId);
+        $url = rtrim((string) config('app.frontend_url'), '/').'/portal/activate'.($slug ? '?empresa='.rawurlencode($slug) : '');
 
         try {
             Mail::to($email)->send((new PortalInvitationMail(

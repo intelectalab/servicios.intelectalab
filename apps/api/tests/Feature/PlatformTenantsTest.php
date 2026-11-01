@@ -101,6 +101,8 @@ class PlatformTenantsTest extends TestCase
         $tenantId = $created['id'];
         $tenant = DB::table('tenants')->find($tenantId);
         $this->assertSame('PROVISIONING', $tenant->status);
+        // Nace con su enlace de ingreso, a partir del nombre ("Servicios Prueba" → servicios-prueba, o con número si ya existe).
+        $this->assertMatchesRegularExpression('/^servicios-prueba(-\d+)?$/', (string) $tenant->login_slug);
 
         $this->inTenant($tenantId);
         $modules = DB::table('tenant_modules')->where('tenant_id', $tenantId)->where('enabled', true)->pluck('module_code')->all();
@@ -129,10 +131,11 @@ class PlatformTenantsTest extends TestCase
         $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/transitions", ['from' => 'PROVISIONING', 'to' => 'ACTIVE'])
             ->assertOk()->assertJsonPath('invited', [$admin->email]);
         $code = null;
-        Mail::assertSent(TenantInvitationMail::class, function (TenantInvitationMail $mail) use ($admin, &$code) {
+        Mail::assertSent(TenantInvitationMail::class, function (TenantInvitationMail $mail) use ($admin, $tenant, &$code) {
             $code = $mail->code;
 
-            return $mail->hasTo($admin->email) && str_ends_with($mail->resetUrl, '/reset-password?email='.rawurlencode($admin->email));
+            // El enlace abre la pantalla con el correo puesto y la marca de la empresa.
+            return $mail->hasTo($admin->email) && str_ends_with($mail->resetUrl, '/reset-password?email='.rawurlencode($admin->email).'&empresa='.$tenant->login_slug);
         });
         $this->app['auth']->forgetGuards();
         $this->postJson('/api/v1/reset-password', ['email' => $admin->email, 'token' => $code, 'password' => 'NuevaClave2026'])->assertOk();
@@ -209,7 +212,7 @@ class PlatformTenantsTest extends TestCase
         $this->assertEqualsCanonicalizing(['tenant', 'transitions', 'catalog', 'plans'], array_keys($tenant));
         $this->assertEqualsCanonicalizing([
             'id', 'code', 'name', 'legal_name', 'trade_name', 'ruc', 'status', 'created_at', 'subscription', 'modules', 'users', 'users_limit',
-            'portal_users', 'portal_users_limit', 'customers', 'customers_limit', 'storage_mb', 'storage_limit_gb', 'subscriptions', 'status_log', 'admins', 'payments',
+            'portal_users', 'portal_users_limit', 'customers', 'customers_limit', 'storage_mb', 'storage_limit_gb', 'subscriptions', 'status_log', 'admins', 'payments', 'login_slug',
         ], array_keys($tenant['tenant']));
 
         $this->getJson('/api/v1/superadmin/tenants/'.Str::uuid())->assertNotFound();

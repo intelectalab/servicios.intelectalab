@@ -5,10 +5,15 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { CheckCircle2, Eye, EyeOff, Info, Loader2 } from "lucide-react";
 import AuthShell, { item, authLabel, authInput, authButton, authGhostButton, BRAND, BRAND_SOFT } from "@/components/auth/AuthShell";
+import { loginPath, type LoginBrand } from "@/lib/login-brand";
 
-/** Activar la invitación al portal: correo, código de la invitación (8 caracteres) y contraseña nueva. */
-export default function PortalActivateForm() {
+/**
+ * Activar la invitación al portal: correo, código de la invitación (8 caracteres) y contraseña nueva.
+ * Con `brand` (llega con ?empresa=…) la pantalla lleva la marca de esa empresa y vuelve a su ingreso.
+ */
+export default function PortalActivateForm({ brand = null }: { brand?: LoginBrand | null }) {
   const router = useRouter();
+  const login = loginPath(brand?.slug);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [password, setPassword] = useState("");
@@ -45,7 +50,7 @@ export default function PortalActivateForm() {
         throw new Error(firstError || data?.message || "No se pudo activar tu acceso.");
       }
       setDone(true);
-      setTimeout(() => router.push("/login"), 2500);
+      setTimeout(() => router.push(login), 2500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ocurrió un error. Intenta de nuevo.");
     } finally {
@@ -55,10 +60,10 @@ export default function PortalActivateForm() {
 
   if (done) {
     return (
-      <AuthShell title="Acceso activado" subtitle="Ya puedes iniciar sesión en el portal. Te estamos redirigiendo.">
+      <AuthShell brand={brand} title="Acceso activado" subtitle="Ya puedes iniciar sesión en el portal. Te estamos redirigiendo.">
         <div className="mt-7 flex flex-col items-center text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: BRAND_SOFT }}>
-            <CheckCircle2 size={22} color={BRAND} />
+            <CheckCircle2 size={22} color={`var(--p-accent, ${BRAND})`} />
           </span>
         </div>
       </AuthShell>
@@ -67,9 +72,10 @@ export default function PortalActivateForm() {
 
   return (
     <AuthShell
+      brand={brand}
       title="Activar mi acceso al portal"
       subtitle="Ingrese el código de su correo de invitación y cree su contraseña."
-      back={{ href: "/login", label: "Volver al inicio de sesión" }}
+      back={{ href: login, label: "Volver al inicio de sesión" }}
     >
       <form onSubmit={handleSubmit} noValidate className="grid gap-3.5">
         <motion.div
@@ -151,7 +157,7 @@ export default function PortalActivateForm() {
         <motion.button variants={item} type="submit" disabled={loading} aria-busy={loading} className={authButton}>
           {loading ? (<><Loader2 size={16} className="animate-spin" />Activando…</>) : "Activar mi acceso"}
         </motion.button>
-        <motion.a variants={item} href="/login" className={authGhostButton}>Cancelar</motion.a>
+        <motion.a variants={item} href={login} className={authGhostButton}>Cancelar</motion.a>
       </form>
     </AuthShell>
   );

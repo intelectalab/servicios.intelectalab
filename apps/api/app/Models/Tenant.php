@@ -20,6 +20,7 @@ class Tenant extends Model
         'locale',
         'currency',
         'configuration',
+        'login_slug',
     ];
 
     protected $casts = [

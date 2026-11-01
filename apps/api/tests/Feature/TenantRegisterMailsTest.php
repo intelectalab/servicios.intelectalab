@@ -55,7 +55,9 @@ class TenantRegisterMailsTest extends TestCase
                 && str_starts_with($mail->rows['Vigencia'], 'Prueba gratis hasta el ')
                 && $mail->rows['Precio al terminar la prueba'] === 'S/ 349.00 al mes'
                 && $mail->rows['Correo de acceso'] === $data['email']
-                && str_ends_with($mail->loginUrl, '/login');
+                // Su propio enlace de ingreso, con la marca de la empresa.
+                && (bool) preg_match('#/e/[a-z0-9-]+$#', $mail->loginUrl)
+                && $mail->rows['Tu enlace de ingreso'] === $mail->loginUrl;
         });
         Mail::assertSent(NewSubscriptionMail::class, function (NewSubscriptionMail $mail) use ($superAdmin, $data) {
             return $mail->hasTo($superAdmin->email)

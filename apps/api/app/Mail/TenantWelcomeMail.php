@@ -32,7 +32,7 @@ class TenantWelcomeMail extends Mailable
                 'preview' => 'Tu cuenta de administrador está lista.',
                 'rows' => $this->rows,
                 'button' => ['label' => 'Iniciar sesión', 'url' => $this->loginUrl],
-                'notice' => 'Por seguridad no enviamos tu contraseña. Si la olvidas, usa «¿Olvidó su contraseña?» en el inicio de sesión.',
+                'notice' => 'Por seguridad no enviamos tu contraseña. Si la olvidas, usa «¿Olvidó su contraseña?» en el inicio de sesión. Tu enlace de ingreso lo puedes cambiar en Configuración → Marca de la empresa.',
             ],
         );
     }

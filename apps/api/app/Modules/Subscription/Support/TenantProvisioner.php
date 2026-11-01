@@ -37,6 +37,8 @@ class TenantProvisioner
             'locale' => 'es-PE',
             'currency' => 'PEN',
             'configuration' => [],
+            // Enlace de ingreso con su marca (/e/…), a partir del nombre; se puede cambiar en Marca.
+            'login_slug' => \App\Services\LoginSlug::forName($data['name']),
         ]);
 
         // Las tablas de la empresa están bajo RLS: se entra a su contexto.

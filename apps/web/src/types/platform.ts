@@ -146,6 +146,8 @@ export type PlatformTenantDetail = PlatformTenant & {
   status_log: { from: string | null; to: string; reason: string | null; at: string; user_name: string | null }[];
   admins: { id: string; name: string; email: string; status: string; last_login_at: string | null }[];
   payments?: SubscriptionPayment[];
+  /** Enlace de ingreso con la marca de la empresa: /e/{login_slug}. */
+  login_slug?: string | null;
 };
 
 export type PlatformPlanOption = {

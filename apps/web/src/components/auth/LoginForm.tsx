@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Users, Check } from "lucide-react";
 import AuthShell, { item, authLabel, authInput, authInputIcon, authButton, authGhostButton, BRAND } from "./AuthShell";
 import { setAuthToken } from "@/lib/auth";
+import { useLoginBrand, withCompany, type LoginBrand } from "@/lib/login-brand";
 
 type LoginResponse = {
   token?: string;
@@ -34,8 +35,20 @@ async function postJson(path: string, body: unknown): Promise<LoginResponse> {
   return data;
 }
 
-export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { homeUrl?: string; plansUrl?: string }) {
+export default function LoginForm({
+  homeUrl = "/", plansUrl = "/#plans", slug = null, initialBrand,
+}: {
+  homeUrl?: string;
+  plansUrl?: string;
+  /** Enlace de la empresa (/e/{slug}): la pantalla sale con su marca. */
+  slug?: string | null;
+  /** Marca ya consultada por el servidor web (null = no hay); sin ella se consulta en el navegador. */
+  initialBrand?: LoginBrand | null;
+}) {
   const router = useRouter();
+  const { brand, ready } = useLoginBrand(slug, initialBrand);
+  // Con marca: sin "Volver al inicio" ni "Ver planes" (son de la página del SaaS).
+  const company = brand?.slug ?? null;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -118,6 +131,7 @@ export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { hom
     return (
       <AuthShell
         key="mfa"
+        brand={brand}
         title="Verificación en dos pasos"
         subtitle={
           <>
@@ -173,18 +187,24 @@ export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { hom
   return (
     <AuthShell
       key="login"
+      brand={brand}
+      pending={!ready}
       title="Iniciar sesión"
       subtitle="Bienvenido(a). Ingrese sus credenciales."
-      back={{ href: homeUrl, label: "Volver al inicio" }}
+      back={company || !ready ? undefined : { href: homeUrl, label: "Volver al inicio" }}
       footer={
         <>
-          ¿Aún no tiene cuenta?{" "}
-          <a href={plansUrl} className="font-medium text-[color:var(--p-brand-text)] hover:underline">
-            Ver planes
-          </a>
-          <span className="mt-1.5 block">
+          {!company && ready && (
+            <>
+              ¿Aún no tiene cuenta?{" "}
+              <a href={plansUrl} className="font-medium text-[color:var(--p-brand-text)] hover:underline">
+                Ver planes
+              </a>
+            </>
+          )}
+          <span className={company ? "block" : "mt-1.5 block"}>
             ¿Lo invitaron al portal de clientes?{" "}
-            <a href="/portal/activate" className="font-medium text-[color:var(--p-brand-text)] hover:underline">
+            <a href={withCompany("/portal/activate", company)} className="font-medium text-[color:var(--p-brand-text)] hover:underline">
               Activar mi acceso
             </a>
           </span>
@@ -247,15 +267,15 @@ export default function LoginForm({ homeUrl = "/", plansUrl = "/#plans" }: { hom
             <span
               className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors"
               style={{
-                borderColor: remember ? BRAND : "var(--p-field-border)",
-                backgroundColor: remember ? BRAND : "transparent",
+                borderColor: remember ? `var(--p-accent, ${BRAND})` : "var(--p-field-border)",
+                backgroundColor: remember ? `var(--p-accent, ${BRAND})` : "transparent",
               }}
             >
               {remember && <Check size={12} color="#fff" strokeWidth={3} />}
             </span>
             <span className="app-muted">Recordarme</span>
           </button>
-          <a href="/forgot-password" className="font-medium text-[color:var(--p-brand-text)] hover:underline">
+          <a href={withCompany("/forgot-password", company)} className="font-medium text-[color:var(--p-brand-text)] hover:underline">
             ¿Olvidó su contraseña?
           </a>
         </motion.div>

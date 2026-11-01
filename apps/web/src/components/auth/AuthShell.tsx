@@ -1,10 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import Image from "next/image";
 import { motion, type Variants } from "framer-motion";
 import { ArrowLeft, FileText, Wrench, Receipt } from "lucide-react";
 import { poppins } from "@/lib/fonts";
+import { brandVars, readableOnWhite, type Rgb } from "@/lib/branding";
+import type { LoginBrand } from "@/lib/login-brand";
 
 /**
  * ─────────────────────────────────────────────────────────
@@ -63,12 +65,31 @@ const FEATURES = [
   { icon: Receipt, title: "Factura y cobra", text: "SUNAT, cuentas por cobrar y pagos en línea" },
 ];
 
+/** Logo de la empresa (pantalla de ingreso propia) o, sin logo, sus iniciales y su nombre. */
+function CompanyLogo({ brand }: { brand: LoginBrand }) {
+  if (brand.logo) {
+    // eslint-disable-next-line @next/next/no-img-element -- data URL del logo limpio de la empresa.
+    return <img src={brand.logo} alt={brand.name} className="max-h-14 max-w-[220px] object-contain object-left" />;
+  }
+  const initials = brand.name.split(/\s+/).filter((w) => /^[\p{L}\d]/u.test(w)).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "E";
+  return (
+    <span className="flex items-center gap-2.5">
+      <span className="grid h-11 w-11 place-items-center rounded-xl bg-[var(--p-accent,#1B8FC9)] text-[15px] font-bold text-[color:var(--p-on-accent,#fff)]">{initials}</span>
+      <strong className="app-text text-[17px] font-semibold">{brand.name}</strong>
+    </span>
+  );
+}
+
+const css = (rgb: Rgb) => `rgb(${rgb.map(Math.round).join(" ")})`;
+
 export default function AuthShell({
   title,
   subtitle,
   children,
   footer,
   back,
+  brand,
+  pending = false,
 }: {
   title: string;
   subtitle: ReactNode;
@@ -76,23 +97,45 @@ export default function AuthShell({
   footer?: ReactNode;
   /** Enlace discreto sobre el logo para salir de la pantalla (p. ej. a la página pública). */
   back?: { href: string; label: string };
+  /** Marca de la empresa (pantalla de ingreso por su enlace /e/…). Sin ella, la de GsCreativas. */
+  brand?: LoginBrand | null;
+  /** Mientras se consulta la marca: panel sin logo ni textos, para no mostrar otra marca un instante. */
+  pending?: boolean;
 }) {
+  // Con marca: el panel se tiñe con su color, oscurecido lo justo para que el texto blanco se lea.
+  const accent = brand ? readableOnWhite(brand.primary_color) : null;
+  const panel = accent
+    ? `linear-gradient(150deg, ${css(accent)} 0%, ${css(accent.map((v) => v * 0.8) as Rgb)} 45%, ${css(accent.map((v) => v * 0.6) as Rgb)} 100%)`
+    : `linear-gradient(150deg, ${BRAND} 0%, ${BRAND_DARK} 40%, ${BRAND_DEEP} 100%)`;
+
   return (
-    <div className={`${poppins.className} app-surface grid min-h-screen w-full grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:grid-rows-1`}>
+    <div
+      className={`${poppins.className} app-surface grid min-h-screen w-full grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:grid-rows-1 ${brand ? "tenant-brand" : ""}`}
+      style={brand ? (brandVars(brand.primary_color) as CSSProperties) : undefined}
+    >
       {/* Panel de marca: columna izquierda en escritorio; bajo lg queda como franja superior con solo logo y titular */}
       <aside
         className="relative flex flex-col justify-between gap-4 overflow-hidden px-[22px] py-[26px] text-white lg:gap-8 lg:px-12 lg:py-10"
         style={{
           background: [
-            "radial-gradient(circle at 80% 15%, rgba(142,205,235,.55), transparent 40%)",
-            "radial-gradient(circle at 10% 90%, rgba(27,143,201,.45), transparent 45%)",
+            // Los brillos azules son de GsCreativas; con la marca de una empresa, neutros.
+            accent ? "radial-gradient(circle at 80% 15%, rgba(255,255,255,.18), transparent 40%)" : "radial-gradient(circle at 80% 15%, rgba(142,205,235,.55), transparent 40%)",
+            accent ? "radial-gradient(circle at 10% 90%, rgba(255,255,255,.10), transparent 45%)" : "radial-gradient(circle at 10% 90%, rgba(27,143,201,.45), transparent 45%)",
             "repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 2px, transparent 2px 22px)",
-            `linear-gradient(150deg, ${BRAND} 0%, ${BRAND_DARK} 40%, ${BRAND_DEEP} 100%)`,
+            panel,
           ].join(", "),
         }}
       >
-        <Logo variant="light" />
+        {pending ? <span className="h-11" /> : brand ? <span className="text-[13px] font-semibold uppercase tracking-[.08em] text-white/80">Acceso de la empresa</span> : <Logo variant="light" />}
 
+        {pending ? <span /> : brand ? (
+          <div>
+            <h1 className="max-w-[18ch] text-[24px] font-bold leading-[1.12] tracking-[-0.02em] lg:text-[clamp(28px,3.2vw,40px)]">{brand.name}</h1>
+            <p className="mt-3.5 hidden max-w-[46ch] whitespace-pre-line text-[14.5px] leading-relaxed text-white/90 lg:block">
+              {brand.welcome || "Ingresa con tu usuario para continuar."}
+            </p>
+          </div>
+        ) : (
         <div>
           <h1 className="max-w-[16ch] text-[24px] font-bold lg:text-[clamp(28px,3.2vw,40px)] leading-[1.12] tracking-[-0.02em]">
             Servicios bajo control, <span className="text-[#BFE6F8]">clientes satisfechos.</span>
@@ -116,9 +159,10 @@ export default function AuthShell({
             ))}
           </div>
         </div>
+        )}
 
         <p className="hidden text-[12px] text-white/70 lg:block">
-          © {new Date().getFullYear()} · Grupo de Soluciones Creativas
+          {pending ? " " : `© ${new Date().getFullYear()} · ${brand ? brand.name : "Grupo de Soluciones Creativas"}`}
         </p>
       </aside>
 
@@ -141,8 +185,16 @@ export default function AuthShell({
             </motion.a>
           )}
           <motion.div variants={item} className="mb-7">
-            <span className="logo-light block"><Logo variant="dark" /></span>
-            <span className="logo-dark"><Logo variant="light" /></span>
+            {pending ? (
+              <span className="block h-11" />
+            ) : brand ? (
+              <CompanyLogo brand={brand} />
+            ) : (
+              <>
+                <span className="logo-light block"><Logo variant="dark" /></span>
+                <span className="logo-dark"><Logo variant="light" /></span>
+              </>
+            )}
           </motion.div>
 
           <motion.div variants={item}>

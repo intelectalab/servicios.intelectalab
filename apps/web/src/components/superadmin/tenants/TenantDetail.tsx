@@ -81,6 +81,8 @@ export function TenantDetail({ id }: { id: string }) {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState("");
   const [openPaymentModal, setOpenPaymentModal] = useState(false);
+  // Cambiar el enlace de ingreso (null = ventana cerrada).
+  const [slugDraft, setSlugDraft] = useState<string | null>(null);
   const [paymentMonths, setPaymentMonths] = useState<number>(3);
   const [paymentAmount, setPaymentAmount] = useState<string>("0");
   const [paymentEndDate, setPaymentEndDate] = useState<string>("");
@@ -178,6 +180,21 @@ export function TenantDetail({ id }: { id: string }) {
     };
   })();
 
+  /** Envía por correo el enlace de ingreso a los administradores activos de la empresa. */
+  async function sendLoginLink() {
+    setBusy(true);
+    try {
+      const res = await apiFetch<{ sent: string[]; failed: string[] }>(`/v1/superadmin/tenants/${id}/login-link`, { method: "POST" });
+      toast(res.failed.length
+        ? `Enviado a ${res.sent.join(", ") || "nadie"}; no salió a ${res.failed.join(", ")}`
+        : `Enlace enviado a ${res.sent.join(", ")}`, res.failed.length ? "warning" : "success");
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "No se pudo enviar el enlace.", "danger");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function act(run: () => Promise<unknown>, done: string) {
     setBusy(true);
     setFormError("");
@@ -238,6 +255,35 @@ export function TenantDetail({ id }: { id: string }) {
         <Card title="Suscripción">
           <Kv rows={[
             ["Estado", <Badge key="s" tone={statusTone}>{statusLabel}</Badge>],
+            [
+              "Enlace de ingreso",
+              <span key="login" className="flex flex-wrap items-center gap-1.5">
+                {tenant.login_slug ? <code className="break-all text-[12.5px]">/e/{tenant.login_slug}</code> : <span className="app-muted">Sin enlace</span>}
+                {tenant.login_slug && (
+                  <button
+                    type="button" className="cursor-pointer text-xs font-medium text-[color:var(--p-brand-text)] hover:underline"
+                    onClick={() => { void navigator.clipboard?.writeText(`${window.location.origin}/e/${tenant.login_slug}`).then(() => toast("Enlace copiado")); }}
+                  >
+                    Copiar
+                  </button>
+                )}
+                <button
+                  type="button" className="cursor-pointer text-xs font-medium text-[color:var(--p-brand-text)] hover:underline"
+                  onClick={() => { setFormError(""); setSlugDraft(tenant.login_slug ?? ""); }}
+                >
+                  Cambiar
+                </button>
+                {tenant.login_slug && tenant.status === "ACTIVE" && (
+                  <button
+                    type="button" disabled={busy}
+                    className="cursor-pointer text-xs font-medium text-[color:var(--p-brand-text)] hover:underline disabled:opacity-50"
+                    onClick={() => void sendLoginLink()}
+                  >
+                    Enviar al administrador
+                  </button>
+                )}
+              </span>,
+            ],
             ["Plan", sub ? <span key="p">{sub.plan}{sub.trial && <span className="ml-1.5"><Chip tone="info">Prueba</Chip></span>}</span> : <span key="p" className="app-muted">Sin suscripción</span>],
             sub ? ["Periodo", PERIODS[sub.billing_period] ?? sub.billing_period] : null,
             sub ? ["Precio", money(sub.billing_period === "ANNUAL" ? sub.annual_price : sub.monthly_price, sub.currency) + (sub.billing_period === "ANNUAL" ? " al año" : " al mes")] : null,
@@ -440,6 +486,35 @@ export function TenantDetail({ id }: { id: string }) {
           <p className="app-muted p-4 text-xs">Sin cobros registrados aún (la empresa inició con periodo de prueba o activación directa).</p>
         )}
       </Card>
+
+      {slugDraft !== null && (
+        <Modal
+          title="Cambiar enlace de ingreso"
+          size="sm"
+          onClose={() => setSlugDraft(null)}
+          footer={<>
+            <Btn variant="secondary" onClick={() => setSlugDraft(null)}>Cancelar</Btn>
+            <Btn
+              disabled={busy || slugDraft.trim().length < 3}
+              onClick={() => void act(async () => {
+                await apiFetch(`/v1/superadmin/tenants/${id}/login-slug`, { method: "PUT", body: JSON.stringify({ login_slug: slugDraft.trim().toLowerCase() }) });
+                setSlugDraft(null);
+              }, "Enlace de ingreso cambiado")}
+            >
+              Guardar
+            </Btn>
+          </>}
+        >
+          <Field label="Nombre corto" required hint="De 3 a 40 letras minúsculas, números o guiones.">
+            <input
+              className={INPUT} value={slugDraft} maxLength={40} autoFocus spellCheck={false}
+              onChange={(e) => setSlugDraft(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+            />
+          </Field>
+          <p className="app-muted mt-2 text-[12.5px]">Quedará como /e/{slugDraft || "…"}. El enlace anterior dejará de funcionar.</p>
+          {formError && <p className="mt-2 text-[13px] text-[color:var(--p-danger-text)]">{formError}</p>}
+        </Modal>
+      )}
 
       {openPaymentModal && (
         <Modal

@@ -19,6 +19,10 @@ export type Branding = {
   email: string | null;
   website: string | null;
   customized: boolean;
+  /** Enlace de ingreso con la marca: /e/{login_slug}. */
+  login_slug: string | null;
+  /** Texto de bienvenida de esa pantalla. */
+  login_welcome: string | null;
   updated_at: string | null;
 };
 

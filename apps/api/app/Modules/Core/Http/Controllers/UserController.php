@@ -301,7 +301,9 @@ class UserController extends Controller
         $company = (string) DB::table('tenants')->where('id', $tenantId)->value('name');
         $role = (string) DB::table('user_roles')->join('roles', 'roles.id', '=', 'user_roles.role_id')
             ->where('user_roles.tenant_id', $tenantId)->where('user_roles.user_id', $user->id)->value('roles.name');
-        $url = rtrim((string) config('app.frontend_url'), '/').'/reset-password?email='.rawurlencode($user->email);
+        // Con el enlace de la empresa: la pantalla para crear la contraseña sale con su marca.
+        $slug = \App\Services\LoginSlug::of($tenantId);
+        $url = rtrim((string) config('app.frontend_url'), '/').'/reset-password?email='.rawurlencode($user->email).($slug ? '&empresa='.rawurlencode($slug) : '');
 
         $code = PasswordResetController::issueCode($user, self::INVITATION_DAYS * 24 * 60);
         try {

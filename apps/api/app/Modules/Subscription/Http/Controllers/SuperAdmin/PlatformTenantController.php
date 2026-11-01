@@ -5,6 +5,7 @@ namespace App\Modules\Subscription\Http\Controllers\SuperAdmin;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\Controller;
 use App\Mail\TenantInvitationMail;
+use App\Mail\TenantLoginLinkMail;
 use App\Models\User;
 use App\Modules\Subscription\Models\SaasPlan;
 use App\Modules\Subscription\Support\ModuleCatalog;
@@ -54,6 +55,8 @@ class PlatformTenantController extends Controller
         abort_if($data === null, 404);
 
         $data['payments'] = $this->payments($tenant);
+        // Enlace de ingreso con su marca (/e/…).
+        $data['login_slug'] = \App\Services\LoginSlug::of($tenant);
 
         return response()->json([
             'tenant' => $data,
@@ -289,6 +292,66 @@ class PlatformTenantController extends Controller
         return response()->json($result);
     }
 
+    /** Cambiar el enlace de ingreso de la empresa (/e/{nombre-corto}); el anterior deja de funcionar. */
+    public function updateLoginSlug(Request $request, string $tenant): JsonResponse
+    {
+        abort_unless(Str::isUuid($tenant), 404);
+        abort_unless(DB::table('tenants')->where('id', $tenant)->exists(), 404);
+        $data = $request->validate(['login_slug' => ['required', 'string', 'max:40']], ['login_slug.required' => 'Escribe el nombre corto del enlace.']);
+        $slug = \App\Services\LoginSlug::validate($data['login_slug'], $tenant);
+        $before = \App\Services\LoginSlug::of($tenant);
+
+        DB::table('tenants')->where('id', $tenant)->update(['login_slug' => $slug, 'updated_at' => now()]);
+        PlatformAuditLogger::log($request->user()->id, 'tenant.login_slug_changed', 'Tenant', $tenant,
+            beforeData: ['login_slug' => $before], afterData: ['login_slug' => $slug]);
+        \App\Services\LoginSlug::forget($before, $slug);
+
+        return response()->json(['login_slug' => $slug]);
+    }
+
+    /** Enviar a los administradores activos de la empresa su enlace de ingreso con la marca. */
+    public function sendLoginLink(Request $request, string $tenant): JsonResponse
+    {
+        abort_unless(Str::isUuid($tenant), 404);
+        $row = DB::table('tenants')->where('id', $tenant)->first(['name', 'status', 'login_slug']);
+        abort_if(! $row, 404);
+        if ($row->status !== 'ACTIVE' || ! $row->login_slug) {
+            throw ValidationException::withMessages(['tenant' => [$row->status !== 'ACTIVE'
+                ? 'La empresa no está activa: su enlace de ingreso no funciona todavía.'
+                : 'La empresa no tiene enlace de ingreso.']]);
+        }
+
+        $emails = DB::transaction(function () use ($tenant) {
+            $this->enterTenant($tenant);
+
+            return DB::table('user_roles')
+                ->join('roles', fn ($join) => $join->on('roles.id', '=', 'user_roles.role_id')->whereRaw('upper(roles.code) = ?', ['ADMIN']))
+                ->join('tenant_users', fn ($join) => $join->on('tenant_users.user_id', '=', 'user_roles.user_id')
+                    ->where('tenant_users.tenant_id', $tenant)->where('tenant_users.status', 'ACTIVE'))
+                ->join('users', 'users.id', '=', 'user_roles.user_id')
+                ->where('user_roles.tenant_id', $tenant)->where('users.status', 'ACTIVE')
+                ->distinct()->pluck('users.email');
+        });
+        if ($emails->isEmpty()) {
+            throw ValidationException::withMessages(['tenant' => ['La empresa no tiene administradores activos a quienes enviarlo.']]);
+        }
+
+        $url = rtrim((string) config('app.frontend_url'), '/').'/e/'.$row->login_slug;
+        $sent = [];
+        foreach ($emails as $email) {
+            try {
+                Mail::to($email)->send((new TenantLoginLinkMail($row->name, $url))->withBrand($tenant));
+                $sent[] = $email;
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
+        PlatformAuditLogger::log($request->user()->id, 'tenant.login_link_sent', 'Tenant', $tenant,
+            afterData: ['login_slug' => $row->login_slug], metadata: ['sent' => $sent]);
+
+        return response()->json(['sent' => $sent, 'failed' => $emails->diff($sent)->values()]);
+    }
+
     public function changePlan(Request $request, string $tenant): JsonResponse
     {
         abort_unless(Str::isUuid($tenant), 404);
@@ -403,13 +466,15 @@ class PlatformTenantController extends Controller
         });
         $company = DB::table('tenants')->where('id', $tenant)->value('name');
         $url = rtrim((string) config('app.frontend_url'), '/').'/reset-password';
+        $slug = \App\Services\LoginSlug::of($tenant);
 
         $sent = [];
         foreach (User::whereIn('id', $userIds)->whereNull('last_login_at')->where('status', 'ACTIVE')->get() as $user) {
             $code = PasswordResetController::issueCode($user, self::INVITATION_DAYS * 24 * 60);
             try {
                 // Con el correo en el enlace, la pantalla abre con él ya puesto.
-                Mail::to($user->email)->send(new TenantInvitationMail($company, $code, self::INVITATION_DAYS, $url.'?email='.rawurlencode($user->email)));
+                Mail::to($user->email)->send(new TenantInvitationMail($company, $code, self::INVITATION_DAYS,
+                    $url.'?email='.rawurlencode($user->email).($slug ? '&empresa='.rawurlencode($slug) : '')));
                 $sent[] = $user->email;
             } catch (Throwable $e) {
                 report($e);

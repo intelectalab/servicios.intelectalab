@@ -78,6 +78,8 @@ Route::prefix('v1')->group(function () {
     Route::post('/login/mfa', [AuthController::class, 'verifyMfa'])->middleware('throttle:10,1,mfa');
     Route::post('/forgot-password', [PasswordResetController::class, 'forgotPassword'])->middleware('throttle:5,1,forgot');
     Route::post('/reset-password', [PasswordResetController::class, 'resetPassword'])->middleware('throttle:10,1,reset');
+    // Pantalla de ingreso con la marca de una empresa (/e/{nombre-corto}): solo nombre, logo, color y bienvenida.
+    Route::get('/public/login-brand/{slug}', [\App\Http\Controllers\BrandingController::class, 'publicLogin'])->middleware('throttle:30,1,login-brand');
 
     Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 
@@ -146,6 +148,7 @@ Route::prefix('v1')->group(function () {
             Route::put('/branding', [\App\Http\Controllers\BrandingController::class, 'update']);
             Route::post('/branding/logo', [\App\Http\Controllers\BrandingController::class, 'uploadLogo'])->middleware('throttle:20,1,branding');
             Route::delete('/branding/logo', [\App\Http\Controllers\BrandingController::class, 'removeLogo']);
+            Route::put('/branding/login-page', [\App\Http\Controllers\BrandingController::class, 'updateLoginPage']);
         });
 
         // Buscador global de la cabecera
@@ -911,6 +914,8 @@ Route::prefix('v1')->group(function () {
         Route::post('/tenants/{tenant}/transitions', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'transition']);
         Route::put('/tenants/{tenant}/plan', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'changePlan']);
         Route::post('/tenants/{tenant}/extend-subscription', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'extendSubscription']);
+        Route::put('/tenants/{tenant}/login-slug', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'updateLoginSlug']);
+        Route::post('/tenants/{tenant}/login-link', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'sendLoginLink'])->middleware('throttle:10,1,platform-login-link');
         Route::post('/tenants/{tenant}/apply-plan-modules', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'applyPlanModules']);
         Route::post('/tenants/{tenant}/admins/{user}/invitation', [\App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformTenantController::class, 'resendInvitation'])->middleware('throttle:10,1,platform-invite');
 

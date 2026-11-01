@@ -65,14 +65,17 @@ class TenantRegisterController extends Controller
         $validity = $hasTrial ? "Prueba gratis hasta el {$until}" : ($annual ? 'Anual' : 'Mensual').", vigente hasta el {$until}";
         $frontend = rtrim((string) config('app.frontend_url'), '/');
 
+        // Su propio enlace de ingreso (/e/…), con la marca de la empresa.
+        $loginUrl = $tenant->login_slug ? "{$frontend}/e/{$tenant->login_slug}" : "{$frontend}/login";
         $welcome = [
             'Empresa' => $tenant->name,
             'Plan' => $plan->name,
             'Vigencia' => $validity,
             $hasTrial ? 'Precio al terminar la prueba' : 'Precio' => $priceText,
             'Correo de acceso' => $user->email,
+            'Tu enlace de ingreso' => $loginUrl,
         ];
-        $this->sendSafely($user->email, new TenantWelcomeMail($tenant->name, $welcome, $frontend.'/login'));
+        $this->sendSafely($user->email, new TenantWelcomeMail($tenant->name, $welcome, $loginUrl));
 
         $notice = array_filter([
             'Empresa' => $tenant->name,

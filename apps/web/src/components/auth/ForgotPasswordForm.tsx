@@ -1,13 +1,17 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import { Send, Loader2 } from "lucide-react";
 import AuthShell, { item, authLabel, authInput, authInputIcon, authButton, authGhostButton } from "./AuthShell";
+import { loginPath, useLoginBrand, withCompany, type LoginBrand } from "@/lib/login-brand";
 
-export default function ForgotPasswordForm() {
+export default function ForgotPasswordForm({ initialBrand }: { initialBrand?: LoginBrand | null }) {
   const router = useRouter();
+  // Desde el ingreso de una empresa (?empresa=…) se conserva su marca (ya consultada por el servidor).
+  const { brand, ready } = useLoginBrand(useSearchParams().get("empresa"), initialBrand);
+  const company = brand?.slug ?? null;
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -33,7 +37,7 @@ export default function ForgotPasswordForm() {
       }
 
       // Siguiente paso: ingresar el código recibido y la nueva contraseña.
-      router.push(`/reset-password?email=${encodeURIComponent(email)}`);
+      router.push(withCompany(`/reset-password?email=${encodeURIComponent(email)}`, company));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ocurrió un error. Intenta de nuevo.");
       setLoading(false);
@@ -42,6 +46,8 @@ export default function ForgotPasswordForm() {
 
   return (
     <AuthShell
+      brand={brand}
+      pending={!ready}
       title="Recuperar contraseña"
       subtitle="Le enviaremos un código para crear una nueva contraseña."
     >
@@ -91,7 +97,7 @@ export default function ForgotPasswordForm() {
             "Enviar código"
           )}
         </motion.button>
-        <motion.a variants={item} href="/login" className={authGhostButton}>
+        <motion.a variants={item} href={loginPath(company)} className={authGhostButton}>
           Volver al inicio de sesión
         </motion.a>
       </form>

@@ -40,6 +40,8 @@ export const PLATFORM_ACTIONS: Record<string, string> = {
   "tenant.modules_applied": "Módulos del plan aplicados",
   "tenant.invitation_sent": "Invitación al administrador enviada",
   "tenant.subscription_extended": "Pago registrado y vigencia extendida",
+  "tenant.login_slug_changed": "Enlace de ingreso cambiado",
+  "tenant.login_link_sent": "Enlace de ingreso enviado al administrador",
 };
 
 export const actionLabel = (action: string) => PLATFORM_ACTIONS[action] ?? action;

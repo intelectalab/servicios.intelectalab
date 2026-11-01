@@ -5,12 +5,16 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, CheckCircle2, Info } from "lucide-react";
 import AuthShell, { item, authLabel, authInput, authButton, authGhostButton, BRAND, BRAND_SOFT } from "./AuthShell";
+import { loginPath, useLoginBrand, type LoginBrand } from "@/lib/login-brand";
 
-export default function ResetPasswordForm() {
+export default function ResetPasswordForm({ initialBrand }: { initialBrand?: LoginBrand | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Llega desde "Recuperar contraseña"; si se abre la página directamente, se pide el correo.
   const emailFromQuery = searchParams.get("email") ?? "";
+  // Desde la invitación o el ingreso de una empresa (?empresa=…) se conserva su marca.
+  const { brand, ready } = useLoginBrand(searchParams.get("empresa"), initialBrand);
+  const company = brand?.slug ?? null;
 
   const [email, setEmail] = useState(emailFromQuery);
   const [code, setCode] = useState("");
@@ -46,7 +50,7 @@ export default function ResetPasswordForm() {
       }
 
       setDone(true);
-      setTimeout(() => router.push("/login"), 2000);
+      setTimeout(() => router.push(loginPath(company)), 2000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ocurrió un error. Intenta de nuevo.");
     } finally {
@@ -56,10 +60,10 @@ export default function ResetPasswordForm() {
 
   if (done) {
     return (
-      <AuthShell title="Contraseña actualizada" subtitle="Te estamos redirigiendo para que inicies sesión.">
+      <AuthShell brand={brand} title="Contraseña actualizada" subtitle="Te estamos redirigiendo para que inicies sesión.">
         <div className="mt-7 flex flex-col items-center text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: BRAND_SOFT }}>
-            <CheckCircle2 size={22} color={BRAND} />
+            <CheckCircle2 size={22} color={`var(--p-accent, ${BRAND})`} />
           </span>
         </div>
       </AuthShell>
@@ -68,6 +72,8 @@ export default function ResetPasswordForm() {
 
   return (
     <AuthShell
+      brand={brand}
+      pending={!ready}
       title="Crear nueva contraseña"
       subtitle="Ingrese el código recibido y su nueva contraseña."
     >
@@ -169,7 +175,7 @@ export default function ResetPasswordForm() {
             "Guardar contraseña"
           )}
         </motion.button>
-        <motion.a variants={item} href="/login" className={authGhostButton}>
+        <motion.a variants={item} href={loginPath(company)} className={authGhostButton}>
           Cancelar
         </motion.a>
       </form>

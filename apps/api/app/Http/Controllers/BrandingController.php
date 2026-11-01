@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\AuditLogger;
 use App\Services\Branding;
+use App\Services\LoginSlug;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -54,6 +55,7 @@ class BrandingController extends Controller
                 afterData: ['logo_sha256' => $hash, 'primary_color' => $primary, 'secondary_color' => $secondary, 'size' => "{$width}x{$height}"],
             );
         });
+        LoginSlug::forget(LoginSlug::of($tenantId));
 
         return response()->json(Branding::of($tenantId));
     }
@@ -70,6 +72,7 @@ class BrandingController extends Controller
             ]);
         if ($updated) {
             AuditLogger::log(tenantId: $tenantId, userId: $request->user()->id, action: 'branding.logo_removed', entityType: 'CompanyBranding', entityId: $tenantId);
+            LoginSlug::forget(LoginSlug::of($tenantId));
         }
 
         return response()->json(Branding::of($tenantId));
@@ -118,8 +121,50 @@ class BrandingController extends Controller
                 afterData: collect($values)->except(['updated_by', 'updated_at'])->all(),
             );
         });
+        LoginSlug::forget(LoginSlug::of($tenantId));
 
         return response()->json(Branding::of($tenantId));
+    }
+
+    /** Página de ingreso: enlace propio (/e/{nombre-corto}) y texto de bienvenida. */
+    public function updateLoginPage(Request $request)
+    {
+        $data = $request->validate([
+            'login_slug' => ['required', 'string', 'max:40'],
+            'login_welcome' => ['nullable', 'string', 'max:240'],
+        ], [
+            'login_slug.required' => 'Escribe el nombre corto del enlace.',
+            'login_welcome.max' => 'La bienvenida admite hasta 240 caracteres.',
+        ]);
+        $tenantId = $this->tenant($request);
+        $slug = LoginSlug::validate($data['login_slug'], $tenantId);
+        $welcome = $this->text($data['login_welcome'] ?? null);
+
+        DB::transaction(function () use ($request, $tenantId, $slug, $welcome) {
+            $before = ['login_slug' => LoginSlug::of($tenantId), 'login_welcome' => DB::table('company_branding')->where('tenant_id', $tenantId)->value('login_welcome')];
+            DB::table('tenants')->where('id', $tenantId)->update(['login_slug' => $slug, 'updated_at' => now()]);
+            if (DB::table('company_branding')->where('tenant_id', $tenantId)->exists()) {
+                DB::table('company_branding')->where('tenant_id', $tenantId)->update(['login_welcome' => $welcome, 'updated_by' => $request->user()->id, 'updated_at' => now()]);
+            } else {
+                DB::table('company_branding')->insert(['tenant_id' => $tenantId, 'login_welcome' => $welcome, 'updated_by' => $request->user()->id, 'updated_at' => now()]);
+            }
+            AuditLogger::log(
+                tenantId: $tenantId, userId: $request->user()->id, action: 'branding.login_page', entityType: 'CompanyBranding', entityId: $tenantId,
+                beforeData: $before, afterData: ['login_slug' => $slug, 'login_welcome' => $welcome],
+            );
+            LoginSlug::forget($before['login_slug'], $slug);
+        });
+
+        return response()->json(Branding::of($tenantId));
+    }
+
+    /** Lo público de la marca para la pantalla de ingreso; 404 si el enlace no existe o la empresa no está activa. */
+    public function publicLogin(string $slug)
+    {
+        $brand = LoginSlug::brand($slug);
+        abort_if(! $brand, 404);
+
+        return response()->json($brand);
     }
 
     private function tenant(Request $request): string

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { FileDown, ImageUp, Lock, Trash2 } from "lucide-react";
+import { Copy, ExternalLink, FileDown, ImageUp, Lock, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
 import { fieldErrors, firstError } from "@/lib/crm";
@@ -143,8 +143,12 @@ export default function BrandingSettings() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
-  const [busy, setBusy] = useState<"logo" | "save" | "remove" | "pdf" | null>(null);
+  const [busy, setBusy] = useState<"logo" | "save" | "remove" | "pdf" | "login" | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // Página de ingreso: nombre corto del enlace y bienvenida (null = sin tocar, se muestra lo guardado).
+  const [loginSlug, setLoginSlug] = useState<string | null>(null);
+  const [loginWelcome, setLoginWelcome] = useState<string | null>(null);
+  const [loginErrors, setLoginErrors] = useState<Record<string, string>>({});
 
   function closePreview() {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -225,6 +229,36 @@ export default function BrandingSettings() {
     }
   }
 
+  async function saveLoginPage(event: FormEvent) {
+    event.preventDefault();
+    if (!branding) return;
+    setBusy("login");
+    try {
+      const data = await apiFetch<Branding>("/v1/branding/login-page", {
+        method: "PUT",
+        body: JSON.stringify({ login_slug: (loginSlug ?? branding.login_slug ?? "").trim().toLowerCase(), login_welcome: loginWelcome ?? branding.login_welcome }),
+      });
+      setLoginSlug(null);
+      setLoginWelcome(null);
+      setLoginErrors({});
+      applied(data, "Página de ingreso guardada");
+    } catch (err) {
+      setLoginErrors(fieldErrors(err));
+      toast(firstError(err, "No se pudo guardar la página de ingreso."), "danger");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function copyLoginLink(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast("Enlace copiado");
+    } catch {
+      toast("No se pudo copiar: selecciónalo y cópialo a mano.", "warning");
+    }
+  }
+
   /** PDF de ejemplo con lo que está en pantalla (aunque aún no se haya guardado). */
   async function samplePdf() {
     if (!branding || !form) return;
@@ -274,6 +308,10 @@ export default function BrandingSettings() {
   const primaryOk = HEX.test(form.primary_color);
   const lightPrimary = primaryOk && contrast(hexToRgb(form.primary_color), [255, 255, 255]) < 3;
   const set = (patch: Partial<Form>) => setForm({ ...form, ...patch });
+  const slugValue = loginSlug ?? branding.login_slug ?? "";
+  const welcomeValue = loginWelcome ?? branding.login_welcome ?? "";
+  const loginLink = branding.login_slug ? `${typeof window !== "undefined" ? window.location.origin : ""}/e/${branding.login_slug}` : "";
+  const slugChanged = Boolean(branding.login_slug) && slugValue.trim().toLowerCase() !== branding.login_slug;
   const readOnly = !canManage ? (
     <span title={deniedText("tenant.manage")}><Chip tone="neutral"><Lock size={11} className="mr-1" aria-hidden="true" />Solo lectura</Chip></span>
   ) : undefined;
@@ -366,6 +404,58 @@ export default function BrandingSettings() {
               <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <Btn variant="secondary" disabled={busy !== null || !canManage} onClick={() => { setForm(toForm(branding)); setErrors({}); }}>Descartar cambios</Btn>
                 <Btn type="submit" permission="tenant.manage" disabled={busy !== null || !primaryOk}>{busy === "save" ? "Guardando…" : "Guardar"}</Btn>
+              </div>
+            </Card>
+          </form>
+
+          <form onSubmit={saveLoginPage}>
+            <Card title="Página de ingreso" actions={readOnly}>
+              <p className="app-muted mb-3 text-[12.5px]">
+                Tu propio enlace para entrar al sistema: muestra tu logo, tu color y tu bienvenida. Compártelo con tu equipo y con tus clientes del portal.
+              </p>
+              {loginLink && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] px-3 py-2">
+                  <code className="min-w-0 flex-1 break-all text-[13px]">{loginLink}</code>
+                  <Btn type="button" size="sm" variant="secondary" onClick={() => copyLoginLink(loginLink)}>
+                    <Copy size={14} />
+                    <span>Copiar</span>
+                  </Btn>
+                  <a href={loginLink} target="_blank" rel="noreferrer" className={btnClass("ghost", "sm")}>
+                    <ExternalLink size={14} />
+                    <span>Abrir</span>
+                  </a>
+                </div>
+              )}
+              <FormGrid>
+                <Field label="Nombre corto del enlace" required error={loginErrors.login_slug} hint="De 3 a 40 letras minúsculas, números o guiones.">
+                  <input
+                    className={INPUT} value={slugValue} maxLength={40} disabled={!canManage} autoComplete="off" spellCheck={false}
+                    onChange={(e) => setLoginSlug(e.target.value.toLowerCase().replace(/\s+/g, "-"))}
+                  />
+                </Field>
+                <Field label="Texto de bienvenida" error={loginErrors.login_welcome} hint="Opcional, hasta 240 caracteres.">
+                  <textarea
+                    className={INPUT} rows={3} value={welcomeValue} maxLength={240} disabled={!canManage}
+                    placeholder="Ingresa con tu usuario para continuar."
+                    onChange={(e) => setLoginWelcome(e.target.value)}
+                  />
+                </Field>
+              </FormGrid>
+              {slugChanged && (
+                <div className="mt-3">
+                  <Notice tone="warn">Al guardar, el enlace anterior dejará de funcionar: avisa a tu equipo del nuevo.</Notice>
+                </div>
+              )}
+              <div className="mt-4 flex flex-wrap justify-end gap-2">
+                <Btn
+                  variant="secondary" disabled={busy !== null || !canManage}
+                  onClick={() => { setLoginSlug(null); setLoginWelcome(null); setLoginErrors({}); }}
+                >
+                  Descartar cambios
+                </Btn>
+                <Btn type="submit" permission="tenant.manage" disabled={busy !== null || slugValue.trim().length < 3}>
+                  {busy === "login" ? "Guardando…" : "Guardar"}
+                </Btn>
               </div>
             </Card>
           </form>
