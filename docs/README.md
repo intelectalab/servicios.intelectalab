@@ -100,6 +100,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Reportes (Control): 7 reportes con el alcance de cada rol, gráficos, rango de fechas, exportación y "Mis exportaciones" | [cambios/2026-11-01_reportes.md](cambios/2026-11-01_reportes.md) |
 | 2026-11-01 | Reportes: tres indicadores por reporte comparados con el periodo anterior, y el clic en la fila abre la ficha | [cambios/2026-11-01_reportes-indicadores-y-fichas.md](cambios/2026-11-01_reportes-indicadores-y-fichas.md) |
 | 2026-11-01 | Reportes en PDF con la marca de la empresa: indicadores, resumen y la tabla filtrada | [cambios/2026-11-01_reportes-en-pdf.md](cambios/2026-11-01_reportes-en-pdf.md) |
+| 2026-11-01 | Workflows (Control): reglas cuando-si-entonces con 12 disparadores, avisos a rol, responsable o portal, plantillas e historial | [cambios/2026-11-01_workflows.md](cambios/2026-11-01_workflows.md) |
 
 ## Cómo se escribe cada entrada
 

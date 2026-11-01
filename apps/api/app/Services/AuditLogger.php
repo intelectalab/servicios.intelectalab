@@ -17,8 +17,9 @@ class AuditLogger
         ?array $afterData = null,
         array $metadata = []
     ): void {
+        $id = (string) Str::uuid();
         DB::table('audit_logs')->insert([
-            'id' => (string) Str::uuid(),
+            'id' => $id,
             'tenant_id' => $tenantId,
             'user_id' => $userId,
             'action' => $action,
@@ -32,5 +33,8 @@ class AuditLogger
             'metadata' => json_encode($metadata),
             'created_at' => now(),
         ]);
+
+        // Si la acción dispara reglas de la empresa (Control → Workflows), corren al guardar.
+        Workflows::audited($tenantId, $userId, $action, $entityType, $entityId, $id);
     }
 }

@@ -16,6 +16,7 @@ class ModulePermissions
         'users.view', 'users.manage', 'users.export', 'tenant.manage', 'audit.view', 'audit.export', 'credit.approve',
         'credentials.view', 'credentials.manage', 'credentials.use', 'credentials.reveal', 'credentials.delete', 'credentials.export',
         'reports.view', 'reports.export',
+        'workflows.view', 'workflows.manage', 'workflows.export',
     ];
 
     /**

@@ -5104,7 +5104,9 @@ CREATE TABLE public.workflow_definitions (
     active boolean DEFAULT true NOT NULL,
     configuration jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    updated_by uuid
 );
 
 
@@ -5119,10 +5121,16 @@ CREATE TABLE public.workflow_runs (
     tenant_id uuid NOT NULL,
     workflow_definition_id uuid NOT NULL,
     entity_id uuid NOT NULL,
-    status character varying(30) DEFAULT 'RUNNING'::character varying NOT NULL,
+    status character varying(30) DEFAULT 'DONE'::character varying NOT NULL,
     context jsonb DEFAULT '{}'::jsonb NOT NULL,
     started_at timestamp with time zone DEFAULT now() NOT NULL,
-    completed_at timestamp with time zone
+    completed_at timestamp with time zone,
+    event_key character varying(100),
+    trigger character varying(60),
+    entity_label character varying(255),
+    matched boolean,
+    result text,
+    CONSTRAINT workflow_runs_status_check CHECK (((status)::text = ANY ((ARRAY['DONE'::character varying, 'SKIPPED'::character varying, 'FAILED'::character varying])::text[])))
 );
 
 
@@ -7213,6 +7221,14 @@ ALTER TABLE ONLY public.workflow_definitions
 
 
 --
+-- Name: workflow_runs workflow_runs_event_unique; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.workflow_runs
+    ADD CONSTRAINT workflow_runs_event_unique UNIQUE (workflow_definition_id, event_key);
+
+
+--
 -- Name: workflow_runs workflow_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -8548,6 +8564,20 @@ CREATE UNIQUE INDEX ux_teams_tenant_name ON public.teams USING btree (tenant_id,
 --
 
 CREATE UNIQUE INDEX warranty_claims_ticket_key ON public.warranty_claims USING btree (ticket_id) WHERE (ticket_id IS NOT NULL);
+
+
+--
+-- Name: workflow_definitions_trigger_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX workflow_definitions_trigger_idx ON public.workflow_definitions USING btree (tenant_id, entity_type) WHERE active;
+
+
+--
+-- Name: workflow_runs_recent_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX workflow_runs_recent_idx ON public.workflow_runs USING btree (tenant_id, started_at DESC);
 
 
 --
@@ -13310,11 +13340,27 @@ ALTER TABLE ONLY public.work_orders
 
 
 --
+-- Name: workflow_definitions workflow_definitions_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.workflow_definitions
+    ADD CONSTRAINT workflow_definitions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: workflow_definitions workflow_definitions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
 --
 
 ALTER TABLE ONLY public.workflow_definitions
     ADD CONSTRAINT workflow_definitions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: workflow_definitions workflow_definitions_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.workflow_definitions
+    ADD CONSTRAINT workflow_definitions_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
 
 
 --
@@ -16575,14 +16621,14 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.work_orders TO erp_app;
 -- Name: TABLE workflow_definitions; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workflow_definitions TO erp_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.workflow_definitions TO erp_app;
 
 
 --
 -- Name: TABLE workflow_runs; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.workflow_runs TO erp_app;
+GRANT SELECT,INSERT ON TABLE public.workflow_runs TO erp_app;
 
 
 --
@@ -16696,6 +16742,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 77	2026_11_01_000100_tenant_login_page	67
 78	2026_11_01_000200_credential_vault_screen	68
 79	2026_11_01_000300_reports_permissions	69
+80	2026_11_01_000400_workflows	70
 \.
 
 
@@ -16892,6 +16939,9 @@ bc659651-e12e-4380-b1c9-99577a79f9d5	credit.approve	Aprobar sobre el límite de 
 b1d322b8-2a82-407d-9464-ae227bb08145	credentials.use	Usar credenciales	Copiar el valor al portapapeles sin verlo en pantalla. Pide motivo y queda registrado.	2026-09-15 05:23:34+00
 a2d3bf4f-51c7-4db2-9d3a-29cda5ee5d2a	credentials.reveal	Revelar credenciales	Ver el valor durante 20 segundos. Pide motivo y queda registrado.	2026-09-15 05:23:34+00
 9f1f94c1-c01d-41c2-bf18-a3ca65ba5809	credentials.delete	Revocar credenciales	Dejar una credencial sin uso. No se borra su historial.	2026-09-15 05:23:34+00
+e7087eb0-9640-4b34-81fb-a82239ff0bda	workflows.view	Ver workflows	Ver las reglas automáticas de la empresa y sus ejecuciones.	2026-11-01 22:40:20.245348+00
+f54f981d-b953-418d-8e9e-8cbb2635ce3e	workflows.manage	Gestionar workflows	Crear, editar, activar y desactivar reglas automáticas.	2026-11-01 22:40:20.245348+00
+e5c1383d-c3cb-4909-98fc-78f1a83f067c	workflows.export	Exportar workflows	Exportar el historial de ejecuciones.	2026-11-01 22:40:20.245348+00
 \.
 
 
@@ -16911,7 +16961,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 79, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 80, true);
 
 
 --

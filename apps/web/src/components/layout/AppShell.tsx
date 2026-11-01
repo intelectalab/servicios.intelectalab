@@ -79,7 +79,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/documents", label: "Documentos", module: "DOCUMENTOS", requiredPermission: "documents.view", icon: Folder, superModule: "Control" },
   { href: "/credentials", label: "Credential Vault", requiredPermission: "credentials.view", icon: KeyRound, superModule: "Control" },
   { label: "Integraciones", icon: Plug, superModule: "Control", soon: true },
-  { label: "Workflows", icon: Workflow, superModule: "Control", soon: true },
+  { href: "/workflows", label: "Workflows", requiredPermission: "workflows.view", icon: Workflow, superModule: "Control" },
   { href: "/reports", label: "Reportes", requiredPermission: "reports.view", icon: ChartLine, superModule: "Control" },
   { href: "/audit", label: "Auditoría", requiredPermission: "audit.view", icon: Eye, superModule: "Control" },
 

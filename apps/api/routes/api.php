@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\ReportController;
+use App\Http\Controllers\WorkflowController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Subscription\Http\Controllers\SaasPlanController;
 use App\Modules\Subscription\Http\Controllers\TenantRegisterController;
@@ -801,6 +802,17 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:reports.view')->group(function () {
             Route::get('/reports', [ReportController::class, 'index']);
             Route::get('/reports/{report}', [ReportController::class, 'show']);
+        });
+
+        // Control: Workflows (plan base). Las reglas no se borran: se desactivan.
+        Route::middleware('permission:workflows.view')->group(function () {
+            Route::get('/workflows', [WorkflowController::class, 'index']);
+            Route::get('/workflow-runs', [WorkflowController::class, 'runs']);
+        });
+        Route::middleware('permission:workflows.manage')->group(function () {
+            Route::post('/workflows', [WorkflowController::class, 'store']);
+            Route::put('/workflows/{workflow}', [WorkflowController::class, 'update']);
+            Route::post('/workflows/{workflow}/toggle', [WorkflowController::class, 'toggle']);
         });
 
         // Control: Credential Vault (plan base). Cada acción es un permiso distinto.

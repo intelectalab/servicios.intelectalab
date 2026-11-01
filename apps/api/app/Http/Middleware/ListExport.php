@@ -59,6 +59,7 @@ class ListExport
         'api/v1/documents' => 'documents',
         'api/v1/credentials' => 'credentials',
         'api/v1/reports/{report}' => 'reports',
+        'api/v1/workflow-runs' => 'workflows',
         'api/v1/users' => 'users',
         'api/v1/audit' => 'audit',
     ];
@@ -86,7 +87,8 @@ class ListExport
     {
         $data = $request->validate([
             'resource' => ['required', 'in:'.implode(',', array_unique(self::RESOURCES))],
-            'format' => ['required', 'in:xlsx,csv,pdf'],
+            // En PDF solo se descargan los reportes (con la marca de la empresa).
+            'format' => ['required', $request->input('resource') === 'reports' ? 'in:xlsx,csv,pdf' : 'in:xlsx,csv'],
             'rows' => ['required', 'integer', 'min:0'],
             'selection' => ['sometimes', 'boolean'],
             'filters' => ['sometimes', 'nullable', 'string', 'max:2000'],

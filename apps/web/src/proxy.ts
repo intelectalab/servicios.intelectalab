@@ -7,7 +7,7 @@ import { SCOPE_COOKIE, TOKEN_COOKIE } from "@/lib/auth";
 const AUTH_ROUTES = ["/login", "/forgot-password", "/reset-password", "/e"];
 
 // Cada tipo de cuenta tiene su propia consola y no entra a la otra.
-const TENANT_PREFIXES = ["/dashboard", "/notifications", "/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/checklist-templates", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/purchase-orders", "/supplier-invoices", "/payables", "/journal", "/ledger", "/financial-statements", "/budgets", "/chart-of-accounts", "/tickets", "/warranty-claims", "/sla-calendar", "/documents", "/credentials", "/reports", "/audit", "/roles", "/users", "/portal-users", "/settings", "/profile"];
+const TENANT_PREFIXES = ["/dashboard", "/notifications", "/customers", "/suppliers", "/employees", "/actors", "/crm", "/services", "/quotations", "/contracts", "/orders", "/portal-requests", "/contracted-services", "/work-orders", "/checklist-templates", "/projects", "/timesheets", "/agenda", "/campo", "/billable-events", "/invoices", "/receivables", "/payments", "/recurring", "/banks", "/fiscal", "/exchange-rates", "/purchase-orders", "/supplier-invoices", "/payables", "/journal", "/ledger", "/financial-statements", "/budgets", "/chart-of-accounts", "/tickets", "/warranty-claims", "/sla-calendar", "/documents", "/credentials", "/reports", "/workflows", "/audit", "/roles", "/users", "/portal-users", "/settings", "/profile"];
 const PLATFORM_PREFIXES = ["/superadmin"];
 // Portal de clientes: experiencia aparte. "/portal" no coincide con "/portal-requests" ni "/portal-users".
 const PORTAL_PREFIXES = ["/portal"];
@@ -138,6 +138,7 @@ export const config = {
     "/documents/:path*",
     "/credentials/:path*",
     "/reports/:path*",
+    "/workflows/:path*",
     "/sla-calendar/:path*",
     "/audit/:path*",
     "/roles/:path*",
