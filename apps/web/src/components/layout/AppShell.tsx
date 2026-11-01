@@ -18,6 +18,7 @@ import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type BuiltMenuItem, type MenuItem } from "@/components/layout/Sidebar";
 import { Card, LinkBtn, LoadError, Screen } from "@/components/ui/proto";
 import { shortDate } from "@/lib/commercial";
+import { RENEWAL_WARNING_DAYS, daysUntil, expiryText } from "@/lib/subscription";
 
 // Menú con los grupos y el orden del prototipo.
 //  - Ítems con "href": pantallas ya construidas. "module" es el código del catálogo
@@ -308,6 +309,12 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
     document.title = pageTitle;
   }, [pageTitle, pathname]);
 
+  // Días de vigencia para el aviso de renovación: solo a quien administra la empresa (Configuración).
+  const renewalDays = !bannerDismissed && subscription?.ends_at && permissions.includes("tenant.manage")
+    ? daysUntil(subscription.ends_at)
+    : null;
+  const showRenewal = renewalDays !== null && renewalDays <= RENEWAL_WARNING_DAYS;
+
   return (
     <div className="app-page flex h-screen min-h-0 overflow-hidden">
       <title>{pageTitle}</title>
@@ -372,43 +379,37 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
           notifications
         />
 
-        {/* Aviso sutil de suscripción / vigencia si faltan 7 días o menos */}
-        {(() => {
-          if (!subscription?.ends_at || bannerDismissed) return null;
-          const diffDays = Math.ceil((new Date(subscription.ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-          if (diffDays > 7) return null;
-
-          return (
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-300 bg-amber-50 px-4 py-2 text-xs text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
-              <div className="flex items-center gap-2">
-                <span className="rounded bg-amber-200/80 px-1.5 py-0.5 text-[10.5px] font-semibold text-amber-900 dark:bg-amber-900/60 dark:text-amber-200">
-                  {subscription.is_trial ? "Periodo de prueba" : "Aviso de suscripción"}
-                </span>
-                <span>
-                  Tu periodo {subscription.is_trial ? "de prueba" : "de suscripción"}{" "}
-                  <strong className="font-semibold">{diffDays < 0 ? "venció" : diffDays === 0 ? "vence hoy" : `vence en ${diffDays} día${diffDays === 1 ? "" : "s"}`}</strong>{" "}
-                  ({shortDate(subscription.ends_at)}).
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Link
-                  href="/profile"
-                  className="rounded-md border border-amber-300 bg-white/90 px-2.5 py-1 text-xs font-medium text-amber-950 shadow-2xs transition hover:bg-white dark:border-amber-700/60 dark:bg-amber-900/50 dark:text-amber-100 dark:hover:bg-amber-900/80"
-                >
-                  Extender plan
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setBannerDismissed(true)}
-                  className="cursor-pointer rounded p-1 text-amber-700 hover:bg-amber-200/60 dark:text-amber-400 dark:hover:bg-amber-900/50 transition"
-                  aria-label="Cerrar aviso"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+        {/* Vigencia: a quien administra la empresa, cuando faltan 7 días o menos (o ya venció). Colores de aviso del sistema. */}
+        {showRenewal && renewalDays !== null && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--p-notice-line)] bg-[var(--p-notice-bg)] px-4 py-2 text-xs text-[color:var(--p-notice-text)]">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-[var(--p-warning-soft)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[color:var(--p-warning-text)]">
+                {subscription?.is_trial ? "Periodo de prueba" : "Aviso de suscripción"}
+              </span>
+              <span>
+                Tu periodo {subscription?.is_trial ? "de prueba" : "de suscripción"}{" "}
+                <strong className="font-semibold">{expiryText(renewalDays)}</strong>{" "}
+                ({shortDate(subscription?.ends_at ?? null)}).
+              </span>
             </div>
-          );
-        })()}
+            <div className="flex items-center gap-2">
+              <Link
+                href="/profile"
+                className="rounded-md border border-[color:var(--p-notice-line)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-medium text-[color:var(--p-notice-text)] transition hover:bg-[var(--app-surface-muted)]"
+              >
+                Extender plan
+              </Link>
+              <button
+                type="button"
+                onClick={() => setBannerDismissed(true)}
+                className="cursor-pointer rounded p-1 transition hover:bg-[var(--p-warning-soft)]"
+                aria-label="Cerrar aviso"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
 
         <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">
           <AccessProvider value={{ permissions, scopes, loading: permissionsLoading }}>

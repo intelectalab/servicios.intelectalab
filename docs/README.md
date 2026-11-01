@@ -91,6 +91,8 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-10-27 | Límite de crédito del cliente: aviso con motivo o bloqueo (regla de la empresa) al aprobar cotizaciones y activar contratos, solo aviso al emitir, permiso para aprobar sobre el límite, barra de crédito en la ficha y "Contado" | [cambios/2026-10-27_limite-de-credito-del-cliente.md](cambios/2026-10-27_limite-de-credito-del-cliente.md) |
 | 2026-10-28 | Dar o quitar el acceso de Super Administrador con un comando del servidor, con invitación por correo y registro en la auditoría de plataforma | [cambios/2026-10-28_dar-acceso-de-superadmin.md](cambios/2026-10-28_dar-acceso-de-superadmin.md) |
 | 2026-10-28 | Editar el propio nombre en Mi perfil (ERP y consola), con auditoría y la cabecera al día | [cambios/2026-10-28_editar-nombre-en-mi-perfil.md](cambios/2026-10-28_editar-nombre-en-mi-perfil.md) |
+| 2026-10-29 | Suscripciones: registrar pagos por transferencia y extender la vigencia, aviso de vencimiento, plan y soporte en Mi perfil y Configuración de la plataforma (canales de soporte) | [cambios/2026-10-29_suscripciones-vigencia-pagos-offline-y-renovacion-whatsapp.md](cambios/2026-10-29_suscripciones-vigencia-pagos-offline-y-renovacion-whatsapp.md) |
+| 2026-10-31 | Correcciones de lo del 29: historial de pagos visible y en su propia tabla, extender sin fechas pasadas, configuración de plataforma solo para la consola y sin datos de ejemplo, aviso solo para quien administra y colores del sistema | [cambios/2026-10-31_correcciones-suscripciones-y-configuracion.md](cambios/2026-10-31_correcciones-suscripciones-y-configuracion.md) |
 
 ## Cómo se escribe cada entrada
 

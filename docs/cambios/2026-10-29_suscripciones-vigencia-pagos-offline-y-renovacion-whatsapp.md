@@ -10,7 +10,7 @@ Fecha: 2026-10-29.
 4. Definir un **canal claro de comunicación y renovación para el cliente**:
    - Banner de advertencia en el ERP cuando le queden 7 días o menos de vigencia (o si ya venció).
    - Botón directo de **1 clic a WhatsApp** con mensaje precargado con los datos de su empresa y plan.
-   - Ventana con los **datos de pago bancarios oficiales** (BCP, BBVA, Yape/Plin) para transferir y adjuntar comprobante.
+   - Ventana con los **datos de pago bancarios oficiales** (BCP, BBVA, Yape/Plin) para transferir y adjuntar comprobante. **No se hizo:** Mi perfil ofrece WhatsApp y correo; los datos bancarios siguen pendientes (se necesitan las cuentas reales).
 
 ---
 
@@ -68,8 +68,10 @@ Fecha: 2026-10-29.
 - **Backend (PHPUnit):**
   - Nueva prueba en `tests/Feature/PlatformTenantsTest.php`:
     - `test_superadmin_can_extend_tenant_subscription_with_custom_amount_and_date`: verifica que el endpoint registre el pago, cambie la fecha de expiración, guarde el medio y la referencia, y que la ficha `show` devuelva el cobro en el historial.
-  - `HeaderFeaturesTest`: verifica que `access()` devuelva los datos de sesión y suscripción intactos.
-  - Resultados: **16 pruebas unitarias pasadas (210 aserciones), 0 fallos**.
+  - `test_superadmin_can_manage_platform_settings`: guardar los canales y verlos en `/me/access` y `/me/profile`.
+  - Resultados de ese día: 16 pruebas de esos archivos (no la suite completa). La suscripción en `/me/access` no tenía prueba propia.
+
+> **Corregido el 2026-10-31** (`2026-10-31_correcciones-suscripciones-y-configuracion.md`): el historial de pagos no se veía en el servidor, los pagos pasaron a su propia tabla, extender ya no acepta fechas pasadas ni acorta, `platform_settings` quedó solo para la consola, sin datos de ejemplo, aviso solo para quien administra la empresa y colores del sistema.
 - **Frontend (TypeScript):**
   - `npx tsc --noEmit` en `apps/web`: **0 errores de compilación**.
 - **Prototipo interactivo:**

@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
-import { Check, LifeBuoy, Mail, MessageSquare, Phone, Save } from "lucide-react";
-import { apiFetch } from "@/lib/api";
-import { Btn, Card, Chip, Field, INPUT, LoadError, PageHead, Screen, useToasts } from "@/components/ui/proto";
+import { LifeBuoy, Mail, MessageSquare, Phone, Save } from "lucide-react";
+import { ApiError, apiFetch } from "@/lib/api";
+import { Btn, Card, Chip, Field, INPUT, LoadError, Notice, PageHead, Screen, useToasts } from "@/components/ui/proto";
 import type { PlatformSettings, PlatformSupportSettings } from "@/types/platform";
 
 export function PlatformSettingsView() {
@@ -11,12 +11,11 @@ export function PlatformSettingsView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  // Sin canales guardados, las empresas no ven ningún dato de contacto.
+  const [configured, setConfigured] = useState(false);
 
-  const [form, setForm] = useState<PlatformSupportSettings>({
-    whatsapp: "+51999999999",
-    email: "soporte@erp-saas.com",
-    schedule: "Lunes a Viernes de 8:00 a 18:00",
-  });
+  const [form, setForm] = useState<PlatformSupportSettings>({ whatsapp: "", email: "", schedule: "" });
 
   useEffect(() => {
     let cancelled = false;
@@ -24,13 +23,14 @@ export function PlatformSettingsView() {
       .then((data) => {
         if (!cancelled && data.support) {
           setForm({
-            whatsapp: data.support.whatsapp ?? "+51999999999",
-            email: data.support.email ?? "soporte@erp-saas.com",
+            whatsapp: data.support.whatsapp ?? "",
+            email: data.support.email ?? "",
             schedule: data.support.schedule ?? "",
           });
+          setConfigured(true);
         }
       })
-      .catch((err) => {
+      .catch(() => {
         if (!cancelled) setError("No se pudo cargar la configuración de la plataforma.");
       })
       .finally(() => {
@@ -45,15 +45,21 @@ export function PlatformSettingsView() {
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
+    setErrors({});
     try {
       const res = await apiFetch<{ message: string; support: PlatformSupportSettings }>("/v1/superadmin/settings", {
         method: "PUT",
         body: JSON.stringify({ support: form }),
       });
       setForm(res.support);
+      setConfigured(true);
       toast("Configuración de soporte guardada correctamente.", "success");
-    } catch {
-      toast("Error al guardar la configuración de la plataforma.", "danger");
+    } catch (err) {
+      // El motivo de cada campo, junto a él (support.whatsapp → whatsapp).
+      if (err instanceof ApiError && err.errors) {
+        setErrors(Object.fromEntries(Object.entries(err.errors).map(([field, messages]) => [field.replace("support.", ""), messages[0]])));
+      }
+      toast(err instanceof ApiError ? err.message : "No se pudo guardar la configuración de la plataforma.", "danger");
     } finally {
       setSaving(false);
     }
@@ -96,15 +102,19 @@ export function PlatformSettingsView() {
               Estos datos se muestran automáticamente en el ERP de cada cliente cuando consultan su plan,
               cuando reciben alertas preventivas de vencimiento o al solicitar extensiones de vigencia.
             </p>
+            {!configured && (
+              <Notice tone="warn">Aún no hay canales guardados: las empresas no ven ningún dato de contacto hasta que los guardes.</Notice>
+            )}
 
             <div className="space-y-4">
               <Field
                 label="WhatsApp oficial de soporte y pagos"
                 required
+                error={errors.whatsapp}
                 hint="Incluye código de país. Ej: +51 987 654 321 o 51987654321."
               >
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[color:var(--app-text-muted)]">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[color:var(--app-muted)]">
                     <Phone size={15} />
                   </span>
                   <input
@@ -112,7 +122,7 @@ export function PlatformSettingsView() {
                     className={`${INPUT} pl-9`}
                     value={form.whatsapp}
                     onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-                    placeholder="+51999999999"
+                    placeholder="+51 987 654 321"
                     required
                   />
                 </div>
@@ -121,10 +131,11 @@ export function PlatformSettingsView() {
               <Field
                 label="Correo electrónico de facturación y soporte"
                 required
+                error={errors.email}
                 hint="Casilla donde los clientes pueden enviar consultas o adjuntar comprobantes."
               >
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[color:var(--app-text-muted)]">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[color:var(--app-muted)]">
                     <Mail size={15} />
                   </span>
                   <input
@@ -140,6 +151,7 @@ export function PlatformSettingsView() {
 
               <Field
                 label="Horario de atención (opcional)"
+                error={errors.schedule}
                 hint="Informativo para que los clientes sepan cuándo recibirán respuesta inmediata."
               >
                 <input
@@ -179,32 +191,32 @@ export function PlatformSettingsView() {
 
               <div className="rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--p-success-soft)] text-[color:var(--p-success-text)]">
                     <MessageSquare size={14} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <strong className="block text-xs font-semibold">WhatsApp de Soporte</strong>
                     <span className="app-muted truncate block text-[11px]">{form.whatsapp || "Sin número"}</span>
                   </div>
-                  <span className="text-[11px] font-medium text-[color:var(--p-brand)]">Chat →</span>
+                  <span className="text-[11px] font-medium text-[color:var(--p-brand-text)]">Chat →</span>
                 </div>
               </div>
 
               <div className="rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--p-brand-soft)] text-[color:var(--p-brand-soft-text)]">
                     <Mail size={14} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <strong className="block text-xs font-semibold">Correo de Facturación</strong>
                     <span className="app-muted truncate block text-[11px]">{form.email || "Sin correo"}</span>
                   </div>
-                  <span className="text-[11px] font-medium text-[color:var(--p-brand)]">Correo →</span>
+                  <span className="text-[11px] font-medium text-[color:var(--p-brand-text)]">Correo →</span>
                 </div>
               </div>
 
               {form.schedule && (
-                <div className="text-[11px] text-[color:var(--app-text-muted)] flex items-center gap-1.5 pt-1">
+                <div className="text-[11px] text-[color:var(--app-muted)] flex items-center gap-1.5 pt-1">
                   <LifeBuoy size={13} />
                   <span>Horario: {form.schedule}</span>
                 </div>

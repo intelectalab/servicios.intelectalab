@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Calendar, Mail, Minus, Pencil, Plus, RefreshCw } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import { money, shortDate } from "@/lib/commercial";
 import { dateTimeText } from "@/lib/portal";
 import { count, PERIODS, subscriptionState, tenantStatus, TRANSITION_LABELS } from "@/lib/platform";
+import { extensionBase } from "@/lib/subscription";
 import type { ExportColumn } from "@/lib/export-table";
 import { Badge, Btn, Card, Chip, Field, INPUT, Kv, LoadError, Modal, PageHead, Screen, Timeline, useToasts } from "@/components/ui/proto";
 import { PickSelect } from "@/components/ui/pick-select";
@@ -97,8 +98,7 @@ export function TenantDetail({ id }: { id: string }) {
   const initPaymentModal = (months = 3) => {
     setFormError("");
     setPaymentMonths(months);
-    const base = sub?.ends_at ? new Date(sub.ends_at) : new Date();
-    const effectiveBase = base.getTime() < Date.now() ? new Date() : base;
+    const effectiveBase = extensionBase(sub?.ends_at);
     effectiveBase.setMonth(effectiveBase.getMonth() + months);
     setPaymentEndDate(formatIsoDate(effectiveBase));
 
@@ -114,8 +114,7 @@ export function TenantDetail({ id }: { id: string }) {
   const handleMonthsChange = (m: number) => {
     const months = Math.max(1, Math.min(120, m));
     setPaymentMonths(months);
-    const base = sub?.ends_at ? new Date(sub.ends_at) : new Date();
-    const effectiveBase = base.getTime() < Date.now() ? new Date() : base;
+    const effectiveBase = extensionBase(sub?.ends_at);
     effectiveBase.setMonth(effectiveBase.getMonth() + months);
     setPaymentEndDate(formatIsoDate(effectiveBase));
 
@@ -129,8 +128,7 @@ export function TenantDetail({ id }: { id: string }) {
     if (!val) return;
     const parts = val.split("-");
     const picked = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
-    const base = sub?.ends_at ? new Date(sub.ends_at) : new Date();
-    const effectiveBase = base.getTime() < Date.now() ? new Date() : base;
+    const effectiveBase = extensionBase(sub?.ends_at);
     const diffDays = Math.ceil((picked.getTime() - effectiveBase.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays > 0) {
       const approxMonths = Math.max(1, Math.round(diffDays / 30));
@@ -158,18 +156,19 @@ export function TenantDetail({ id }: { id: string }) {
   }, [load]);
 
   const tenant = detail?.tenant;
-  const currentPlan = detail?.plans.find((p) => p.id === tenant?.subscription?.plan_id);
+  // El compilador de React ya memoriza estos cálculos.
+  const currentPlan = detail?.plans.find((p) => p.id === detail.tenant.subscription?.plan_id);
   const targetPlan = detail?.plans.find((p) => p.id === planId);
 
-  const modules: ModuleRow[] = useMemo(() => (detail?.catalog ?? []).map((m) => ({
+  const modules: ModuleRow[] = (detail?.catalog ?? []).map((m) => ({
     ...m,
     on: m.is_core || (tenant?.modules ?? []).includes(m.code),
     inPlan: m.is_core || Boolean(currentPlan?.modules[m.code]),
     hasPlan: Boolean(currentPlan),
-  })), [detail, tenant, currentPlan]);
+  }));
 
   // Qué cambia al pasar al plan elegido: módulos que se encienden y que se apagan (sin borrar datos).
-  const planDiff = useMemo(() => {
+  const planDiff = (() => {
     if (!targetPlan) return { on: [] as string[], off: [] as string[] };
     const name = (code: string) => detail?.catalog.find((m) => m.code === code)?.name ?? code;
     const target = new Set(Object.keys(targetPlan.modules));
@@ -177,7 +176,7 @@ export function TenantDetail({ id }: { id: string }) {
       on: modules.filter((m) => !m.is_core && !m.on && target.has(m.code)).map((m) => m.name),
       off: modules.filter((m) => !m.is_core && m.on && !target.has(m.code)).map((m) => name(m.code)),
     };
-  }, [targetPlan, modules, detail]);
+  })();
 
   async function act(run: () => Promise<unknown>, done: string) {
     setBusy(true);
@@ -407,7 +406,7 @@ export function TenantDetail({ id }: { id: string }) {
         {tenant.payments && tenant.payments.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-[color:var(--app-border)] bg-[var(--app-surface-muted)] text-[11.5px] font-semibold text-[color:var(--app-text-muted)]">
+              <thead className="border-b border-[color:var(--app-border)] bg-[var(--app-surface-muted)] text-[11.5px] font-semibold text-[color:var(--app-muted)]">
                 <tr>
                   <th className="px-4 py-2.5">Fecha</th>
                   <th className="px-4 py-2.5">Monto</th>
@@ -421,17 +420,17 @@ export function TenantDetail({ id }: { id: string }) {
                 {tenant.payments.map((p) => (
                   <tr key={p.id} className="hover:bg-[var(--app-surface-muted)]">
                     <td className="whitespace-nowrap px-4 py-2.5 font-medium">{shortDate(p.created_at)}</td>
-                    <td className="whitespace-nowrap px-4 py-2.5 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                    <td className="whitespace-nowrap px-4 py-2.5 font-mono font-bold text-[color:var(--p-success-text)]">
                       {money(p.amount, p.currency)}
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5">{p.months ? `+${p.months} meses` : "Personalizado"}</td>
                     <td className="px-4 py-2.5">
                       <span className="font-medium">{p.payment_method}</span>
-                      {p.reference && <small className="block font-mono text-[11px] text-[color:var(--app-text-muted)]">Ref: {p.reference}</small>}
-                      {p.notes && <small className="block text-[11px] italic text-[color:var(--app-text-muted)]">{p.notes}</small>}
+                      {p.reference && <small className="block font-mono text-[11px] text-[color:var(--app-muted)]">Ref: {p.reference}</small>}
+                      {p.notes && <small className="block text-[11px] italic text-[color:var(--app-muted)]">{p.notes}</small>}
                     </td>
                     <td className="whitespace-nowrap px-4 py-2.5 font-mono">{shortDate(p.new_ends_at)}</td>
-                    <td className="whitespace-nowrap px-4 py-2.5 text-[color:var(--app-text-muted)]">{p.created_by_name ?? "Superadmin"}</td>
+                    <td className="whitespace-nowrap px-4 py-2.5 text-[color:var(--app-muted)]">{p.created_by_name ?? "Superadmin"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -478,7 +477,7 @@ export function TenantDetail({ id }: { id: string }) {
                 <span className="app-muted block text-[11px] font-medium uppercase tracking-wider">Plan actual</span>
                 <div className="mt-0.5 flex items-baseline gap-2">
                   <strong className="text-base font-semibold">{currentPlan?.name ?? sub?.plan}</strong>
-                  <span className="font-mono text-xs text-[color:var(--app-text-muted)]">
+                  <span className="font-mono text-xs text-[color:var(--app-muted)]">
                     ({money(currentPlan?.monthly_price ?? sub?.monthly_price ?? 0, currentPlan?.currency ?? sub?.currency ?? "PEN")}/mes)
                   </span>
                 </div>
@@ -513,7 +512,7 @@ export function TenantDetail({ id }: { id: string }) {
                     onChange={(e) => handleMonthsChange(parseInt(e.target.value, 10) || 1)}
                     className="h-6 w-12 rounded border border-[color:var(--app-border)] bg-[var(--app-surface)] text-center font-mono text-xs font-bold"
                   />
-                  <span className="text-[11px] text-[color:var(--app-text-muted)]">meses</span>
+                  <span className="text-[11px] text-[color:var(--app-muted)]">meses</span>
                   <button
                     type="button"
                     onClick={() => handleMonthsChange(paymentMonths + 1)}
@@ -583,7 +582,7 @@ export function TenantDetail({ id }: { id: string }) {
               hint="Sugerido según el plan. Puedes editarlo libremente si acordaste un descuento o importe específico."
             >
               <div className="relative flex items-center">
-                <span className="pointer-events-none absolute left-3 font-mono font-semibold text-xs text-[color:var(--app-text-muted)]">
+                <span className="pointer-events-none absolute left-3 font-mono font-semibold text-xs text-[color:var(--app-muted)]">
                   {sub?.currency ?? "PEN"}
                 </span>
                 <input
@@ -593,7 +592,7 @@ export function TenantDetail({ id }: { id: string }) {
                   onChange={(e) => setPaymentAmount(e.target.value)}
                   className={`${INPUT} pl-12 pr-20 font-mono text-sm font-semibold`}
                 />
-                <span className="pointer-events-none absolute right-3 inline-flex items-center gap-1 text-[11px] text-[color:var(--app-text-muted)]">
+                <span className="pointer-events-none absolute right-3 inline-flex items-center gap-1 text-[11px] text-[color:var(--app-muted)]">
                   <Pencil size={11} />
                   Editable
                 </span>

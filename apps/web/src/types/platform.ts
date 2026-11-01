@@ -201,5 +201,6 @@ export type PlatformSupportSettings = {
 };
 
 export type PlatformSettings = {
-  support: PlatformSupportSettings;
+  /** null mientras la plataforma no configure sus canales. */
+  support: PlatformSupportSettings | null;
 };

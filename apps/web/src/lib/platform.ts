@@ -30,6 +30,7 @@ export const PLATFORM_ACTIONS: Record<string, string> = {
   "plan.deactivated": "Plan desactivado",
   "platform.export": "Exportación",
   "platform.access_denied": "Acceso rechazado a la consola",
+  "platform.settings_updated": "Configuración de la plataforma actualizada",
   "platform.super_admin_invited": "Super Administrador invitado",
   "platform.super_admin_reinvited": "Invitación de Super Administrador reenviada",
   "platform.super_admin_revoked": "Acceso de Super Administrador quitado",
@@ -38,6 +39,7 @@ export const PLATFORM_ACTIONS: Record<string, string> = {
   "tenant.plan_changed": "Plan de la empresa cambiado",
   "tenant.modules_applied": "Módulos del plan aplicados",
   "tenant.invitation_sent": "Invitación al administrador enviada",
+  "tenant.subscription_extended": "Pago registrado y vigencia extendida",
 };
 
 export const actionLabel = (action: string) => PLATFORM_ACTIONS[action] ?? action;

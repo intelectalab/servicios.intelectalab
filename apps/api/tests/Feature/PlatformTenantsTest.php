@@ -225,7 +225,12 @@ class PlatformTenantsTest extends TestCase
         $list = $this->getJson('/api/v1/superadmin/tenants')->assertOk()->json('data');
         $tenantId = $list[0]['id'];
 
-        $newEndsAt = now()->addMonths(4)->format('Y-m-d');
+        // Una fecha pasada o anterior a la vigencia actual no extiende nada.
+        $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/extend-subscription", [
+            'ends_at' => now()->subDay()->format('Y-m-d'), 'amount' => 10, 'payment_method' => 'Yape / Plin',
+        ])->assertStatus(422)->assertJsonValidationErrors('ends_at');
+
+        $newEndsAt = now()->addYears(30)->format('Y-m-d');
 
         $response = $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/extend-subscription", [
             'ends_at' => $newEndsAt,
@@ -241,9 +246,24 @@ class PlatformTenantsTest extends TestCase
         $this->assertEquals('OPE-94819284', $response['payment']['reference']);
         $this->assertEquals(4, $response['payment']['months']);
 
+        // Acortar después de extender tampoco.
+        $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/extend-subscription", [
+            'ends_at' => now()->addYears(29)->format('Y-m-d'), 'amount' => 10, 'payment_method' => 'Yape / Plin',
+        ])->assertStatus(422)->assertJsonValidationErrors('ends_at');
+
+        // La ficha lee los pagos fuera de cualquier contexto de empresa (como en el servidor).
+        DB::statement("SELECT set_config('app.tenant_id', '', false)");
         $detail = $this->getJson("/api/v1/superadmin/tenants/{$tenantId}")->assertOk()->json();
-        $this->assertNotEmpty($detail['tenant']['payments']);
+        $this->assertCount(1, $detail['tenant']['payments']);
         $this->assertEquals(1250.00, $detail['tenant']['payments'][0]['amount']);
+        $this->assertSame($response['payment']['id'], $detail['tenant']['payments'][0]['id']);
+
+        // El pago queda en su tabla, no en la configuración, y la app no lo puede cambiar ni borrar.
+        $this->inTenant($tenantId);
+        $this->assertArrayNotHasKey('payments', json_decode(DB::table('tenant_subscriptions')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->value('configuration'), true));
+        $paymentId = $response['payment']['id'];
+        $this->assertDatabaseRejects(fn () => DB::table('tenant_subscription_payments')->where('id', $paymentId)->update(['amount' => 1]));
+        $this->assertDatabaseRejects(fn () => DB::table('tenant_subscription_payments')->where('id', $paymentId)->delete());
     }
 
     public function test_company_and_portal_accounts_cannot_use_the_console(): void
@@ -288,6 +308,13 @@ class PlatformTenantsTest extends TestCase
 
         $this->assertSame('+51987654321', $putRes->json('support.whatsapp'));
         $this->assertSame('ayuda@erp-saas.com', $putRes->json('support.email'));
+        $this->getJson('/api/v1/superadmin/audit?action=platform.settings_updated')->assertOk()->assertJsonPath('data.0.action', 'platform.settings_updated');
+        $this->putJson('/api/v1/superadmin/settings', ['support' => ['whatsapp' => 'llámame', 'email' => 'x@y.pe']])
+            ->assertStatus(422)->assertJsonValidationErrors('support.whatsapp');
+
+        // La app de las empresas no puede leer ni cambiar la configuración de la plataforma.
+        $this->assertDatabaseRejects(fn () => DB::table('platform_settings')->update(['value' => json_encode(['whatsapp' => '1'])]));
+        $this->assertDatabaseRejects(fn () => DB::table('platform_settings')->count());
 
         // Client tenant gets updated settings in /me/access and /me/profile
         $this->makeTenant(['CRM']);

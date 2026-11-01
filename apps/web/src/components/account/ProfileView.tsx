@@ -4,9 +4,11 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Eye, EyeOff, Globe, LifeBuoy, Mail, MessageSquare, Pencil, Smartphone } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
 import { PROFILE_NAME_EVENT } from "@/lib/auth";
-import { Btn, Card, Chip, Field, INPUT, Kv, LoadError, Modal, PageHead, Screen, useToasts } from "@/components/ui/proto";
+import { useAccess } from "@/lib/access-context";
+import { Btn, Card, Chip, Field, INPUT, Kv, LoadError, Modal, Notice, PageHead, Screen, useToasts } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
 import { shortDate } from "@/lib/commercial";
+import { RENEWAL_WARNING_DAYS, daysUntil } from "@/lib/subscription";
 
 type Session = {
   id: number;
@@ -81,6 +83,14 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase() ?? "").join("");
 }
 
+/** "(Vencido)", "(Vence hoy)" o "(3 días restantes)" cuando faltan 7 días o menos. */
+function ValidityNote({ endsAt }: { endsAt: string }) {
+  const days = daysUntil(endsAt);
+  if (days < 0) return <span className="font-medium text-[color:var(--p-danger-text)]">(Vencido)</span>;
+  if (days > RENEWAL_WARNING_DAYS) return null;
+  return <span className="font-medium text-[color:var(--p-warning-text)]">{days === 0 ? "(Vence hoy)" : `(${days} ${days === 1 ? "día restante" : "días restantes"})`}</span>;
+}
+
 function firstError(err: unknown, fallback: string) {
   if (err instanceof ApiError) return (err.errors && Object.values(err.errors)[0]?.[0]) || err.message;
   return fallback;
@@ -89,6 +99,7 @@ function firstError(err: unknown, fallback: string) {
 /** Mi perfil y seguridad: cuenta, contraseña, sesiones y avisos. Lo usan la consola de la empresa y la de plataforma. */
 export default function ProfileView() {
   const { toast, toasts } = useToasts();
+  const { can } = useAccess();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
@@ -216,6 +227,8 @@ export default function ProfileView() {
   }
 
   const others = profile.sessions.filter((session) => !session.current).length;
+  // Renovar el plan le corresponde a quien administra la empresa.
+  const canRenew = Boolean(profile.tenant) && !profile.is_super_admin && can("tenant.manage");
   const reveal = (
     <button
       type="button"
@@ -295,38 +308,32 @@ export default function ProfileView() {
                       ? [
                           "Plan de la empresa",
                           profile.subscription ? (
-                            <span className="flex items-center gap-2">
+                            <span key="plan" className="flex items-center gap-2">
                               <strong className="font-medium">{profile.subscription.plan_name}</strong>
                               <Chip tone={profile.subscription.is_trial ? "warning" : "success"}>
                                 {profile.subscription.is_trial ? "Prueba gratuita" : "Activo"}
                               </Chip>
                             </span>
                           ) : (
-                            <span className="app-muted">Sin plan asignado</span>
+                            <span key="plan" className="app-muted">Sin plan asignado</span>
                           ),
                         ]
                       : null,
                     profile.tenant && !profile.is_super_admin && profile.subscription?.ends_at
                       ? [
                           "Vigencia",
-                          <span className="flex flex-wrap items-center gap-1.5">
+                          <span key="validity" className="flex flex-wrap items-center gap-1.5">
                             <span>Hasta el {shortDate(profile.subscription.ends_at)}</span>
-                            {(() => {
-                              const diffDays = Math.ceil(
-                                (new Date(profile.subscription.ends_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-                              );
-                              if (diffDays < 0) return <span className="font-medium text-[color:var(--p-danger-text)]">(Vencido)</span>;
-                              if (diffDays === 0) return <span className="font-medium text-amber-600">(Vence hoy)</span>;
-                              if (diffDays <= 7) return <span className="font-medium text-amber-600">({diffDays} días restantes)</span>;
-                              return null;
-                            })()}
-                            <button
-                              type="button"
-                              onClick={() => setShowSupportModal(true)}
-                              className="ml-1 cursor-pointer text-xs font-medium text-[color:var(--p-brand)] hover:underline"
-                            >
-                              Extender
-                            </button>
+                            <ValidityNote endsAt={profile.subscription.ends_at} />
+                            {canRenew && (
+                              <button
+                                type="button"
+                                onClick={() => setShowSupportModal(true)}
+                                className="ml-1 cursor-pointer text-xs font-medium text-[color:var(--p-brand-text)] hover:underline"
+                              >
+                                Extender
+                              </button>
+                            )}
                           </span>,
                         ]
                       : null,
@@ -342,11 +349,11 @@ export default function ProfileView() {
                   ]}
                 />
 
-                {/* Banner de soporte / extensión de plan */}
-                {profile.tenant && !profile.is_super_admin && (
+                {/* Extender o renovar: lo gestiona quien administra la empresa. */}
+                {canRenew && (
                   <div className="mt-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 rounded-xl border border-[color:var(--app-border)] bg-[var(--app-surface-muted)] p-3 text-xs">
                     <div className="flex items-start gap-2.5">
-                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--p-brand-soft)] text-[color:var(--p-brand)]">
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[var(--p-brand-soft)] text-[color:var(--p-brand-soft-text)]">
                         <LifeBuoy size={15} />
                       </div>
                       <div>
@@ -361,9 +368,9 @@ export default function ProfileView() {
                     <button
                       type="button"
                       onClick={() => setShowSupportModal(true)}
-                      className="cursor-pointer shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--app-text)] shadow-2xs hover:bg-[var(--app-surface-muted)] hover:border-[color:var(--p-brand)] transition"
+                      className="cursor-pointer shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] px-3 py-1.5 text-xs font-semibold text-[color:var(--app-text)] hover:bg-[var(--app-surface-muted)] hover:border-[color:var(--p-brand)] transition"
                     >
-                      <LifeBuoy size={13} className="text-[color:var(--p-brand)]" />
+                      <LifeBuoy size={13} className="text-[color:var(--p-brand-text)]" />
                       <span>Contactar con soporte</span>
                     </button>
                   </div>
@@ -472,9 +479,10 @@ export default function ProfileView() {
       />
 
       {showSupportModal && (() => {
-        const whatsappRaw = profile.support?.whatsapp || "+51999999999";
+        // Sin canales configurados por la plataforma no se muestra ningún dato de ejemplo.
+        const whatsappRaw = profile.support?.whatsapp ?? "";
         const whatsappClean = whatsappRaw.replace(/[^0-9]/g, "");
-        const supportEmail = profile.support?.email || "soporte@erp-saas.com";
+        const supportEmail = profile.support?.email ?? "";
 
         return (
           <Modal
@@ -507,7 +515,11 @@ export default function ProfileView() {
                 Para coordinar la extensión de tu periodo (1, 3, 6 o 12 meses), registrar transferencias bancarias o consultar sobre planes superiores, ponte en contacto con nosotros:
               </p>
 
+              {!whatsappClean && !supportEmail && (
+                <Notice tone="warn">La plataforma todavía no publicó sus canales de soporte. Vuelve a intentarlo más tarde.</Notice>
+              )}
               <div className="grid gap-2.5">
+                {whatsappClean && (
                 <a
                   href={`https://wa.me/${whatsappClean}?text=${encodeURIComponent(
                     `Hola Soporte, me comunico desde la empresa ${profile.tenant ?? ""} (${profile.subscription?.plan_name ?? "Plan"}). Quisiera consultar sobre la extensión o renovación de nuestro plan.`
@@ -517,7 +529,7 @@ export default function ProfileView() {
                   className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3 transition hover:border-[color:var(--p-brand)] hover:bg-[var(--app-surface-muted)]"
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--p-success-soft)] text-[color:var(--p-success-text)]">
                       <MessageSquare size={16} />
                     </div>
                     <div>
@@ -525,12 +537,14 @@ export default function ProfileView() {
                       <span className="app-muted text-[11px]">{whatsappRaw}</span>
                     </div>
                   </div>
-                  <span className="text-xs font-medium text-[color:var(--p-brand)]">Iniciar chat →</span>
+                  <span className="text-xs font-medium text-[color:var(--p-brand-text)]">Iniciar chat →</span>
                 </a>
+                )}
 
+                {supportEmail && (
                 <div className="flex items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[var(--app-surface)] p-3">
                   <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[var(--p-brand-soft)] text-[color:var(--p-brand-soft-text)]">
                       <Mail size={16} />
                     </div>
                     <div>
@@ -540,11 +554,12 @@ export default function ProfileView() {
                   </div>
                   <a
                     href={`mailto:${supportEmail}?subject=${encodeURIComponent(`Solicitud de extensión de plan - ${profile.tenant ?? ""}`)}&body=${encodeURIComponent(`Hola equipo de soporte,\n\nDeseo coordinar la extensión del plan ${profile.subscription?.plan_name ?? ""} para la empresa ${profile.tenant ?? ""}.\n\nSaludos,\n${profile.name}`)}`}
-                    className="text-xs font-medium text-[color:var(--p-brand)] hover:underline"
+                    className="text-xs font-medium text-[color:var(--p-brand-text)] hover:underline"
                   >
                     Enviar correo →
                   </a>
                 </div>
+                )}
 
                 {profile.support?.schedule && (
                   <p className="app-muted text-[11px] text-center pt-1">

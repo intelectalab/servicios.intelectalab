@@ -2,40 +2,47 @@
 
 namespace App\Modules\Subscription\Support;
 
+use App\Modules\Subscription\Http\Controllers\SuperAdmin\PlatformDashboardController;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Configuración de la plataforma (canales de soporte que ven todas las empresas). La lee y la
+ * cambia el usuario de la consola: la app de las empresas no tiene acceso a la tabla. Lo que
+ * leen las empresas se guarda en caché y se renueva al guardar.
+ */
 class PlatformSettings
 {
     public const SUPPORT_KEY = 'support';
 
-    public const DEFAULT_SUPPORT = [
-        'whatsapp' => '+51999999999',
-        'email' => 'soporte@erp-saas.com',
-        'schedule' => 'Lunes a Viernes de 8:00 a 18:00',
-    ];
+    private const CONNECTION = PlatformDashboardController::CONNECTION;
 
-    public static function get(string $key, array $default = []): array
+    private const CACHE_PREFIX = 'platform-settings:';
+
+    public static function get(string $key): ?array
     {
-        $row = DB::table('platform_settings')->where('key', $key)->first();
-        if (! $row) {
-            return $default;
-        }
+        return Cache::rememberForever(self::CACHE_PREFIX.$key, function () use ($key) {
+            $value = DB::connection(self::CONNECTION)->table('platform_settings')->where('key', $key)->value('value');
+            $decoded = is_array($value) ? $value : json_decode((string) $value, true);
 
-        $decoded = is_array($row->value) ? $row->value : json_decode($row->value, true);
-
-        return is_array($decoded) ? array_merge($default, $decoded) : $default;
+            return is_array($decoded) ? $decoded : null;
+        });
     }
 
     public static function set(string $key, array $value): void
     {
-        DB::table('platform_settings')->updateOrInsert(
+        DB::connection(self::CONNECTION)->table('platform_settings')->updateOrInsert(
             ['key' => $key],
             ['value' => json_encode($value), 'updated_at' => now()]
         );
+        Cache::forget(self::CACHE_PREFIX.$key);
     }
 
-    public static function support(): array
+    /** Canales de soporte; null mientras la plataforma no los configure (no se muestran datos de ejemplo). */
+    public static function support(): ?array
     {
-        return self::get(self::SUPPORT_KEY, self::DEFAULT_SUPPORT);
+        $support = self::get(self::SUPPORT_KEY);
+
+        return $support && (($support['whatsapp'] ?? '') !== '' || ($support['email'] ?? '') !== '') ? $support : null;
     }
 }

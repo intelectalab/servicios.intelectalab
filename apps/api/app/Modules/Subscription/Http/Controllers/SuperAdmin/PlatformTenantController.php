@@ -53,15 +53,7 @@ class PlatformTenantController extends Controller
         $data = $this->console('SELECT platform_tenant(?) AS data', [$tenant]);
         abort_if($data === null, 404);
 
-        $sub = DB::table('tenant_subscriptions')
-            ->where('tenant_id', $tenant)
-            ->where('status', 'ACTIVE')
-            ->orderByDesc('starts_at')
-            ->first();
-        $config = $sub && $sub->configuration
-            ? (is_array($sub->configuration) ? $sub->configuration : json_decode($sub->configuration, true))
-            : [];
-        $data['payments'] = $config['payments'] ?? [];
+        $data['payments'] = $this->payments($tenant);
 
         return response()->json([
             'tenant' => $data,
@@ -189,21 +181,30 @@ class PlatformTenantController extends Controller
         return response()->json(['status' => $data['to'], 'invited' => $invited]);
     }
 
+    /**
+     * Registrar un pago (transferencia, depósito, Yape…) y extender la vigencia hasta la fecha
+     * elegida. La fecha va después de la vigencia actual (o de hoy, si ya venció): para un
+     * error de digitación se registra otro pago, nunca se acorta. El pago queda en su tabla.
+     */
     public function extendSubscription(Request $request, string $tenant): JsonResponse
     {
         abort_unless(Str::isUuid($tenant), 404);
         $data = $request->validate([
             'ends_at' => ['required', 'date'],
-            'amount' => ['required', 'numeric', 'min:0'],
+            'amount' => ['required', 'numeric', 'min:0', 'max:9999999'],
             'payment_method' => ['required', 'string', 'max:100'],
             'reference' => ['nullable', 'string', 'max:100'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'months' => ['nullable', 'integer', 'min:1', 'max:120'],
+        ], [
+            'ends_at.required' => 'Elige hasta qué fecha queda vigente.',
+            'amount.required' => 'Indica el monto pagado.',
+            'payment_method.required' => 'Indica el medio de pago.',
         ]);
 
-        $userId = $request->user()->id;
+        $user = $request->user();
 
-        $result = DB::transaction(function () use ($tenant, $data, $userId, $request) {
+        $result = DB::transaction(function () use ($tenant, $data, $user) {
             abort_unless(DB::table('tenants')->where('id', $tenant)->lockForUpdate()->exists(), 404);
             $this->enterTenant($tenant);
 
@@ -214,32 +215,22 @@ class PlatformTenantController extends Controller
                 ->lockForUpdate()
                 ->first();
 
-            $plan = $sub ? SaasPlan::find($sub->plan_id) : null;
-            $newEndsAt = \Illuminate\Support\Carbon::parse($data['ends_at']);
+            $newEndsAt = \Illuminate\Support\Carbon::parse($data['ends_at'])->endOfDay();
+            $current = $sub?->ends_at ? \Illuminate\Support\Carbon::parse($sub->ends_at) : null;
+            $floor = $current && $current->isFuture() ? $current : now();
+            if ($newEndsAt->lte($floor)) {
+                throw ValidationException::withMessages(['ends_at' => [
+                    $current && $current->isFuture()
+                        // En hora de Perú, como la muestra la ficha (la base guarda en UTC).
+                        ? 'La nueva vigencia debe ser posterior a la actual ('.$current->copy()->timezone('America/Lima')->format('d/m/Y').').'
+                        : 'La nueva vigencia debe ser una fecha futura.',
+                ]]);
+            }
 
-            $config = $sub && $sub->configuration
-                ? (is_array($sub->configuration) ? $sub->configuration : json_decode($sub->configuration, true))
-                : [];
-
-            $payments = $config['payments'] ?? [];
-
-            $paymentRecord = [
-                'id' => (string) Str::uuid(),
-                'amount' => (float) $data['amount'],
-                'currency' => $plan->currency ?? 'PEN',
-                'payment_method' => $data['payment_method'],
-                'reference' => $data['reference'] ?? null,
-                'notes' => $data['notes'] ?? null,
-                'months' => isset($data['months']) ? (int) $data['months'] : null,
-                'previous_ends_at' => $sub?->ends_at,
-                'new_ends_at' => $newEndsAt->toIso8601String(),
-                'created_at' => now()->toIso8601String(),
-                'created_by' => $userId,
-                'created_by_name' => $request->user()->name,
-            ];
-
-            array_unshift($payments, $paymentRecord);
-            $config['payments'] = $payments;
+            // Sin suscripción: la del primer plan activo, con sus módulos.
+            $plan = $sub ? SaasPlan::find($sub->plan_id) : SaasPlan::where('active', true)->orderBy('display_order')->first();
+            abort_unless($plan, 422, 'No hay ningún plan activo para crear la suscripción.');
+            $config = $sub ? (json_decode((string) $sub->configuration, true) ?: []) : ['billing_period' => 'MONTHLY', 'trial_days' => 0];
             $config['is_trial'] = false;
 
             if ($sub) {
@@ -248,22 +239,37 @@ class PlatformTenantController extends Controller
                     'configuration' => json_encode($config),
                     'updated_at' => now(),
                 ]);
+                $subscriptionId = $sub->id;
             } else {
-                $defaultPlan = SaasPlan::where('active', true)->orderBy('display_order')->first();
-                $subId = (string) Str::uuid();
+                $subscriptionId = (string) Str::uuid();
                 DB::table('tenant_subscriptions')->insert([
-                    'id' => $subId,
-                    'tenant_id' => $tenant,
-                    'plan_id' => $defaultPlan->id,
-                    'status' => 'ACTIVE',
-                    'starts_at' => now(),
-                    'ends_at' => $newEndsAt,
-                    'configuration' => json_encode($config),
-                    'created_at' => now(),
-                    'updated_at' => now(),
+                    'id' => $subscriptionId, 'tenant_id' => $tenant, 'plan_id' => $plan->id, 'status' => 'ACTIVE',
+                    'starts_at' => now(), 'ends_at' => $newEndsAt, 'configuration' => json_encode($config),
+                    'created_at' => now(), 'updated_at' => now(),
                 ]);
+                TenantPlanModules::apply($tenant, $plan);
             }
 
+            $paymentRecord = [
+                'id' => (string) Str::uuid(),
+                'tenant_id' => $tenant,
+                'subscription_id' => $subscriptionId,
+                'amount' => round((float) $data['amount'], 2),
+                'currency' => $plan->currency ?: 'PEN',
+                'payment_method' => trim($data['payment_method']),
+                'reference' => trim((string) ($data['reference'] ?? '')) ?: null,
+                'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
+                'months' => isset($data['months']) ? (int) $data['months'] : null,
+                'previous_ends_at' => $sub?->ends_at,
+                'new_ends_at' => $newEndsAt,
+                'created_by' => $user->id,
+                'created_by_name' => $user->name,
+                'created_at' => now(),
+            ];
+            DB::table('tenant_subscription_payments')->insert($paymentRecord);
+            $paymentRecord = $this->paymentRow((object) $paymentRecord);
+
+            $userId = $user->id;
             PlatformAuditLogger::log(
                 $userId,
                 'tenant.subscription_extended',
@@ -436,6 +442,38 @@ class PlatformTenantController extends Controller
         $row = DB::connection(self::CONSOLE)->selectOne($sql, $bindings);
 
         return $row?->data === null ? null : json_decode($row->data, true);
+    }
+
+    /** Pagos de la suscripción, el más reciente primero. La tabla está aislada por empresa: se lee dentro de su contexto. */
+    private function payments(string $tenant): array
+    {
+        return DB::transaction(function () use ($tenant) {
+            $this->enterTenant($tenant);
+
+            return DB::table('tenant_subscription_payments')->where('tenant_id', $tenant)
+                ->orderByDesc('created_at')->limit(200)->get()
+                ->map(fn ($row) => $this->paymentRow($row))->all();
+        });
+    }
+
+    private function paymentRow(object $row): array
+    {
+        $date = fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value)->toIso8601String() : null;
+
+        return [
+            'id' => $row->id,
+            'amount' => (float) $row->amount,
+            'currency' => trim((string) $row->currency),
+            'payment_method' => $row->payment_method,
+            'reference' => $row->reference,
+            'notes' => $row->notes,
+            'months' => $row->months !== null ? (int) $row->months : null,
+            'previous_ends_at' => $date($row->previous_ends_at),
+            'new_ends_at' => $date($row->new_ends_at),
+            'created_at' => $date($row->created_at),
+            'created_by' => $row->created_by,
+            'created_by_name' => $row->created_by_name,
+        ];
     }
 
     private function enterTenant(string $tenant): void
