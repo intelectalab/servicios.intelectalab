@@ -55,7 +55,13 @@ La migración de arriba. **No borra datos**; mueve los pagos de la configuració
   - **Consola**, con un superadmin de prueba creado con `platform:super-admin` (invitación → crear contraseña → código de verificación; al final se desactivó con `--revoke`): WhatsApp inválido muestra el error junto al campo y no guarda; en **Consola Prueba SAC** una fecha anterior a la vigencia se rechaza y +3 meses queda en el historial (S/ 304.00, OPE-PRUEBA-31, vigencia al 22/02/2027 — ese pago queda como dato de prueba: la tabla no deja borrarlo); la Auditoría de plataforma muestra los textos nuevos.
   - Se encontró y corrigió en la prueba: el mensaje de la fecha mostraba el día en UTC (23/11 en vez de 22/11); ahora en hora de Lima.
 
-## 7. Pendiente
+## 7. Despliegue (31/10, ya 01/11 en el VPS)
+
+- Primer intento: `deploy.sh` se detuvo en las migraciones porque la contraseña de `erp_user` de `/root/erp_db_passwords.txt` ya no era la de la base (alguien la cambió después del 20/10). Durante unos minutos el VPS quedó con el código nuevo de la API sin la migración (la ficha de tenant de la consola fallaba); el ERP siguió funcionando. Respaldo: `/root/backups/erp/20261101_022052_antes_deploy_4487efe`.
+- Yadira actualizó el archivo con la contraseña vigente; comprobada sin mostrarla y despliegue retomado: **`abd2a14` desplegado**, migración `2026_10_31_000100` corrida (lote 9), web compilada, `/login` 200.
+- Verificado en el VPS: `erp_app` ya no puede leer `platform_settings`; los canales se leen por la consola; el pago de **EMP-A5B191** (S/ 512.00, Transferencia BCP, vigencia al 30/03/2027) quedó en `tenant_subscription_payments` y ya no en la configuración; la app no puede editarlo. Los dos errores del log de ese día son del intento fallido.
+
+## 8. Pendiente
 
 - En el VPS (y en tu PC) los canales siguen con `+51999999998` y `soporte@erp-saas.com`, que no son reales: **cámbialos en Consola → Configuración** antes de que una empresa los use.
 - Decidir qué pasa con una empresa vencida.
