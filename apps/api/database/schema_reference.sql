@@ -16695,6 +16695,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 76	2026_10_31_000100_subscription_payments_and_platform_settings_access	66
 77	2026_11_01_000100_tenant_login_page	67
 78	2026_11_01_000200_credential_vault_screen	68
+79	2026_11_01_000300_reports_permissions	69
 \.
 
 
@@ -16758,8 +16759,6 @@ eb786dd3-6c11-401a-8fb0-f952b80c4fa6	finance.view	Ver finanzas	\N	2026-09-07 16:
 37bb68d4-eb5d-4318-836f-1fa21b3e9d97	finance.manage	Gestionar finanzas	\N	2026-09-07 16:33:36.858468+00
 94fa567f-08cd-49f2-9285-7c097f549532	integrations.view	Ver integraciones	\N	2026-09-07 16:33:36.858468+00
 a55994c4-8449-44dc-b07c-4b9b2c4089ff	integrations.manage	Gestionar integraciones	\N	2026-09-07 16:33:36.858468+00
-96713678-973d-4351-a884-3365bffd14fc	reports.view	Ver reportes	\N	2026-09-07 16:33:36.858468+00
-5f7e41b0-4003-4fcc-a979-94d006f4ccbf	reports.export	Exportar reportes	\N	2026-09-07 16:33:36.858468+00
 5b720aa4-e4ef-4195-a301-6b8211bb7430	portal.manage	Gestionar portal	\N	2026-09-07 16:33:36.858468+00
 b65cd0f0-66da-47c1-afdd-144e3ba37849	audit.view	Ver auditoría	\N	2026-09-07 16:33:36.858468+00
 de9f79fd-2a81-46fb-a48d-ea2942d9fff1	quotations.approve	Aprobar cotizaciones	Aprobar o rechazar cotizaciones enviadas a aprobación.	2026-10-06 03:45:20.371524+00
@@ -16797,6 +16796,8 @@ a8aff9af-acc8-4fc0-b800-a3fce584ecd0	work_orders.view	Ver órdenes de trabajo	Ó
 605eef2a-2ab5-42b9-bf82-bf9bde1415a1	tickets.view	Ver tickets	Tickets de soporte, su SLA y su conversación.	2026-09-07 16:33:36.858468+00
 2261f2d5-1af0-4a0c-b68d-9a39885fd104	documents.view	Ver documentos	Documentos de la empresa, sus versiones y su registro de accesos; descargar por enlace temporal.	2026-09-07 16:33:36.858468+00
 facf4dc5-76a0-46ec-9631-876dce52337b	credentials.view	Ver credenciales	Ver los datos generales de las credenciales y su historial, nunca el valor.	2026-09-07 16:33:36.858468+00
+96713678-973d-4351-a884-3365bffd14fc	reports.view	Ver reportes	Ver los reportes de los módulos que el rol puede ver, con su mismo alcance.	2026-09-07 16:33:36.858468+00
+5f7e41b0-4003-4fcc-a979-94d006f4ccbf	reports.export	Exportar reportes	Exportar un reporte a Excel o CSV. Queda en auditoría.	2026-09-07 16:33:36.858468+00
 364b75ac-bb6c-4ec4-86a1-1f991250cc47	work_orders.create	Crear órdenes de trabajo	Crear una orden de trabajo desde un servicio contratado activo.	2026-10-13 03:48:11.334326+00
 a4b1d2a4-aded-4a4d-aa88-24398c52b961	work_orders.manage	Gestionar órdenes de trabajo	Editar, iniciar, bloquear, completar y cancelar órdenes de trabajo, y marcar su checklist.	2026-10-13 03:48:11.334326+00
 dad650bd-85e8-49bb-819c-afefd92d523b	work_orders.approve	Asignar órdenes de trabajo y aprobar checklists	Asignar o reasignar el técnico y la fecha, y aprobar o devolver el checklist.	2026-10-13 03:48:11.334326+00
@@ -16910,7 +16911,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 78, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 79, true);
 
 
 --

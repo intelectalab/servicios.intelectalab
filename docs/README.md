@@ -97,6 +97,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Repo pública de la empresa sin secretos, librerías sin vulnerabilidades (PhpSpreadsheet, Symfony…) y prueba automática de GitHub con la base actual | [cambios/2026-11-01_prueba-automatica-de-github.md](cambios/2026-11-01_prueba-automatica-de-github.md) |
 | 2026-11-01 | Buscador en los filtros desplegables con muchas opciones (Entidad y Usuario de Auditoría, Categoría de Documentos…) | [cambios/2026-11-01_buscador-en-filtros-largos.md](cambios/2026-11-01_buscador-en-filtros-largos.md) |
 | 2026-11-01 | Credential Vault (Control): guardar cifrado, revelar 20 s, usar (copiar sin mostrar), rotar, revocar e historial, cada acción con motivo y permiso propio | [cambios/2026-11-01_credential-vault.md](cambios/2026-11-01_credential-vault.md) |
+| 2026-11-01 | Reportes (Control): 7 reportes con el alcance de cada rol, gráficos, rango de fechas, exportación y "Mis exportaciones" | [cambios/2026-11-01_reportes.md](cambios/2026-11-01_reportes.md) |
 
 ## Cómo se escribe cada entrada
 

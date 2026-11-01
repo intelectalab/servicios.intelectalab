@@ -58,6 +58,7 @@ class ListExport
         'api/v1/warranty-claims' => 'warranty',
         'api/v1/documents' => 'documents',
         'api/v1/credentials' => 'credentials',
+        'api/v1/reports/{report}' => 'reports',
         'api/v1/users' => 'users',
         'api/v1/audit' => 'audit',
     ];

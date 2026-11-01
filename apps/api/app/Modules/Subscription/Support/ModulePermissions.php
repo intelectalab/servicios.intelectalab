@@ -9,11 +9,13 @@ class ModulePermissions
     /**
      * Permisos de administración del propio tenant; no dependen de ningún módulo. Aprobar sobre
      * el límite de crédito tampoco: el límite vive en la ficha del cliente. El Credential Vault
-     * viene con el plan base, como Auditoría.
+     * y los Reportes vienen con el plan base, como Auditoría (cada reporte pide además el permiso
+     * de su módulo).
      */
     public const BASE = [
         'users.view', 'users.manage', 'users.export', 'tenant.manage', 'audit.view', 'audit.export', 'credit.approve',
         'credentials.view', 'credentials.manage', 'credentials.use', 'credentials.reveal', 'credentials.delete', 'credentials.export',
+        'reports.view', 'reports.export',
     ];
 
     /**

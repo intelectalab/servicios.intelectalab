@@ -496,7 +496,7 @@ class ProjectController extends Controller
     }
 
     /** Totales de cada proyecto (alias => subconsulta), para mostrarlos y para ordenar por ellos. */
-    private static function totals(): array
+    public static function totals(): array
     {
         $tasks = fn (string $what, string $extra = '') => "SELECT {$what} FROM tasks t WHERE t.project_id = projects.id AND t.status <> 'CANCELLED' {$extra}";
         $hours = fn (string $what, string $status) => "SELECT COALESCE({$what}, 0) FROM time_entries h WHERE h.project_id = projects.id AND h.status = '{$status}'";

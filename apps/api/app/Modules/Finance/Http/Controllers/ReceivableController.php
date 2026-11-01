@@ -18,7 +18,7 @@ use Illuminate\Support\Str;
 class ReceivableController extends Controller
 {
     /** Número del comprobante de la fila: es un dato de la cuenta, se muestre o no el comprobante. */
-    private const INVOICE_NUMBER = '(SELECT i.invoice_number FROM invoices i WHERE i.id = receivables.invoice_id)';
+    public const INVOICE_NUMBER = '(SELECT i.invoice_number FROM invoices i WHERE i.id = receivables.invoice_id)';
 
     private const WITH = ['customer.party.person', 'customer.party.organization'];
 

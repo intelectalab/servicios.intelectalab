@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\PasswordResetController;
+use App\Http\Controllers\ReportController;
 use Illuminate\Support\Facades\Route;
 use App\Modules\Subscription\Http\Controllers\SaasPlanController;
 use App\Modules\Subscription\Http\Controllers\TenantRegisterController;
@@ -794,6 +795,12 @@ Route::prefix('v1')->group(function () {
             Route::put('/sla-settings/policies', [SlaSettingsController::class, 'updatePolicies']);
             Route::post('/sla-settings/holidays', [SlaSettingsController::class, 'addHoliday']);
             Route::delete('/sla-settings/holidays/{holiday}', [SlaSettingsController::class, 'removeHoliday']);
+        });
+
+        // Control: Reportes (plan base). Cada reporte pide además el permiso de su módulo.
+        Route::middleware('permission:reports.view')->group(function () {
+            Route::get('/reports', [ReportController::class, 'index']);
+            Route::get('/reports/{report}', [ReportController::class, 'show']);
         });
 
         // Control: Credential Vault (plan base). Cada acción es un permiso distinto.

@@ -262,6 +262,7 @@ class AuditCatalog
         'credential.revoke' => 'Credencial revocada',
         'credential.expire' => 'Credencial expirada',
         'credentials.export' => 'Credenciales exportadas',
+        'reports.export' => 'Reporte exportado',
         'document.create' => 'Documento subido',
         'document.version' => 'Versión nueva subida',
         'document.update' => 'Documento editado',
