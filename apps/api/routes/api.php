@@ -796,16 +796,18 @@ Route::prefix('v1')->group(function () {
             Route::delete('/sla-settings/holidays/{holiday}', [SlaSettingsController::class, 'removeHoliday']);
         });
 
-        // Rutas de prueba para verificar permisos
+        // Control: Credential Vault (plan base). Cada acción es un permiso distinto.
         Route::middleware('permission:credentials.view')->group(function () {
             Route::get('/credentials', [CredentialController::class, 'index']);
             Route::get('/credentials/{credential}', [CredentialController::class, 'show']);
+            Route::get('/credentials/{credential}/history', [CredentialController::class, 'history']);
         });
         Route::middleware('permission:credentials.manage')->group(function () {
             Route::post('/credentials', [CredentialController::class, 'store']);
             Route::post('/credentials/{credential}/rotate', [CredentialController::class, 'rotate']);
         });
-        Route::middleware('permission:credentials.reveal')->post('/credentials/{credential}/reveal', [CredentialController::class, 'reveal']);
+        Route::middleware(['permission:credentials.use', 'throttle:30,1,vault'])->post('/credentials/{credential}/use', [CredentialController::class, 'use']);
+        Route::middleware(['permission:credentials.reveal', 'throttle:30,1,vault'])->post('/credentials/{credential}/reveal', [CredentialController::class, 'reveal']);
         Route::middleware('permission:credentials.delete')->post('/credentials/{credential}/revoke', [CredentialController::class, 'revoke']);
 
         // CRM - protegido por permiso Y por el switch ON/OFF del tenant

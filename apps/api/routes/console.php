@@ -16,3 +16,7 @@ Illuminate\Support\Facades\Schedule::command('recurring:run-cycles')->dailyAt('0
 // Cada madrugada, las cotizaciones enviadas que pasaron su fecha de validez quedan Vencidas (RN-COM-05).
 // Hora de Lima: a las 00:10 (05:10 UTC) la fecha UTC ya coincide con la de Perú.
 Illuminate\Support\Facades\Schedule::command('quotations:expire')->dailyAt('00:10')->timezone('America/Lima');
+
+// Cada madrugada, las credenciales del Vault cuya fecha de vencimiento pasó quedan Expiradas
+// (la pantalla ya las muestra así desde que vencen; esto deja el cambio en la base y en auditoría).
+Illuminate\Support\Facades\Schedule::command('credentials:expire')->dailyAt('00:15')->timezone('America/Lima');

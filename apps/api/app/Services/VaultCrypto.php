@@ -13,15 +13,15 @@ class VaultCrypto
      * versión, guardando el resultado como hexadecimal para evitar
      * problemas de codificación con el tipo bytea de PostgreSQL.
      */
-    public static function storeVersion(string $tenantId, string $credentialId, string $plainSecret, ?string $userId, int $version): void
+    public static function storeVersion(string $tenantId, string $credentialId, string $plainSecret, ?string $userId, int $version, ?string $reason = null): void
     {
         $encrypted = Crypt::encryptString($plainSecret);
         $hex = bin2hex($encrypted);
 
         DB::insert(
-            'INSERT INTO credential_versions (id, tenant_id, credential_id, version, secret_ciphertext, created_by, created_at)
-             VALUES (?, ?, ?, ?, decode(?, \'hex\'), ?, now())',
-            [(string) Str::uuid(), $tenantId, $credentialId, $version, $hex, $userId]
+            'INSERT INTO credential_versions (id, tenant_id, credential_id, version, secret_ciphertext, created_by, reason, created_at)
+             VALUES (?, ?, ?, ?, decode(?, \'hex\'), ?, ?, now())',
+            [(string) Str::uuid(), $tenantId, $credentialId, $version, $hex, $userId, $reason]
         );
     }
 

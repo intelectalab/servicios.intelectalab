@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { useAccess } from "@/lib/access-context";
 import { poppins } from "@/lib/fonts";
+import { PickSelect } from "./pick-select";
 import { useCardDrag } from "./sortable-cards";
 
 /**
@@ -252,9 +253,26 @@ export function SearchInput({
   );
 }
 
+/** Desde cuántas opciones el filtro trae buscador (Entidad de Auditoría, Categoría de Documentos…). */
+const FILTER_SEARCH_FROM = 9;
+
 export function FilterSelect({
   label, value, onChange, options,
 }: { label: string; value: string; onChange: (value: string) => void; options: [string, string][] }) {
+  if (options.length >= FILTER_SEARCH_FROM) {
+    return (
+      <span className="relative flex-[1_1_140px] sm:flex-none">
+        <PickSelect
+          searchable
+          ariaLabel={label}
+          value={value}
+          onChange={onChange}
+          options={[["", `${label}: todos`], ...options]}
+          className="app-surface app-text h-10 w-full rounded-[9px] sm:w-auto sm:max-w-[220px] border border-[color:var(--app-border)] pl-2.5 pr-2 text-[13px] outline-none focus:border-[color:var(--p-accent,#1B8FC9)]"
+        />
+      </span>
+    );
+  }
   return (
     // `relative`: la etiqueta oculta se coloca respecto del filtro; si no, bajo el pliegue añade una franja vacía a la página.
     <label className="relative flex-[1_1_140px] sm:flex-none">

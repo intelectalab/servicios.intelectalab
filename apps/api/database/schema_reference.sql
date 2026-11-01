@@ -6,7 +6,6 @@
 -- PostgreSQL database dump
 --
 
-\restrict vr5QoE7aWMIBEEkxXht9NmXG3pbwomEbi5Mb07PHt7KcRXh9nCeNmqPIgBC3b4R
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg13+2)
 -- Dumped by pg_dump version 17.11 (Debian 17.11-1.pgdg13+2)
@@ -2087,7 +2086,8 @@ CREATE TABLE public.credential_access_logs (
     action character varying(50) NOT NULL,
     success boolean DEFAULT true NOT NULL,
     correlation_id uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    reason character varying(500)
 );
 
 
@@ -2109,8 +2109,10 @@ CREATE TABLE public.credential_records (
     created_by uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    owner_label character varying(150),
     CONSTRAINT chk_credential_expiry CHECK (((expires_at IS NULL) OR (expires_at > created_at))),
-    CONSTRAINT credential_records_status_check CHECK (((status)::text = ANY (ARRAY[('ACTIVE'::character varying)::text, ('EXPIRED'::character varying)::text, ('REVOKED'::character varying)::text, ('ROTATION_REQUIRED'::character varying)::text])))
+    CONSTRAINT credential_records_status_check CHECK (((status)::text = ANY (ARRAY[('ACTIVE'::character varying)::text, ('EXPIRED'::character varying)::text, ('REVOKED'::character varying)::text, ('ROTATION_REQUIRED'::character varying)::text]))),
+    CONSTRAINT credential_records_type_check CHECK (((credential_type)::text = ANY ((ARRAY['SERVIDOR'::character varying, 'DNS'::character varying, 'HOSTING'::character varying, 'CLOUD'::character varying, 'API_KEY'::character varying, 'SMTP'::character varying, 'CERTIFICADO'::character varying, 'BASE_DATOS'::character varying])::text[])))
 );
 
 
@@ -2128,7 +2130,8 @@ CREATE TABLE public.credential_versions (
     secret_ciphertext bytea NOT NULL,
     secret_metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_by uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    reason character varying(500)
 );
 
 
@@ -7243,6 +7246,13 @@ CREATE UNIQUE INDEX checklist_items_current_position_key ON public.checklist_ite
 --
 
 CREATE UNIQUE INDEX checklists_tenant_name_key ON public.checklists USING btree (tenant_id, lower(btrim((name)::text)));
+
+
+--
+-- Name: credential_access_logs_credential_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX credential_access_logs_credential_idx ON public.credential_access_logs USING btree (credential_id, created_at DESC);
 
 
 --
@@ -15600,21 +15610,21 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.cost_entries TO erp_app;
 -- Name: TABLE credential_access_logs; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credential_access_logs TO erp_app;
+GRANT SELECT,INSERT ON TABLE public.credential_access_logs TO erp_app;
 
 
 --
 -- Name: TABLE credential_records; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credential_records TO erp_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.credential_records TO erp_app;
 
 
 --
 -- Name: TABLE credential_versions; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.credential_versions TO erp_app;
+GRANT SELECT,INSERT ON TABLE public.credential_versions TO erp_app;
 
 
 --
@@ -16586,13 +16596,11 @@ ALTER DEFAULT PRIVILEGES FOR ROLE erp_user IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
-\unrestrict vr5QoE7aWMIBEEkxXht9NmXG3pbwomEbi5Mb07PHt7KcRXh9nCeNmqPIgBC3b4R
 
 --
 -- PostgreSQL database dump
 --
 
-\restrict tAC7QNZYkpr5C4D9rV5RWv5Jcju39G1Vp5FO4tj7HcGT4rRKS56ByGqfFcKoOhj
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg13+2)
 -- Dumped by pg_dump version 17.11 (Debian 17.11-1.pgdg13+2)
@@ -16686,6 +16694,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 75	2026_10_29_230000_create_platform_settings_table	65
 76	2026_10_31_000100_subscription_payments_and_platform_settings_access	66
 77	2026_11_01_000100_tenant_login_page	67
+78	2026_11_01_000200_credential_vault_screen	68
 \.
 
 
@@ -16745,8 +16754,6 @@ efde44ef-0b5e-4a89-b3a8-72f37a214645	orders.view	Ver órdenes	\N	2026-09-07 16:3
 56be17a9-59a8-433a-b884-bde437edc520	orders.manage	Gestionar órdenes	\N	2026-09-07 16:33:36.858468+00
 e3120c60-673f-4670-873d-a4e9e16eae76	operations.view	Ver operaciones	\N	2026-09-07 16:33:36.858468+00
 52e49ae0-f34b-4da8-be41-e857cd15ab16	operations.manage	Gestionar operaciones	\N	2026-09-07 16:33:36.858468+00
-facf4dc5-76a0-46ec-9631-876dce52337b	credentials.view	Ver metadatos de credenciales	\N	2026-09-07 16:33:36.858468+00
-00439cbb-2e2f-44d5-bf05-7d72de9b4032	credentials.manage	Gestionar credenciales	\N	2026-09-07 16:33:36.858468+00
 eb786dd3-6c11-401a-8fb0-f952b80c4fa6	finance.view	Ver finanzas	\N	2026-09-07 16:33:36.858468+00
 37bb68d4-eb5d-4318-836f-1fa21b3e9d97	finance.manage	Gestionar finanzas	\N	2026-09-07 16:33:36.858468+00
 94fa567f-08cd-49f2-9285-7c097f549532	integrations.view	Ver integraciones	\N	2026-09-07 16:33:36.858468+00
@@ -16755,9 +16762,6 @@ a55994c4-8449-44dc-b07c-4b9b2c4089ff	integrations.manage	Gestionar integraciones
 5f7e41b0-4003-4fcc-a979-94d006f4ccbf	reports.export	Exportar reportes	\N	2026-09-07 16:33:36.858468+00
 5b720aa4-e4ef-4195-a301-6b8211bb7430	portal.manage	Gestionar portal	\N	2026-09-07 16:33:36.858468+00
 b65cd0f0-66da-47c1-afdd-144e3ba37849	audit.view	Ver auditoría	\N	2026-09-07 16:33:36.858468+00
-b1d322b8-2a82-407d-9464-ae227bb08145	credentials.use	Utilizar credencial	Usar una credencial en una integración, sin ver su valor	2026-09-15 05:23:34+00
-a2d3bf4f-51c7-4db2-9d3a-29cda5ee5d2a	credentials.reveal	Revelar secreto de credencial	Ver el valor real y descifrado de una credencial	2026-09-15 05:23:34+00
-9f1f94c1-c01d-41c2-bf18-a3ca65ba5809	credentials.delete	Eliminar/revocar credencial	Revocar o eliminar definitivamente una credencial	2026-09-15 05:23:34+00
 de9f79fd-2a81-46fb-a48d-ea2942d9fff1	quotations.approve	Aprobar cotizaciones	Aprobar o rechazar cotizaciones enviadas a aprobación.	2026-10-06 03:45:20.371524+00
 4ef1af59-5111-4676-8235-66a78c7e601c	contracts.approve	Activar contratos	Pasar un contrato de borrador a vigente.	2026-10-07 13:28:49.744321+00
 adcda418-863a-4d01-805f-7b12aeb53979	portal.view	Ver solicitudes del portal	Ver la bandeja de solicitudes que los clientes envían desde el portal.	2026-10-07 14:24:59.805692+00
@@ -16792,6 +16796,7 @@ a8aff9af-acc8-4fc0-b800-a3fce584ecd0	work_orders.view	Ver órdenes de trabajo	Ó
 4371667e-09d7-4d44-98a9-e46c75fdd3d0	recurring.view	Ver servicios recurrentes	Instancias recurrentes, su vigencia y sus ciclos.	2026-09-07 16:33:36.858468+00
 605eef2a-2ab5-42b9-bf82-bf9bde1415a1	tickets.view	Ver tickets	Tickets de soporte, su SLA y su conversación.	2026-09-07 16:33:36.858468+00
 2261f2d5-1af0-4a0c-b68d-9a39885fd104	documents.view	Ver documentos	Documentos de la empresa, sus versiones y su registro de accesos; descargar por enlace temporal.	2026-09-07 16:33:36.858468+00
+facf4dc5-76a0-46ec-9631-876dce52337b	credentials.view	Ver credenciales	Ver los datos generales de las credenciales y su historial, nunca el valor.	2026-09-07 16:33:36.858468+00
 364b75ac-bb6c-4ec4-86a1-1f991250cc47	work_orders.create	Crear órdenes de trabajo	Crear una orden de trabajo desde un servicio contratado activo.	2026-10-13 03:48:11.334326+00
 a4b1d2a4-aded-4a4d-aa88-24398c52b961	work_orders.manage	Gestionar órdenes de trabajo	Editar, iniciar, bloquear, completar y cancelar órdenes de trabajo, y marcar su checklist.	2026-10-13 03:48:11.334326+00
 dad650bd-85e8-49bb-819c-afefd92d523b	work_orders.approve	Asignar órdenes de trabajo y aprobar checklists	Asignar o reasignar el técnico y la fecha, y aprobar o devolver el checklist.	2026-10-13 03:48:11.334326+00
@@ -16881,6 +16886,11 @@ b82490b4-1ce3-463a-bfbc-a224de33c5d5	documents.manage	Gestionar documentos	Edita
 420e2264-4168-4a0e-88e7-fbb6d241fd24	documents.create	Subir documentos	Subir un documento vinculado a un cliente, contrato, proyecto u orden de trabajo, y subir versiones nuevas.	2026-10-22 19:53:27.430853+00
 9d43cbeb-eaec-4e5e-826a-2dfdc52b02ad	documents.export	Exportar documentos	Descargar el listado de documentos en Excel o CSV.	2026-10-22 19:53:27.430853+00
 bc659651-e12e-4380-b1c9-99577a79f9d5	credit.approve	Aprobar sobre el límite de crédito	Aprobar una cotización o activar un contrato aunque el cliente supere su límite de crédito, cuando la empresa lo bloquea. Siempre con motivo.	2026-10-27 07:43:01.2514+00
+81abd3a4-5d43-4741-b86b-e6d268fe5640	credentials.export	Exportar credenciales	Exportar el listado del Vault (solo datos generales, nunca los valores).	2026-11-01 20:48:46.593905+00
+00439cbb-2e2f-44d5-bf05-7d72de9b4032	credentials.manage	Crear y rotar credenciales	Guardar una credencial nueva y cambiar su valor (nueva versión).	2026-09-07 16:33:36.858468+00
+b1d322b8-2a82-407d-9464-ae227bb08145	credentials.use	Usar credenciales	Copiar el valor al portapapeles sin verlo en pantalla. Pide motivo y queda registrado.	2026-09-15 05:23:34+00
+a2d3bf4f-51c7-4db2-9d3a-29cda5ee5d2a	credentials.reveal	Revelar credenciales	Ver el valor durante 20 segundos. Pide motivo y queda registrado.	2026-09-15 05:23:34+00
+9f1f94c1-c01d-41c2-bf18-a3ca65ba5809	credentials.delete	Revocar credenciales	Dejar una credencial sin uso. No se borra su historial.	2026-09-15 05:23:34+00
 \.
 
 
@@ -16900,12 +16910,11 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 77, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 78, true);
 
 
 --
 -- PostgreSQL database dump complete
 --
 
-\unrestrict tAC7QNZYkpr5C4D9rV5RWv5Jcju39G1Vp5FO4tj7HcGT4rRKS56ByGqfFcKoOhj
 

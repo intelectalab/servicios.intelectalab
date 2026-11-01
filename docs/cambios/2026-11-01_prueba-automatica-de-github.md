@@ -26,7 +26,7 @@ Fecha: 2026-11-01.
 
 ```bash
 cd apps/api/database
-{ head -4 schema_reference.sql; docker exec erp_postgres pg_dump -U erp_user -d erp_saas --schema-only --no-comments; docker exec erp_postgres pg_dump -U erp_user -d erp_saas --data-only --no-comments -t public.migrations -t public.permissions -t public.module_catalog -t public.saas_plans; } | grep -v -E '^\\(restrict|unrestrict) ' > /tmp/s.sql && mv /tmp/s.sql schema_reference.sql
+{ head -4 schema_reference.sql; docker exec erp_postgres pg_dump -U erp_user -d erp_saas --schema-only --no-comments; docker exec erp_postgres pg_dump -U erp_user -d erp_saas --data-only --no-comments -t public.migrations -t public.permissions -t public.module_catalog -t public.saas_plans; } | grep -v -E '^.(restrict|unrestrict) ' > /tmp/s.sql && mv /tmp/s.sql schema_reference.sql
 ```
 
 ## 3. Qué NO se tocó

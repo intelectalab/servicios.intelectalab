@@ -13,7 +13,7 @@ class CredentialAccessLog extends Model
     public $incrementing = false;
     public $timestamps = false;
 
-    protected $fillable = ['tenant_id', 'credential_id', 'user_id', 'action', 'success', 'correlation_id'];
+    protected $fillable = ['tenant_id', 'credential_id', 'user_id', 'action', 'success', 'reason', 'correlation_id'];
 
     protected $casts = ['success' => 'boolean'];
 
