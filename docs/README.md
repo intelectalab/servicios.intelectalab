@@ -99,6 +99,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Credential Vault (Control): guardar cifrado, revelar 20 s, usar (copiar sin mostrar), rotar, revocar e historial, cada acción con motivo y permiso propio | [cambios/2026-11-01_credential-vault.md](cambios/2026-11-01_credential-vault.md) |
 | 2026-11-01 | Reportes (Control): 7 reportes con el alcance de cada rol, gráficos, rango de fechas, exportación y "Mis exportaciones" | [cambios/2026-11-01_reportes.md](cambios/2026-11-01_reportes.md) |
 | 2026-11-01 | Reportes: tres indicadores por reporte comparados con el periodo anterior, y el clic en la fila abre la ficha | [cambios/2026-11-01_reportes-indicadores-y-fichas.md](cambios/2026-11-01_reportes-indicadores-y-fichas.md) |
+| 2026-11-01 | Reportes en PDF con la marca de la empresa: indicadores, resumen y la tabla filtrada | [cambios/2026-11-01_reportes-en-pdf.md](cambios/2026-11-01_reportes-en-pdf.md) |
 
 ## Cómo se escribe cada entrada
 

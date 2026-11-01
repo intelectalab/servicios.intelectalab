@@ -66,7 +66,7 @@ const clip = (lines: string[], max: number) =>
   lines.length <= max ? lines : [...lines.slice(0, max - 1), `${lines[max - 1].replace(/[\s,.;:]+$/, "")}...`];
 
 /** La fuente del PDF no trae estos signos: se cambian por su equivalente simple. */
-const plain = (text: unknown) =>
+export const plain = (text: unknown) =>
   String(text ?? "").replace(/[−–—]/g, "-").replace(/…/g, "...").replace(/[→]/g, "->").replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
 
 export const pdfAmount = (value: string | number) =>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownRight, ArrowUpRight, BarChart3, Clock, Coins, FileText, Filter, LifeBuoy, Repeat, TrendingUp, Wrench } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, BarChart3, Clock, Coins, FileDown, FileText, Filter, LifeBuoy, Repeat, TrendingUp, Wrench } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { apiFetch } from "@/lib/api";
 import { FREQUENCIES, QUOTATION_STATES, excelTone, money, shortDate, stateOf } from "@/lib/commercial";
@@ -17,8 +17,9 @@ import {
 import { useAccess } from "@/lib/access-context";
 import { ReceivableModal } from "@/components/dashboard/finance/Receivables";
 import { exportCsv, exportXlsx, fetchAllPages, recordExport, type ExportColumn } from "@/lib/export-table";
+import { downloadReportPdf } from "@/lib/report-pdf";
 import {
-  Badge, Card, DataTable, ExportButtons, INPUT, Kpi, Kpis, LoadError, Notice, PAGE_SIZES, PageHead, Pager, Screen, SelectionBar, TD, TH,
+  Badge, Btn, Card, DataTable, ExportButtons, INPUT, Kpi, Kpis, LoadError, Notice, PAGE_SIZES, PageHead, Pager, Screen, SelectionBar, TD, TH,
   applySort, useRowSelection, useToasts, type Column, type SortState, type Tone,
 } from "@/components/ui/proto";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
@@ -38,6 +39,8 @@ type Col = {
   states?: States;
   field?: string;
   width?: number;
+  /** Unidad que se agrega a la cifra en el PDF (la tabla ya la muestra en `render`). */
+  unit?: string;
 };
 
 const str = (value: unknown) => (value === null || value === undefined ? "" : String(value));
@@ -93,7 +96,7 @@ const REPORTS: Record<ReportKey, { icon: ReactNode; cols: Col[] }> = {
       { label: "Etapa", sortKey: "stage", filter: "text", value: (r) => str(r.stage) || "—", width: 18 },
       status("Estado", "status", OPPORTUNITY_STATES, "status"),
       amount("Monto", "amount", "amount"),
-      { label: "Probabilidad", sortKey: "probability", num: true, kind: "number", value: (r) => num(r.probability), render: (r) => `${num(r.probability)} %`, width: 12 },
+      { label: "Probabilidad", sortKey: "probability", num: true, kind: "number", value: (r) => num(r.probability), render: (r) => `${num(r.probability)} %`, width: 12, unit: " %" },
       { label: "Responsable", sortKey: "owner", filter: "text", value: (r) => str(r.owner) || "Sin asignar", width: 24 },
     ],
   },
@@ -132,10 +135,10 @@ const REPORTS: Record<ReportKey, { icon: ReactNode; cols: Col[] }> = {
       amount("Costo", "cost", "cost", false),
       amount("Margen", "margin", "margin"),
       {
-        label: "Margen %", sortKey: "margin_pct", num: true, kind: "number", width: 12, value: (r) => num(r.margin_pct),
+        label: "Margen %", sortKey: "margin_pct", num: true, kind: "number", width: 12, unit: " %", value: (r) => num(r.margin_pct),
         render: (r) => <span className={`tabular-nums ${num(r.margin_pct) < 20 ? "font-semibold text-[color:var(--p-warning-text)]" : ""}`}>{num(r.margin_pct)} %</span>,
       },
-      { label: "Avance", num: true, kind: "number", width: 10, value: (r) => num(r.progress), render: (r) => `${num(r.progress)} %` },
+      { label: "Avance", num: true, kind: "number", width: 10, value: (r) => num(r.progress), render: (r) => `${num(r.progress)} %`, unit: " %" },
       status("Estado", "status", PROJECT_STATES, "status"),
     ],
   },
@@ -297,25 +300,44 @@ const KPI_VALUE: Record<ReportKpi["format"], (value: number) => string> = {
 };
 
 /** Cambio frente al periodo anterior: en % (en puntos si la cifra ya es un %). En horas, bajar es bueno. */
-function KpiDelta({ kpi }: { kpi: ReportKpi }) {
-  if (kpi.previous === null || kpi.value === null) return null;
-  if (kpi.previous === kpi.value) return <span className="app-muted">igual que el periodo anterior</span>;
+type Delta = { kind: "none" } | { kind: "same" } | { kind: "nodata" } | { kind: "change"; amount: number; up: boolean; good: boolean; unit: string };
+
+function deltaOf(kpi: ReportKpi): Delta {
+  if (kpi.previous === null || kpi.value === null) return { kind: "none" };
+  if (kpi.previous === kpi.value) return { kind: "same" };
   const diff = kpi.format === "percent" ? kpi.value - kpi.previous : kpi.previous ? ((kpi.value - kpi.previous) / Math.abs(kpi.previous)) * 100 : null;
-  if (diff === null) return <span className="app-muted">sin datos del periodo anterior</span>;
+  if (diff === null) return { kind: "nodata" };
   const rounded = Math.round(diff);
-  if (rounded === 0) return <span className="app-muted">igual que el periodo anterior</span>;
-  const good = kpi.format === "hours" ? rounded < 0 : rounded > 0;
-  const Arrow = rounded > 0 ? ArrowUpRight : ArrowDownRight;
+  if (rounded === 0) return { kind: "same" };
+  return { kind: "change", amount: Math.abs(rounded), up: rounded > 0, good: kpi.format === "hours" ? rounded < 0 : rounded > 0, unit: kpi.format === "percent" ? " pts" : " %" };
+}
+
+function KpiDelta({ kpi }: { kpi: ReportKpi }) {
+  const delta = deltaOf(kpi);
+  if (delta.kind === "none") return null;
+  if (delta.kind === "same") return <span className="app-muted">igual que el periodo anterior</span>;
+  if (delta.kind === "nodata") return <span className="app-muted">sin datos del periodo anterior</span>;
+  const Arrow = delta.up ? ArrowUpRight : ArrowDownRight;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 font-semibold ${good ? "text-[color:var(--p-success-text)]" : "text-[color:var(--p-danger-text)]"}`}
-      title={`Periodo anterior: ${KPI_VALUE[kpi.format](kpi.previous)}`}
+      className={`inline-flex items-center gap-0.5 font-semibold ${delta.good ? "text-[color:var(--p-success-text)]" : "text-[color:var(--p-danger-text)]"}`}
+      title={`Periodo anterior: ${KPI_VALUE[kpi.format](kpi.previous ?? 0)}`}
     >
       <Arrow size={13} aria-hidden="true" />
-      {Math.abs(rounded)}{kpi.format === "percent" ? " pts" : " %"}
+      {delta.amount}{delta.unit}
       <span className="app-muted font-normal">&nbsp;vs anterior</span>
     </span>
   );
+}
+
+/** Resumen del PDF en lugar del gráfico (tramos de antigüedad, meses, estados). */
+function pdfSummary(report: ReportKey, page: ReportPage): { title: string; rows: [string, string][] } | null {
+  const summary = page.summary;
+  if (report === "ventas" && summary?.months) return { title: "Total cotizado por mes (en soles)", rows: summary.months.map((m) => [monthLabel(m.key), money(m.amount)]) };
+  if (report === "cobranza" && summary?.aging) return { title: "Saldo por antigüedad (en soles)", rows: summary.aging.map((b) => [b.label, money(b.amount)]) };
+  if (report === "sla" && summary?.sla) return { title: "Tickets por estado del SLA", rows: SLA_STATES.filter(([key]) => summary.sla?.[key]).map(([key, label]) => [label, String(summary.sla?.[key] ?? 0)]) };
+  if (report === "operaciones" && summary?.states) return { title: "Órdenes por estado", rows: WORK_ORDER_STATES.filter(([key]) => summary.states?.[key]).map(([key, label]) => [label, String(summary.states?.[key] ?? 0)]) };
+  return null;
 }
 
 function ReportKpis({ page }: { page: ReportPage }) {
@@ -408,13 +430,52 @@ function ReportPanel({ report, label, onExported }: { report: ReportKey; label: 
     tone: col.states && col.field ? (row) => excelTone(stateOf(col.states ?? [], str(row[col.field ?? ""]))[1]) : undefined,
   }));
 
-  async function runExport(format: "xlsx" | "csv", picked?: ReportRow[]) {
+  /** PDF con la marca: periodo, filtros, indicadores, el resumen del gráfico y las filas (las filtradas o las marcadas). */
+  async function exportPdf(rows: ReportRow[], picked: boolean) {
+    const filters = [
+      ...(from || to ? [`${dated}: ${from ? shortDate(from) : "inicio"} a ${to ? shortDate(to) : "hoy"}`] : []),
+      ...(columnFilters.param !== "[]" ? ["Con filtros por columna"] : []),
+      ...(sort ? [`Orden: ${def.cols.find((col) => col.sortKey === sort.key)?.label ?? sort.key} (${sort.dir === "asc" ? "ascendente" : "descendente"})`] : []),
+    ];
+    await downloadReportPdf({
+      file: `reporte-${report}_${new Date().toLocaleDateString("en-CA")}`,
+      title: label,
+      meta: [
+        ...(data?.period && data.kpis?.some((kpi) => kpi.previous !== null)
+          ? [`${data.period.custom ? "Rango" : "Lo que va del mes"}: ${periodLabel(data.period.from, data.period.to)} (comparado con ${periodLabel(data.period.prev_from, data.period.prev_to)})`]
+          : []),
+        filters.length ? filters.join(" · ") : "Sin filtros",
+        picked ? `${rows.length} ${rows.length === 1 ? "fila marcada" : "filas marcadas"}` : `${rows.length} ${rows.length === 1 ? "fila" : "filas"} dentro del alcance de quien lo generó`,
+      ],
+      kpis: (data?.kpis ?? []).map((kpi) => {
+        const delta = deltaOf(kpi);
+        return {
+          label: kpi.label,
+          value: kpi.value === null ? "-" : kpi.format === "money" ? money(kpi.value) : KPI_VALUE[kpi.format](kpi.value),
+          delta: delta.kind === "change" ? { text: `${delta.up ? "+" : "-"}${delta.amount}${delta.unit} vs anterior`, good: delta.good } : null,
+          hint: kpi.hint,
+        };
+      }),
+      summary: data ? pdfSummary(report, data) : null,
+      head: def.cols.map((col) => col.label),
+      rows: rows.map((row) => def.cols.map((col) => {
+        const value = col.value(row);
+        if (col.kind === "money") return money(num(value), cur(row));
+        if (typeof value === "number") return `${value.toLocaleString("es-PE")}${col.unit ?? ""}`;
+        return value || "-";
+      })),
+      numCols: def.cols.flatMap((col, index) => (col.num ? [index] : [])),
+    });
+  }
+
+  async function runExport(format: "xlsx" | "csv" | "pdf", picked?: ReportRow[]) {
     setExporting(true);
     try {
       const rows = picked ?? (await fetchAllPages<ReportRow>(`/v1/reports/${report}`, applySort(columnFilters.apply(withRange(new URLSearchParams())), sort)));
       await recordExport("reports", format, rows.length, Boolean(picked), `report=${report}`);
       const name = `reporte-${report}`;
-      if (format === "xlsx") await exportXlsx(name, label, exportCols, rows);
+      if (format === "pdf") await exportPdf(rows, Boolean(picked));
+      else if (format === "xlsx") await exportXlsx(name, label, exportCols, rows);
       else exportCsv(name, exportCols, rows);
       toast(`${rows.length} ${rows.length === 1 ? "fila exportada" : "filas exportadas"}`);
       onExported();
@@ -486,7 +547,15 @@ function ReportPanel({ report, label, onExported }: { report: ReportKey; label: 
                 perPage={data.per_page}
                 onPage={setPage}
                 onPerPage={(size) => { setPerPage(size); setPage(1); }}
-                left={<ExportButtons permission="reports.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />}
+                left={
+                  <div className="mr-auto flex flex-wrap gap-1.5">
+                    <ExportButtons permission="reports.export" total={data.total} busy={exporting} onExport={(format) => runExport(format)} />
+                    <Btn variant="ghost" size="sm" disabled={exporting} onClick={() => runExport("pdf")} title={`Descargar las ${data.total} filas filtradas en PDF, con la marca de la empresa`} permission="reports.export">
+                      <FileDown size={14} />
+                      <span>PDF</span>
+                    </Btn>
+                  </div>
+                }
               />
             )}
           </>
@@ -576,7 +645,7 @@ export default function ReportsView() {
                       {index.exports.map((item) => (
                         <tr key={item.at}>
                           <td className={TD}>{item.label}{item.selection && <small className="app-muted block text-xs">Solo filas marcadas</small>}</td>
-                          <td className={TD}>{item.format === "xlsx" ? "Excel" : item.format === "csv" ? "CSV" : "—"}</td>
+                          <td className={TD}>{item.format === "xlsx" ? "Excel" : item.format === "csv" ? "CSV" : item.format === "pdf" ? "PDF" : "—"}</td>
                           <td className={`${TD} text-right tabular-nums`}>{item.rows}</td>
                           <td className={`${TD} whitespace-nowrap`}><Clock size={12} className="app-muted mr-1 inline align-[-1px]" />{dateTime(item.at)}</td>
                         </tr>

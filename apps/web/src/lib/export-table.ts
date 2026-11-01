@@ -72,7 +72,7 @@ export async function fetchAllPages<T>(path: string, params: URLSearchParams): P
  * `<recurso>.export` y la deja en auditoría (quién, qué listado, cuántas filas). Sin el
  * permiso responde 403 y el archivo no se genera.
  */
-export async function recordExport(resource: string, format: "xlsx" | "csv", rows: number, selection = false, context?: string) {
+export async function recordExport(resource: string, format: "xlsx" | "csv" | "pdf", rows: number, selection = false, context?: string) {
   // De una selección no hay filtros que anotar: son las filas marcadas en pantalla.
   // `context` (p. ej. "report=ventas") se anota siempre, para saber qué se exportó.
   const filters = [context, selection ? "" : decodeURIComponent(lastExportQuery)].filter(Boolean).join("&").slice(0, 2000);

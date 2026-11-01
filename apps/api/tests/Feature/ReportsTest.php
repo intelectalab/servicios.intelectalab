@@ -98,6 +98,11 @@ class ReportsTest extends TestCase
         $this->getJson('/api/v1/reports/ventas?export=1')->assertOk()->assertJsonPath('summary', null);
         $this->postJson('/api/v1/exports', ['resource' => 'reports', 'format' => 'xlsx', 'rows' => 3, 'filters' => 'report=ventas&from='.$from])->assertOk();
         $this->getJson('/api/v1/reports')->assertJsonPath('exports.0.label', 'Ventas y cotizaciones')->assertJsonPath('exports.0.rows', 3);
+        // La auditoría guarda la hora al segundo: la segunda exportación, un segundo después.
+        $this->travel(2)->seconds();
+        $this->postJson('/api/v1/exports', ['resource' => 'reports', 'format' => 'pdf', 'rows' => 2, 'filters' => 'report=cobranza'])->assertOk();
+        $this->getJson('/api/v1/reports')->assertJsonPath('exports.0.format', 'pdf')->assertJsonPath('exports.0.label', 'Cobranza y antigüedad');
+        $this->postJson('/api/v1/exports', ['resource' => 'reports', 'format' => 'docx', 'rows' => 2])->assertStatus(422);
 
         // Ventas: solo lo suyo y sin exportar.
         $this->as($seller);

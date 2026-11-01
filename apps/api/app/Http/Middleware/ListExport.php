@@ -86,7 +86,7 @@ class ListExport
     {
         $data = $request->validate([
             'resource' => ['required', 'in:'.implode(',', array_unique(self::RESOURCES))],
-            'format' => ['required', 'in:xlsx,csv'],
+            'format' => ['required', 'in:xlsx,csv,pdf'],
             'rows' => ['required', 'integer', 'min:0'],
             'selection' => ['sometimes', 'boolean'],
             'filters' => ['sometimes', 'nullable', 'string', 'max:2000'],

@@ -52,7 +52,7 @@ export function periodLabel(from: string, to: string) {
 
 export type ReportsIndex = {
   reports: { key: ReportKey; label: string }[];
-  exports: { report: string | null; label: string; format: "xlsx" | "csv" | null; rows: number; selection: boolean; at: string }[];
+  exports: { report: string | null; label: string; format: "xlsx" | "csv" | "pdf" | null; rows: number; selection: boolean; at: string }[];
 };
 
 /** Reportes con una fecha propia: se filtran por rango. */
