@@ -825,6 +825,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/reports/{report}', [ReportController::class, 'show']);
         });
 
+        // Administración: Seguridad y aislamiento. Ver y probar, quien ve la auditoría; la política, quien administra la empresa.
+        Route::middleware('permission:audit.view')->group(function () {
+            Route::get('/security', [\App\Http\Controllers\SecurityController::class, 'show']);
+            Route::post('/security/isolation-probe', [\App\Http\Controllers\SecurityController::class, 'probe'])->middleware('throttle:6,1,isolation-probe');
+        });
+        Route::middleware('permission:tenant.manage')->put('/security/policy', [\App\Http\Controllers\SecurityController::class, 'updatePolicy']);
+
         // Administración: Notificaciones (plan base): plantillas por evento, bitácora de envíos y canales.
         Route::middleware('permission:messaging.view')->group(function () {
             Route::get('/messaging', [\App\Http\Controllers\MessagingController::class, 'show']);

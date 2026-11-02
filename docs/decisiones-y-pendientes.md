@@ -175,6 +175,13 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - El logo nunca se guarda como llegó: el servidor lo vuelve a dibujar como PNG acotado; SVG no se acepta. Los colores se proponen desde el logo y se pueden cambiar.
 - La marca va en todos los PDF, en los Excel exportados, en la barra del portal y en los correos que recibe el cliente. Un color claro se oscurece donde hace falta para que se lea. Sin marca, todo sigue con el azul de siempre.
 
+### Seguridad y aislamiento (2026-11-01)
+
+- Detalle en [cambios/2026-11-01_seguridad-y-aislamiento.md](cambios/2026-11-01_seguridad-y-aislamiento.md). Administración → Seguridad y aislamiento (`/security`); la abre quien ve la auditoría.
+- Sin demostraciones: la prueba de aislamiento intenta leer registros reales de otra empresa y los controles se comprueban contra la base y la configuración.
+- Política por empresa (`App\Services\SecurityPolicy`): código para todos, duración de la sesión (1–12 h), "Recordarme" y cierre por inactividad. Se aplica al ingresar y, la inactividad, en cada petición (`SetTenantContext`). Superadmin y portal no la siguen.
+- Las contraseñas incorrectas quedan en la auditoría de la empresa. `tenant_status_log` tiene ya su regla de aislamiento: todas las tablas con `tenant_id` la tienen.
+
 ### Reglas de aprobación (2026-11-01)
 
 - Detalle en [cambios/2026-11-01_reglas-de-aprobacion.md](cambios/2026-11-01_reglas-de-aprobacion.md). Administración → Reglas de aprobación (`/approval-rules`), del módulo Cotizaciones.
@@ -285,7 +292,7 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - Consola de plataforma: el panel ya lee con su usuario de base (`erp_console`, desde el 2026-10-22, [cambios/2026-10-22_panel-consola-de-plataforma.md](cambios/2026-10-22_panel-consola-de-plataforma.md)); Planes y Tenants siguen escribiendo con `erp_app`, pero desde el 2026-11-01 la base solo acepta cambios en planes y suscripciones con una sesión de superadmin verificada. Falta lo mismo en `tenants` (la app aún puede borrar una empresa o cambiarle el estado) y en `tenant_modules`. Las pruebas de suscripción vencidas siguen en ACTIVE. Cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
 - Auditoría: casi ningún movimiento guarda antes y después (solo el detalle); la entidad se muestra con su identificador, no con su número; falta decidir cuánto tiempo se conserva. El filtro "hoy" usa el día del servidor (UTC), como en los demás listados.
 - No hay comando para crear superadmins. (La auditoría de plataforma tiene pantalla desde el 2026-10-23.)
-- Mi perfil: no se cierra una sesión concreta, solo todas las demás.
+- Mi perfil: no se cierra una sesión concreta, solo todas las demás (tampoco desde Seguridad y aislamiento).
 - `php artisan tenants:sync-permissions` da a los tenants ya registrados los permisos de sus módulos. Falta confirmar si se corrió.
 - En local, el PHP de XAMPP tiene apagada la caché de código (OPcache): cada llamada tarda unos 0,33 s. Activarla en `C:\xampp\php\php.ini` aceleraría todo el sistema (propuesto el 2026-10-12, sin hacer).
 - Notificaciones: avisos por fecha con tarea programada; WhatsApp (proveedor); más correos al cliente si se piden. (Plantillas, bitácora y canales existen desde el 2026-11-01.)

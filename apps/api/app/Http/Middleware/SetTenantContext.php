@@ -2,10 +2,14 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\AuditLogger;
+use App\Services\SecurityPolicy;
 use App\Services\TenantAccess;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Laravel\Sanctum\PersonalAccessToken;
 use Symfony\Component\HttpFoundation\Response;
 
 class SetTenantContext
@@ -51,6 +55,27 @@ class SetTenantContext
 
         DB::statement("SET app.tenant_id = '{$tenantId}'");
         $request->attributes->set('tenant_id', $tenantId);
+
+        // Política de la empresa: la sesión sin uso por más del tiempo elegido se cierra.
+        $token = $user->currentAccessToken();
+        // Solo sesiones reales (las de prueba de Sanctum no tienen identificador).
+        if ($token instanceof PersonalAccessToken && is_numeric($token->getKey())) {
+            $idle = SecurityPolicy::for($tenantId)['idle_minutes'];
+            $last = $token->last_activity_at ?? $token->created_at;
+            if ($idle > 0 && $last && Carbon::parse($last)->lt(now()->subMinutes($idle))) {
+                AuditLogger::log($tenantId, $user->id, 'auth.session_idle', 'User', $user->id, metadata: ['minutes' => $idle]);
+                $token->delete();
+
+                return response()->json([
+                    'message' => "Tu sesión se cerró tras {$idle} minutos sin uso. Vuelve a ingresar.",
+                    'code' => 'SESSION_IDLE',
+                ], 401);
+            }
+            // Se anota como mucho una vez por minuto.
+            if (! $token->last_activity_at || Carbon::parse($token->last_activity_at)->lt(now()->subMinute())) {
+                $token->forceFill(['last_activity_at' => now()])->saveQuietly();
+            }
+        }
 
         return $next($request);
     }

@@ -87,7 +87,7 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/plan", label: "Módulos y plan", requiredPermission: "tenant.manage", icon: ToggleLeft, superModule: "Administración" },
   { href: "/users", label: "Usuarios", requiredPermission: "users.view", icon: UserCog, superModule: "Administración" },
   { href: "/roles", label: "Roles y permisos", requiredPermission: "users.view", icon: Key, superModule: "Administración" },
-  { label: "Seguridad y aislamiento", icon: Lock, superModule: "Administración", soon: true },
+  { href: "/security", label: "Seguridad y aislamiento", requiredPermission: "audit.view", icon: Lock, superModule: "Administración" },
   { href: "/portal-users", label: "Usuarios del portal", module: "PORTAL", requiredPermission: "portal_users.view", icon: UserRound, superModule: "Administración" },
   { href: "/approval-rules", label: "Reglas de aprobación", module: "COTIZACIONES", requiredPermission: "approvals.view", icon: ListChecks, superModule: "Administración" },
   // Del módulo Soporte: sin él, el calendario no se usa (sale con el candado del plan).

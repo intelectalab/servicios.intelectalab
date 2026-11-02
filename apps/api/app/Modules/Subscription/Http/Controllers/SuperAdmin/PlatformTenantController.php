@@ -173,6 +173,8 @@ class PlatformTenantController extends Controller
             }
 
             DB::table('tenants')->where('id', $tenant)->update(['status' => $data['to'], 'updated_at' => now()]);
+            // El historial de estado está aislado por empresa: se escribe en su contexto.
+            $this->enterTenant($tenant);
             $this->logStatus($tenant, $row->status, $data['to'], $reason ?: null, $userId);
             PlatformAuditLogger::log($userId, 'tenant.status_changed', 'Tenant', $tenant,
                 ['status' => $row->status], ['status' => $data['to']], ['reason' => $reason ?: null]);

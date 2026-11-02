@@ -9,6 +9,7 @@ use App\Modules\Subscription\Support\TenantModules;
 use App\Services\AccessScope;
 use App\Services\AuditLogger;
 use App\Services\LoginThrottle;
+use App\Services\SecurityPolicy;
 use App\Services\PlatformAuditLogger;
 use App\Services\TenantAccess;
 use Illuminate\Http\Request;
@@ -44,6 +45,10 @@ class AuthController extends Controller
         $user = User::where('email', $email)->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password_hash)) {
+            // El intento fallido queda en la auditoría de su empresa (Seguridad → Actividad de acceso).
+            if ($user) {
+                $this->audit($user, 'auth.login_failed', ['email' => $user->email]);
+            }
             if (LoginThrottle::fail($email)) {
                 if ($user) {
                     $this->audit($user, 'auth.account_locked', ['minutes' => LoginThrottle::LOCK_MINUTES]);
@@ -159,11 +164,14 @@ class AuthController extends Controller
 
     private function issueSession(User $user, bool $remember, array $auditMetadata = [])
     {
-        $this->resolveActiveTenant($user);
+        $tenantId = $this->resolveActiveTenant($user);
         $this->audit($user, 'auth.login', ['email' => $user->email, 'remember' => $remember] + $auditMetadata);
 
-        // "Recordarme" alarga la sesión; sin marcar dura una jornada.
-        $minutes = config($remember ? 'sanctum.remember_minutes' : 'sanctum.session_minutes');
+        // "Recordarme" alarga la sesión; sin marcar dura una jornada. La empresa puede acortarla
+        // o no permitir "Recordarme" (Seguridad y aislamiento → Política).
+        $minutes = $user->is_super_admin
+            ? config($remember ? 'sanctum.remember_minutes' : 'sanctum.session_minutes')
+            : SecurityPolicy::sessionMinutes($tenantId, $remember);
         $session = $user->createToken('api-token', ['*'], now()->addMinutes($minutes));
         // Desde dónde se abrió la sesión, para que la persona la reconozca en "Mi perfil".
         $session->accessToken->forceFill([
@@ -254,6 +262,10 @@ class AuthController extends Controller
 
         if (! $tenantId) {
             return false;
+        }
+        // La empresa puede exigir el código a todos sus usuarios.
+        if (SecurityPolicy::for($tenantId)['require_mfa_all']) {
+            return true;
         }
 
         $isTenantAdmin = config('auth.admin_mfa_required') && DB::table('user_roles')

@@ -469,6 +469,30 @@ CREATE FUNCTION public.guard_platform_tables() RETURNS trigger
 ALTER FUNCTION public.guard_platform_tables() OWNER TO erp_user;
 
 --
+-- Name: isolation_probe_targets(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.isolation_probe_targets() RETURNS TABLE(resource text, record_id uuid)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+    DECLARE
+        v_tenant uuid := app_tenant_id();
+        v_table text;
+    BEGIN
+        IF v_tenant IS NULL THEN
+            RETURN;
+        END IF;
+        FOREACH v_table IN ARRAY ARRAY['quotations', 'contracts', 'invoices', 'documents', 'credential_records', 'support_tickets', 'parties'] LOOP
+            RETURN QUERY EXECUTE format('SELECT %L::text, id FROM %I WHERE tenant_id <> $1 ORDER BY random() LIMIT 1', v_table, v_table) USING v_tenant;
+        END LOOP;
+    END
+    $_$;
+
+
+ALTER FUNCTION public.isolation_probe_targets() OWNER TO erp_user;
+
+--
 -- Name: message_opened(text); Type: FUNCTION; Schema: public; Owner: erp_user
 --
 
@@ -3656,7 +3680,8 @@ CREATE TABLE public.personal_access_tokens (
     updated_at timestamp(0) without time zone,
     user_agent character varying(500),
     ip_address character varying(45),
-    mfa boolean DEFAULT false NOT NULL
+    mfa boolean DEFAULT false NOT NULL,
+    last_activity_at timestamp(0) without time zone
 );
 
 
@@ -15740,6 +15765,13 @@ CREATE POLICY tenant_isolation ON public.tenant_settings USING ((tenant_id = pub
 
 
 --
+-- Name: tenant_status_log tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.tenant_status_log USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
 -- Name: tenant_subscription_payments tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
 --
 
@@ -15864,6 +15896,12 @@ ALTER TABLE public.tenant_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tenant_settings ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: tenant_status_log; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.tenant_status_log ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: tenant_subscription_payments; Type: ROW SECURITY; Schema: public; Owner: erp_user
 --
 
@@ -15972,6 +16010,14 @@ GRANT USAGE ON SCHEMA public TO erp_platform;
 --
 
 REVOKE ALL ON FUNCTION public.guard_platform_tables() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION isolation_probe_targets(); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.isolation_probe_targets() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.isolation_probe_targets() TO erp_app;
 
 
 --
@@ -17466,6 +17512,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 85	2026_11_01_000700_bulk_imports	73
 86	2026_11_01_000800_messaging	74
 87	2026_11_01_000900_quotation_authorizations	75
+88	2026_11_01_001000_security_screen	76
 \.
 
 
@@ -17694,7 +17741,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 87, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 88, true);
 
 
 --
