@@ -153,7 +153,7 @@ class MessagingTest extends TestCase
     {
         $this->makeTenant(['SOPORTE']);
         $this->as($this->makeUser('Gerencia', ['messaging.view']));
-        $this->getJson('/api/v1/messaging')->assertOk()->assertJsonPath('kpis.active_templates', 23);
+        $this->getJson('/api/v1/messaging')->assertOk()->assertJsonPath('kpis.active_templates', 26);
         $this->putJson('/api/v1/message-templates/ticket.created', ['subject' => 'x', 'body' => 'y', 'active' => true])->assertForbidden();
         $this->putJson('/api/v1/messaging/channels', ['email' => false])->assertForbidden();
 

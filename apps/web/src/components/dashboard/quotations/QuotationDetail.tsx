@@ -16,6 +16,7 @@ import {
   useToasts, type Tone,
 } from "@/components/ui/proto";
 import { SortableBoard } from "@/components/ui/sortable-cards";
+import { QuotationAuthorizationCard } from "@/components/dashboard/quotations/QuotationAuthorizationCard";
 import type { Quotation } from "@/types/commercial";
 
 // Acciones que piden confirmación; "reason" indica si llevan comentario y si es obligatorio.
@@ -243,6 +244,11 @@ export default function QuotationDetail() {
   const history = quotation.history ?? [];
   const approvals = quotation.approvals ?? [];
   const visited = history.flatMap((entry) => (entry.metadata.to ? [entry.metadata.to] : [])).concat("DRAFT");
+  // Reglas de aprobación: sin su autorización interna, el borrador no se envía.
+  const authorization = quotation.authorization;
+  const sendBlocked = authorization && authorization.required_level > 0 && authorization.status !== "APPROVED"
+    ? `Necesita autorización interna hasta el nivel ${authorization.required_level}`
+    : undefined;
   const canVersion =
     ["SUBMITTED", "REJECTED", "EXPIRED", "APPROVED"].includes(status) && !quotation.superseded_by && !quotation.contract;
 
@@ -352,7 +358,7 @@ export default function QuotationDetail() {
         className="grid grid-cols-1 gap-x-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
         zones={[
           { className: "min-w-0 lg:min-h-24", cards: ["lines", "states"] },
-          { className: "min-w-0 lg:min-h-24", cards: ["trace", "approvals", "history"] },
+          { className: "min-w-0 lg:min-h-24", cards: ["trace", "authorization", "approvals", "history"] },
         ]}
         cards={[
           {
@@ -435,7 +441,8 @@ export default function QuotationDetail() {
                       variant="secondary"
                       onClick={() => run("submit", "Enviar a aprobación: listo", "No se pudo enviar a aprobación.")}
                       permission="quotations.manage"
-                      disabled={busy}
+                      disabled={busy || Boolean(sendBlocked)}
+                      title={sendBlocked}
                     >
                       Enviar a aprobación
                     </Btn>
@@ -530,6 +537,18 @@ export default function QuotationDetail() {
             />
           </Card>
             ),
+          },
+          {
+            id: "authorization",
+            node: authorization ? (
+              <QuotationAuthorizationCard
+                quotationId={quotation.id}
+                status={status}
+                authorization={authorization}
+                onChanged={() => setReload((n) => n + 1)}
+                toast={toast}
+              />
+            ) : null,
           },
           {
             id: "approvals",

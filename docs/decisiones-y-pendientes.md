@@ -175,6 +175,12 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - El logo nunca se guarda como llegó: el servidor lo vuelve a dibujar como PNG acotado; SVG no se acepta. Los colores se proponen desde el logo y se pueden cambiar.
 - La marca va en todos los PDF, en los Excel exportados, en la barra del portal y en los correos que recibe el cliente. Un color claro se oscurece donde hace falta para que se lea. Sin marca, todo sigue con el azul de siempre.
 
+### Reglas de aprobación (2026-11-01)
+
+- Detalle en [cambios/2026-11-01_reglas-de-aprobacion.md](cambios/2026-11-01_reglas-de-aprobacion.md). Administración → Reglas de aprobación (`/approval-rules`), del módulo Cotizaciones.
+- Una cotización en borrador que supera una regla (monto total en soles o descuento de línea en %) necesita autorización interna nivel por nivel antes de enviarse. Cada nivel lo autorizan los roles que la empresa elige; quien creó la cotización no la autoriza y una persona no decide dos niveles (lo garantiza la base). Si cambian montos o descuentos, se anula. Sin reglas, nada cambia; la empresa nace sin reglas.
+- Lo lleva `App\Modules\Services\Support\QuotationAuthorization`. La aprobación posterior (Gerencia, portal) no cambia.
+
 ### Notificaciones (2026-11-01)
 
 - Detalle en [cambios/2026-11-01_notificaciones.md](cambios/2026-11-01_notificaciones.md). Administración → Notificaciones (`/messaging`), del plan base.

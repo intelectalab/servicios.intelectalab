@@ -117,7 +117,22 @@ export interface Quotation {
   own_approval_blocked?: boolean;
   /** El cliente supera su límite de crédito con esta cotización. Solo en el detalle. */
   credit?: CreditWarning | null;
+  /** Autorización interna por niveles (Reglas de aprobación). Solo en el detalle. */
+  authorization?: QuotationAuthorizationSummary;
 }
+
+/** Autorización interna de una cotización según las reglas de aprobación de la empresa. */
+export type QuotationAuthorizationSummary = {
+  required_level: number;
+  reasons: string[];
+  status: "NOT_REQUIRED" | "MISSING" | "PENDING" | "APPROVED" | "REJECTED" | "VOID";
+  request: { id: string; status: string; required_level: number; requested_at: string; void_reason: string | null; stale: boolean } | null;
+  steps: { level: number; decision: "APPROVED" | "REJECTED"; comment: string | null; created_at: string; user_id: string; user_name: string | null }[];
+  next_level: { level: number; name: string; roles: string[] } | null;
+  can_decide: boolean;
+  decide_blocked: string | null;
+  levels: { level: number; name: string; roles: string[] }[];
+};
 
 /**
  * Aviso de límite de crédito en una ficha. "blocked": la empresa bloquea y la persona no tiene

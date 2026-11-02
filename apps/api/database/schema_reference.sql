@@ -1276,6 +1276,54 @@ CREATE FUNCTION public.protect_supplier_payment() RETURNS trigger
 ALTER FUNCTION public.protect_supplier_payment() OWNER TO erp_user;
 
 --
+-- Name: quotation_authorization_steps_guard(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.quotation_authorization_steps_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM quotation_authorizations a JOIN quotations q ON q.id = a.quotation_id
+                   WHERE a.id = NEW.authorization_id AND q.created_by = NEW.user_id) THEN
+            RAISE EXCEPTION 'Quien creó la cotización no la autoriza.' USING ERRCODE = '42501';
+        END IF;
+        IF EXISTS (SELECT 1 FROM quotation_authorization_steps s WHERE s.authorization_id = NEW.authorization_id AND s.user_id = NEW.user_id) THEN
+            RAISE EXCEPTION 'Una misma persona no autoriza dos niveles.' USING ERRCODE = '42501';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM quotation_authorizations a WHERE a.id = NEW.authorization_id AND a.status = 'PENDING') THEN
+            RAISE EXCEPTION 'La autorización ya está cerrada.' USING ERRCODE = '42501';
+        END IF;
+        RETURN NEW;
+    END
+    $$;
+
+
+ALTER FUNCTION public.quotation_authorization_steps_guard() OWNER TO erp_user;
+
+--
+-- Name: quotation_authorizations_guard(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.quotation_authorizations_guard() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        IF NEW.quotation_id <> OLD.quotation_id OR NEW.tenant_id <> OLD.tenant_id OR NEW.required_level <> OLD.required_level
+           OR NEW.reasons <> OLD.reasons OR NEW.signature <> OLD.signature OR NEW.requested_at <> OLD.requested_at
+           OR NEW.requested_by IS DISTINCT FROM OLD.requested_by THEN
+            RAISE EXCEPTION 'Una solicitud de autorización no se modifica.' USING ERRCODE = '42501';
+        END IF;
+        IF NEW.status <> OLD.status AND NOT (OLD.status = 'PENDING' OR (OLD.status = 'APPROVED' AND NEW.status = 'VOID')) THEN
+            RAISE EXCEPTION 'La autorización ya está cerrada.' USING ERRCODE = '42501';
+        END IF;
+        RETURN NEW;
+    END
+    $$;
+
+
+ALTER FUNCTION public.quotation_authorizations_guard() OWNER TO erp_user;
+
+--
 -- Name: resolve_active_tenant_for_user(uuid); Type: FUNCTION; Schema: public; Owner: erp_user
 --
 
@@ -3965,6 +4013,51 @@ CREATE TABLE public.quotation_approvals (
 
 
 ALTER TABLE public.quotation_approvals OWNER TO erp_user;
+
+--
+-- Name: quotation_authorization_steps; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.quotation_authorization_steps (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    authorization_id uuid NOT NULL,
+    level smallint NOT NULL,
+    decision character varying(20) NOT NULL,
+    user_id uuid NOT NULL,
+    comment text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT quotation_authorization_steps_decision_check CHECK (((decision)::text = ANY ((ARRAY['APPROVED'::character varying, 'REJECTED'::character varying])::text[]))),
+    CONSTRAINT quotation_authorization_steps_level_check CHECK (((level >= 1) AND (level <= 2))),
+    CONSTRAINT quotation_authorization_steps_reject_reason CHECK ((((decision)::text <> 'REJECTED'::text) OR (btrim(COALESCE(comment, ''::text)) <> ''::text)))
+);
+
+
+ALTER TABLE public.quotation_authorization_steps OWNER TO erp_user;
+
+--
+-- Name: quotation_authorizations; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.quotation_authorizations (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    quotation_id uuid NOT NULL,
+    required_level smallint NOT NULL,
+    reasons jsonb DEFAULT '[]'::jsonb NOT NULL,
+    signature character varying(64) NOT NULL,
+    status character varying(20) DEFAULT 'PENDING'::character varying NOT NULL,
+    requested_by uuid,
+    requested_at timestamp with time zone DEFAULT now() NOT NULL,
+    closed_at timestamp with time zone,
+    void_reason text,
+    CONSTRAINT quotation_authorizations_required_level_check CHECK (((required_level >= 1) AND (required_level <= 2))),
+    CONSTRAINT quotation_authorizations_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'VOID'::character varying])::text[]))),
+    CONSTRAINT quotation_authorizations_void_reason CHECK ((((status)::text <> 'VOID'::text) OR (btrim(COALESCE(void_reason, ''::text)) <> ''::text)))
+);
+
+
+ALTER TABLE public.quotation_authorizations OWNER TO erp_user;
 
 --
 -- Name: quotation_items; Type: TABLE; Schema: public; Owner: erp_user
@@ -6712,6 +6805,30 @@ ALTER TABLE ONLY public.quotation_approvals
 
 
 --
+-- Name: quotation_authorization_steps quotation_authorization_steps_authorization_id_level_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorization_steps
+    ADD CONSTRAINT quotation_authorization_steps_authorization_id_level_key UNIQUE (authorization_id, level);
+
+
+--
+-- Name: quotation_authorization_steps quotation_authorization_steps_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorization_steps
+    ADD CONSTRAINT quotation_authorization_steps_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: quotation_authorizations quotation_authorizations_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorizations
+    ADD CONSTRAINT quotation_authorizations_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: quotation_items quotation_items_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -8625,6 +8742,20 @@ CREATE INDEX platform_audit_logs_user_id_index ON public.platform_audit_logs USI
 
 
 --
+-- Name: quotation_authorizations_one_pending; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE UNIQUE INDEX quotation_authorizations_one_pending ON public.quotation_authorizations USING btree (quotation_id) WHERE ((status)::text = 'PENDING'::text);
+
+
+--
+-- Name: quotation_authorizations_quotation; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX quotation_authorizations_quotation ON public.quotation_authorizations USING btree (quotation_id, requested_at DESC);
+
+
+--
 -- Name: quotations_previous_id_index; Type: INDEX; Schema: public; Owner: erp_user
 --
 
@@ -9322,6 +9453,20 @@ CREATE TRIGGER trg_purchase_orders_updated_at BEFORE UPDATE ON public.purchase_o
 --
 
 CREATE TRIGGER trg_purchase_receipts_check BEFORE INSERT ON public.purchase_receipts FOR EACH ROW EXECUTE FUNCTION public.check_purchase_receipt();
+
+
+--
+-- Name: quotation_authorization_steps trg_quotation_authorization_steps_guard; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_quotation_authorization_steps_guard BEFORE INSERT ON public.quotation_authorization_steps FOR EACH ROW EXECUTE FUNCTION public.quotation_authorization_steps_guard();
+
+
+--
+-- Name: quotation_authorizations trg_quotation_authorizations_guard; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_quotation_authorizations_guard BEFORE UPDATE ON public.quotation_authorizations FOR EACH ROW EXECUTE FUNCTION public.quotation_authorizations_guard();
 
 
 --
@@ -12239,6 +12384,54 @@ ALTER TABLE ONLY public.quotation_approvals
 
 
 --
+-- Name: quotation_authorization_steps quotation_authorization_steps_authorization_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorization_steps
+    ADD CONSTRAINT quotation_authorization_steps_authorization_id_fkey FOREIGN KEY (authorization_id) REFERENCES public.quotation_authorizations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: quotation_authorization_steps quotation_authorization_steps_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorization_steps
+    ADD CONSTRAINT quotation_authorization_steps_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: quotation_authorization_steps quotation_authorization_steps_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorization_steps
+    ADD CONSTRAINT quotation_authorization_steps_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id);
+
+
+--
+-- Name: quotation_authorizations quotation_authorizations_quotation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorizations
+    ADD CONSTRAINT quotation_authorizations_quotation_id_fkey FOREIGN KEY (quotation_id) REFERENCES public.quotations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: quotation_authorizations quotation_authorizations_requested_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorizations
+    ADD CONSTRAINT quotation_authorizations_requested_by_fkey FOREIGN KEY (requested_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: quotation_authorizations quotation_authorizations_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.quotation_authorizations
+    ADD CONSTRAINT quotation_authorizations_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: quotation_items quotation_items_quotation_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -14347,6 +14540,18 @@ ALTER TABLE public.purchase_receipts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quotation_approvals ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: quotation_authorization_steps; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.quotation_authorization_steps ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: quotation_authorizations; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.quotation_authorizations ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: quotation_items; Type: ROW SECURITY; Schema: public; Owner: erp_user
 --
 
@@ -15238,6 +15443,20 @@ CREATE POLICY tenant_isolation ON public.purchase_receipts USING ((tenant_id = p
 --
 
 CREATE POLICY tenant_isolation ON public.quotation_approvals USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: quotation_authorization_steps tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.quotation_authorization_steps USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: quotation_authorizations tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.quotation_authorizations USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
 
 
 --
@@ -16674,6 +16893,20 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.quotation_approvals TO erp_app
 
 
 --
+-- Name: TABLE quotation_authorization_steps; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT ON TABLE public.quotation_authorization_steps TO erp_app;
+
+
+--
+-- Name: TABLE quotation_authorizations; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.quotation_authorizations TO erp_app;
+
+
+--
 -- Name: TABLE quotation_items; Type: ACL; Schema: public; Owner: erp_user
 --
 
@@ -17232,6 +17465,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 84	2026_11_01_000600_platform_tables_write_guard	72
 85	2026_11_01_000700_bulk_imports	73
 86	2026_11_01_000800_messaging	74
+87	2026_11_01_000900_quotation_authorizations	75
 \.
 
 
@@ -17439,6 +17673,8 @@ ab2935c2-e055-463c-ae65-53f14dcb04ef	imports.create	Importar	Importar desde Exce
 72d5fcbc-a2f0-44c6-88b2-47fd7d93be48	messaging.view	Ver notificaciones	Ver las plantillas, la bitácora de envíos y los canales de la empresa.	2026-11-02 02:40:42.126587+00
 72e54856-3378-4ad3-ba4c-c9a75a4198a8	messaging.manage	Gestionar notificaciones	Editar plantillas y canales, y reintentar envíos fallidos.	2026-11-02 02:40:42.126587+00
 15f2140e-84dd-44ae-9c6a-cdc12608ba97	messaging.export	Exportar notificaciones	Exportar la bitácora de envíos.	2026-11-02 02:40:42.126587+00
+e551eef7-1690-460e-bbcc-4978e59f5052	approvals.view	Ver reglas de aprobación	Ver las reglas de autorización interna y las cotizaciones que la esperan.	2026-11-02 03:00:13.737086+00
+18748be6-e2e2-4bbb-b9d7-697ccd6b2838	approvals.manage	Gestionar reglas de aprobación	Cambiar las reglas de autorización interna y quién autoriza cada nivel.	2026-11-02 03:00:13.737086+00
 \.
 
 
@@ -17458,7 +17694,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 86, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 87, true);
 
 
 --

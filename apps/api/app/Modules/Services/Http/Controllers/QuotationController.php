@@ -17,6 +17,7 @@ use App\Modules\Services\Models\Service;
 use App\Modules\Services\Models\ServicePrice;
 use App\Services\AuditHistory;
 use App\Modules\Portal\Models\PortalRequest;
+use App\Modules\Services\Support\QuotationAuthorization;
 use App\Services\AuditLogger;
 use App\Services\MessageCenter;
 use App\Services\ColumnFilters;
@@ -252,6 +253,8 @@ class QuotationController extends Controller
                 beforeData: $before,
                 afterData: ['total' => $quotation->total, 'items' => count($itemsData)],
             );
+            // Si cambiaron montos o descuentos, la autorización interna deja de valer.
+            QuotationAuthorization::refresh($request, $quotation);
         });
 
         return response()->json($quotation->load('items.service'));
@@ -267,6 +270,9 @@ class QuotationController extends Controller
                 'items' => ['La cotización necesita al menos una línea para enviarse.'],
             ]);
         }
+
+        // Reglas de aprobación: si la alcanzan, necesita su autorización interna antes de enviarse.
+        QuotationAuthorization::assertReady($quotation);
 
         $response = $this->transition($request, $quotation, 'SUBMITTED', 'quotation.submit');
         Notifier::send('quotation.submitted', 'Cotización por aprobar', "{$quotation->quotation_number} · ".Notifier::money($quotation->total, $quotation->currency),
@@ -650,6 +656,8 @@ class QuotationController extends Controller
                 ? CrmOpportunity::query()->whereKey($quotation->source_id)->first(['id', 'opportunity_number', 'name'])
                 : null,
             'history' => AuditHistory::for('Quotation', $quotation->id),
+            // Autorización interna por niveles (Reglas de aprobación).
+            'authorization' => QuotationAuthorization::summary($quotation, request()->user()?->id),
         ];
     }
 

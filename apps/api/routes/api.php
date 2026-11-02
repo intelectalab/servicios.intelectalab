@@ -291,6 +291,16 @@ Route::prefix('v1')->group(function () {
             Route::post('/quotations/{quotation}/versions', [QuotationController::class, 'newVersion']);
         });
 
+        // Autorización interna por niveles (Reglas de aprobación): pedirla es de quien gestiona la
+        // cotización; decidir cada nivel, de los roles que la empresa eligió (se comprueba dentro).
+        Route::middleware('permission:quotations.manage')->post('/quotations/{quotation}/authorization', [\App\Modules\Services\Http\Controllers\QuotationAuthorizationController::class, 'request']);
+        Route::middleware('permission:quotations.view')->group(function () {
+            Route::post('/quotations/{quotation}/authorization/approve', [\App\Modules\Services\Http\Controllers\QuotationAuthorizationController::class, 'approve']);
+            Route::post('/quotations/{quotation}/authorization/reject', [\App\Modules\Services\Http\Controllers\QuotationAuthorizationController::class, 'reject']);
+        });
+        Route::middleware(['module:COTIZACIONES', 'permission:approvals.view'])->get('/approval-rules', [\App\Modules\Services\Http\Controllers\QuotationAuthorizationController::class, 'show']);
+        Route::middleware(['module:COTIZACIONES', 'permission:approvals.manage'])->put('/approval-rules', [\App\Modules\Services\Http\Controllers\QuotationAuthorizationController::class, 'update']);
+
         // Aprobar es un permiso aparte: quien cotiza no necesariamente aprueba.
         Route::middleware('permission:quotations.approve')->group(function () {
             Route::post('/quotations/{quotation}/approve', [QuotationController::class, 'approve']);
