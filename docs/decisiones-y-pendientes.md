@@ -1,6 +1,6 @@
 # Decisiones y pendientes
 
-Estado al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones completo (con la pantalla de plantillas de checklist) y Finanzas completo: Por facturar, Comprobantes, Cuentas por cobrar, Cobros, Recurrencia, Bancos y caja, Facturación electrónica y Monedas y tipo de cambio, Compras: Órdenes de compra, Comprobantes de proveedor y Cuentas por pagar, y Contabilidad: Libro diario, Mayor y balance, Estados financieros, Centros de costo y presupuestos y Plan de cuentas y periodos, con cierre de ejercicio; y desde el 2026-10-15 Soporte: Tickets y SLA, Garantías y Calendario laboral y SLA).
+Estado al 2026-11-02: todas las pantallas del menú del prototipo construidas (salvo "Flujos end-to-end"); ver Pendientes al final. Antes, al 2026-10-14 (con el CRM completo, la pantalla Auditoría, Operaciones completo (con la pantalla de plantillas de checklist) y Finanzas completo: Por facturar, Comprobantes, Cuentas por cobrar, Cobros, Recurrencia, Bancos y caja, Facturación electrónica y Monedas y tipo de cambio, Compras: Órdenes de compra, Comprobantes de proveedor y Cuentas por pagar, y Contabilidad: Libro diario, Mayor y balance, Estados financieros, Centros de costo y presupuestos y Plan de cuentas y periodos, con cierre de ejercicio; y desde el 2026-10-15 Soporte: Tickets y SLA, Garantías y Calendario laboral y SLA).
 
 ## Decisiones tomadas
 
@@ -281,29 +281,51 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 
 ## Pendientes
 
-- Soporte: avisos (escalar, asignar, SLA por vencer) con Notificaciones; reclamos de garantía desde el portal del cliente; tarea programada de vencimientos. (Los tickets desde el portal existen desde el 2026-10-22.)
-- Compras: consulta de validez ante SUNAT; nota de crédito de proveedor; aviso de órdenes por aprobar (con Notificaciones); pagos parciales y programados; revertir un pago con depósito de detracción (hoy no se permite).
-- Contabilidad: editar las reglas automáticas por empresa; libros electrónicos (PLE); planilla (cuentas 62); validar con el contador las cuentas del cierre (5911/5921). En Tenant A, los cobros PAG-2026-0001…0004 (anteriores a Bancos y caja) no tienen cuenta: la 1041/1011 no coincide con Bancos y caja.
-- Finanzas: elegir el proveedor de facturación electrónica y escribir su clase (con él, XML y CDR, y consultar el ticket de una baja pendiente); renovación automática de instancias recurrentes; avisos de renovación, de cobranza y de arqueo con diferencia (con Notificaciones); cambio entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos por horas aprobadas y por hitos; nota de crédito parcial; editar el vencimiento de un borrador; pago en línea; activar el programador del servidor para los ciclos diarios.
-- Operaciones: en la App del técnico, abrirla sin señal desde cero, borrar lo guardado en el teléfono al cerrar sesión, registrar dónde estaba el técnico y ubicación en el cliente; rejilla por horas y arrastrar para reprogramar en Agenda; antivirus real para los archivos (ver [propuesta-antivirus.md](propuesta-antivirus.md)); facturar por horas (con Finanzas); avisos de horas y costos por aprobar (con Notificaciones); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte).
-- CRM: pantalla para editar etapas y fuentes; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
-- Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
+Revisados el 2026-11-02 contra el prototipo, el código y la base. Del menú del prototipo están todas las pantallas salvo "Flujos end-to-end", que allí es una página de demostración (mapa CRM encendido / apagado con un recorrido simulado): se propone no traerla, o hacerla solo como ayuda.
+
+### Antes de usarlo en serio
+- **Desplegar** los commits locales: al hacerlo corren las migraciones `2026_11_01_000200` a `001000`. En el VPS: `APP_URL` con la dirección pública de la API (apertura de correos), `ADMIN_MFA_REQUIRED=true` y el programador (`schedule:run`) cada minuto (`webhooks:deliver` lo necesita).
+- **Vencimiento de la suscripción:** hoy no bloquea nada; una empresa vencida sigue entrando (en local hay 4 suscripciones vencidas en ACTIVE). De los límites del plan solo se controla el de usuarios. Falta decidir qué pasa al vencer y qué otros límites bloquean.
+- **`tenants` y `tenant_modules`:** la aplicación aún puede borrar una empresa, cambiarle el estado o encender módulos sin pasar por la consola. Falta el mismo control que tienen planes y suscripciones desde el 2026-11-01. `role_permissions` tampoco tiene regla de aislamiento.
+- **Zona horaria de la aplicación en UTC:** de noche en Perú, la fecha de emisión de las órdenes y el filtro "hoy" de los listados toman el día siguiente.
+- **Empresa nueva:** nace solo con el rol Administrador; los roles base del prototipo (Gerencia, Ventas, Operaciones, Finanzas, Técnico, Soporte) no se crean solos.
+- **Antivirus real** para los archivos (hoy simulado; ver [propuesta-antivirus.md](propuesta-antivirus.md)).
+- Confirmar si se corrió `php artisan tenants:sync-permissions` en el VPS.
+
+### Proveedores por elegir (sin ellos se muestra "pendiente" y no se simula)
+- Facturación electrónica (OSE/PSE): con él, envío a SUNAT, XML y CDR, bajas y su consulta, y la validez de los comprobantes de proveedor.
+- Pasarela de pago ("Pagar en línea" del portal).
+- WhatsApp Business (notificaciones).
+- Firma electrónica acreditada (opcional) y gestor externo para los secretos del Credential Vault.
+
+### Funciones dentro de los módulos
+- **Avisos por fecha** con una tarea programada: SLA por vencer, vencimientos de contratos y garantías, renovaciones, cobranza, recordatorios de actividades, arqueo con diferencia.
+- **Finanzas:** renovación automática de instancias recurrentes; nota de crédito parcial; transferencias entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos facturables por horas aprobadas y por hitos; editar el vencimiento de un borrador; tipo de cambio automático (hoy se trae de SUNAT con un botón).
+- **Compras:** nota de crédito de proveedor; pagos parciales y programados; revertir un pago que incluyó el depósito de la detracción.
+- **Contabilidad:** libros electrónicos (PLE); reglas automáticas editables por empresa; planilla (cuentas 62); validar con un contador las cuentas del cierre (5911/5921). En Tenant A, los cobros PAG-2026-0001…0004 (anteriores a Bancos y caja) no tienen cuenta.
+- **Operaciones:** App del técnico: abrirla sin señal desde cero, borrar lo guardado al cerrar sesión, registrar dónde estaba el técnico; Agenda: rejilla por horas y arrastrar para reprogramar.
+- **CRM:** pantalla para editar etapas y fuentes; asignar una actividad a otra persona; clientes como miembros de campaña; envío real de las comunicaciones de campaña.
+- **Soporte:** reclamos de garantía desde el portal.
+- **Portal:** ver los usuarios del portal en la ficha del cliente.
+- **Reportes:** resumen semanal por correo (propuesto).
+- **Comercial:** una cotización cuyo contrato ya generó una orden deja "Orden directa" deshabilitado (en el prototipo son independientes). Lo que Servicios y Cotizaciones aún no tienen respecto al prototipo está en [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md).
+- **Alcance:** a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa con el alcance Sede); mostrar la sede en las fichas.
+- **Auditoría:** guardar antes y después en más movimientos; mostrar el número del registro en vez de su identificador; decidir cuánto tiempo se conserva.
+- **Sesiones:** cerrar una sesión concreta (hoy, en Mi perfil, solo todas las demás).
+
+### Orden y limpieza
+- Identidades repetidas en Tenant A: 5 documentos con dos registros cada uno, de los módulos separados. Lista en [cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md](cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md).
+- Borrar de verdad Clientes, Proveedores y Empleados (pantallas, componentes, `lib/open-record.ts`, `/v1/search`), hoy solo desconectados.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
-- CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.
-- Consola de plataforma: el panel ya lee con su usuario de base (`erp_console`, desde el 2026-10-22, [cambios/2026-10-22_panel-consola-de-plataforma.md](cambios/2026-10-22_panel-consola-de-plataforma.md)); Planes y Tenants siguen escribiendo con `erp_app`, pero desde el 2026-11-01 la base solo acepta cambios en planes y suscripciones con una sesión de superadmin verificada. Falta lo mismo en `tenants` (la app aún puede borrar una empresa o cambiarle el estado) y en `tenant_modules`. Las pruebas de suscripción vencidas siguen en ACTIVE. Cookie de sesión no legible por el navegador; gestor externo para los secretos de la bóveda; regla de aislamiento en `role_permissions`.
-- Auditoría: casi ningún movimiento guarda antes y después (solo el detalle); la entidad se muestra con su identificador, no con su número; falta decidir cuánto tiempo se conserva. El filtro "hoy" usa el día del servidor (UTC), como en los demás listados.
-- No hay comando para crear superadmins. (La auditoría de plataforma tiene pantalla desde el 2026-10-23.)
-- Mi perfil: no se cierra una sesión concreta, solo todas las demás (tampoco desde Seguridad y aislamiento).
-- `php artisan tenants:sync-permissions` da a los tenants ya registrados los permisos de sus módulos. Falta confirmar si se corrió.
-- En local, el PHP de XAMPP tiene apagada la caché de código (OPcache): cada llamada tarda unos 0,33 s. Activarla en `C:\xampp\php\php.ini` aceleraría todo el sistema (propuesto el 2026-10-12, sin hacer).
-- Notificaciones: avisos por fecha con tarea programada; WhatsApp (proveedor); más correos al cliente si se piden. (Plantillas, bitácora y canales existen desde el 2026-11-01.)
-- Correo real: falta configurar SMTP en `apps/api/.env` (hoy `MAIL_MAILER=log`).
 - El contenido de Planes SaaS y la landing sigue con el estilo anterior.
-- Identidades repetidas: en "Tenant A - Prueba" hay 5 documentos con dos registros cada uno, creados en los módulos separados. Clientes y actores no crea más, pero no une los que existen. Lista en [cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md](cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md).
-- Borrar de verdad Clientes, Proveedores y Empleados (pantallas, componentes, `lib/open-record.ts`, `/v1/search`) cuando se decida.
-- Comercial tiene todas sus pantallas. El portal del cliente existe desde el 2026-10-22.
-- Portal de clientes: proveedor de firma acreditado si se decide; pago en línea (pasarela); avisos al cliente (Notificaciones) cuando la empresa responde, envía una cotización o publica un aviso; ver los usuarios del portal en la ficha del cliente; correr la migración en el VPS. Lo que Servicios y Cotizaciones aún no tienen respecto al prototipo está en [cambios/2026-10-05_comercial-campos-y-funciones.md](cambios/2026-10-05_comercial-campos-y-funciones.md).
-- `database/schema_reference.sql` no incluye las migraciones `2026_10_05_000300` (modalidad, garantía, estado archivado, versión anterior) ni `2026_10_05_000400` (tipo de cambio).
-- La fecha de emisión de órdenes usa el día del servidor (UTC): de noche en Perú sale el día siguiente. Falta fijar la zona horaria de la aplicación.
-- Una cotización cuyo contrato ya generó una orden deja "Orden directa" deshabilitado; en el prototipo son independientes.
-- Dólares: falta llevarlos a contratos, comprobantes y cobros (diferencia de cambio), y una fuente automática del tipo de cambio. Detalle en [cambios/2026-10-05_cotizaciones-dolares-y-buscador.md](cambios/2026-10-05_cotizaciones-dolares-y-buscador.md).
+- Canales de soporte de la plataforma: el formulario existe en Consola → Configuración; falta poner el WhatsApp y el correo reales.
+- Cookie de sesión legible por la página (el token se guarda en una cookie que el navegador puede leer).
+- En local, la caché de código de PHP (OPcache) está apagada: cada llamada tarda unos 0,33 s más (propuesto activarla en `C:\xampp\php\php.ini`).
+
+### Resueltos desde la lista anterior (2026-11-02)
+- Avisos de Notificaciones: orden de compra y comprobante de proveedor por aprobar, horas y costos por aprobar, técnico asignado, ticket nuevo, asignado y escalado; correos al cliente (cotización enviada, comprobante emitido, respuesta y resolución de su ticket).
+- Correo real: SMTP activo en el VPS (en la PC de desarrollo también está en `smtp`).
+- `schema_reference.sql` y la prueba de GitHub: al día (se regenera con cada migración).
+- Crear superadmins: comando `php artisan platform:super-admin`.
+- Dólares en contratos, comprobantes y cobros, con su diferencia de cambio.
+- Planes, catálogo de módulos y suscripciones protegidos en la base; pantallas de Administración completas (Importación masiva, Notificaciones, Reglas de aprobación, Seguridad y aislamiento).
