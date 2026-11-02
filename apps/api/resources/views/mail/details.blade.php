@@ -2,6 +2,16 @@
 @extends('mail.layout')
 
 @section('content')
+        @isset($paragraphs)
+        <tr>
+          <td style="padding:18px 32px 0;font-family:Poppins,'Segoe UI',Arial,sans-serif;">
+            @foreach ($paragraphs as $paragraph)
+            <p style="margin:0 0 12px;font-size:14px;line-height:22px;color:#1D1D1B;">{!! nl2br(e($paragraph)) !!}</p>
+            @endforeach
+          </td>
+        </tr>
+        @endisset
+        @if (! empty($rows))
         <tr>
           <td style="padding:22px 32px 0;font-family:Poppins,'Segoe UI',Arial,sans-serif;">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border:1px solid #DCE7EF;border-radius:12px;border-collapse:separate;">
@@ -14,6 +24,7 @@
             </table>
           </td>
         </tr>
+        @endif
         @isset($button)
         <tr>
           <td align="center" style="padding:24px 32px 0;">
@@ -26,6 +37,11 @@
             </table>
             <p style="margin:10px 0 0;font-family:Poppins,'Segoe UI',Arial,sans-serif;font-size:11.5px;line-height:17px;color:#8A949E;">O copia este enlace: <a href="{{ $button['url'] }}" style="color:{{ $accent ?? '#1B8FC9' }};">{{ $button['url'] }}</a></p>
           </td>
+        </tr>
+        @endisset
+        @isset($pixel)
+        <tr>
+          <td style="padding:0;line-height:1px;font-size:1px;"><img src="{{ $pixel }}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;"></td>
         </tr>
         @endisset
 @endsection

@@ -65,7 +65,8 @@ class BulkImportTest extends TestCase
 
         // Un archivo sin ninguna fila válida también queda, como fallido.
         $this->post('/api/v1/services/import', $this->services(), ['Accept' => 'application/json'])->assertStatus(422);
-        $this->assertSame('FAILED', $this->getJson('/api/v1/import-jobs?sort=date&dir=desc')->json('data.0.status'));
+        $this->assertSame(1, $this->getJson('/api/v1/import-jobs?status=FAILED')->json('total'));
+        $this->assertSame(2, $this->getJson('/api/v1/import-jobs')->json('total'));
     }
 
     public function test_leads_are_imported_from_their_own_template(): void

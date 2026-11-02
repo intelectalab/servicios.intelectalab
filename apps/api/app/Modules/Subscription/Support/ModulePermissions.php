@@ -18,6 +18,7 @@ class ModulePermissions
         'reports.view', 'reports.export',
         'workflows.view', 'workflows.manage', 'workflows.export',
         'imports.view', 'imports.create', 'imports.export',
+        'messaging.view', 'messaging.manage', 'messaging.export',
     ];
 
     /**

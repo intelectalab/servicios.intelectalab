@@ -469,6 +469,21 @@ CREATE FUNCTION public.guard_platform_tables() RETURNS trigger
 ALTER FUNCTION public.guard_platform_tables() OWNER TO erp_user;
 
 --
+-- Name: message_opened(text); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.message_opened(p_token text) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+        UPDATE outgoing_messages SET opened_at = now()
+        WHERE open_token = p_token AND opened_at IS NULL AND status = 'SENT';
+    $$;
+
+
+ALTER FUNCTION public.message_opened(p_token text) OWNER TO erp_user;
+
+--
 -- Name: notifications_read_once(); Type: FUNCTION; Schema: public; Owner: erp_user
 --
 
@@ -484,6 +499,31 @@ CREATE FUNCTION public.notifications_read_once() RETURNS trigger
 
 
 ALTER FUNCTION public.notifications_read_once() OWNER TO erp_user;
+
+--
+-- Name: outgoing_messages_immutable(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.outgoing_messages_immutable() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        IF NEW.id <> OLD.id OR NEW.tenant_id <> OLD.tenant_id OR NEW.channel <> OLD.channel OR NEW.event <> OLD.event
+           OR NEW.audience <> OLD.audience OR NEW.to_address IS DISTINCT FROM OLD.to_address
+           OR NEW.subject <> OLD.subject OR NEW.body <> OLD.body OR NEW.link IS DISTINCT FROM OLD.link
+           OR NEW.open_token IS DISTINCT FROM OLD.open_token OR NEW.created_at <> OLD.created_at
+           OR NEW.created_by IS DISTINCT FROM OLD.created_by THEN
+            RAISE EXCEPTION 'Un mensaje enviado no se modifica; solo cambia su estado.' USING ERRCODE = '42501';
+        END IF;
+        IF OLD.opened_at IS NOT NULL AND NEW.opened_at IS DISTINCT FROM OLD.opened_at THEN
+            RAISE EXCEPTION 'La apertura de un mensaje no cambia.' USING ERRCODE = '42501';
+        END IF;
+        RETURN NEW;
+    END
+    $$;
+
+
+ALTER FUNCTION public.outgoing_messages_immutable() OWNER TO erp_user;
 
 --
 -- Name: platform_dashboard(integer); Type: FUNCTION; Schema: public; Owner: erp_user
@@ -3171,6 +3211,30 @@ ALTER SEQUENCE public.jobs_id_seq OWNED BY public.jobs.id;
 
 
 --
+-- Name: message_templates; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.message_templates (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    event character varying(60) NOT NULL,
+    channel character varying(20) DEFAULT 'EMAIL'::character varying NOT NULL,
+    subject character varying(200) NOT NULL,
+    body text NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    lock_version integer DEFAULT 1 NOT NULL,
+    updated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT message_templates_body_check CHECK ((btrim(body) <> ''::text)),
+    CONSTRAINT message_templates_channel_check CHECK (((channel)::text = ANY ((ARRAY['EMAIL'::character varying, 'WHATSAPP'::character varying])::text[]))),
+    CONSTRAINT message_templates_subject_check CHECK ((btrim((subject)::text) <> ''::text))
+);
+
+
+ALTER TABLE public.message_templates OWNER TO erp_user;
+
+--
 -- Name: migrations; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -3353,6 +3417,39 @@ CREATE TABLE public.outbox_events (
 
 
 ALTER TABLE public.outbox_events OWNER TO erp_user;
+
+--
+-- Name: outgoing_messages; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.outgoing_messages (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    channel character varying(20) DEFAULT 'EMAIL'::character varying NOT NULL,
+    event character varying(60) NOT NULL,
+    audience character varying(20) NOT NULL,
+    to_address character varying(255),
+    to_name character varying(255),
+    subject character varying(255) NOT NULL,
+    body text NOT NULL,
+    link character varying(500),
+    status character varying(20) NOT NULL,
+    error text,
+    attempts integer DEFAULT 0 NOT NULL,
+    open_token character varying(64),
+    opened_at timestamp with time zone,
+    sent_at timestamp with time zone,
+    customer_id uuid,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT outgoing_messages_attempts_check CHECK ((attempts >= 0)),
+    CONSTRAINT outgoing_messages_audience_check CHECK (((audience)::text = ANY ((ARRAY['INTERNAL'::character varying, 'CUSTOMER'::character varying])::text[]))),
+    CONSTRAINT outgoing_messages_channel_check CHECK (((channel)::text = ANY ((ARRAY['EMAIL'::character varying, 'WHATSAPP'::character varying])::text[]))),
+    CONSTRAINT outgoing_messages_status_check CHECK (((status)::text = ANY ((ARRAY['QUEUED'::character varying, 'SENT'::character varying, 'FAILED'::character varying, 'SKIPPED'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.outgoing_messages OWNER TO erp_user;
 
 --
 -- Name: parties; Type: TABLE; Schema: public; Owner: erp_user
@@ -6239,6 +6336,22 @@ ALTER TABLE ONLY public.jobs
 
 
 --
+-- Name: message_templates message_templates_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.message_templates
+    ADD CONSTRAINT message_templates_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: message_templates message_templates_tenant_id_event_channel_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.message_templates
+    ADD CONSTRAINT message_templates_tenant_id_event_channel_key UNIQUE (tenant_id, event, channel);
+
+
+--
 -- Name: migrations migrations_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -6340,6 +6453,22 @@ ALTER TABLE ONLY public.outbox_events
 
 ALTER TABLE ONLY public.outbox_events
     ADD CONSTRAINT outbox_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: outgoing_messages outgoing_messages_open_token_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.outgoing_messages
+    ADD CONSTRAINT outgoing_messages_open_token_key UNIQUE (open_token);
+
+
+--
+-- Name: outgoing_messages outgoing_messages_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.outgoing_messages
+    ADD CONSTRAINT outgoing_messages_pkey PRIMARY KEY (id);
 
 
 --
@@ -8454,6 +8583,13 @@ CREATE INDEX jobs_queue_index ON public.jobs USING btree (queue);
 
 
 --
+-- Name: outgoing_messages_tenant; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX outgoing_messages_tenant ON public.outgoing_messages USING btree (tenant_id, created_at DESC);
+
+
+--
 -- Name: personal_access_tokens_expires_at_index; Type: INDEX; Schema: public; Owner: erp_user
 --
 
@@ -9095,6 +9231,13 @@ CREATE TRIGGER trg_module_catalog_updated_at BEFORE UPDATE ON public.module_cata
 --
 
 CREATE TRIGGER trg_orders_updated_at BEFORE UPDATE ON public.orders FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: outgoing_messages trg_outgoing_messages_immutable; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_outgoing_messages_immutable BEFORE UPDATE ON public.outgoing_messages FOR EACH ROW EXECUTE FUNCTION public.outgoing_messages_immutable();
 
 
 --
@@ -11464,6 +11607,22 @@ ALTER TABLE ONLY public.invoices
 
 
 --
+-- Name: message_templates message_templates_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.message_templates
+    ADD CONSTRAINT message_templates_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: message_templates message_templates_updated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.message_templates
+    ADD CONSTRAINT message_templates_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: notification_preferences notification_preferences_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -11589,6 +11748,22 @@ ALTER TABLE ONLY public.organizations
 
 ALTER TABLE ONLY public.outbox_events
     ADD CONSTRAINT outbox_events_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: outgoing_messages outgoing_messages_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.outgoing_messages
+    ADD CONSTRAINT outgoing_messages_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: outgoing_messages outgoing_messages_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.outgoing_messages
+    ADD CONSTRAINT outgoing_messages_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
@@ -14034,6 +14209,12 @@ ALTER TABLE public.invoice_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.invoices ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: message_templates; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.message_templates ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: notification_preferences; Type: ROW SECURITY; Schema: public; Owner: erp_user
 --
 
@@ -14068,6 +14249,12 @@ ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.outbox_events ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: outgoing_messages; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.outgoing_messages ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: parties; Type: ROW SECURITY; Schema: public; Owner: erp_user
@@ -14885,6 +15072,13 @@ CREATE POLICY tenant_isolation ON public.invoices USING ((tenant_id = public.app
 
 
 --
+-- Name: message_templates tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.message_templates USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
 -- Name: notification_preferences tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
 --
 
@@ -14928,6 +15122,13 @@ CREATE POLICY tenant_isolation ON public.organizations USING ((EXISTS ( SELECT 1
 --
 
 CREATE POLICY tenant_isolation ON public.outbox_events USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: outgoing_messages tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.outgoing_messages USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
 
 
 --
@@ -15552,6 +15753,14 @@ GRANT USAGE ON SCHEMA public TO erp_platform;
 --
 
 REVOKE ALL ON FUNCTION public.guard_platform_tables() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION message_opened(p_token text); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.message_opened(p_token text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.message_opened(p_token text) TO erp_app;
 
 
 --
@@ -16223,6 +16432,13 @@ GRANT SELECT,USAGE ON SEQUENCE public.jobs_id_seq TO erp_app;
 
 
 --
+-- Name: TABLE message_templates; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.message_templates TO erp_app;
+
+
+--
 -- Name: TABLE migrations; Type: ACL; Schema: public; Owner: erp_user
 --
 
@@ -16291,6 +16507,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.organizations TO erp_app;
 --
 
 GRANT SELECT,INSERT,UPDATE ON TABLE public.outbox_events TO erp_app;
+
+
+--
+-- Name: TABLE outgoing_messages; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.outgoing_messages TO erp_app;
 
 
 --
@@ -17008,6 +17231,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 81	2026_11_01_000500_integrations	71
 84	2026_11_01_000600_platform_tables_write_guard	72
 85	2026_11_01_000700_bulk_imports	73
+86	2026_11_01_000800_messaging	74
 \.
 
 
@@ -17212,6 +17436,9 @@ e5c1383d-c3cb-4909-98fc-78f1a83f067c	workflows.export	Exportar workflows	Exporta
 028a404f-ab3c-41ca-9752-9c6764f6c8a6	imports.view	Ver importaciones	Abrir Importación masiva y ver el historial de importaciones.	2026-11-02 02:19:29.202539+00
 ab2935c2-e055-463c-ae65-53f14dcb04ef	imports.create	Importar	Importar desde Excel o CSV. Pide además el permiso de crear de cada entidad.	2026-11-02 02:19:29.202539+00
 0218aa72-3c51-4f99-9931-efe00c3d87bb	imports.export	Exportar importaciones	Exportar el historial de importaciones.	2026-11-02 02:19:29.202539+00
+72d5fcbc-a2f0-44c6-88b2-47fd7d93be48	messaging.view	Ver notificaciones	Ver las plantillas, la bitácora de envíos y los canales de la empresa.	2026-11-02 02:40:42.126587+00
+72e54856-3378-4ad3-ba4c-c9a75a4198a8	messaging.manage	Gestionar notificaciones	Editar plantillas y canales, y reintentar envíos fallidos.	2026-11-02 02:40:42.126587+00
+15f2140e-84dd-44ae-9c6a-cdc12608ba97	messaging.export	Exportar notificaciones	Exportar la bitácora de envíos.	2026-11-02 02:40:42.126587+00
 \.
 
 
@@ -17231,7 +17458,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 85, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 86, true);
 
 
 --

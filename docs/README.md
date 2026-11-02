@@ -105,6 +105,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Integraciones (Control): estado real de las conexiones y webhooks salientes firmados con cola, reintentos, fallidos y protección de direcciones | [cambios/2026-11-01_integraciones.md](cambios/2026-11-01_integraciones.md) |
 | 2026-11-01 | Planes, catálogo de módulos y suscripciones protegidos en la base: la app no los borra y solo los cambia una sesión de superadmin verificada; el registro solo acepta planes públicos | [cambios/2026-11-01_tablas-de-plataforma-protegidas.md](cambios/2026-11-01_tablas-de-plataforma-protegidas.md) |
 | 2026-11-01 | Importación masiva (Administración): validar antes de importar con el resultado de cada fila, leads importables e historial de todas las importaciones con su permiso y alcance | [cambios/2026-11-01_importacion-masiva.md](cambios/2026-11-01_importacion-masiva.md) |
+| 2026-11-01 | Notificaciones (Administración): plantillas por evento, bitácora de envíos con apertura y reintento, canales de la empresa y correos al cliente en 4 eventos | [cambios/2026-11-01_notificaciones.md](cambios/2026-11-01_notificaciones.md) |
 
 ## Cómo se escribe cada entrada
 

@@ -17,6 +17,7 @@ use App\Modules\Support\Models\WarrantyClaim;
 use App\Modules\Support\Support\SlaCalendar;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\MessageCenter;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
@@ -290,6 +291,12 @@ class SupportTicketController extends Controller
                 $ticket->update(['first_response_at' => now()]);
             }
             $this->audit($request, $ticket, $internal ? 'ticket.comment.internal' : 'ticket.comment.public', ['length' => mb_strlen(trim($data['body']))]);
+            // La respuesta pública también le llega al cliente por correo; la nota interna, nunca.
+            if (! $internal && $ticket->customer_id) {
+                MessageCenter::customer($ticket->tenant_id, 'customer.ticket_replied', $ticket->customer_id, [
+                    'numero' => $ticket->ticket_number, 'asunto' => $ticket->subject, 'mensaje' => trim($data['body']),
+                ], "/portal/support/{$ticket->id}");
+            }
         });
 
         return response()->json($this->detail($ticket), 201);
@@ -629,6 +636,11 @@ class SupportTicketController extends Controller
 
             $ticket->update($changes);
             $this->audit($request, $ticket, $action, array_filter(['from' => $previous, 'to' => $to, 'note' => $reason]));
+            if ($to === 'RESOLVED' && $ticket->customer_id) {
+                MessageCenter::customer($ticket->tenant_id, 'customer.ticket_resolved', $ticket->customer_id, [
+                    'numero' => $ticket->ticket_number, 'asunto' => $ticket->subject, 'resolucion' => (string) $reason,
+                ], "/portal/support/{$ticket->id}");
+            }
         });
 
         return response()->json($this->detail($ticket));

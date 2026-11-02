@@ -18,6 +18,7 @@ use App\Modules\Services\Models\ServicePrice;
 use App\Services\AuditHistory;
 use App\Modules\Portal\Models\PortalRequest;
 use App\Services\AuditLogger;
+use App\Services\MessageCenter;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
@@ -270,6 +271,14 @@ class QuotationController extends Controller
         $response = $this->transition($request, $quotation, 'SUBMITTED', 'quotation.submit');
         Notifier::send('quotation.submitted', 'Cotización por aprobar', "{$quotation->quotation_number} · ".Notifier::money($quotation->total, $quotation->currency),
             "/quotations/{$quotation->id}", array_diff(Notifier::withPermission('quotations.approve', $quotation), [$quotation->created_by]));
+        // Correo al cliente (plantilla y canal en Administración → Notificaciones).
+        if ($quotation->customer_id) {
+            MessageCenter::customer($quotation->tenant_id, 'customer.quotation_sent', $quotation->customer_id, [
+                'numero' => $quotation->quotation_number,
+                'total' => Notifier::money($quotation->total, $quotation->currency),
+                'vigencia' => $quotation->valid_until ? \Illuminate\Support\Carbon::parse($quotation->valid_until)->format('d/m/Y') : '—',
+            ], "/portal/quotations/{$quotation->id}");
+        }
 
         return $response;
     }

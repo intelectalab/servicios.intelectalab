@@ -19,6 +19,8 @@ use App\Modules\Finance\Support\Treasury;
 use App\Modules\Finance\Support\Withholding;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\MessageCenter;
+use App\Services\Notifier;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use Illuminate\Http\Request;
@@ -261,6 +263,13 @@ class InvoiceController extends Controller
             if (! $contingency) {
                 FiscalGateway::queue($invoice, $request->user()->id);
             }
+            // Correo al cliente; sale si la emisión se guarda.
+            MessageCenter::customer($tenantId, 'customer.invoice_issued', $invoice->customer_id, [
+                'tipo' => $invoice->invoice_type === 'RECEIPT' ? 'boleta' : 'factura',
+                'numero' => $invoice->invoice_number,
+                'total' => Notifier::money($invoice->total, $invoice->currency),
+                'vencimiento' => $invoice->due_date ? \Illuminate\Support\Carbon::parse($invoice->due_date)->format('d/m/Y') : '—',
+            ], '/portal/invoices');
         });
 
         return response()->json($this->detail($invoice, $request));

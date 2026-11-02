@@ -61,6 +61,7 @@ class ListExport
         'api/v1/reports/{report}' => 'reports',
         'api/v1/workflow-runs' => 'workflows',
         'api/v1/import-jobs' => 'imports',
+        'api/v1/outgoing-messages' => 'messaging',
         'api/v1/integration-deliveries' => 'integrations',
         'api/v1/users' => 'users',
         'api/v1/audit' => 'audit',

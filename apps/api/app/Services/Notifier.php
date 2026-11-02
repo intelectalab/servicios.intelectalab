@@ -2,13 +2,10 @@
 
 namespace App\Services;
 
-use App\Mail\NotificationMail;
 use App\Models\Concerns\ScopedByAccess;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use Throwable;
 
 /**
  * Avisos a las personas de la empresa: campana del sistema y, si la persona lo pidió, correo.
@@ -19,7 +16,8 @@ use Throwable;
  *
  * Las preferencias de Mi perfil mandan: sin "En la aplicación" no aparece en la campana; sin
  * "Correo" no se envía correo. El aviso se guarda con la operación (si se deshace, no hay
- * aviso); el correo sale después de responder y, si falla, la operación no se pierde.
+ * aviso); el correo lo envía MessageCenter después de responder y, si falla, la operación no se
+ * pierde: queda Fallido en la bitácora, para reintentar.
  */
 class Notifier
 {
@@ -46,7 +44,7 @@ class Notifier
             ->where('tenant_users.tenant_id', $tenantId)
             ->where('tenant_users.status', 'ACTIVE')
             ->whereIn('tenant_users.user_id', $ids)
-            ->get(['users.id', 'users.email']);
+            ->get(['users.id', 'users.email', 'users.name']);
         $preferences = DB::table('notification_preferences')
             ->where('tenant_id', $tenantId)
             ->whereIn('user_id', $members->pluck('id'))
@@ -78,7 +76,7 @@ class Notifier
                 'created_at' => now(),
             ];
             if ($email && $member->email) {
-                $mails[] = $member->email;
+                $mails[] = ['email' => $member->email, 'name' => $member->name];
             }
         }
 
@@ -86,7 +84,8 @@ class Notifier
             DB::table('notifications')->insert($rows);
         }
         if ($mails) {
-            self::mailLater($tenantId, $mails, $title, $body, $link);
+            // Plantilla de la empresa, canal y bitácora: Administración → Notificaciones.
+            MessageCenter::internal($tenantId, $event, $mails, $title, $body, $link);
         }
     }
 
@@ -127,22 +126,5 @@ class Notifier
     public static function money($amount, ?string $currency = 'PEN'): string
     {
         return ($currency === 'USD' ? 'US$ ' : 'S/ ').number_format((float) $amount, 2);
-    }
-
-    /** El correo sale cuando la operación ya se guardó y después de responder a quien la hizo. */
-    private static function mailLater(string $tenantId, array $emails, string $title, string $body, ?string $link): void
-    {
-        $company = (string) DB::table('tenants')->where('id', $tenantId)->value('name');
-        $url = $link ? rtrim((string) config('app.frontend_url'), '/').$link : null;
-
-        DB::afterCommit(fn () => app()->terminating(function () use ($tenantId, $emails, $title, $body, $company, $url) {
-            foreach ($emails as $email) {
-                try {
-                    Mail::to($email)->send((new NotificationMail($title, $body, $company, $url))->withBrand($tenantId));
-                } catch (Throwable $e) {
-                    report($e);
-                }
-            }
-        }));
     }
 }

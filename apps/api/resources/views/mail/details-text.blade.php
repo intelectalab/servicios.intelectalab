@@ -1,6 +1,12 @@
 {!! $heading !!}
 
 {!! $intro !!}
+@isset($paragraphs)
+@foreach ($paragraphs as $paragraph)
+
+{!! $paragraph !!}
+@endforeach
+@endisset
 
 @foreach ($rows as $label => $value)
 {!! $label !!}: {!! $value !!}

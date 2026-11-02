@@ -71,6 +71,9 @@ use App\Modules\Accounting\Http\Controllers\FiscalYearController;
 use App\Modules\Accounting\Http\Controllers\JournalController;
 use App\Modules\Accounting\Http\Controllers\LedgerController;
 
+// Imagen de apertura de los correos (Notificaciones): pública, sin sesión; solo marca la apertura.
+Route::get('/m/{token}.gif', [\App\Http\Controllers\MessagingController::class, 'opened'])->middleware('throttle:120,1,mail-open');
+
 Route::prefix('v1')->group(function () {
     Route::get('/saas-plans', [SaasPlanController::class, 'index']);
     // Registro público: pocas altas por dirección, para que no se pueda automatizar.
@@ -810,6 +813,19 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:reports.view')->group(function () {
             Route::get('/reports', [ReportController::class, 'index']);
             Route::get('/reports/{report}', [ReportController::class, 'show']);
+        });
+
+        // Administración: Notificaciones (plan base): plantillas por evento, bitácora de envíos y canales.
+        Route::middleware('permission:messaging.view')->group(function () {
+            Route::get('/messaging', [\App\Http\Controllers\MessagingController::class, 'show']);
+            Route::get('/outgoing-messages', [\App\Http\Controllers\MessagingController::class, 'messages']);
+            Route::get('/outgoing-messages/{message}', [\App\Http\Controllers\MessagingController::class, 'message']);
+        });
+        Route::middleware('permission:messaging.manage')->group(function () {
+            Route::put('/message-templates/{event}', [\App\Http\Controllers\MessagingController::class, 'updateTemplate']);
+            Route::post('/message-templates/{event}/reset', [\App\Http\Controllers\MessagingController::class, 'resetTemplate']);
+            Route::put('/messaging/channels', [\App\Http\Controllers\MessagingController::class, 'updateChannels']);
+            Route::post('/outgoing-messages/{message}/retry', [\App\Http\Controllers\MessagingController::class, 'retry'])->middleware('throttle:30,1,message-retry');
         });
 
         // Administración: Importación masiva (plan base). Validar e importar van a la ruta de cada entidad.

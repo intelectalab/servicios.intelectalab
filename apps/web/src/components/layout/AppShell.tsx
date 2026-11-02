@@ -92,7 +92,7 @@ const MENU_ITEMS: MenuItem[] = [
   { label: "Reglas de aprobación", icon: ListChecks, superModule: "Administración", soon: true },
   // Del módulo Soporte: sin él, el calendario no se usa (sale con el candado del plan).
   { href: "/sla-calendar", label: "Calendario laboral y SLA", module: "SOPORTE", requiredPermission: "sla.view", icon: CalendarClock, superModule: "Administración" },
-  { label: "Notificaciones", icon: Bell, superModule: "Administración", soon: true },
+  { href: "/messaging", label: "Notificaciones", requiredPermission: "messaging.view", icon: Bell, superModule: "Administración" },
   { href: "/imports", label: "Importación masiva", requiredPermission: "imports.view", icon: Upload, superModule: "Administración" },
 ];
 // Ícono de cada grupo del menú, como en el prototipo.

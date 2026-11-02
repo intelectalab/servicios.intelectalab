@@ -175,6 +175,13 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - El logo nunca se guarda como llegó: el servidor lo vuelve a dibujar como PNG acotado; SVG no se acepta. Los colores se proponen desde el logo y se pueden cambiar.
 - La marca va en todos los PDF, en los Excel exportados, en la barra del portal y en los correos que recibe el cliente. Un color claro se oscurece donde hace falta para que se lea. Sin marca, todo sigue con el azul de siempre.
 
+### Notificaciones (2026-11-01)
+
+- Detalle en [cambios/2026-11-01_notificaciones.md](cambios/2026-11-01_notificaciones.md). Administración → Notificaciones (`/messaging`), del plan base.
+- Todo correo por un evento de la empresa pasa por `App\Services\MessageCenter`: plantilla de la empresa o texto del sistema, registro en `outgoing_messages` (no se reescribe ni se borra), envío después de responder, reintento a pedido. Un evento nuevo que mande correo se agrega a `MessageCenter::INTERNAL` o `CUSTOMER`.
+- Correos al cliente en 4 eventos (cotización enviada, comprobante emitido, respuesta y resolución de su ticket): a sus usuarios del portal o, si no tiene, a su correo principal. Nunca una nota interna.
+- La apertura se mide con una imagen invisible (`/api/m/{token}.gif`): es aproximada.
+
 ### Importación masiva (2026-11-01)
 
 - Detalle en [cambios/2026-11-01_importacion-masiva.md](cambios/2026-11-01_importacion-masiva.md). Administración → Importación masiva (`/imports`), del plan base.
@@ -275,7 +282,7 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - Mi perfil: no se cierra una sesión concreta, solo todas las demás.
 - `php artisan tenants:sync-permissions` da a los tenants ya registrados los permisos de sus módulos. Falta confirmar si se corrió.
 - En local, el PHP de XAMPP tiene apagada la caché de código (OPcache): cada llamada tarda unos 0,33 s. Activarla en `C:\xampp\php\php.ini` aceleraría todo el sistema (propuesto el 2026-10-12, sin hacer).
-- Notificaciones: avisos por fecha con tarea programada; plantillas, bitácora y canales de la empresa (Administración → Notificaciones); WhatsApp (proveedor); avisos al cliente en el portal; correr la migración `2026_10_23_000300` en el VPS.
+- Notificaciones: avisos por fecha con tarea programada; WhatsApp (proveedor); más correos al cliente si se piden. (Plantillas, bitácora y canales existen desde el 2026-11-01.)
 - Correo real: falta configurar SMTP en `apps/api/.env` (hoy `MAIL_MAILER=log`).
 - El contenido de Planes SaaS y la landing sigue con el estilo anterior.
 - Identidades repetidas: en "Tenant A - Prueba" hay 5 documentos con dos registros cada uno, creados en los módulos separados. Clientes y actores no crea más, pero no une los que existen. Lista en [cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md](cambios/2026-10-08_desconectar-clientes-proveedores-empleados.md).
