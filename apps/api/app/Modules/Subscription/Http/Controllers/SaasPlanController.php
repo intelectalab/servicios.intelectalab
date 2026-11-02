@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Subscription\Models\SaasPlan;
 use App\Modules\Subscription\Support\ModuleCatalog;
 use App\Services\PlatformAuditLogger;
+use App\Services\PlatformWrites;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
@@ -56,9 +57,12 @@ class SaasPlanController extends Controller
 
         // Solo módulos del catálogo, con los obligatorios siempre incluidos.
         $validated['modules'] = ModuleCatalog::normalizePlanModules($validated['modules'] ?? []);
-        $plan = SaasPlan::create($validated);
+        $plan = PlatformWrites::run(function () use ($request, $validated) {
+            $plan = SaasPlan::create($validated);
+            PlatformAuditLogger::log($request->user()->id, 'plan.created', 'SaasPlan', $plan->id, afterData: $plan->toArray());
 
-        PlatformAuditLogger::log($request->user()->id, 'plan.created', 'SaasPlan', $plan->id, afterData: $plan->toArray());
+            return $plan;
+        });
 
         return response()->json([
             'message' => 'Plan SaaS creado exitosamente.',
@@ -100,9 +104,10 @@ class SaasPlanController extends Controller
         }
 
         $before = $plan->toArray();
-        $plan->update($validated);
-
-        PlatformAuditLogger::log($request->user()->id, 'plan.updated', 'SaasPlan', $plan->id, $before, $plan->fresh()->toArray());
+        PlatformWrites::run(function () use ($request, $plan, $validated, $before) {
+            $plan->update($validated);
+            PlatformAuditLogger::log($request->user()->id, 'plan.updated', 'SaasPlan', $plan->id, $before, $plan->fresh()->toArray());
+        });
 
         return response()->json([
             'message' => 'Plan SaaS actualizado exitosamente.',
@@ -113,9 +118,10 @@ class SaasPlanController extends Controller
     public function destroy(Request $request, $id): JsonResponse
     {
         $plan = SaasPlan::findOrFail($id);
-        $plan->update(['active' => false]);
-
-        PlatformAuditLogger::log($request->user()->id, 'plan.deactivated', 'SaasPlan', $plan->id);
+        PlatformWrites::run(function () use ($request, $plan) {
+            $plan->update(['active' => false]);
+            PlatformAuditLogger::log($request->user()->id, 'plan.deactivated', 'SaasPlan', $plan->id);
+        });
 
         return response()->json([
             'message' => 'Plan SaaS desactivado correctamente.',

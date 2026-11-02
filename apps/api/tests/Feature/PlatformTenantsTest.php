@@ -29,12 +29,12 @@ class PlatformTenantsTest extends TestCase
 
     private function plan(array $modules, int $users = 3, bool $trial = true): SaasPlan
     {
-        return SaasPlan::create([
+        return $this->asPlatform(fn () => SaasPlan::create([
             'code' => 'T-'.Str::upper(Str::random(6)), 'name' => 'Plan prueba '.Str::random(4), 'currency' => 'PEN',
             'monthly_price' => 50, 'annual_price' => 500, 'active' => true, 'is_public' => false, 'display_order' => 99,
             'has_trial' => $trial, 'trial_days' => 14, 'default_billing_period' => 'MONTHLY',
             'modules' => array_fill_keys($modules, true), 'limits' => ['users' => $users],
-        ]);
+        ]));
     }
 
     private function ruc(): string

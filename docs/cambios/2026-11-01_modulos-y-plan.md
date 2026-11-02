@@ -55,7 +55,7 @@ Construir **Administración → Módulos y plan** para el administrador de cada 
 
 Sin migraciones. Usa `saas_plans`, `tenant_subscriptions`, `tenant_subscription_payments`, `tenant_modules` (en `configuration` se guarda quién lo apagó) y `audit_logs`.
 
-**Hallazgo para revisar aparte:** el usuario de la aplicación (`erp_app`) tiene permiso de modificar y borrar en `saas_plans`, `module_catalog` y `tenant_subscriptions`. Son datos de la plataforma, y lo correcto sería que solo los cambie la consola. No se tocó en esta tanda.
+**Hallazgo para revisar aparte:** el usuario de la aplicación (`erp_app`) tiene permiso de modificar y borrar en `saas_plans`, `module_catalog` y `tenant_subscriptions`. Son datos de la plataforma, y lo correcto sería que solo los cambie la consola. No se tocó en esta tanda. (Resuelto después: [2026-11-01_tablas-de-plataforma-protegidas.md](2026-11-01_tablas-de-plataforma-protegidas.md).)
 
 ## 6. Cómo se probó
 

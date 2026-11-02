@@ -12,6 +12,7 @@ use App\Modules\Subscription\Support\ModuleCatalog;
 use App\Modules\Subscription\Support\TenantPlanModules;
 use App\Modules\Subscription\Support\TenantProvisioner;
 use App\Services\PlatformAuditLogger;
+use App\Services\PlatformWrites;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,7 +26,8 @@ use Throwable;
  * Tenants de la consola de plataforma. Las lecturas van con el usuario de la
  * consola (solo datos de plataforma); los cambios los hace la app dentro del
  * contexto de la empresa, en una transacción, y quedan en la auditoría de
- * plataforma. Desactivar o cerrar nunca borra datos.
+ * plataforma. Lo que toca planes o suscripciones va con PlatformWrites (la base
+ * lo exige). Desactivar o cerrar nunca borra datos.
  */
 class PlatformTenantController extends Controller
 {
@@ -114,7 +116,7 @@ class PlatformTenantController extends Controller
             ->reject(fn (string $code) => ($code === 'CRM' && ! ($data['crm'] ?? true)) || ($code === 'PORTAL' && ! ($data['portal'] ?? true)))
             ->values()->all();
 
-        $created = DB::transaction(function () use ($data, $plan, $modules, $userId) {
+        $created = PlatformWrites::run(function () use ($data, $plan, $modules, $userId) {
             $created = TenantProvisioner::create([
                 'name' => $data['name'],
                 'legal_name' => $data['legal_name'] ?: $data['name'],
@@ -207,7 +209,7 @@ class PlatformTenantController extends Controller
 
         $user = $request->user();
 
-        $result = DB::transaction(function () use ($tenant, $data, $user) {
+        $result = PlatformWrites::run(function () use ($tenant, $data, $user) {
             abort_unless(DB::table('tenants')->where('id', $tenant)->lockForUpdate()->exists(), 404);
             $this->enterTenant($tenant);
 
@@ -365,7 +367,7 @@ class PlatformTenantController extends Controller
         }
         $userId = $request->user()->id;
 
-        $result = DB::transaction(function () use ($tenant, $plan, $data, $userId) {
+        $result = PlatformWrites::run(function () use ($tenant, $plan, $data, $userId) {
             abort_unless(DB::table('tenants')->where('id', $tenant)->lockForUpdate()->exists(), 404);
             $this->enterTenant($tenant);
 

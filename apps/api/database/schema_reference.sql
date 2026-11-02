@@ -417,6 +417,58 @@ CREATE FUNCTION public.check_transfer_movement() RETURNS trigger
 ALTER FUNCTION public.check_transfer_movement() OWNER TO erp_user;
 
 --
+-- Name: guard_platform_tables(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.guard_platform_tables() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    DECLARE
+        v_owner name;
+        v_trial integer;
+    BEGIN
+        -- Las migraciones corren con el dueño de la tabla.
+        SELECT r.rolname INTO v_owner FROM pg_class c JOIN pg_roles r ON r.oid = c.relowner WHERE c.oid = TG_RELID;
+        IF session_user = v_owner THEN
+            RETURN NEW;
+        END IF;
+
+        IF platform_session_user() IS NOT NULL THEN
+            -- PL/pgSQL no corta el AND: NEW.tenant_id solo se lee en suscripciones.
+            IF TG_TABLE_NAME = 'tenant_subscriptions' AND TG_OP = 'UPDATE' THEN
+                IF NEW.id <> OLD.id OR NEW.tenant_id <> OLD.tenant_id THEN
+                    RAISE EXCEPTION 'Una suscripción no cambia de empresa.' USING ERRCODE = '42501';
+                END IF;
+            END IF;
+            RETURN NEW;
+        END IF;
+
+        -- Registro público: la primera suscripción de una empresa nueva, y nada más.
+        IF TG_TABLE_NAME = 'tenant_subscriptions' AND TG_OP = 'INSERT' THEN
+            IF EXISTS (SELECT 1 FROM tenant_subscriptions s WHERE s.tenant_id = NEW.tenant_id) THEN
+                RAISE EXCEPTION 'La empresa ya tiene suscripción: solo la consola de plataforma la cambia.' USING ERRCODE = '42501';
+            END IF;
+            SELECT p.trial_days INTO v_trial FROM saas_plans p WHERE p.id = NEW.plan_id AND p.active AND p.is_public;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'El plan no está disponible para el registro.' USING ERRCODE = '42501';
+            END IF;
+            IF NEW.status <> 'ACTIVE' OR NEW.ends_at IS NULL
+               OR NEW.ends_at > now() + GREATEST(interval '367 days', make_interval(days => COALESCE(v_trial, 0) + 1)) THEN
+                RAISE EXCEPTION 'Vigencia no permitida para una suscripción nueva.' USING ERRCODE = '42501';
+            END IF;
+            RETURN NEW;
+        END IF;
+
+        RAISE EXCEPTION 'Solo la consola de plataforma, con una sesión de superadmin verificada, cambia %.', TG_TABLE_NAME
+            USING ERRCODE = '42501';
+    END
+    $$;
+
+
+ALTER FUNCTION public.guard_platform_tables() OWNER TO erp_user;
+
+--
 -- Name: notifications_read_once(); Type: FUNCTION; Schema: public; Owner: erp_user
 --
 
@@ -556,6 +608,35 @@ CREATE FUNCTION public.platform_dashboard(p_soon_days integer DEFAULT 7) RETURNS
 
 
 ALTER FUNCTION public.platform_dashboard(p_soon_days integer) OWNER TO erp_user;
+
+--
+-- Name: platform_session_user(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.platform_session_user() RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+    DECLARE
+        v_token text := current_setting('app.platform_token', true);
+        v_user uuid;
+    BEGIN
+        IF v_token IS NULL OR v_token !~ '^[0-9]{1,18}$' THEN
+            RETURN NULL;
+        END IF;
+        SELECT u.id INTO v_user
+        FROM personal_access_tokens t
+        JOIN users u ON u.id = t.tokenable_id
+        WHERE t.id = v_token::bigint
+          AND t.mfa
+          AND (t.expires_at IS NULL OR t.expires_at > (now() AT TIME ZONE 'UTC'))
+          AND u.is_super_admin AND u.status = 'ACTIVE';
+        RETURN v_user;
+    END
+    $_$;
+
+
+ALTER FUNCTION public.platform_session_user() OWNER TO erp_user;
 
 --
 -- Name: platform_subscriptions(); Type: FUNCTION; Schema: public; Owner: erp_user
@@ -9105,6 +9186,13 @@ CREATE TRIGGER trg_roles_updated_at BEFORE UPDATE ON public.roles FOR EACH ROW E
 
 
 --
+-- Name: saas_plans trg_saas_plans_guard; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_saas_plans_guard BEFORE INSERT OR UPDATE ON public.saas_plans FOR EACH ROW EXECUTE FUNCTION public.guard_platform_tables();
+
+
+--
 -- Name: service_categories trg_service_categories_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
 --
 
@@ -9179,6 +9267,13 @@ CREATE TRIGGER trg_tenant_modules_updated_at BEFORE UPDATE ON public.tenant_modu
 --
 
 CREATE TRIGGER trg_tenant_settings_updated_at BEFORE UPDATE ON public.tenant_settings FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: tenant_subscriptions trg_tenant_subscriptions_guard; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_tenant_subscriptions_guard BEFORE INSERT OR UPDATE ON public.tenant_subscriptions FOR EACH ROW EXECUTE FUNCTION public.guard_platform_tables();
 
 
 --
@@ -15371,11 +15466,25 @@ GRANT USAGE ON SCHEMA public TO erp_platform;
 
 
 --
+-- Name: FUNCTION guard_platform_tables(); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.guard_platform_tables() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION platform_dashboard(p_soon_days integer); Type: ACL; Schema: public; Owner: erp_user
 --
 
 REVOKE ALL ON FUNCTION public.platform_dashboard(p_soon_days integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.platform_dashboard(p_soon_days integer) TO erp_platform;
+
+
+--
+-- Name: FUNCTION platform_session_user(); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.platform_session_user() FROM PUBLIC;
 
 
 --
@@ -15453,7 +15562,7 @@ GRANT ALL ON FUNCTION public.superadmin_companies(p_user_id uuid) TO erp_app;
 -- Name: TABLE tenant_subscriptions; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.tenant_subscriptions TO erp_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.tenant_subscriptions TO erp_app;
 
 
 --
@@ -16042,8 +16151,8 @@ GRANT SELECT,USAGE ON SEQUENCE public.migrations_id_seq TO erp_app;
 -- Name: TABLE module_catalog; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.module_catalog TO erp_app;
 GRANT SELECT ON TABLE public.module_catalog TO erp_platform;
+GRANT SELECT ON TABLE public.module_catalog TO erp_app;
 
 
 --
@@ -16368,8 +16477,8 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.roles TO erp_app;
 -- Name: TABLE saas_plans; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.saas_plans TO erp_app;
 GRANT SELECT ON TABLE public.saas_plans TO erp_platform;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.saas_plans TO erp_app;
 
 
 --
@@ -16808,6 +16917,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 79	2026_11_01_000300_reports_permissions	69
 80	2026_11_01_000400_workflows	70
 81	2026_11_01_000500_integrations	71
+84	2026_11_01_000600_platform_tables_write_guard	72
 \.
 
 
@@ -17028,7 +17138,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 81, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 84, true);
 
 
 --

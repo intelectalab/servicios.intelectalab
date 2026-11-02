@@ -9,19 +9,21 @@ use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Tests\Feature\Concerns\PlatformSession;
 use Tests\TestCase;
 
 class TenantRegisterMailsTest extends TestCase
 {
     use DatabaseTransactions;
+    use PlatformSession;
 
     private function payload(array $overrides = []): array
     {
-        $planId = DB::table('saas_plans')->insertGetId([
+        $planId = $this->asPlatform(fn () => DB::table('saas_plans')->insertGetId([
             'code' => 'TEST-'.Str::random(6), 'name' => 'Plan de prueba', 'active' => true, 'is_public' => true,
             'monthly_price' => 349, 'annual_price' => 3490, 'currency' => 'PEN', 'has_trial' => true, 'trial_days' => 15,
             'modules' => json_encode(['SERVICIOS' => true]),
-        ], 'id');
+        ], 'id'));
 
         return $overrides + [
             'plan_id' => $planId,
