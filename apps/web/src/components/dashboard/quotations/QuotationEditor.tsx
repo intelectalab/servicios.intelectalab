@@ -11,6 +11,7 @@ import type { Customer, PaginatedResponse } from "@/types/customer";
 import type { ExchangeRate, Frequency, Quotation, Service } from "@/types/commercial";
 
 // Días de validez con los que nace una cotización.
+// Mientras llega la de la empresa (Configuración → Comercial); 15 días si no la cambió.
 const DEFAULT_VALIDITY_DAYS = 15;
 // Tope de clientes y servicios que se cargan en los selectores.
 const SELECT_LIMIT = 200;
@@ -76,14 +77,17 @@ export default function QuotationEditor() {
 
     async function load() {
       try {
-        const [customerPage, servicePage, quotation, currentRate] = await Promise.all([
+        const [customerPage, servicePage, quotation, currentRate, settings] = await Promise.all([
           apiFetch<PaginatedResponse<Customer>>(`/v1/customers?status=ACTIVE&per_page=${SELECT_LIMIT}`),
           apiFetch<PaginatedResponse<Service>>(`/v1/services?per_page=${SELECT_LIMIT}`),
           id ? apiFetch<Quotation>(`/v1/quotations/${id}`) : Promise.resolve(null),
           // Sin tipo de cambio registrado solo se cotiza en soles.
           apiFetch<Partial<ExchangeRate> | null>("/v1/exchange-rates/current").catch(() => null),
+          id ? Promise.resolve(null) : apiFetch<{ quotation_validity_days?: number }>("/v1/tenant/settings").catch(() => null),
         ]);
         if (cancelled) return;
+        // Una cotización nueva propone la vigencia por defecto de la empresa.
+        if (!id && settings?.quotation_validity_days) setValidUntil(isoDateFromNow(settings.quotation_validity_days));
         // Un borrador en dólares conserva el tipo de cambio con el que se convirtieron sus líneas.
         setRate(Number((quotation?.currency === "USD" && quotation.exchange_rate) || currentRate?.sell || 0));
 

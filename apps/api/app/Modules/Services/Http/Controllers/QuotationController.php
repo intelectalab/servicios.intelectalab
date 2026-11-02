@@ -150,7 +150,9 @@ class QuotationController extends Controller
                 'status' => 'DRAFT',
                 'currency' => $currency,
                 'exchange_rate' => $exchangeRate,
-                'valid_until' => $request->valid_until,
+                // Sin fecha, la vigencia por defecto de la empresa (Configuración → Comercial).
+                'valid_until' => $request->valid_until
+                    ?? now('America/Lima')->addDays(TenantSettingsController::settings($tenantId)['quotation_validity_days'])->toDateString(),
                 ...$totals,
                 'notes' => $request->notes,
                 'source_type' => $portalRequest ? 'PORTAL' : ($opportunity ? 'OPPORTUNITY' : null),

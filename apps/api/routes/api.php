@@ -147,6 +147,11 @@ Route::prefix('v1')->group(function () {
         // Ajustes de la empresa (segregación de funciones)
         Route::get('/tenant/settings', [TenantSettingsController::class, 'show']);
         Route::middleware('permission:tenant.manage')->put('/tenant/settings', [TenantSettingsController::class, 'update']);
+        // Configuración → Identidad y región.
+        Route::middleware('permission:tenant.manage')->group(function () {
+            Route::get('/tenant/identity', [TenantSettingsController::class, 'identity']);
+            Route::put('/tenant/identity', [TenantSettingsController::class, 'updateIdentity']);
+        });
 
         // Administración → Módulos y plan (el administrador de la empresa).
         Route::middleware('permission:tenant.manage')->group(function () {

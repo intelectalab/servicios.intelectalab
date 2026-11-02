@@ -289,6 +289,7 @@ class AuditCatalog
         'workflows.export' => 'Ejecuciones de workflows exportadas',
         'message_template.update' => 'Plantilla de notificación editada',
         'approval_rules.update' => 'Reglas de aprobación cambiadas',
+        'tenant.identity.update' => 'Nombre comercial cambiado',
         'auth.login_failed' => 'Contraseña incorrecta',
         'auth.session_idle' => 'Sesión cerrada por inactividad',
         'security.isolation_probe' => 'Prueba de aislamiento',

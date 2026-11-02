@@ -108,6 +108,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Notificaciones (Administración): plantillas por evento, bitácora de envíos con apertura y reintento, canales de la empresa y correos al cliente en 4 eventos | [cambios/2026-11-01_notificaciones.md](cambios/2026-11-01_notificaciones.md) |
 | 2026-11-01 | Reglas de aprobación (Administración): autorización interna por niveles de las cotizaciones que superan un monto o un descuento, con los roles que elige la empresa | [cambios/2026-11-01_reglas-de-aprobacion.md](cambios/2026-11-01_reglas-de-aprobacion.md) |
 | 2026-11-01 | Seguridad y aislamiento (Administración): prueba de aislamiento real, controles comprobados, actividad de acceso y política de la empresa (código para todos, duración, inactividad) | [cambios/2026-11-01_seguridad-y-aislamiento.md](cambios/2026-11-01_seguridad-y-aislamiento.md) |
+| 2026-11-01 | Configuración: Identidad y región (nombre comercial; razón social, RUC, zona y moneda de solo lectura), vigencia por defecto de cotizaciones y enlaces a lo que se configura en otras pantallas | [cambios/2026-11-01_configuracion-identidad-y-comercial.md](cambios/2026-11-01_configuracion-identidad-y-comercial.md) |
 
 ## Cómo se escribe cada entrada
 

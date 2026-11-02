@@ -26,7 +26,11 @@ class TenantSettingsController extends Controller
             'match_tolerance' => ['sometimes', 'numeric', 'min:0', 'max:10'],
             // Límite de crédito del cliente al aprobar o activar: solo avisar (con motivo) o bloquear.
             'credit_limit_mode' => ['sometimes', 'in:WARN,BLOCK'],
+            // Días de vigencia con los que nace una cotización si no se indica otra fecha.
+            'quotation_validity_days' => ['sometimes', 'integer', 'min:1', 'max:365'],
         ], [
+            'quotation_validity_days.min' => 'La vigencia va de 1 a 365 días.',
+            'quotation_validity_days.max' => 'La vigencia va de 1 a 365 días.',
             'credit_limit_mode.in' => 'Elige "Solo avisar" o "Bloquear".',
             'match_tolerance.max' => 'La tolerancia del cruce va de 0 % a 10 %.',
             'match_tolerance.min' => 'La tolerancia del cruce va de 0 % a 10 %.',
@@ -38,6 +42,7 @@ class TenantSettingsController extends Controller
             $configuration[$key] = match ($key) {
                 'match_tolerance' => round((float) $value, 1),
                 'credit_limit_mode' => $value,
+                'quotation_validity_days' => (int) $value,
                 default => (bool) $value,
             };
         }
@@ -76,6 +81,49 @@ class TenantSettingsController extends Controller
             'match_tolerance' => (float) ($configuration['match_tolerance'] ?? 2),
             // Límite de crédito: "Solo avisar" si la empresa no eligió otra cosa.
             'credit_limit_mode' => ($configuration['credit_limit_mode'] ?? 'WARN') === 'BLOCK' ? 'BLOCK' : 'WARN',
+            // Vigencia por defecto de las cotizaciones, en días (15 si la empresa no la cambió).
+            'quotation_validity_days' => max(1, min(365, (int) ($configuration['quotation_validity_days'] ?? 15))),
+        ];
+    }
+
+    /**
+     * Identidad y región (Configuración): nombre comercial, razón social, RUC, zona horaria y moneda
+     * base. Solo el nombre comercial se cambia aquí: razón social y RUC son los fiscales (los fija la
+     * plataforma al dar de alta la empresa), y la hora y la contabilidad del sistema son de Perú, en soles.
+     */
+    public function identity(Request $request)
+    {
+        return response()->json(self::identityOf((string) $request->attributes->get('tenant_id')));
+    }
+
+    public function updateIdentity(Request $request)
+    {
+        $tenantId = (string) $request->attributes->get('tenant_id');
+        $data = $request->validate(['trade_name' => ['required', 'string', 'max:255']], ['trade_name.required' => 'Escribe el nombre comercial.']);
+        $before = self::identityOf($tenantId);
+        $company = DB::table('companies')->where('tenant_id', $tenantId)->orderBy('created_at')->first(['id']);
+        abort_unless($company, 404);
+
+        DB::table('companies')->where('id', $company->id)->update(['trade_name' => trim($data['trade_name']), 'updated_at' => now()]);
+        AuditLogger::log(
+            tenantId: $tenantId, userId: $request->user()->id, action: 'tenant.identity.update', entityType: 'Tenant', entityId: $tenantId,
+            beforeData: ['trade_name' => $before['trade_name']], afterData: ['trade_name' => trim($data['trade_name'])],
+        );
+
+        return response()->json(self::identityOf($tenantId));
+    }
+
+    private static function identityOf(string $tenantId): array
+    {
+        $tenant = DB::table('tenants')->where('id', $tenantId)->first(['name', 'timezone', 'currency']);
+        $company = DB::table('companies')->where('tenant_id', $tenantId)->orderBy('created_at')->first(['legal_name', 'trade_name', 'tax_identifier']);
+
+        return [
+            'trade_name' => $company->trade_name ?? $tenant->name,
+            'legal_name' => $company->legal_name ?? null,
+            'ruc' => $company->tax_identifier ?? null,
+            'timezone' => $tenant->timezone ?: 'America/Lima',
+            'currency' => $tenant->currency ?: 'PEN',
         ];
     }
 

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Copy, ExternalLink, FileDown, ImageUp, Lock, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
+import { CompanySettingsCards } from "@/components/dashboard/settings/CompanySettingsCards";
 import { fieldErrors, firstError } from "@/lib/crm";
 import { DEFAULT_PRIMARY, contrast, hexToRgb, readableOnWhite, rgbToHex, setBranding, textOn, tint, type Branding } from "@/lib/branding";
 import { downloadDocumentPdf } from "@/lib/document-pdf";
@@ -327,6 +328,9 @@ export default function BrandingSettings() {
           </Btn>
         }
       />
+
+      {/* Identidad y región y Comercial, como en el prototipo; lo de marca sigue debajo, sin cambios. */}
+      <CompanySettingsCards canManage={canManage} toast={toast} />
 
       <div className="grid items-start gap-[18px] xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div className="min-w-0">
