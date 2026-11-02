@@ -493,13 +493,13 @@ class AccessScopeTest extends TestCase
 
         Sanctum::actingAs($admin);
         $list = $this->getJson('/api/v1/roles')->assertOk()->json();
-        $this->assertSame(['quotations', 'contracts', 'orders', 'portal', 'leads', 'opportunities', 'activities', 'contracted_services', 'work_orders', 'projects', 'time_entries', 'cost_entries', 'agenda', 'billing', 'receivables', 'payments', 'recurring', 'purchases', 'payables', 'budgets', 'tickets', 'warranty', 'documents'], collect($list['scope_resources'])->pluck('code')->all());
+        $this->assertSame(['quotations', 'contracts', 'orders', 'portal', 'leads', 'opportunities', 'activities', 'contracted_services', 'work_orders', 'projects', 'time_entries', 'cost_entries', 'agenda', 'billing', 'receivables', 'payments', 'recurring', 'purchases', 'payables', 'budgets', 'tickets', 'warranty', 'documents', 'imports'], collect($list['scope_resources'])->pluck('code')->all());
         $this->assertSame('TENANT', collect($list['roles'])->firstWhere('id', $salesId)['scopes']['quotations']);
 
         // Un rol nuevo nace alcanzando solo lo propio.
         $newRole = $this->postJson('/api/v1/roles', ['name' => 'Preventa'])->assertCreated()->json('id');
         $this->assertSame(
-            ['activities' => 'OWN', 'agenda' => 'OWN', 'billing' => 'OWN', 'budgets' => 'OWN', 'contracted_services' => 'OWN', 'contracts' => 'OWN', 'cost_entries' => 'OWN', 'documents' => 'OWN', 'leads' => 'OWN', 'opportunities' => 'OWN', 'orders' => 'OWN', 'payables' => 'OWN', 'payments' => 'OWN', 'portal' => 'OWN', 'projects' => 'OWN', 'purchases' => 'OWN', 'quotations' => 'OWN', 'receivables' => 'OWN', 'recurring' => 'OWN', 'tickets' => 'OWN', 'time_entries' => 'OWN', 'warranty' => 'OWN', 'work_orders' => 'OWN'],
+            ['activities' => 'OWN', 'agenda' => 'OWN', 'billing' => 'OWN', 'budgets' => 'OWN', 'contracted_services' => 'OWN', 'contracts' => 'OWN', 'cost_entries' => 'OWN', 'documents' => 'OWN', 'imports' => 'OWN', 'leads' => 'OWN', 'opportunities' => 'OWN', 'orders' => 'OWN', 'payables' => 'OWN', 'payments' => 'OWN', 'portal' => 'OWN', 'projects' => 'OWN', 'purchases' => 'OWN', 'quotations' => 'OWN', 'receivables' => 'OWN', 'recurring' => 'OWN', 'tickets' => 'OWN', 'time_entries' => 'OWN', 'warranty' => 'OWN', 'work_orders' => 'OWN'],
             DB::table('role_scopes')->where('role_id', $newRole)->orderBy('resource')->pluck('scope', 'resource')->all(),
         );
 

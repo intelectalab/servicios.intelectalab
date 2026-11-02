@@ -104,6 +104,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Módulos y plan (Administración): plan y vigencia, apagar o encender módulos del plan, uso frente a límites, pagos y pedido de cambio | [cambios/2026-11-01_modulos-y-plan.md](cambios/2026-11-01_modulos-y-plan.md) |
 | 2026-11-01 | Integraciones (Control): estado real de las conexiones y webhooks salientes firmados con cola, reintentos, fallidos y protección de direcciones | [cambios/2026-11-01_integraciones.md](cambios/2026-11-01_integraciones.md) |
 | 2026-11-01 | Planes, catálogo de módulos y suscripciones protegidos en la base: la app no los borra y solo los cambia una sesión de superadmin verificada; el registro solo acepta planes públicos | [cambios/2026-11-01_tablas-de-plataforma-protegidas.md](cambios/2026-11-01_tablas-de-plataforma-protegidas.md) |
+| 2026-11-01 | Importación masiva (Administración): validar antes de importar con el resultado de cada fila, leads importables e historial de todas las importaciones con su permiso y alcance | [cambios/2026-11-01_importacion-masiva.md](cambios/2026-11-01_importacion-masiva.md) |
 
 ## Cómo se escribe cada entrada
 

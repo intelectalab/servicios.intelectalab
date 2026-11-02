@@ -22,7 +22,7 @@ class OperationsChecklistTemplatesTest extends TestCase
     use OperationsFixtures;
 
     private const MANAGER = [
-        'checklists.view', 'checklists.manage', 'checklists.export',
+        'checklists.view', 'checklists.manage', 'checklists.export', 'imports.create',
         'contracted_services.view', 'work_orders.view', 'work_orders.create', 'work_orders.manage', 'work_orders.approve',
     ];
 

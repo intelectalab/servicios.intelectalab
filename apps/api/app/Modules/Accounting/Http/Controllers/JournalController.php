@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Accounting\Support\Chart;
 use App\Modules\Accounting\Support\Ledger;
 use App\Services\AuditLogger;
+use App\Services\ImportReport;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
@@ -290,11 +291,13 @@ class JournalController extends Controller
         }
 
         if (! $ready) {
+            ImportReport::recordGrouped($request, 'journal', 0, $warnings, count($rows));
             throw ValidationException::withMessages(['file' => ['No se importó ningún asiento.', ...$warnings]]);
         }
 
         $file = Str::limit((string) $request->file('file')->getClientOriginalName(), 120);
-        $numbers = DB::transaction(function () use ($request, $tenantId, $ready, $file) {
+        $numbers = DB::transaction(function () use ($request, $tenantId, $ready, $file, $warnings, $rows) {
+            ImportReport::recordGrouped($request, 'journal', count($ready), $warnings, count($rows));
             $numbers = [];
             foreach ($ready as $group) {
                 $id = Ledger::post($tenantId, $group['date'], Str::limit($group['description'], 1000, ''), ['type' => 'IMPORT', 'number' => Str::limit($file, 100, '')], $group['lines'], $request->user()->id);

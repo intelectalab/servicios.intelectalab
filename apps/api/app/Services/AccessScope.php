@@ -48,6 +48,7 @@ class AccessScope
         'tickets' => 'Tickets',
         'warranty' => 'Garantías',
         'documents' => 'Documentos',
+        'imports' => 'Importaciones',
     ];
 
     /** De menor a mayor alcance. */
@@ -188,6 +189,8 @@ class AccessScope
                 ->orWhereIn("{$table}.ticket_id", fn ($sub) => $sub->select('id')->from('support_tickets')->whereIn('assigned_user_id', $owners)),
             // Un documento, de quien lo subió.
             'documents' => $query->whereIn("{$table}.created_by", $owners),
+            // Una importación es de quien la hizo.
+            'imports' => $query->whereIn("{$table}.created_by", $owners),
         };
     }
 

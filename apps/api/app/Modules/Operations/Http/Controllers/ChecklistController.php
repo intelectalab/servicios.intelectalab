@@ -9,6 +9,7 @@ use App\Modules\Operations\Models\WorkOrder;
 use App\Modules\Services\Models\Service;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
+use App\Services\ImportReport;
 use App\Services\ColumnFilters;
 use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
@@ -287,10 +288,12 @@ class ChecklistController extends Controller
         }
 
         if (! $ready) {
+            ImportReport::recordGrouped($request, 'checklists', 0, $warnings, count($rows));
             throw ValidationException::withMessages(['file' => ['No se importó ninguna plantilla.', ...$warnings]]);
         }
 
-        $items = DB::transaction(function () use ($request, $tenantId, $ready) {
+        $items = DB::transaction(function () use ($request, $tenantId, $ready, $warnings, $rows) {
+            ImportReport::recordGrouped($request, 'checklists', count($ready), $warnings, count($rows));
             $total = 0;
             foreach ($ready as $data) {
                 $checklist = $this->create($tenantId, $request->user()->id, $data);

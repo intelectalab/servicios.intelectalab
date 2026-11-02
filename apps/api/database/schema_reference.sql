@@ -2942,6 +2942,36 @@ CREATE TABLE public.idempotency_keys (
 ALTER TABLE public.idempotency_keys OWNER TO erp_user;
 
 --
+-- Name: import_jobs; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.import_jobs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    entity character varying(40) NOT NULL,
+    file_name character varying(255) NOT NULL,
+    total_rows integer DEFAULT 0 NOT NULL,
+    created_count integer DEFAULT 0 NOT NULL,
+    updated_count integer DEFAULT 0 NOT NULL,
+    skipped_count integer DEFAULT 0 NOT NULL,
+    error_count integer DEFAULT 0 NOT NULL,
+    status character varying(20) NOT NULL,
+    details jsonb DEFAULT '[]'::jsonb NOT NULL,
+    created_by uuid,
+    branch_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT import_jobs_created_count_check CHECK ((created_count >= 0)),
+    CONSTRAINT import_jobs_error_count_check CHECK ((error_count >= 0)),
+    CONSTRAINT import_jobs_skipped_count_check CHECK ((skipped_count >= 0)),
+    CONSTRAINT import_jobs_status_check CHECK (((status)::text = ANY ((ARRAY['COMPLETED'::character varying, 'PARTIAL'::character varying, 'FAILED'::character varying])::text[]))),
+    CONSTRAINT import_jobs_total_rows_check CHECK ((total_rows >= 0)),
+    CONSTRAINT import_jobs_updated_count_check CHECK ((updated_count >= 0))
+);
+
+
+ALTER TABLE public.import_jobs OWNER TO erp_user;
+
+--
 -- Name: integration_attempts; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -4166,7 +4196,7 @@ CREATE TABLE public.role_scopes (
     resource character varying(50) NOT NULL,
     scope character varying(30) DEFAULT 'OWN'::character varying NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT role_scopes_resource_check CHECK (((resource)::text = ANY ((ARRAY['quotations'::character varying, 'contracts'::character varying, 'orders'::character varying, 'portal'::character varying, 'leads'::character varying, 'opportunities'::character varying, 'activities'::character varying, 'contracted_services'::character varying, 'work_orders'::character varying, 'projects'::character varying, 'time_entries'::character varying, 'cost_entries'::character varying, 'agenda'::character varying, 'billing'::character varying, 'receivables'::character varying, 'payments'::character varying, 'recurring'::character varying, 'purchases'::character varying, 'payables'::character varying, 'budgets'::character varying, 'tickets'::character varying, 'warranty'::character varying, 'documents'::character varying])::text[]))),
+    CONSTRAINT role_scopes_resource_check CHECK (((resource)::text = ANY ((ARRAY['quotations'::character varying, 'contracts'::character varying, 'orders'::character varying, 'portal'::character varying, 'leads'::character varying, 'opportunities'::character varying, 'activities'::character varying, 'contracted_services'::character varying, 'work_orders'::character varying, 'projects'::character varying, 'time_entries'::character varying, 'cost_entries'::character varying, 'agenda'::character varying, 'billing'::character varying, 'receivables'::character varying, 'payments'::character varying, 'recurring'::character varying, 'purchases'::character varying, 'payables'::character varying, 'budgets'::character varying, 'tickets'::character varying, 'warranty'::character varying, 'documents'::character varying, 'imports'::character varying])::text[]))),
     CONSTRAINT role_scopes_scope_check CHECK (((scope)::text = ANY ((ARRAY['OWN'::character varying, 'TEAM'::character varying, 'BRANCH'::character varying, 'TENANT'::character varying])::text[])))
 );
 
@@ -6126,6 +6156,14 @@ ALTER TABLE ONLY public.idempotency_keys
 
 ALTER TABLE ONLY public.idempotency_keys
     ADD CONSTRAINT idempotency_keys_tenant_id_idempotency_key_key UNIQUE (tenant_id, idempotency_key);
+
+
+--
+-- Name: import_jobs import_jobs_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.import_jobs
+    ADD CONSTRAINT import_jobs_pkey PRIMARY KEY (id);
 
 
 --
@@ -8392,6 +8430,13 @@ CREATE INDEX idx_work_orders_creator ON public.work_orders USING btree (tenant_i
 --
 
 CREATE INDEX idx_work_orders_tenant_status ON public.work_orders USING btree (tenant_id, status);
+
+
+--
+-- Name: import_jobs_tenant; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX import_jobs_tenant ON public.import_jobs USING btree (tenant_id, created_at DESC);
 
 
 --
@@ -11243,6 +11288,30 @@ ALTER TABLE ONLY public.idempotency_keys
 
 
 --
+-- Name: import_jobs import_jobs_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.import_jobs
+    ADD CONSTRAINT import_jobs_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE SET NULL;
+
+
+--
+-- Name: import_jobs import_jobs_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.import_jobs
+    ADD CONSTRAINT import_jobs_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: import_jobs import_jobs_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.import_jobs
+    ADD CONSTRAINT import_jobs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: integration_attempts integration_attempts_connection_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -13929,6 +13998,12 @@ ALTER TABLE public.fiscal_void_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.idempotency_keys ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: import_jobs; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.import_jobs ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: integration_attempts; Type: ROW SECURITY; Schema: public; Owner: erp_user
 --
 
@@ -14765,6 +14840,13 @@ CREATE POLICY tenant_isolation ON public.fiscal_void_requests USING ((tenant_id 
 --
 
 CREATE POLICY tenant_isolation ON public.idempotency_keys USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: import_jobs tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.import_jobs USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
 
 
 --
@@ -16078,6 +16160,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.idempotency_keys TO erp_app;
 
 
 --
+-- Name: TABLE import_jobs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT ON TABLE public.import_jobs TO erp_app;
+
+
+--
 -- Name: TABLE integration_attempts; Type: ACL; Schema: public; Owner: erp_user
 --
 
@@ -16918,6 +17007,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 80	2026_11_01_000400_workflows	70
 81	2026_11_01_000500_integrations	71
 84	2026_11_01_000600_platform_tables_write_guard	72
+85	2026_11_01_000700_bulk_imports	73
 \.
 
 
@@ -17119,6 +17209,9 @@ e7087eb0-9640-4b34-81fb-a82239ff0bda	workflows.view	Ver workflows	Ver las reglas
 f54f981d-b953-418d-8e9e-8cbb2635ce3e	workflows.manage	Gestionar workflows	Crear, editar, activar y desactivar reglas automáticas.	2026-11-01 22:40:20.245348+00
 e5c1383d-c3cb-4909-98fc-78f1a83f067c	workflows.export	Exportar workflows	Exportar el historial de ejecuciones.	2026-11-01 22:40:20.245348+00
 0a1311a1-d10d-4f69-9bb1-b63d3e694f4d	integrations.export	Exportar integraciones	Exportar la cola de envíos de los webhooks.	2026-11-01 23:33:07.566227+00
+028a404f-ab3c-41ca-9752-9c6764f6c8a6	imports.view	Ver importaciones	Abrir Importación masiva y ver el historial de importaciones.	2026-11-02 02:19:29.202539+00
+ab2935c2-e055-463c-ae65-53f14dcb04ef	imports.create	Importar	Importar desde Excel o CSV. Pide además el permiso de crear de cada entidad.	2026-11-02 02:19:29.202539+00
+0218aa72-3c51-4f99-9931-efe00c3d87bb	imports.export	Exportar importaciones	Exportar el historial de importaciones.	2026-11-02 02:19:29.202539+00
 \.
 
 
@@ -17138,7 +17231,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 84, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 85, true);
 
 
 --

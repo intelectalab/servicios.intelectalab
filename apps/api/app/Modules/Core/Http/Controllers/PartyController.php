@@ -26,6 +26,7 @@ use App\Modules\Support\Models\SupportTicket;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
+use App\Services\ImportReport;
 use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
 use Illuminate\Http\JsonResponse;
@@ -786,56 +787,32 @@ class PartyController extends Controller
         ]);
         $customColumns = array_values(array_diff($headers, self::IMPORT_HEADERS));
 
-        $created = 0;
-        $updated = 0;
-        $warnings = [];
+        return ImportReport::run($request, 'parties', $rows, ['tipo', 'numero_documento', 'razon_social', 'nombres', 'roles'],
+            function (array $row, int $number, ImportReport $report) use ($request, $tenantId, $customColumns) {
+                $data = $this->importData($row, $tenantId);
 
-        foreach ($rows as $number => $row) {
-            try {
-                DB::transaction(function () use ($row, $request, $tenantId, $customColumns, $number, &$created, &$updated, &$warnings) {
-                    $data = $this->importData($row, $tenantId);
-
-                    $existing = $this->duplicatesOf($request, [...$data, 'legal_name' => null])[0] ?? null;
-                    if ($existing) {
-                        // Ya existe: no se duplica, solo recibe los roles que le falten.
-                        $party = $this->find($existing['id'], $request);
-                        $missing = array_values(array_diff($data['roles'], $existing['roles']));
-                        foreach ($missing as $role) {
-                            $this->grantRole($party, $role, $tenantId, $data['position'] ?? null);
-                        }
-                        if ($missing) {
-                            $this->audit($request, $party, 'party.role.add', ['note' => 'Importación: '.implode(', ', array_map(fn ($role) => self::ROLE_LABELS[$role], $missing))]);
-                            $updated++;
-                        }
-                        $warnings[] = "Fila {$number}: «{$existing['name']}» ya existía; ".($missing
-                            ? 'se le agregó '.implode(', ', array_map(fn ($role) => self::ROLE_LABELS[$role], $missing)).'.'
-                            : 'no se cambió.');
-
-                        return;
+                $existing = $this->duplicatesOf($request, [...$data, 'legal_name' => null])[0] ?? null;
+                if ($existing) {
+                    // Ya existe: no se duplica, solo recibe los roles que le falten.
+                    $party = $this->find($existing['id'], $request);
+                    $missing = array_values(array_diff($data['roles'], $existing['roles']));
+                    foreach ($missing as $role) {
+                        $this->grantRole($party, $role, $tenantId, $data['position'] ?? null);
+                    }
+                    if ($missing) {
+                        $this->audit($request, $party, 'party.role.add', ['note' => 'Importación: '.implode(', ', array_map(fn ($role) => self::ROLE_LABELS[$role], $missing))]);
+                        $report->updated("«{$existing['name']}» ya existía; se le agregó ".implode(', ', array_map(fn ($role) => self::ROLE_LABELS[$role], $missing)).'.');
+                    } else {
+                        $report->skipped("«{$existing['name']}» ya existía; no se cambió.");
                     }
 
-                    $party = $this->createParty($data, $tenantId, $request);
-                    $this->importTerms($party, $row);
-                    $this->importCustomFields($party, $row, $customColumns, $tenantId);
-                    $created++;
-                });
-            } catch (ValidationException $e) {
-                $warnings[] = "Fila {$number}: ".collect($e->errors())->flatten()->first();
-            } catch (\Illuminate\Database\QueryException) {
-                $warnings[] = "Fila {$number}: no se pudo guardar (revisa que los datos no sean demasiado largos).";
-            }
-        }
+                    return;
+                }
 
-        if ($created + $updated === 0) {
-            return response()->json(['message' => 'No se pudo importar ningún registro.', 'errors' => ['file' => $warnings]], 422);
-        }
-
-        return response()->json([
-            'imported' => $created,
-            'updated' => $updated,
-            'message' => "Se importaron {$created} registro(s)".($updated ? " y se actualizaron {$updated}" : '').'.',
-            'warnings' => $warnings,
-        ]);
+                $party = $this->createParty($data, $tenantId, $request);
+                $this->importTerms($party, $row);
+                $this->importCustomFields($party, $row, $customColumns, $tenantId);
+            });
     }
 
     /** Una fila del archivo, convertida a los mismos datos que valida el formulario. */

@@ -1059,7 +1059,7 @@ class ComercialTest extends TestCase
 
     public function test_actors_and_services_are_imported_from_a_file(): void
     {
-        [$user, $tenantId] = $this->makeTenantUser(['core.view', 'core.manage', 'services.view', 'services.manage']);
+        [$user, $tenantId] = $this->makeTenantUser(['core.view', 'core.manage', 'services.view', 'services.manage', 'imports.create']);
         Sanctum::actingAs($user);
         $upload = fn (string $name, string $csv) => ['file' => \Illuminate\Http\UploadedFile::fake()->createWithContent($name, $csv)];
 
@@ -1133,7 +1133,7 @@ class ComercialTest extends TestCase
         $this->get('/api/v1/services/template')->assertOk();
 
         // La plantilla Excel que se descarga se puede importar tal cual, con sus filas de ejemplo.
-        [$other] = $this->makeTenantUser(['core.view', 'core.manage', 'services.view', 'services.manage']);
+        [$other] = $this->makeTenantUser(['core.view', 'core.manage', 'services.view', 'services.manage', 'imports.create']);
         Sanctum::actingAs($other);
         $template = fn (string $path) => ['file' => \Illuminate\Http\UploadedFile::fake()->createWithContent('plantilla.xlsx', $this->get($path)->streamedContent())];
         $this->post('/api/v1/parties/import', $template('/api/v1/parties/template'), ['Accept' => 'application/json'])

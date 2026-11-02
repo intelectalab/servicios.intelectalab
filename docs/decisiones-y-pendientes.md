@@ -175,6 +175,13 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - El logo nunca se guarda como llegó: el servidor lo vuelve a dibujar como PNG acotado; SVG no se acepta. Los colores se proponen desde el logo y se pueden cambiar.
 - La marca va en todos los PDF, en los Excel exportados, en la barra del portal y en los correos que recibe el cliente. Un color claro se oscurece donde hace falta para que se lea. Sin marca, todo sigue con el azul de siempre.
 
+### Importación masiva (2026-11-01)
+
+- Detalle en [cambios/2026-11-01_importacion-masiva.md](cambios/2026-11-01_importacion-masiva.md). Administración → Importación masiva (`/imports`), del plan base.
+- Toda importación fila por fila pasa por `App\Services\ImportReport`: valida con `dry_run` (todo se deshace al final) y deja el historial (`import_jobs`, solo alta y lectura). Un importador nuevo usa esa pieza y su entrada en `ImportController::ENTITIES`.
+- Importar pide `imports.create` además del permiso de crear de la entidad, también desde cada listado. El historial lleva alcance (lo propio = lo que la persona importó).
+- Los leads importados nacen Nuevos, a nombre de quien importa, con las reglas del formulario.
+
 ### Auditoría (2026-10-08)
 - Pantalla de solo lectura en Control → Auditoría (`/audit`). Detalle en [cambios/2026-10-08_auditoria.md](cambios/2026-10-08_auditoria.md).
 - Permisos `audit.view` y `audit.export`, sin módulo del plan. Como en el prototipo, los tienen Administrador y Gerencia.
@@ -258,7 +265,7 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 - Contabilidad: editar las reglas automáticas por empresa; libros electrónicos (PLE); planilla (cuentas 62); validar con el contador las cuentas del cierre (5911/5921). En Tenant A, los cobros PAG-2026-0001…0004 (anteriores a Bancos y caja) no tienen cuenta: la 1041/1011 no coincide con Bancos y caja.
 - Finanzas: elegir el proveedor de facturación electrónica y escribir su clase (con él, XML y CDR, y consultar el ticket de una baja pendiente); renovación automática de instancias recurrentes; avisos de renovación, de cobranza y de arqueo con diferencia (con Notificaciones); cambio entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos por horas aprobadas y por hitos; nota de crédito parcial; editar el vencimiento de un borrador; pago en línea; activar el programador del servidor para los ciclos diarios.
 - Operaciones: en la App del técnico, abrirla sin señal desde cero, borrar lo guardado en el teléfono al cerrar sesión, registrar dónde estaba el técnico y ubicación en el cliente; rejilla por horas y arrastrar para reprogramar en Agenda; antivirus real para los archivos (ver [propuesta-antivirus.md](propuesta-antivirus.md)); facturar por horas (con Finanzas); avisos de horas y costos por aprobar (con Notificaciones); evento facturable al completar (con Finanzas); avisar al técnico al asignar (con Notificaciones); órdenes desde un ticket (con Soporte).
-- CRM: pantalla para editar etapas y fuentes; importar leads; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
+- CRM: pantalla para editar etapas y fuentes; asignar una actividad a otra persona; recordatorios de actividades (con Notificaciones); clientes como miembros de campaña; envío real de comunicaciones de campaña.
 - Alcance: a qué sede pertenecen los documentos anteriores (todos sin sede; solo importa si se usa el alcance Sede); mostrar la sede en las fichas; los roles base del prototipo no se crean solos en una empresa nueva.
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - CI no corre las migraciones (carga `schema_reference.sql`, desactualizado): las pruebas nuevas fallarían ahí.

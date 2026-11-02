@@ -264,7 +264,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/services/{service}', [ServiceController::class, 'show']);
         });
         Route::middleware('permission:services.manage')->group(function () {
-            Route::post('/services/import', [ServiceController::class, 'import']);
+            Route::post('/services/import', [ServiceController::class, 'import'])->middleware('permission:imports.create');
             Route::post('/services', [ServiceController::class, 'store']);
             Route::put('/services/{service}', [ServiceController::class, 'update']);
             Route::post('/services/{service}/activate', [ServiceController::class, 'activate']);
@@ -349,7 +349,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:core.manage')->group(function () {
             Route::post('/parties/bulk-deactivate', [PartyController::class, 'bulkDeactivate']);
             Route::post('/parties/bulk-activate', [PartyController::class, 'bulkActivate']);
-            Route::post('/parties/import', [PartyController::class, 'import']);
+            Route::post('/parties/import', [PartyController::class, 'import'])->middleware('permission:imports.create');
             Route::post('/parties', [PartyController::class, 'store']);
             Route::put('/parties/{party}', [PartyController::class, 'update']);
             Route::post('/parties/{party}/roles', [PartyController::class, 'addRole']);
@@ -387,7 +387,7 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware('permission:checklists.manage')->group(function () {
             Route::get('/checklists/template', [ChecklistController::class, 'importTemplate']);
-            Route::post('/checklists/import', [ChecklistController::class, 'import']);
+            Route::post('/checklists/import', [ChecklistController::class, 'import'])->middleware('permission:imports.create');
             Route::post('/checklists', [ChecklistController::class, 'store']);
             Route::put('/checklists/{checklist}', [ChecklistController::class, 'update']);
             Route::post('/checklists/{checklist}/duplicate', [ChecklistController::class, 'duplicate']);
@@ -725,7 +725,7 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:accounting.create')->group(function () {
             Route::post('/journal-entries', [JournalController::class, 'store']);
             Route::get('/journal-entries/template', [JournalController::class, 'importTemplate']);
-            Route::post('/journal-entries/import', [JournalController::class, 'import']);
+            Route::post('/journal-entries/import', [JournalController::class, 'import'])->middleware('permission:imports.create');
         });
         Route::middleware('permission:accounting.manage')->group(function () {
             Route::post('/accounting-accounts', [ChartController::class, 'storeAccount']);
@@ -812,6 +812,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/reports/{report}', [ReportController::class, 'show']);
         });
 
+        // Administración: Importación masiva (plan base). Validar e importar van a la ruta de cada entidad.
+        Route::middleware('permission:imports.view')->group(function () {
+            Route::get('/imports', [\App\Http\Controllers\ImportController::class, 'index']);
+            Route::get('/import-jobs', [\App\Http\Controllers\ImportController::class, 'jobs']);
+            Route::get('/import-jobs/{job}', [\App\Http\Controllers\ImportController::class, 'show']);
+        });
+
         // Control: Workflows (plan base). Las reglas no se borran: se desactivan.
         Route::middleware('permission:workflows.view')->group(function () {
             Route::get('/workflows', [WorkflowController::class, 'index']);
@@ -853,6 +860,8 @@ Route::prefix('v1')->group(function () {
         Route::middleware('permission:credentials.delete')->post('/credentials/{credential}/revoke', [CredentialController::class, 'revoke']);
 
         // CRM - protegido por permiso Y por el switch ON/OFF del tenant
+        // Antes de /crm/leads/{lead}: la plantilla no es un lead.
+        Route::middleware(['module:crm', 'permission:leads.manage'])->get('/crm/leads/template', [CrmLeadController::class, 'importTemplate']);
         Route::middleware(['module:crm', 'permission:leads.view'])->group(function () {
             Route::get('/crm/leads', [CrmLeadController::class, 'index']);
             Route::get('/crm/leads/summary', [CrmLeadController::class, 'summary']);
@@ -861,6 +870,7 @@ Route::prefix('v1')->group(function () {
         });
         Route::middleware(['module:crm', 'permission:leads.manage'])->group(function () {
             Route::post('/crm/leads', [CrmLeadController::class, 'store']);
+            Route::post('/crm/leads/import', [CrmLeadController::class, 'import'])->middleware('permission:imports.create');
             Route::put('/crm/leads/{lead}', [CrmLeadController::class, 'update']);
             Route::post('/crm/leads/{lead}/contact', [CrmLeadController::class, 'contact']);
             Route::post('/crm/leads/{lead}/qualify', [CrmLeadController::class, 'qualify']);

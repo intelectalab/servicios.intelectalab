@@ -18,11 +18,14 @@ use App\Modules\Crm\Support\LeadScoring;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
+use App\Services\ImportReport;
 use App\Services\ListSort;
 use App\Services\SequentialNumberGenerator;
+use App\Services\SpreadsheetImport;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -99,6 +102,80 @@ class CrmLeadController extends Controller
             'total' => (int) $byStatus->sum(),
             'by_status' => (object) $byStatus->map(fn ($total) => (int) $total)->all(),
         ]);
+    }
+
+    private const IMPORT_HEADERS = ['empresa', 'contacto', 'cargo', 'correo', 'telefono', 'fuente', 'interes'];
+
+    private const IMPORT_ALIASES = [
+        'organizacion' => 'empresa', 'razon_social' => 'empresa', 'company' => 'empresa',
+        'nombre' => 'contacto', 'nombre_de_contacto' => 'contacto', 'persona' => 'contacto',
+        'puesto' => 'cargo', 'email' => 'correo', 'correo_electronico' => 'correo', 'celular' => 'telefono', 'phone' => 'telefono',
+        'origen' => 'fuente', 'source' => 'fuente', 'servicio_de_interes' => 'interes', 'interest' => 'interes',
+    ];
+
+    public function importTemplate(Request $request)
+    {
+        $sources = CrmCatalog::sources((string) $request->attributes->get('tenant_id'))->pluck('name')->all();
+
+        return SpreadsheetImport::template(
+            'plantilla_importacion_leads.xlsx',
+            'Plantilla de importación de leads',
+            self::IMPORT_HEADERS,
+            [
+                ['Clínica San Gabriel', 'Rosa Medina', 'Gerente de TI', 'rosa.medina@ejemplo.pe', '987111222', $sources[0] ?? '', 'Soporte TI'],
+                ['Corporación Textil Andina', 'Hugo Ramos', 'Jefe de Operaciones', 'hugo.ramos@ejemplo.pe', '', $sources[1] ?? $sources[0] ?? '', 'Mantenimiento'],
+            ],
+            [
+                'empresa o contacto: al menos uno. fuente es obligatoria y debe ser una de la lista.',
+                'correo: si ya hay un lead abierto con ese correo, la fila no entra.',
+                'Los leads entran como Nuevos y quedan a tu nombre (tú eres el responsable); su puntaje se calcula al importarlos.',
+                'Si la empresa ya está en Clientes y actores, el lead queda enlazado a ella.',
+            ],
+            ['fuente' => $sources],
+        );
+    }
+
+    /** Importa leads con las reglas del formulario; cada fila se guarda por separado. */
+    public function import(Request $request)
+    {
+        $request->validate(['file' => ['required', 'file', 'max:5120']], ['file.max' => 'El archivo supera los 5 MB: impórtalo por partes.']);
+        $tenantId = (string) $request->attributes->get('tenant_id');
+        [, $rows] = SpreadsheetImport::read($request->file('file'), self::IMPORT_ALIASES, ['empresa', 'contacto', 'fuente', 'correo']);
+        $sources = CrmCatalog::sources($tenantId)->keyBy(fn ($source) => SpreadsheetImport::normalize($source->name));
+        $form = new StoreLeadRequest();
+
+        return ImportReport::run($request, 'leads', $rows, ['empresa', 'contacto', 'correo', 'fuente'],
+            function (array $row) use ($request, $tenantId, $sources, $form) {
+                $get = fn (string $key) => trim((string) ($row[$key] ?? ''));
+                $source = $sources->get(SpreadsheetImport::normalize($get('fuente')));
+                if (! $source) {
+                    throw ValidationException::withMessages(['source_id' => [$get('fuente') === ''
+                        ? 'Indica la fuente.'
+                        : "La fuente «{$get('fuente')}» no existe; usa una de la lista."]]);
+                }
+
+                $data = $this->leadFields(Validator::make([
+                    'organization_name' => $get('empresa') ?: null,
+                    'person_name' => $get('contacto') ?: null,
+                    'position' => $get('cargo') ?: null,
+                    'email' => $get('correo') ?: null,
+                    'phone' => $get('telefono') ?: null,
+                    'interest' => $get('interes') ?: null,
+                    'source_id' => $source->id,
+                ], $form->rules(), $form->messages())->validate(), $tenantId);
+
+                $number = SequentialNumberGenerator::next($tenantId, 'crm_leads', 'lead_number', 'LD');
+                $lead = CrmLead::create([
+                    ...$data,
+                    'tenant_id' => $tenantId,
+                    'lead_number' => $number,
+                    'status' => 'NEW',
+                    'owner_user_id' => $request->user()->id,
+                    'party_id' => $this->matchingPartyId($tenantId, $data['organization_name'] ?? null),
+                ]);
+                $this->audit($request, $lead, 'crm_lead.create', ['to' => 'NEW', 'lead_number' => $number, 'note' => 'Importado']);
+                LeadScoring::apply($lead);
+            }, 'lead(s)');
     }
 
     /** Listas de los filtros y del formulario. */
@@ -374,7 +451,12 @@ class CrmLeadController extends Controller
     /** Valida los datos del formulario y los devuelve con los nombres de las columnas. */
     private function leadData(StoreLeadRequest $request, string $tenantId, ?CrmLead $lead = null): array
     {
-        $data = $request->validated();
+        return $this->leadFields($request->validated(), $tenantId, $lead);
+    }
+
+    /** Las reglas del formulario sobre datos ya validados (también los de una fila importada). */
+    private function leadFields(array $data, string $tenantId, ?CrmLead $lead = null): array
+    {
         $text = fn (string $key) => trim((string) ($data[$key] ?? '')) ?: null;
 
         if (! $text('organization_name') && ! $text('person_name')) {

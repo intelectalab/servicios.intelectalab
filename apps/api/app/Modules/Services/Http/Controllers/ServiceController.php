@@ -14,6 +14,7 @@ use App\Modules\Services\Models\ServiceRecurringConfig;
 use App\Services\AuditHistory;
 use App\Services\AuditLogger;
 use App\Services\ColumnFilters;
+use App\Services\ImportReport;
 use App\Services\ListSort;
 use App\Services\SpreadsheetImport;
 use Illuminate\Http\Request;
@@ -267,81 +268,60 @@ class ServiceController extends Controller
 
         [, $rows] = SpreadsheetImport::read($request->file('file'), self::IMPORT_ALIASES, ['codigo', 'nombre', 'categoria', 'precio', 'modalidad']);
 
-        $created = 0;
-        $warnings = [];
         $rules = (new StoreServiceRequest())->rules();
         $messages = (new StoreServiceRequest())->messages();
 
-        foreach ($rows as $number => $row) {
-            $get = fn (string $key) => trim((string) ($row[$key] ?? ''));
+        return ImportReport::run($request, 'services', $rows, ['codigo', 'nombre', 'categoria', 'modalidad', 'precio'],
+            function (array $row) use ($rules, $messages, $tenantId, $request) {
+                $get = fn (string $key) => trim((string) ($row[$key] ?? ''));
+                $mode = SpreadsheetImport::normalize($get('modalidad'));
+                $frequency = SpreadsheetImport::normalize($get('frecuencia'));
+                if ($mode !== '' && ! isset(self::IMPORT_MODES[$mode])) {
+                    throw ValidationException::withMessages(['billing_mode' => ['modalidad debe ser Único, Recurrente o Por evento.']]);
+                }
+                if ($frequency !== '' && ! isset(self::IMPORT_FREQUENCIES[$frequency])) {
+                    throw ValidationException::withMessages(['frequency' => ['frecuencia debe ser Mensual, Trimestral o Anual.']]);
+                }
+                if ($get('codigo') === '' || $get('nombre') === '' || $get('categoria') === '') {
+                    throw ValidationException::withMessages(['category_id' => ['Código, nombre y categoría son obligatorios.']]);
+                }
 
-            try {
-                DB::transaction(function () use ($get, $rules, $messages, $tenantId, $request, &$created) {
-                    $mode = SpreadsheetImport::normalize($get('modalidad'));
-                    $frequency = SpreadsheetImport::normalize($get('frecuencia'));
-                    if ($mode !== '' && ! isset(self::IMPORT_MODES[$mode])) {
-                        throw ValidationException::withMessages(['billing_mode' => ['modalidad debe ser Único, Recurrente o Por evento.']]);
-                    }
-                    if ($frequency !== '' && ! isset(self::IMPORT_FREQUENCIES[$frequency])) {
-                        throw ValidationException::withMessages(['frequency' => ['frecuencia debe ser Mensual, Trimestral o Anual.']]);
-                    }
-                    if ($get('codigo') === '' || $get('nombre') === '' || $get('categoria') === '') {
-                        throw ValidationException::withMessages(['category_id' => ['Código, nombre y categoría son obligatorios.']]);
-                    }
+                $billingMode = self::IMPORT_MODES[$mode] ?? 'ONE_TIME';
+                $data = Validator::make([
+                    'code' => $get('codigo'),
+                    'name' => $get('nombre'),
+                    'description' => $get('descripcion') ?: null,
+                    'unit' => $get('unidad') ?: null,
+                    'category_id' => $this->categoryFor($get('categoria'), $tenantId),
+                    'billing_mode' => $billingMode,
+                    'frequency' => $billingMode === 'RECURRING' ? (self::IMPORT_FREQUENCIES[$frequency] ?? null) : null,
+                    'warranty_months' => $get('garantia_meses') === '' ? 0 : $get('garantia_meses'),
+                    'price' => $get('precio') === '' ? null : $get('precio'),
+                ], $rules, $messages)->validate();
+                $this->assertUniqueCode($data['code']);
 
-                    $billingMode = self::IMPORT_MODES[$mode] ?? 'ONE_TIME';
-                    $data = Validator::make([
-                        'code' => $get('codigo'),
-                        'name' => $get('nombre'),
-                        'description' => $get('descripcion') ?: null,
-                        'unit' => $get('unidad') ?: null,
-                        'category_id' => $this->categoryFor($get('categoria'), $tenantId),
-                        'billing_mode' => $billingMode,
-                        'frequency' => $billingMode === 'RECURRING' ? (self::IMPORT_FREQUENCIES[$frequency] ?? null) : null,
-                        'warranty_months' => $get('garantia_meses') === '' ? 0 : $get('garantia_meses'),
-                        'price' => $get('precio') === '' ? null : $get('precio'),
-                    ], $rules, $messages)->validate();
-                    $this->assertUniqueCode($data['code']);
+                $service = Service::create([
+                    'tenant_id' => $tenantId,
+                    'status' => 'DRAFT',
+                    'category_id' => $data['category_id'],
+                    'code' => $data['code'],
+                    'name' => $data['name'],
+                    'description' => $data['description'],
+                    'unit' => $data['unit'],
+                    'billing_mode' => $data['billing_mode'],
+                    'warranty_months' => (int) $data['warranty_months'],
+                ]);
+                $this->syncRecurrence($service, $data['frequency']);
 
-                    $service = Service::create([
-                        'tenant_id' => $tenantId,
-                        'status' => 'DRAFT',
-                        'category_id' => $data['category_id'],
-                        'code' => $data['code'],
-                        'name' => $data['name'],
-                        'description' => $data['description'],
-                        'unit' => $data['unit'],
-                        'billing_mode' => $data['billing_mode'],
-                        'warranty_months' => (int) $data['warranty_months'],
+                if ((float) ($data['price'] ?? 0) > 0) {
+                    ServicePrice::create([
+                        'tenant_id' => $tenantId, 'service_id' => $service->id, 'currency' => 'PEN',
+                        'amount' => $data['price'], 'valid_from' => now()->toDateString(), 'active' => true,
                     ]);
-                    $this->syncRecurrence($service, $data['frequency']);
+                }
 
-                    if ((float) ($data['price'] ?? 0) > 0) {
-                        ServicePrice::create([
-                            'tenant_id' => $tenantId, 'service_id' => $service->id, 'currency' => 'PEN',
-                            'amount' => $data['price'], 'valid_from' => now()->toDateString(), 'active' => true,
-                        ]);
-                    }
-
-                    $this->audit($request, $service, 'service.create', ['note' => 'Importado']);
-                    $created++;
-                });
-            } catch (ValidationException $e) {
-                $warnings[] = "Fila {$number}: ".collect($e->errors())->flatten()->first();
-            } catch (\Illuminate\Database\QueryException) {
-                $warnings[] = "Fila {$number}: no se pudo guardar (revisa que los datos no sean demasiado largos).";
-            }
-        }
-
-        if ($created === 0) {
-            return response()->json(['message' => 'No se pudo importar ningún servicio.', 'errors' => ['file' => $warnings]], 422);
-        }
-
-        return response()->json([
-            'imported' => $created,
-            'message' => "Se importaron {$created} servicio(s) en borrador.",
-            'warnings' => $warnings,
-        ]);
+                $this->audit($request, $service, 'service.create', ['note' => 'Importado']);
+            }, 'servicio(s) en borrador');
     }
 
     /** La categoría con ese nombre; si no existe, se crea. */

@@ -22,7 +22,7 @@ class AccountingYearCloseTest extends TestCase
 
     private const ACCOUNTANT = [
         'accounting.view', 'accounting.create', 'accounting.manage', 'accounting.approve', 'accounting.export',
-        'budgets.view', 'budgets.manage', 'budgets.approve',
+        'budgets.view', 'budgets.manage', 'budgets.approve', 'imports.create',
     ];
 
     protected function setUp(): void

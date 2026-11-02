@@ -44,7 +44,7 @@ trait OperationsFixtures
         foreach (DB::table('permissions')->whereIn('code', $permissions)->pluck('id') as $permissionId) {
             DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
         }
-        foreach ($scope ? ['contracted_services', 'work_orders', 'contracts', 'projects', 'time_entries', 'cost_entries', 'billing', 'receivables', 'payments', 'recurring', 'purchases', 'payables', 'budgets', 'tickets', 'warranty', 'documents'] : [] as $resource) {
+        foreach ($scope ? ['contracted_services', 'work_orders', 'contracts', 'projects', 'time_entries', 'cost_entries', 'billing', 'receivables', 'payments', 'recurring', 'purchases', 'payables', 'budgets', 'tickets', 'warranty', 'documents', 'imports'] : [] as $resource) {
             DB::table('role_scopes')->insert(['role_id' => $roleId, 'tenant_id' => $this->tenantId, 'resource' => $resource, 'scope' => $scope]);
         }
 
