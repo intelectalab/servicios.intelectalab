@@ -5,10 +5,11 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { getAuthToken } from "@/lib/auth";
+import { announceTenantName } from "@/lib/tenant-name";
 import { firstError } from "@/lib/crm";
 import { Btn, Card, Field, INPUT, LoadError } from "@/components/ui/proto";
 
-type Identity = { trade_name: string; legal_name: string | null; ruc: string | null; timezone: string; currency: string };
+type Identity = { trade_name: string; display_name: string; legal_name: string | null; ruc: string | null; timezone: string; currency: string };
 
 const TIMEZONES: Record<string, string> = { "America/Lima": "America/Lima (Perú, UTC−5)" };
 const CURRENCIES: Record<string, string> = { PEN: "Soles (PEN)", USD: "Dólares (USD)" };
@@ -61,6 +62,7 @@ export function CompanySettingsCards({ canManage, toast }: {
       setIdentity(data);
       setTradeName(data.trade_name);
       cached = { token: getAuthToken(), identity: data, validity };
+      announceTenantName(data.display_name);
       toast("Nombre comercial guardado");
     } catch (err) {
       setErrors({ trade_name: firstError(err, "No se pudo guardar.") });
@@ -116,7 +118,7 @@ export function CompanySettingsCards({ canManage, toast }: {
           </Field>
         </div>
         <div className="mt-3 flex justify-end">
-          <Btn permission="tenant.manage" onClick={saveIdentity} disabled={busy !== null || tradeName.trim() === identity.trade_name}>
+          <Btn permission="tenant.manage" onClick={saveIdentity} disabled={busy !== null || (tradeName.trim() === identity.trade_name && identity.trade_name === identity.display_name)}>
             {busy === "identity" ? "Guardando…" : "Guardar"}
           </Btn>
         </div>

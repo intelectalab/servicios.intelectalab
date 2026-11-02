@@ -24,7 +24,11 @@ class CompanySettingsTest extends TestCase
         $this->getJson('/api/v1/tenant/identity')->assertOk()
             ->assertJsonPath('legal_name', 'Empresa de Prueba SAC')->assertJsonPath('currency', 'PEN');
         $this->putJson('/api/v1/tenant/identity', ['trade_name' => 'Prueba Servicios', 'legal_name' => 'Otra SAC'])->assertOk()
-            ->assertJsonPath('trade_name', 'Prueba Servicios')->assertJsonPath('legal_name', 'Empresa de Prueba SAC');
+            ->assertJsonPath('trade_name', 'Prueba Servicios')->assertJsonPath('legal_name', 'Empresa de Prueba SAC')
+            ->assertJsonPath('display_name', 'Prueba Servicios');
+        // Es también el nombre con el que se muestra la empresa (cabecera, menú, correos).
+        $this->assertSame('Prueba Servicios', DB::table('tenants')->where('id', $this->tenantId)->value('name'));
+        $this->assertSame('Prueba Servicios', $this->getJson('/api/v1/me/access')->json('tenant.name'));
         $this->putJson('/api/v1/tenant/identity', ['trade_name' => ''])->assertStatus(422);
         $this->assertSame(1, DB::table('audit_logs')->where('tenant_id', $this->tenantId)->where('action', 'tenant.identity.update')->count());
 

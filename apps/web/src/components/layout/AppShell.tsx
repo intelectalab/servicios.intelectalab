@@ -19,6 +19,7 @@ import Sidebar, { type BuiltMenuItem, type MenuItem } from "@/components/layout/
 import { Card, LinkBtn, LoadError, Screen } from "@/components/ui/proto";
 import { shortDate } from "@/lib/commercial";
 import { RENEWAL_WARNING_DAYS, daysUntil, expiryText } from "@/lib/subscription";
+import { onTenantName } from "@/lib/tenant-name";
 
 // Menú con los grupos y el orden del prototipo.
 //  - Ítems con "href": pantallas ya construidas. "module" es el código del catálogo
@@ -151,6 +152,8 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
   // Módulos del plan que la empresa apagó: candado "Apagado" en vez de "Plan".
   const [modulesOff, setModulesOff] = useState<string[]>([]);
   const [tenantName, setTenantName] = useState<string | undefined>(undefined);
+  // Configuración avisa cuando cambia el nombre comercial: se ve al instante.
+  useEffect(() => onTenantName(setTenantName), []);
   const [roleName, setRoleName] = useState<string | undefined>(undefined);
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [accessLoaded, setAccessLoaded] = useState(false);

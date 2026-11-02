@@ -104,7 +104,12 @@ class TenantSettingsController extends Controller
         $company = DB::table('companies')->where('tenant_id', $tenantId)->orderBy('created_at')->first(['id']);
         abort_unless($company, 404);
 
-        DB::table('companies')->where('id', $company->id)->update(['trade_name' => trim($data['trade_name']), 'updated_at' => now()]);
+        // El nombre comercial es también el nombre con el que el sistema muestra a la empresa
+        // (cabecera, menú, correos, consola).
+        DB::transaction(function () use ($tenantId, $company, $data) {
+            DB::table('companies')->where('id', $company->id)->update(['trade_name' => trim($data['trade_name']), 'updated_at' => now()]);
+            DB::table('tenants')->where('id', $tenantId)->update(['name' => trim($data['trade_name']), 'updated_at' => now()]);
+        });
         AuditLogger::log(
             tenantId: $tenantId, userId: $request->user()->id, action: 'tenant.identity.update', entityType: 'Tenant', entityId: $tenantId,
             beforeData: ['trade_name' => $before['trade_name']], afterData: ['trade_name' => trim($data['trade_name'])],
@@ -120,6 +125,8 @@ class TenantSettingsController extends Controller
 
         return [
             'trade_name' => $company->trade_name ?? $tenant->name,
+            // Con el que se muestra la empresa; si no coincide con el nombre comercial, guardar lo iguala.
+            'display_name' => $tenant->name,
             'legal_name' => $company->legal_name ?? null,
             'ruc' => $company->tax_identifier ?? null,
             'timezone' => $tenant->timezone ?: 'America/Lima',
