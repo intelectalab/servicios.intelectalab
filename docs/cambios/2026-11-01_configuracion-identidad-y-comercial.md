@@ -63,3 +63,5 @@ La página mezclaba los datos de la empresa con la marca y se veía desordenada.
 La pestaña elegida se recuerda en el navegador de cada persona; si el navegador no deja guardar, vale solo durante la visita. Se abre en General la primera vez.
 
 **Probado:** como Administrador, cada pestaña muestra sus tarjetas, "Marca de la empresa" queda recordada al recargar, y en 375 px ninguna de las dos tiene desplazamiento horizontal.
+
+**Corrección (2026-11-02): parpadeo al volver a General.** Al pasar de Marca a General se veía un instante el bloque de carga: General volvía a pedir sus datos cada vez. Ahora recuerda lo último cargado y lo muestra al instante, mientras lo actualiza por detrás. Lo recordado está atado a la sesión, así que otra persona que entre después en el mismo navegador no lo ve. Probado: en 3 cambios seguidos de Marca a General, el bloque de carga no apareció ninguna vez.
