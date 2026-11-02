@@ -171,6 +171,7 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 
 ### Marca de la empresa (2026-10-23)
 
+- Configuración tiene dos pestañas (2026-11-02): General (identidad y región, vigencia por defecto de cotizaciones, enlaces) y Marca de la empresa.
 - Cada empresa define su marca en Configuración → Marca de la empresa (`tenant.manage`): logo, color principal y secundario y contacto del pie. Detalle en [cambios/2026-10-23_marca-de-la-empresa-y-documentos-corporativos.md](cambios/2026-10-23_marca-de-la-empresa-y-documentos-corporativos.md).
 - El logo nunca se guarda como llegó: el servidor lo vuelve a dibujar como PNG acotado; SVG no se acepta. Los colores se proponen desde el logo y se pueden cambiar.
 - La marca va en todos los PDF, en los Excel exportados, en la barra del portal y en los correos que recibe el cliente. Un color claro se oscurece donde hace falta para que se lea. Sin marca, todo sigue con el azul de siempre.

@@ -52,3 +52,14 @@ Sin migraciones. La vigencia se guarda en `tenants.configuration.quotation_valid
   - una cotización nueva propone hoy + 15 días;
   - en 375 px no hay desplazamiento horizontal.
   - No se guardó ningún cambio en Tenant A.
+
+## 7. Después: dos pestañas (2026-11-02)
+
+La página mezclaba los datos de la empresa con la marca y se veía desordenada. Se decidió separarla en **pestañas dentro de la misma Configuración** (el menú sigue con una sola entrada, como el prototipo):
+
+- **General:** Identidad y región, Comercial y "También se configura en".
+- **Marca de la empresa:** logo, colores, pie de los documentos, página de ingreso y la vista previa, con el botón "PDF de ejemplo". Su contenido y su disposición no cambiaron.
+
+La pestaña elegida se recuerda en el navegador de cada persona; si el navegador no deja guardar, vale solo durante la visita. Se abre en General la primera vez.
+
+**Probado:** como Administrador, cada pestaña muestra sus tarjetas, "Marca de la empresa" queda recordada al recargar, y en 375 px ninguna de las dos tiene desplazamiento horizontal.

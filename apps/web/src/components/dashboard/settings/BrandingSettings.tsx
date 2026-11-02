@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 import { Copy, ExternalLink, FileDown, ImageUp, Lock, Trash2 } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { useAccess } from "@/lib/access-context";
@@ -8,7 +8,7 @@ import { CompanySettingsCards } from "@/components/dashboard/settings/CompanySet
 import { fieldErrors, firstError } from "@/lib/crm";
 import { DEFAULT_PRIMARY, contrast, hexToRgb, readableOnWhite, rgbToHex, setBranding, textOn, tint, type Branding } from "@/lib/branding";
 import { downloadDocumentPdf } from "@/lib/document-pdf";
-import { Btn, Card, Chip, Field, FormGrid, INPUT, LoadError, Modal, Notice, PageHead, Screen, btnClass, deniedText, useToasts } from "@/components/ui/proto";
+import { Btn, Card, Chip, Field, FormGrid, INPUT, LoadError, Modal, Notice, PageHead, Screen, Tabs, btnClass, deniedText, useToasts } from "@/components/ui/proto";
 
 type Form = { primary_color: string; secondary_color: string; address: string; phone: string; email: string; website: string };
 
@@ -134,7 +134,34 @@ function DocumentPreview({ branding, form }: { branding: Branding; form: Form })
 }
 
 /** Configuración → Marca de la empresa: logo, colores y datos del pie de sus documentos. */
+// Pestañas de Configuración; la elegida se recuerda en el navegador.
+const TAB_KEY = "erp.settings.tab";
+const TABS: [string, string, null][] = [["GENERAL", "General", null], ["BRAND", "Marca de la empresa", null]];
+
+// Si el navegador no deja guardar, la pestaña vale solo mientras dure la visita.
+let currentTab = "GENERAL";
+
+function savedTab(): string {
+  try {
+    const value = window.localStorage.getItem(TAB_KEY);
+    if (value) currentTab = value === "BRAND" ? "BRAND" : "GENERAL";
+  } catch { /* sin almacenamiento */ }
+  return currentTab;
+}
+
+const tabListeners = new Set<() => void>();
+
 export default function BrandingSettings() {
+  const tab = useSyncExternalStore(
+    (listener) => { tabListeners.add(listener); return () => { tabListeners.delete(listener); }; },
+    savedTab,
+    () => "GENERAL",
+  );
+  function changeTab(next: string) {
+    currentTab = next;
+    try { window.localStorage.setItem(TAB_KEY, next); } catch { /* sin almacenamiento: solo esta visita */ }
+    tabListeners.forEach((listener) => listener());
+  }
   const { toast, toasts } = useToasts();
   const { can, loading: accessLoading } = useAccess();
   const canManage = !accessLoading && can("tenant.manage");
@@ -301,9 +328,23 @@ export default function BrandingSettings() {
     }
   }
 
-  if (error) return <Screen><PageHead title="Configuración" /><Card><LoadError text={error} onRetry={() => setReload((n) => n + 1)} /></Card></Screen>;
+  const tabs = <Tabs tabs={TABS} value={tab} onChange={changeTab} />;
+
+  // General: identidad y región, comercial y dónde se configura lo demás.
+  if (tab === "GENERAL") {
+    return (
+      <Screen>
+        <PageHead title="Configuración" />
+        {tabs}
+        <CompanySettingsCards canManage={canManage} toast={toast} />
+        {toasts}
+      </Screen>
+    );
+  }
+
+  if (error) return <Screen><PageHead title="Configuración" />{tabs}<Card><LoadError text={error} onRetry={() => setReload((n) => n + 1)} /></Card></Screen>;
   if (!branding || !form) {
-    return <Screen><PageHead title="Configuración" /><div className="h-64 animate-pulse rounded-xl bg-[var(--app-surface-muted)]" aria-busy="true" /></Screen>;
+    return <Screen><PageHead title="Configuración" />{tabs}<div className="h-64 animate-pulse rounded-xl bg-[var(--app-surface-muted)]" aria-busy="true" /></Screen>;
   }
 
   const primaryOk = HEX.test(form.primary_color);
@@ -328,9 +369,7 @@ export default function BrandingSettings() {
           </Btn>
         }
       />
-
-      {/* Identidad y región y Comercial, como en el prototipo; lo de marca sigue debajo, sin cambios. */}
-      <CompanySettingsCards canManage={canManage} toast={toast} />
+      {tabs}
 
       <div className="grid items-start gap-[18px] xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
         <div className="min-w-0">
