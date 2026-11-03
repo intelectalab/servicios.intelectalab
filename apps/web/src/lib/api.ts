@@ -169,12 +169,15 @@ async function send<T>(path: string, options: RequestInit, method: string): Prom
   if (!res.ok) {
     if (res.status === 401 && typeof window !== "undefined") {
       clearAuthToken();
+      // Recarga completa a propósito: sin sesión no debe quedar nada de la anterior en memoria.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/login";
     }
     // La empresa dejó de estar activa (suspendida, en mantenimiento, cerrada…):
     // se saca al usuario de la consola hacia la pantalla de bloqueo.
     if (res.status === 403 && data?.code === "TENANT_BLOCKED" && typeof window !== "undefined") {
       if (window.location.pathname !== "/blocked") {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.href = `/blocked?status=${encodeURIComponent(data.tenant_status ?? "")}`;
       }
     }
