@@ -1,5 +1,5 @@
 import { ApiError, apiFetch } from "@/lib/api";
-import { getAuthToken } from "@/lib/auth";
+import { getSessionKey } from "@/lib/auth";
 import type { FieldRoute, WorkOrderStatus } from "@/types/operations";
 
 /**
@@ -82,7 +82,7 @@ function addToLog(userId: string, entries: SyncEntry[]) {
 
 /** Marca corta de la sesión: la ruta guardada solo se muestra a la sesión que la guardó. */
 function sessionTag(): string {
-  const token = getAuthToken() ?? "";
+  const token = getSessionKey();
   let hash = 0;
   for (let index = 0; index < token.length; index += 1) hash = (hash * 31 + token.charCodeAt(index)) | 0;
   return String(hash);

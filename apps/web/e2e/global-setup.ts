@@ -11,8 +11,9 @@ export default async function globalSetup() {
   if (!process.env.E2E_PASSWORD) throw new Error("Falta E2E_PASSWORD en apps/web/.env.e2e (la misma del .env de la API).");
 
   const root = path.resolve(__dirname, "..", "..", "..");
-  const compose = readFileSync(path.join(root, "docker-compose.yml"), "utf8");
-  const dbPassword = compose.match(/POSTGRES_PASSWORD:\s*(\S+)/)?.[1];
+  // En GitHub (CI) la contraseña del dueño viene en E2E_DB_OWNER_PASSWORD; en local, la de docker-compose.yml.
+  const dbPassword = process.env.E2E_DB_OWNER_PASSWORD
+    ?? readFileSync(path.join(root, "docker-compose.yml"), "utf8").match(/POSTGRES_PASSWORD:\s*(\S+)/)?.[1];
   if (!dbPassword) throw new Error("No se encontró la contraseña local de la base en docker-compose.yml.");
 
   execFileSync("php", ["artisan", "db:seed", "--class=E2eSeeder", "--force"], {

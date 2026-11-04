@@ -16,7 +16,7 @@ import {
 import { PickSelect } from "@/components/ui/pick-select";
 import { ColumnFilterBar, addColumnFilter, applyFilters, useServerColumnFilters } from "@/components/dashboard/ColumnFilters";
 import { ImportModal } from "@/components/dashboard/ImportModal";
-import { getAuthToken } from "@/lib/auth";
+import { APP_HEADERS } from "@/lib/auth";
 import {
   AccountFormModal, CashCountModal, CashExpenseDetailModal, CashExpenseModal, RefillModal, TransferModal,
 } from "@/components/dashboard/finance/BankModals";
@@ -235,8 +235,7 @@ const TEMPLATE_NAME = "plantilla_extracto_bancario.xlsx";
 
 /** Descarga la plantilla de Excel del extracto (la misma que ofrece la ventana de importar). */
 async function downloadTemplate(accountId: string) {
-  const token = getAuthToken();
-  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/v1/bank-accounts/${accountId}/statements/template`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL ?? ""}/v1/bank-accounts/${accountId}/statements/template`, { headers: APP_HEADERS, credentials: "include" });
   if (!response.ok) throw new Error("No se pudo descargar la plantilla.");
   const url = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");

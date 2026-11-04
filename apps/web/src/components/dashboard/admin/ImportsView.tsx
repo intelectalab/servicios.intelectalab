@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Check, Download, FileSpreadsheet, Upload } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { getAuthToken } from "@/lib/auth";
+import { APP_HEADERS } from "@/lib/auth";
 import { excelTone, stateOf } from "@/lib/commercial";
 import { dateTime, firstError } from "@/lib/crm";
 import { exportCsv, exportXlsx, fetchAllPages, recordExport, type ExportColumn } from "@/lib/export-table";
@@ -18,10 +18,8 @@ import type { PaginatedResponse } from "@/types/customer";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
-const authHeaders = (): Record<string, string> => {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+// La sesión viaja en la cookie HttpOnly (credentials: "include"); la API pide este encabezado para escribir.
+const authHeaders = (): Record<string, string> => APP_HEADERS;
 
 const jobKey = (job: ImportJob) => job.id;
 const omitted = (job: ImportJob) => job.skipped + job.failed;
@@ -151,7 +149,7 @@ export default function ImportsView() {
     setBusy("template");
     setFileError("");
     try {
-      const response = await fetch(`${API_BASE}${entity.endpoint}/template`, { headers: authHeaders() });
+      const response = await fetch(`${API_BASE}${entity.endpoint}/template`, { headers: authHeaders(), credentials: "include" });
       if (!response.ok) throw new Error();
       const url = URL.createObjectURL(await response.blob());
       const link = document.createElement("a");
@@ -180,7 +178,7 @@ export default function ImportsView() {
       const body = new FormData();
       body.append("file", chosen);
       if (dryRun) body.append("dry_run", "1");
-      const response = await fetch(`${API_BASE}${entity.endpoint}/import`, { method: "POST", headers: { ...authHeaders(), Accept: "application/json" }, body });
+      const response = await fetch(`${API_BASE}${entity.endpoint}/import`, { method: "POST", credentials: "include", headers: { ...authHeaders(), Accept: "application/json" }, body });
       const result = await response.json().catch(() => null);
 
       if (dryRun) {

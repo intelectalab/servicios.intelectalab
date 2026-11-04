@@ -141,6 +141,26 @@ class TenantTablesGuardTest extends TestCase
             ->where('roles.tenant_id', $tenantId)->where('roles.code', 'TECHNICIAN')->where('resource', 'work_orders')->value('scope'));
     }
 
+    public function test_existing_companies_get_the_missing_base_roles_without_duplicates(): void
+    {
+        $this->makeTenant(['CRM', 'COTIZACIONES']);
+        $code = DB::table('tenants')->where('id', $this->tenantId)->value('code');
+        // Ya tenía su propio "Ventas" con otro código: no se repite.
+        DB::table('roles')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'code' => 'VENDEDORES', 'name' => 'Ventas', 'is_system' => false]);
+
+        $this->artisan('tenants:base-roles', ['--tenant' => $code, '--dry-run' => true])->assertSuccessful();
+        DB::statement("SELECT set_config('app.tenant_id', ?, false)", [$this->tenantId]);
+        $this->assertSame(0, DB::table('roles')->where('tenant_id', $this->tenantId)->where('code', 'MANAGER')->count());
+
+        $this->artisan('tenants:base-roles', ['--tenant' => $code])->assertSuccessful();
+        DB::statement("SELECT set_config('app.tenant_id', ?, false)", [$this->tenantId]);
+        $codes = DB::table('roles')->where('tenant_id', $this->tenantId)->pluck('code')->all();
+        $this->assertEqualsCanonicalizing(['VENDEDORES', 'MANAGER', 'OPERATIONS', 'TECHNICIAN', 'FINANCE', 'SUPPORT'], $codes);
+
+        // Correrlo otra vez no cambia nada.
+        $this->artisan('tenants:base-roles', ['--tenant' => $code])->expectsOutputToContain('ya tiene los roles base')->assertSuccessful();
+    }
+
     public function test_the_daily_exchange_rate_is_saved_without_overwriting_the_day_already_registered(): void
     {
         $this->makeTenant(['FINANZAS']);

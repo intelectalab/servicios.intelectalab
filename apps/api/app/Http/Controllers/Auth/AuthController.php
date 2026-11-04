@@ -12,6 +12,7 @@ use App\Services\AccessScope;
 use App\Services\AuditLogger;
 use App\Services\LoginThrottle;
 use App\Services\SecurityPolicy;
+use App\Services\SessionCookie;
 use App\Services\PlatformAuditLogger;
 use App\Services\TenantAccess;
 use Illuminate\Http\Request;
@@ -203,6 +204,8 @@ class AuthController extends Controller
         $portal = ! $user->is_super_admin
             && DB::table('portal_users')->where('user_id', $user->id)->where('status', 'ACTIVE')->update(['last_login_at' => now()]) > 0;
 
+        // El navegador guarda la sesión en una cookie que el JavaScript no lee (SessionCookie); el token
+        // también va en la respuesta para las apps y las pruebas que lo mandan en el encabezado.
         return response()->json([
             'user' => [
                 'id' => $user->id,
@@ -212,7 +215,7 @@ class AuthController extends Controller
                 'portal' => $portal,
             ],
             'token' => $token,
-        ]);
+        ])->withCookie(SessionCookie::make($token, $remember, (int) $minutes));
     }
 
     /**
@@ -646,6 +649,6 @@ class AuthController extends Controller
 
         $request->user()->currentAccessToken()->delete();
 
-        return response()->json(['message' => 'Sesión cerrada correctamente.']);
+        return response()->json(['message' => 'Sesión cerrada correctamente.'])->withCookie(SessionCookie::forget());
     }
 }

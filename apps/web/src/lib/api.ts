@@ -1,4 +1,4 @@
-import { clearAuthToken, getAuthToken } from "./auth";
+import { APP_HEADERS, clearSession, getSessionKey } from "./auth";
 
 export class ApiError extends Error {
   status: number;
@@ -95,7 +95,7 @@ export function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T>
   }
   if (options.signal || options.headers) return send<T>(path, options, method);
 
-  const key = `${getAuthToken() ?? ""} ${path}`;
+  const key = `${getSessionKey()} ${path}`;
   const pending = pendingReads.get(key);
   if (pending) return pending as Promise<T>;
 
@@ -125,8 +125,6 @@ const READ_TIMEOUT_MS = 30_000;
 export const TIMEOUT_STATUS = 0;
 
 async function send<T>(path: string, options: RequestInit, method: string): Promise<T> {
-  const token = getAuthToken();
-
   const record = method === "GET" ? null : RECORD_PATH.exec(path);
   const version = record ? seenVersions.get(`${record[1]}/${record[2]}`) : undefined;
   const repeatKey = idempotencyKey(path, method, options.body);
@@ -141,11 +139,13 @@ async function send<T>(path: string, options: RequestInit, method: string): Prom
     res = await fetch(`${API_BASE}${path}`, {
       ...options,
       signal: timeout?.signal ?? options.signal,
+      // La sesión viaja en la cookie HttpOnly que puso la API al iniciar sesión.
+      credentials: "include",
       headers: {
         // Un archivo viaja como formulario: el navegador pone su propio tipo de contenido.
         ...(options.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
         Accept: "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...APP_HEADERS,
         ...(version !== undefined ? { "If-Match": String(version) } : {}),
         ...(repeatKey ? { "Idempotency-Key": repeatKey } : {}),
         ...options.headers,
@@ -168,7 +168,7 @@ async function send<T>(path: string, options: RequestInit, method: string): Prom
 
   if (!res.ok) {
     if (res.status === 401 && typeof window !== "undefined") {
-      clearAuthToken();
+      clearSession();
       // Recarga completa a propósito: sin sesión no debe quedar nada de la anterior en memoria.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = "/login";

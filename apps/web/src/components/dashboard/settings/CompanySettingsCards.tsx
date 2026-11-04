@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { getAuthToken } from "@/lib/auth";
+import { getSessionKey } from "@/lib/auth";
 import { announceTenantName } from "@/lib/tenant-name";
 import { firstError } from "@/lib/crm";
 import { Btn, Card, Field, INPUT, LoadError } from "@/components/ui/proto";
@@ -17,7 +17,7 @@ const CURRENCIES: Record<string, string> = { PEN: "Soles (PEN)", USD: "Dólares 
 // Lo último cargado, de esta misma sesión: al volver a la pestaña General se muestra al instante
 // (sin parpadeo de carga) y se actualiza por detrás. Otra sesión en el navegador no lo ve.
 let cached: { token: string | null; identity: Identity; validity: string } | null = null;
-const fromCache = () => (cached && cached.token === getAuthToken() ? cached : null);
+const fromCache = () => (cached && cached.token === getSessionKey() ? cached : null);
 
 /**
  * Configuración → Identidad y región y Comercial (como en el prototipo), más dónde se configura
@@ -44,7 +44,7 @@ export function CompanySettingsCards({ canManage, toast }: {
     ])
       .then(([data, settings]) => {
         if (cancelled) return;
-        cached = { token: getAuthToken(), identity: data, validity: String(settings.quotation_validity_days) };
+        cached = { token: getSessionKey(), identity: data, validity: String(settings.quotation_validity_days) };
         setIdentity(data);
         setTradeName(data.trade_name);
         setValidity(String(settings.quotation_validity_days));
@@ -61,7 +61,7 @@ export function CompanySettingsCards({ canManage, toast }: {
       const data = await apiFetch<Identity>("/v1/tenant/identity", { method: "PUT", body: JSON.stringify({ trade_name: tradeName }) });
       setIdentity(data);
       setTradeName(data.trade_name);
-      cached = { token: getAuthToken(), identity: data, validity };
+      cached = { token: getSessionKey(), identity: data, validity };
       announceTenantName(data.display_name);
       toast("Nombre comercial guardado");
     } catch (err) {
@@ -79,7 +79,7 @@ export function CompanySettingsCards({ canManage, toast }: {
         method: "PUT", body: JSON.stringify({ quotation_validity_days: Number(validity) }),
       });
       setValidity(String(data.quotation_validity_days));
-      if (identity) cached = { token: getAuthToken(), identity, validity: String(data.quotation_validity_days) };
+      if (identity) cached = { token: getSessionKey(), identity, validity: String(data.quotation_validity_days) };
       toast("Vigencia guardada");
     } catch (err) {
       setErrors({ validity: firstError(err, "No se pudo guardar.") });

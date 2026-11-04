@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Loader2, Users, Check } from "lucide-react";
 import AuthShell, { item, authLabel, authInput, authInputIcon, authButton, authGhostButton, BRAND } from "./AuthShell";
-import { setAuthToken } from "@/lib/auth";
+import { startSession } from "@/lib/auth";
 import { useLoginBrand, withCompany, type LoginBrand } from "@/lib/login-brand";
 
 type LoginResponse = {
@@ -21,6 +21,8 @@ async function postJson(path: string, body: unknown): Promise<LoginResponse> {
   const base = process.env.NEXT_PUBLIC_API_URL ?? "";
   const res = await fetch(`${base}${path}`, {
     method: "POST",
+    // La API responde con la cookie HttpOnly de la sesión: el navegador la guarda.
+    credentials: "include",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify(body),
   });
@@ -62,7 +64,7 @@ export default function LoginForm({
   function finishLogin(data: LoginResponse) {
     if (!data.token) throw new Error("No se pudo iniciar sesión.");
 
-    setAuthToken(data.token, data.user?.is_super_admin ? "platform" : data.user?.portal ? "portal" : "tenant", remember);
+    startSession(data.user?.is_super_admin ? "platform" : data.user?.portal ? "portal" : "tenant", remember);
     // Cada cuenta a su consola: plataforma, portal de clientes o el sistema de la empresa.
     if (data.user?.is_super_admin) {
       router.push("/superadmin/dashboard");

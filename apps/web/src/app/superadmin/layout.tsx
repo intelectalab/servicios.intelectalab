@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Building2, CreditCard, Eye, LayoutDashboard, Plus, Receipt, Settings, ShieldCheck } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import { PROFILE_NAME_EVENT, clearAuthToken } from "@/lib/auth";
+import { PROFILE_NAME_EVENT, clearSession } from "@/lib/auth";
 import Header, { type UserProfile } from "@/components/layout/Header";
 import Sidebar, { type BuiltMenuItem } from "@/components/layout/Sidebar";
 
@@ -96,7 +96,7 @@ export default function SuperAdminLayout({ children }: { children: ReactNode }) 
     } catch {
       // Ignorar error de red y limpiar localmente
     } finally {
-      clearAuthToken();
+      clearSession();
       router.push("/login");
     }
   }

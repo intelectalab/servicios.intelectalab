@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
 import { Ban, Clock, Loader2, Lock, Wrench, type LucideIcon } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
-import { clearAuthToken } from "@/lib/auth";
+import { clearSession } from "@/lib/auth";
 import { poppins } from "@/lib/fonts";
 
 // El texto explicativo viene de la API (TenantAccess.php); aquí solo van título e ícono.
@@ -80,7 +80,7 @@ function BlockedContent() {
     } catch {
       // Con la empresa bloqueada la API rechaza la llamada; igual se limpia la sesión local.
     } finally {
-      clearAuthToken();
+      clearSession();
       router.push("/login");
     }
   }

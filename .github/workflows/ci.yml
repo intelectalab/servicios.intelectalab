@@ -95,3 +95,88 @@ jobs:
       - name: Build
         working-directory: apps/web
         run: npm run build
+  # Pruebas de punta a punta (Playwright) con la base, la API y la web compilada levantadas, como en
+  # producción: ingreso con la cookie HttpOnly, límites y vencimiento del plan, roles base y la App
+  # del técnico sin señal. Usa el Chrome que trae la máquina de GitHub.
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: erp_saas
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DB_CONNECTION: pgsql
+      DB_HOST: 127.0.0.1
+      DB_PORT: 5432
+      DB_DATABASE: erp_saas
+      DB_USERNAME: erp_app
+      DB_PASSWORD: erp_app_password
+      DB_PLATFORM_USERNAME: erp_console
+      DB_PLATFORM_PASSWORD: ci_console_password
+      # Solo existen en esta base temporal de GitHub.
+      E2E_DB_OWNER_PASSWORD: ci_owner_password
+      E2E_PASSWORD: ci-e2e-Prueba-2026
+      ADMIN_MFA_REQUIRED: 'false'
+      MAIL_MAILER: log
+      NEXT_PUBLIC_API_URL: /api
+      API_PROXY_TARGET: http://127.0.0.1:8000
+      SITE_URL: http://localhost:3000
+      APP_URL: http://app.localhost:3000
+      E2E_BASE_URL: http://app.localhost:3000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_pgsql, pgsql
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Base de datos (roles, esquema y catálogos)
+        env:
+          PGPASSWORD: ci_password
+        run: |
+          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE erp_user WITH LOGIN NOSUPERUSER PASSWORD 'ci_owner_password';
+          CREATE ROLE erp_app WITH LOGIN PASSWORD 'erp_app_password';
+          CREATE ROLE erp_platform NOLOGIN;
+          CREATE ROLE erp_console WITH LOGIN PASSWORD 'ci_console_password' IN ROLE erp_platform;
+          SQL
+          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f apps/api/database/schema_reference.sql
+          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f .github/ci-fixture.sql
+
+      - name: API
+        working-directory: apps/api
+        run: |
+          composer install --no-interaction --prefer-dist
+          cp .env.example .env
+          php artisan key:generate
+          nohup php artisan serve --host=127.0.0.1 --port=8000 > /tmp/api.log 2>&1 &
+
+      - name: Web (compilada)
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run build
+          nohup npx next start -p 3000 > /tmp/web.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:8000/up > /dev/null && curl -sf http://localhost:3000/login > /dev/null && break; sleep 2; done
+
+      - name: Pruebas E2E
+        working-directory: apps/web
+        run: npx playwright test
+
+      - name: Registros si algo falla
+        if: failure()
+        run: |
+          tail -n 80 /tmp/api.log /tmp/web.log
+          tail -n 80 apps/api/storage/logs/laravel.log || true

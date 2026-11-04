@@ -127,12 +127,19 @@ class BaseRoles
         return ['permissions' => array_keys($permissions), 'scopes' => $scopes];
     }
 
-    /** Crea los roles base en la empresa (dentro de su contexto y de una transacción). */
-    public static function create(string $tenantId, array $modules): void
+    /**
+     * Crea los roles base que le falten a la empresa (dentro de su contexto y de una transacción).
+     * No repite uno que ya tenga con el mismo código o el mismo nombre. Devuelve los creados.
+     *
+     * @return string[]
+     */
+    public static function create(string $tenantId, array $modules): array
     {
         $ids = DB::table('permissions')->pluck('id', 'code');
+        $created = [];
         foreach (self::ROLES as $code => [$name, $description]) {
-            if (DB::table('roles')->where('tenant_id', $tenantId)->where('code', $code)->exists()) {
+            if (DB::table('roles')->where('tenant_id', $tenantId)
+                ->where(fn ($query) => $query->where('code', $code)->orWhereRaw('lower(name) = lower(?)', [$name]))->exists()) {
                 continue;
             }
             $definition = self::definition($code, $modules);
@@ -147,6 +154,9 @@ class BaseRoles
             foreach ($definition['scopes'] as $resource => $scope) {
                 DB::table('role_scopes')->insert(['role_id' => $roleId, 'tenant_id' => $tenantId, 'resource' => $resource, 'scope' => $scope, 'updated_at' => now()]);
             }
+            $created[] = $name;
         }
+
+        return $created;
     }
 }

@@ -8,7 +8,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { clearAuthToken } from "@/lib/auth";
+import { clearSession } from "@/lib/auth";
 import { poppins } from "@/lib/fonts";
 import { brandVars, loadBranding, readableOnWhite, type Branding } from "@/lib/branding";
 import { PORTAL_NAV, type PortalMe, type PortalSection } from "@/lib/portal";
@@ -107,8 +107,11 @@ export default function PortalShell({ children }: { children: ReactNode }) {
         if (cancelled) return;
         // Una sesión que no es del portal (o una cuenta desactivada) vuelve al inicio de sesión.
         if (err instanceof ApiError && err.status === 403 && (err.body as { code?: string } | undefined)?.code === "NOT_PORTAL_USER") {
-          clearAuthToken();
-          router.replace("/login");
+          // La cookie de la sesión la borra la API al salir (la página no la puede borrar).
+          apiFetch("/v1/logout", { method: "POST" }).catch(() => undefined).finally(() => {
+            clearSession();
+            router.replace("/login");
+          });
           return;
         }
         setError(err instanceof ApiError && err.status === 0 ? err.message : "No se pudo cargar tu portal.");
@@ -167,7 +170,7 @@ export default function PortalShell({ children }: { children: ReactNode }) {
     } catch {
       // Aunque falle, la sesión se cierra en este navegador.
     } finally {
-      clearAuthToken();
+      clearSession();
       router.replace("/login");
     }
   }

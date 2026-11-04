@@ -315,13 +315,13 @@ Revisados el 2026-11-02 contra el prototipo, el código y la base. Del menú del
 - La cuenta de superadmin sigue siendo miembro de `EMP-5E380F` (Yadi SAC), membresía anterior a los triggers; el sistema la ignora. Falta decidir si se borra.
 - El contenido de Planes SaaS y la landing sigue con el estilo anterior.
 - Canales de soporte de la plataforma: el formulario existe en Consola → Configuración; falta poner el WhatsApp y el correo reales.
-- Cookie de sesión legible por la página (el token se guarda en una cookie que el navegador puede leer).
 - En local, la caché de código de PHP (OPcache) está apagada: cada llamada tarda unos 0,33 s más (propuesto activarla en `C:\xampp\php\php.ini`).
 
 ### Resueltos el 2026-11-04
 - Vencimiento con 7 días de gracia y solo lectura; límites del plan que bloquean el alta siguiente (en la base) y avisan desde el 80 %.
 - Guardas en `tenants`, `tenant_modules` y aislamiento de `role_permissions`; roles base del kit en cada empresa nueva.
 - Fechas de negocio con el calendario de Lima (`LocalTime`); tipo de cambio diario de SUNAT; App del técnico abre sin señal; pruebas E2E con Playwright. Detalle en [cambios/2026-11-04_brechas-de-codigo-del-reporte.md](cambios/2026-11-04_brechas-de-codigo-del-reporte.md).
+- Sesión en cookie HttpOnly con protección contra CSRF; comando `tenants:base-roles`; pruebas E2E en GitHub.
 
 ### Resueltos desde la lista anterior (2026-11-02)
 - Avisos de Notificaciones: orden de compra y comprobante de proveedor por aprobar, horas y costos por aprobar, técnico asignado, ticket nuevo, asignado y escalado; correos al cliente (cotización enviada, comprobante emitido, respuesta y resolución de su ticket).

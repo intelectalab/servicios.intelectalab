@@ -53,6 +53,21 @@ Cerrar las brechas del reporte de avance (comparación con el kit) que dependen 
 - `E2eSeeder` crea dos empresas propias: "E2E Activa" (4 de 5 leads) y "E2E Vencida" (vencida hace 10 días). La contraseña sale de `E2E_PASSWORD` (en `apps/api/.env` y `apps/web/.env.e2e`, que no se suben); el seeder corre antes de cada corrida (`e2e/global-setup.ts`).
 - Flujos: aviso al 80 % y bloqueo al llegar al límite; solo lectura tras la gracia; roles base de una empresa nueva; y la App del técnico abriendo sin señal (solo contra la compilación de producción: `next build`, `next start -p 3200` y `E2E_BASE_URL=http://app.localhost:3200`).
 
+### 2.8. Cookie de sesión protegida (HttpOnly)
+
+- La API pone la sesión en la cookie `auth_token` con `HttpOnly` y `SameSite=Lax` (y `Secure` con https) al iniciar sesión, y la borra al salir o cuando responde 401 (`SessionCookie`). El JavaScript de la página ya no puede leer el token.
+- `TokenFromCookie` (al inicio del grupo `api`) toma la sesión de la cookie cuando la petición no trae su propio `Authorization`. Para escribir con la cookie exige `X-Requested-With: XMLHttpRequest` (protección contra CSRF); sin él responde 403 `CSRF_HEADER_REQUIRED`.
+- La web manda la cookie (`credentials: "include"`) y ese encabezado en `apiFetch` y en las importaciones; las cachés de la página usan una marca de sesión sin secreto (`auth_session`). Como el nombre de la cookie es el mismo, las sesiones abiertas antes del cambio siguen funcionando.
+- En desarrollo, la web llama a la API por su mismo origen (`NEXT_PUBLIC_API_URL=/api`, con el proxy de Next hacia `API_PROXY_TARGET`, por defecto `http://127.0.0.1:8000`). En el servidor no cambia nada: `/api` ya está en el mismo dominio.
+
+### 2.9. Roles base para las empresas existentes
+
+- Comando `php artisan tenants:base-roles [--tenant=CÓDIGO] [--dry-run]`: agrega a las empresas activas o en alta los roles base que les falten, con los permisos de sus módulos encendidos. No repite un rol con el mismo código o nombre y se puede volver a correr.
+
+### 2.10. Pruebas E2E en GitHub
+
+- Nuevo trabajo `e2e` en `.github/workflows/ci.yml`: base temporal, API (`artisan serve`) y web compilada (`next start` con el proxy `/api`), y las 4 pruebas con el Chrome de la máquina de GitHub. Las contraseñas solo existen en esa base temporal.
+
 ## 3. Pruebas
 
 - API: 356 pruebas (7 563 aserciones), con las nuevas `PlanLimitsAndExpiryTest`, `TenantTablesGuardTest` y `LocalTimeTest`. Las pruebas que preparan módulos fuera de un plan o empresas suspendidas usan `asPlatformFixture` (sesión de superadmin de prueba), como lo haría la consola.
@@ -63,6 +78,5 @@ Cerrar las brechas del reporte de avance (comparación con el kit) que dependen 
 ## 4. Lo que queda
 
 - En la PC, "Tenant AB - Prueba" está en Enterprise con límites de prueba (por ejemplo, 10 órdenes de trabajo): ahora esos límites bloquean. Para seguir probando, subir los límites desde la consola.
-- Las empresas que ya existen no reciben los roles base (solo las nuevas). Se puede agregar un comando si se quiere.
-- Las pruebas E2E no corren en GitHub (necesitan la API, la web y la base levantadas); quedan para correr en local antes de desplegar.
+- Para dar los roles base a las empresas que ya existían: `php artisan tenants:base-roles` en el servidor (como www-data, con php8.4).
 - Siguen dependiendo de un proveedor: OSE/PSE, pago en línea, WhatsApp, antivirus y gestor externo de secretos.

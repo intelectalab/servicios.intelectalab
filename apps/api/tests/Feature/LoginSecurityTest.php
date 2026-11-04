@@ -262,6 +262,38 @@ class LoginSecurityTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_the_browser_session_travels_in_an_http_only_cookie(): void
+    {
+        $user = $this->makeUser(['mfa_enabled' => false]);
+        $this->makeTenantFor($user, 'ACTIVE', 'VENTAS');
+
+        $login = $this->login($user)->assertOk();
+        $token = $login->json('token');
+        $cookie = collect($login->headers->getCookies())->firstWhere(fn ($c) => $c->getName() === 'auth_token');
+        $this->assertNotNull($cookie);
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertSame('lax', $cookie->getSameSite());
+        $this->assertSame($token, $cookie->getValue());
+
+        // Solo con la cookie (sin encabezado): leer funciona; escribir exige el encabezado de la app.
+        $this->app['auth']->forgetGuards();
+        $this->withCredentials()->withUnencryptedCookie('auth_token', $token)->getJson('/api/v1/me')->assertOk()->assertJsonPath('email', $user->email);
+        $this->app['auth']->forgetGuards();
+        $this->withCredentials()->withUnencryptedCookie('auth_token', $token)->postJson('/api/v1/me/notifications/read-all')
+            ->assertForbidden()->assertJsonPath('code', 'CSRF_HEADER_REQUIRED');
+        $this->app['auth']->forgetGuards();
+        $this->withCredentials()->withUnencryptedCookie('auth_token', $token)->withHeader('X-Requested-With', 'XMLHttpRequest')
+            ->postJson('/api/v1/me/notifications/read-all')->assertOk();
+
+        // Cerrar sesión borra la cookie; una cookie que ya no vale se borra con el 401.
+        $this->app['auth']->forgetGuards();
+        $logout = $this->withCredentials()->withUnencryptedCookie('auth_token', $token)->withHeader('X-Requested-With', 'XMLHttpRequest')->postJson('/api/v1/logout')->assertOk();
+        $this->assertTrue(collect($logout->headers->getCookies())->firstWhere(fn ($c) => $c->getName() === 'auth_token')->isCleared());
+        $this->app['auth']->forgetGuards();
+        $expired = $this->withCredentials()->withUnencryptedCookie('auth_token', $token)->getJson('/api/v1/me')->assertUnauthorized();
+        $this->assertTrue(collect($expired->headers->getCookies())->firstWhere(fn ($c) => $c->getName() === 'auth_token')->isCleared());
+    }
+
     public function test_if_the_mail_server_fails_the_login_says_so_instead_of_a_server_error(): void
     {
         // Servidor de correo que no responde (como cuando cambia la clave de la cuenta de envío).

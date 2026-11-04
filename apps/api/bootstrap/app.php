@@ -24,6 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'list.export' => \App\Http\Middleware\ListExport::class,
             'subscription.writable' => \App\Http\Middleware\EnsureSubscriptionWritable::class,
         ]);
+        // La sesión de la web llega en la cookie HttpOnly: se pasa al encabezado antes que todo lo demás.
+        $middleware->api(prepend: [\App\Http\Middleware\TokenFromCookie::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         // Un identificador que no tiene forma de UUID no existe: se responde "no encontrado"

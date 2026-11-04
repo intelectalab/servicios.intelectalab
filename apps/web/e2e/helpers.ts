@@ -9,6 +9,8 @@ export async function login(page: Page, email: string) {
   await page.locator("#password").fill(process.env.E2E_PASSWORD ?? "");
   await page.getByRole("button", { name: /ingresar/i }).click();
   await expect(page).not.toHaveURL(/\/login/);
+  // La sesión está en una cookie HttpOnly: la página no puede leer el token.
+  expect(await page.evaluate(() => document.cookie)).not.toContain("auth_token");
 }
 
 /** Llama a la API con la sesión de la página (el token está en la cookie auth_token). */

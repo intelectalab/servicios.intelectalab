@@ -11,7 +11,7 @@ import {
   TrendingUp, Upload, UserCog, UserRound, Wallet, Workflow, Wrench, X, Zap,
 } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
-import { PROFILE_NAME_EVENT, clearAuthToken } from "@/lib/auth";
+import { PROFILE_NAME_EVENT, clearSession } from "@/lib/auth";
 import { AccessProvider, type Scope } from "@/lib/access-context";
 import { brandVars, loadBranding, subscribeToBranding, type Branding } from "@/lib/branding";
 import Header, { type UserProfile } from "@/components/layout/Header";
@@ -275,7 +275,7 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
     } catch {
       // Si falla la llamada, igual limpiamos la sesión localmente.
     } finally {
-      clearAuthToken();
+      clearSession();
       router.push("/login");
     }
   }

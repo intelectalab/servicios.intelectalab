@@ -2,17 +2,15 @@
 
 import { useRef, useState, type DragEvent, type FormEvent, type ReactNode } from "react";
 import { CheckCircle2, Download, FileSpreadsheet, Upload } from "lucide-react";
-import { getAuthToken } from "@/lib/auth";
+import { APP_HEADERS } from "@/lib/auth";
 import { Btn, Modal, Notice } from "@/components/ui/proto";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type Result = { imported?: number; updated?: number; message?: string; warnings?: string[] };
 
-const authHeaders = (): Record<string, string> => {
-  const token = getAuthToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+// La sesión viaja en la cookie HttpOnly (credentials: "include"); la API pide este encabezado para escribir.
+const authHeaders = (): Record<string, string> => APP_HEADERS;
 
 /** Mensaje y avisos por fila de una respuesta de error de la API. */
 function failure(data: { message?: string; errors?: Record<string, string[]> } | null, status: number): [string, string[]] {
@@ -69,7 +67,7 @@ export function ImportModal({
     setBusy("template");
     setError("");
     try {
-      const response = await fetch(`${API_BASE}${endpoint}/template`, { headers: authHeaders() });
+      const response = await fetch(`${API_BASE}${endpoint}/template`, { headers: authHeaders(), credentials: "include" });
       if (!response.ok) throw new Error(failure(await response.json().catch(() => null), response.status)[0]);
 
       const url = URL.createObjectURL(await response.blob());
@@ -101,7 +99,7 @@ export function ImportModal({
       const body = new FormData();
       body.append("file", file);
       // Sin Content-Type: el navegador pone el multipart con su separador.
-      const response = await fetch(`${API_BASE}${endpoint}/import`, { method: "POST", headers: { ...authHeaders(), Accept: "application/json" }, body });
+      const response = await fetch(`${API_BASE}${endpoint}/import`, { method: "POST", credentials: "include", headers: { ...authHeaders(), Accept: "application/json" }, body });
       const data = await response.json().catch(() => null);
 
       if (!response.ok) {
