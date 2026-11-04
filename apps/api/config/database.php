@@ -97,6 +97,9 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // La app manda las horas en UTC sin zona: la conexión debe interpretarlas en UTC aunque el
+            // servidor de PostgreSQL esté en otra zona (en el VPS, Europe/Berlin).
+            'timezone' => env('DB_TIMEZONE', 'UTC'),
         ],
 
         // Consola de plataforma (superadmin): usuario propio, miembro de erp_platform.
@@ -113,6 +116,9 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // La app manda las horas en UTC sin zona: la conexión debe interpretarlas en UTC aunque el
+            // servidor de PostgreSQL esté en otra zona (en el VPS, Europe/Berlin).
+            'timezone' => env('DB_TIMEZONE', 'UTC'),
         ],
 
         'sqlsrv' => [
