@@ -34,14 +34,15 @@ class LoginSecurityTest extends TestCase
     private function makeTenantFor(User $user, string $status = 'ACTIVE', ?string $roleCode = null): string
     {
         $tenantId = (string) Str::uuid();
-        DB::table('tenants')->insert([
+        // Una empresa que nace suspendida o cerrada solo la crea la consola.
+        $this->asPlatformFixture(fn () => DB::table('tenants')->insert([
             'id' => $tenantId,
             'code' => 'test-'.Str::random(8),
             'name' => 'Test Tenant',
             'status' => $status,
             'created_at' => now(),
             'updated_at' => now(),
-        ]);
+        ]));
 
         DB::statement("SET app.tenant_id = '{$tenantId}'");
         DB::table('tenant_users')->insert([
@@ -155,7 +156,7 @@ class LoginSecurityTest extends TestCase
         Sanctum::actingAs($user);
         $this->getJson('/api/v1/me')->assertOk();
 
-        DB::table('tenants')->where('id', $tenantId)->update(['status' => 'SUSPENDED']);
+        $this->asPlatformFixture(fn () => DB::table('tenants')->where('id', $tenantId)->update(['status' => 'SUSPENDED']));
         $this->getJson('/api/v1/me')->assertStatus(403)
             ->assertJson(['code' => 'TENANT_BLOCKED', 'tenant_status' => 'SUSPENDED']);
     }
@@ -166,7 +167,7 @@ class LoginSecurityTest extends TestCase
         $tenantId = $this->makeTenantFor($user);
         $token = $user->createToken('api-token')->plainTextToken;
 
-        DB::table('tenants')->where('id', $tenantId)->update(['status' => 'CLOSED']);
+        $this->asPlatformFixture(fn () => DB::table('tenants')->where('id', $tenantId)->update(['status' => 'CLOSED']));
 
         $this->withToken($token)->postJson('/api/v1/logout')->assertOk();
         $this->assertSame(0, $user->tokens()->count());

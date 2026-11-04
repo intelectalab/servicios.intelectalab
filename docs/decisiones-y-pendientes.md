@@ -284,11 +284,7 @@ Detalle en [cambios/2026-10-23_panel-de-control-y-notificaciones.md](cambios/202
 Revisados el 2026-11-02 contra el prototipo, el código y la base. Del menú del prototipo están todas las pantallas salvo "Flujos end-to-end", que allí es una página de demostración (mapa CRM encendido / apagado con un recorrido simulado): se propone no traerla, o hacerla solo como ayuda.
 
 ### Antes de usarlo en serio
-- **Desplegar** los commits locales: al hacerlo corren las migraciones `2026_11_01_000200` a `001000`. En el VPS: `APP_URL` con la dirección pública de la API (apertura de correos), `ADMIN_MFA_REQUIRED=true` y el programador (`schedule:run`) cada minuto (`webhooks:deliver` lo necesita).
-- **Vencimiento de la suscripción:** hoy no bloquea nada; una empresa vencida sigue entrando (en local hay 4 suscripciones vencidas en ACTIVE). De los límites del plan solo se controla el de usuarios. Falta decidir qué pasa al vencer y qué otros límites bloquean.
-- **`tenants` y `tenant_modules`:** la aplicación aún puede borrar una empresa, cambiarle el estado o encender módulos sin pasar por la consola. Falta el mismo control que tienen planes y suscripciones desde el 2026-11-01. `role_permissions` tampoco tiene regla de aislamiento.
-- **Zona horaria de la aplicación en UTC:** de noche en Perú, la fecha de emisión de las órdenes y el filtro "hoy" de los listados toman el día siguiente.
-- **Empresa nueva:** nace solo con el rol Administrador; los roles base del prototipo (Gerencia, Ventas, Operaciones, Finanzas, Técnico, Soporte) no se crean solos.
+- **Desplegar** lo del 2026-11-04: corren las migraciones `2026_11_03_000100` a `000300` (límites del plan, guardas de empresas y módulos, fechas de Lima). Antes, revisar en el VPS que ninguna empresa real pase los límites de su plan (no se borra nada, pero no podrá crear más).
 - **Antivirus real** para los archivos (hoy simulado; ver [propuesta-antivirus.md](propuesta-antivirus.md)).
 - Confirmar si se corrió `php artisan tenants:sync-permissions` en el VPS.
 
@@ -300,10 +296,10 @@ Revisados el 2026-11-02 contra el prototipo, el código y la base. Del menú del
 
 ### Funciones dentro de los módulos
 - **Avisos por fecha** con una tarea programada: SLA por vencer, vencimientos de contratos y garantías, renovaciones, cobranza, recordatorios de actividades, arqueo con diferencia.
-- **Finanzas:** renovación automática de instancias recurrentes; nota de crédito parcial; transferencias entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos facturables por horas aprobadas y por hitos; editar el vencimiento de un borrador; tipo de cambio automático (hoy se trae de SUNAT con un botón).
+- **Finanzas:** renovación automática de instancias recurrentes; nota de crédito parcial; transferencias entre cuentas de distinta moneda; detracción por servicio del catálogo; eventos facturables por horas aprobadas y por hitos; editar el vencimiento de un borrador.
 - **Compras:** nota de crédito de proveedor; pagos parciales y programados; revertir un pago que incluyó el depósito de la detracción.
 - **Contabilidad:** libros electrónicos (PLE); reglas automáticas editables por empresa; planilla (cuentas 62); validar con un contador las cuentas del cierre (5911/5921). En Tenant A, los cobros PAG-2026-0001…0004 (anteriores a Bancos y caja) no tienen cuenta.
-- **Operaciones:** App del técnico: abrirla sin señal desde cero, borrar lo guardado al cerrar sesión, registrar dónde estaba el técnico; Agenda: rejilla por horas y arrastrar para reprogramar.
+- **Operaciones:** App del técnico: borrar lo guardado al cerrar sesión, registrar dónde estaba el técnico; Agenda: rejilla por horas y arrastrar para reprogramar.
 - **CRM:** pantalla para editar etapas y fuentes; asignar una actividad a otra persona; clientes como miembros de campaña; envío real de las comunicaciones de campaña.
 - **Soporte:** reclamos de garantía desde el portal.
 - **Portal:** ver los usuarios del portal en la ficha del cliente.
@@ -321,6 +317,11 @@ Revisados el 2026-11-02 contra el prototipo, el código y la base. Del menú del
 - Canales de soporte de la plataforma: el formulario existe en Consola → Configuración; falta poner el WhatsApp y el correo reales.
 - Cookie de sesión legible por la página (el token se guarda en una cookie que el navegador puede leer).
 - En local, la caché de código de PHP (OPcache) está apagada: cada llamada tarda unos 0,33 s más (propuesto activarla en `C:\xampp\php\php.ini`).
+
+### Resueltos el 2026-11-04
+- Vencimiento con 7 días de gracia y solo lectura; límites del plan que bloquean el alta siguiente (en la base) y avisan desde el 80 %.
+- Guardas en `tenants`, `tenant_modules` y aislamiento de `role_permissions`; roles base del kit en cada empresa nueva.
+- Fechas de negocio con el calendario de Lima (`LocalTime`); tipo de cambio diario de SUNAT; App del técnico abre sin señal; pruebas E2E con Playwright. Detalle en [cambios/2026-11-04_brechas-de-codigo-del-reporte.md](cambios/2026-11-04_brechas-de-codigo-del-reporte.md).
 
 ### Resueltos desde la lista anterior (2026-11-02)
 - Avisos de Notificaciones: orden de compra y comprobante de proveedor por aprobar, horas y costos por aprobar, técnico asignado, ticket nuevo, asignado y escalado; correos al cliente (cotización enviada, comprobante emitido, respuesta y resolución de su ticket).

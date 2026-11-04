@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Bancos y caja: cuentas y sus saldos, movimientos, transferencias, conciliación contra el
@@ -214,7 +215,7 @@ class TreasuryController extends Controller
                 throw ValidationException::withMessages(['from_account_id' => ['El fondo está completo.']]);
             }
 
-            return $this->moveBetween($request, $data['from_account_id'], $cash->id, $missing, 'REPOSICION-'.now()->toDateString(), null, 'treasury.refill');
+            return $this->moveBetween($request, $data['from_account_id'], $cash->id, $missing, 'REPOSICION-'.LocalTime::today()->toDateString(), null, 'treasury.refill');
         });
 
         return response()->json($result, 201);

@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 class OrderController extends Controller
 {
@@ -125,7 +126,7 @@ class OrderController extends Controller
                 'quotation_id' => $quotation->id,
                 'order_number' => $number,
                 'status' => 'DRAFT',
-                'order_date' => now()->toDateString(),
+                'order_date' => LocalTime::today()->toDateString(),
                 'currency' => $quotation->currency,
                 'total' => $quotation->total,
                 'notes' => "Orden directa desde {$quotation->quotation_number}",

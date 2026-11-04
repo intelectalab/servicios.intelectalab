@@ -24,7 +24,7 @@ class Payable extends Model
     public const OPEN = ['OPEN', 'PARTIAL'];
 
     /** Días que faltan para el vencimiento de la fila (negativo si ya venció). */
-    public const DAYS_TO_DUE = '(payables.due_date - CURRENT_DATE)';
+    public const DAYS_TO_DUE = "(payables.due_date - (now() AT TIME ZONE 'America/Lima')::date)";
 
     /** Movimiento => texto visible. */
     public const MOVEMENTS = ['CHARGE' => 'Cargo', 'PAYMENT' => 'Pago', 'DETRACTION' => 'Depósito de detracción', 'RETENTION_4TA' => 'Retención 4.ª categoría'];

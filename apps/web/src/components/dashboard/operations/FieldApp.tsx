@@ -119,6 +119,14 @@ export default function FieldApp() {
   }, [refreshQueue]);
 
   useEffect(() => {
+    // Guarda la pantalla en el teléfono para poder abrirla después sin señal (public/sw.js). Solo en producción:
+    // en desarrollo los archivos cambian a cada rato.
+    if (process.env.NODE_ENV === "production" && "serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" }).catch(() => undefined);
+    }
+  }, []);
+
+  useEffect(() => {
     // Si la persona eligió trabajar sin conexión, se respeta al volver a abrir la app.
     const manual = offlineMode();
     const saved = manual ? savedRoute(technicianId || undefined) : null;

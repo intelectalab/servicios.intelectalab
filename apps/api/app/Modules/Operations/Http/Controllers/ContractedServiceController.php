@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Servicios contratados: la instancia operativa de cada línea vendida. Nacen al activar el
@@ -260,7 +261,7 @@ class ContractedServiceController extends Controller
             'status' => 'ACTIVE',
             'frequency' => $recurrence->frequency,
             'interval_value' => $recurrence->interval_value,
-            'next_cycle_date' => max($service->start_date?->toDateString() ?? '', now()->toDateString()),
+            'next_cycle_date' => max($service->start_date?->toDateString() ?? '', LocalTime::today()->toDateString()),
             // Lo pactado en el servicio contratado: cambiar el catálogo no altera sus ciclos.
             ...Recurrence::snapshot($service),
             'created_at' => now(),

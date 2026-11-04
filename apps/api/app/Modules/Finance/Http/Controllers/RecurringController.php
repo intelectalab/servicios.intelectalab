@@ -16,6 +16,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Servicios recurrentes: instancias que se cobran por ciclos. Nacen al activar un servicio
@@ -77,11 +78,11 @@ class RecurringController extends Controller
         $days = RecurringInstance::RENEWAL_ALERT_DAYS;
         $alerts = $this->listing()->where('recurring_service_instances.status', 'ACTIVE')
             ->whereNotNull('recurring_service_instances.end_date')
-            ->where('recurring_service_instances.end_date', '<', today()->addDays($days)->toDateString())
+            ->where('recurring_service_instances.end_date', '<', LocalTime::today()->addDays($days)->toDateString())
             ->orderBy('recurring_service_instances.end_date');
 
         return response()->json([
-            'due' => RecurringInstance::query()->where('status', 'ACTIVE')->where('next_cycle_date', '<=', today()->toDateString())->count(),
+            'due' => RecurringInstance::query()->where('status', 'ACTIVE')->where('next_cycle_date', '<=', LocalTime::today()->toDateString())->count(),
             'alert_days' => $days,
             'alerts_total' => $alerts->clone()->count(),
             'alerts' => $alerts->limit(20)->get()->map(fn (RecurringInstance $instance) => [
@@ -113,7 +114,7 @@ class RecurringController extends Controller
             ->pluck('id')->all();
         abort_if($single && ! $ids, 404);
 
-        $horizon = $single ? today()->addDays(Recurrence::SINGLE_HORIZON_DAYS) : today();
+        $horizon = $single ? LocalTime::today()->addDays(Recurrence::SINGLE_HORIZON_DAYS) : LocalTime::today();
         $summary = Recurrence::run($ids, $horizon, $request->user()->id, $single);
 
         return response()->json($summary);
@@ -145,7 +146,7 @@ class RecurringController extends Controller
 
         DB::transaction(function () use ($request, $instance, $data) {
             $previous = $instance->status;
-            $today = today();
+            $today = LocalTime::today();
             // El tramo que se cierra empieza donde terminó el anterior (o al inicio de la instancia).
             $lastEnd = DB::table('recurring_service_prices')->where('recurring_instance_id', $instance->id)->max('valid_to');
             $from = $lastEnd ? \Illuminate\Support\Carbon::parse($lastEnd)->addDay() : ($instance->start_date ?? $instance->created_at->copy()->startOfDay());
@@ -253,7 +254,7 @@ class RecurringController extends Controller
 
     private function row(RecurringInstance $instance): array
     {
-        $due = $instance->status === 'ACTIVE' && $instance->next_cycle_date && $instance->next_cycle_date->lte(today());
+        $due = $instance->status === 'ACTIVE' && $instance->next_cycle_date && $instance->next_cycle_date->lte(LocalTime::today());
 
         return [
             'id' => $instance->id,
@@ -268,10 +269,10 @@ class RecurringController extends Controller
             'next_cycle_date' => $instance->next_cycle_date?->toDateString(),
             'due' => $due,
             // Días que faltan para el ciclo que toca (negativo si ya venció).
-            'days_to_next' => $instance->next_cycle_date ? (int) today()->diffInDays($instance->next_cycle_date, false) : null,
+            'days_to_next' => $instance->next_cycle_date ? (int) LocalTime::today()->diffInDays($instance->next_cycle_date, false) : null,
             'start_date' => $instance->start_date?->toDateString(),
             'end_date' => $instance->end_date?->toDateString(),
-            'renewal_due' => $instance->status === 'ACTIVE' && $instance->end_date && $instance->end_date->lt(today()->addDays(RecurringInstance::RENEWAL_ALERT_DAYS)),
+            'renewal_due' => $instance->status === 'ACTIVE' && $instance->end_date && $instance->end_date->lt(LocalTime::today()->addDays(RecurringInstance::RENEWAL_ALERT_DAYS)),
             'cycles_count' => (int) $instance->cycles_count,
             'status' => $instance->status,
             'status_reason' => $instance->status_reason,

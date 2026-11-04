@@ -45,7 +45,7 @@ class ModuleAccessTest extends TestCase
         ]);
 
         foreach ($modules as $code) {
-            DB::table('tenant_modules')->insert([
+            $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
                 'id' => (string) Str::uuid(),
                 'tenant_id' => $tenantId,
                 'module_code' => $code,
@@ -53,7 +53,7 @@ class ModuleAccessTest extends TestCase
                 'configuration' => '{}',
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ]));
         }
 
         if ($permissions) {

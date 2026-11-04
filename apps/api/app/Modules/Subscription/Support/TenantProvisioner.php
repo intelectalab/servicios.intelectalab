@@ -14,8 +14,8 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Alta de una empresa: tenant, empresa (datos fiscales), sede principal si se
- * indica, administrador con el rol ADMIN de sistema, módulos del plan con sus
- * permisos y suscripción. Lo usan el registro público y "Aprovisionar tenant"
+ * indica, administrador con el rol ADMIN de sistema, suscripción, módulos del plan
+ * con sus permisos y los roles base (BaseRoles). Lo usan el registro público y "Aprovisionar tenant"
  * de la consola. Debe llamarse dentro de una transacción.
  */
 class TenantProvisioner
@@ -101,21 +101,7 @@ class TenantProvisioner
         $plan = $data['plan'];
         $modules = $data['modules'] ?? collect($plan->modules ?? [])->filter()->keys()->map(fn ($code) => strtoupper($code))->all();
 
-        foreach ($modules as $code) {
-            TenantModule::create([
-                'tenant_id' => $tenant->id,
-                'module_code' => strtoupper($code),
-                'enabled' => true,
-                'activated_at' => now(),
-                'configuration' => [],
-            ]);
-        }
-
-        $permissionIds = DB::table('permissions')->whereIn('code', ModulePermissions::codesFor($modules))->pluck('id');
-        foreach ($permissionIds as $permissionId) {
-            DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
-        }
-
+        // Primero la suscripción: la base solo deja encender los módulos que incluye el plan vigente.
         $hasTrial = $data['trial'];
         $trialDays = $hasTrial ? ($plan->trial_days ?? 30) : 0;
         $endsAt = $trialDays > 0 ? now()->addDays($trialDays) : ($data['billing_period'] === 'ANNUAL' ? now()->addYear() : now()->addMonth());
@@ -132,6 +118,24 @@ class TenantProvisioner
                 'trial_days' => $trialDays,
             ],
         ]);
+
+        foreach ($modules as $code) {
+            TenantModule::create([
+                'tenant_id' => $tenant->id,
+                'module_code' => strtoupper($code),
+                'enabled' => true,
+                'activated_at' => now(),
+                'configuration' => [],
+            ]);
+        }
+
+        $permissionIds = DB::table('permissions')->whereIn('code', ModulePermissions::codesFor($modules))->pluck('id');
+        foreach ($permissionIds as $permissionId) {
+            DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
+        }
+
+        // Roles base del kit (Gerencia, Ventas, Operaciones, Técnico, Finanzas, Soporte) con lo de sus módulos.
+        BaseRoles::create((string) $tenant->id, $modules);
 
         return compact('tenant', 'user', 'plan', 'hasTrial', 'endsAt', 'modules');
     }

@@ -7,6 +7,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Libro diario: escribe asientos y extornos. Todo asiento pasa por aquí.
@@ -137,7 +138,7 @@ class Ledger
                 'cost_center_id' => $line->cost_center_id, 'party_id' => $line->party_id, 'note' => $line->note,
             ])->all();
 
-        $reversal = self::post($tenantId, $date ?? now()->toDateString(), "Extorno de {$entry->entry_number} · {$reason}",
+        $reversal = self::post($tenantId, $date ?? LocalTime::today()->toDateString(), "Extorno de {$entry->entry_number} · {$reason}",
             ['type' => 'REVERSAL', 'id' => $entry->id, 'number' => $entry->entry_number, 'reversal_of' => $entry->id], $lines, $userId);
 
         DB::table('acc_journal_entries')->where('id', $entry->id)->update(['status' => 'REVERSED', 'reversed_by' => $reversal, 'reason' => $reason]);
@@ -177,7 +178,7 @@ class Ledger
     {
         $period = substr($date, 0, 7);
         if (self::isClosed($tenantId, $period)) {
-            $date = now()->toDateString();
+            $date = LocalTime::today()->toDateString();
             if (self::isClosed($tenantId, substr($date, 0, 7))) {
                 throw ValidationException::withMessages(['date' => ['El periodo '.substr($date, 0, 7).' está cerrado: reábrelo para contabilizar.']]);
             }

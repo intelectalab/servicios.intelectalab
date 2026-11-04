@@ -239,7 +239,7 @@ class SupportTest extends TestCase
         $this->tenantId = $own;
         $this->as($agent);
         $this->getJson("/api/v1/tickets/{$foreign}")->assertNotFound();
-        DB::table('tenant_modules')->where('tenant_id', $own)->where('module_code', 'SOPORTE')->delete();
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->where('tenant_id', $own)->where('module_code', 'SOPORTE')->delete());
         $this->getJson('/api/v1/tickets')->assertStatus(403)->assertJsonPath('code', 'MODULE_DISABLED');
     }
 

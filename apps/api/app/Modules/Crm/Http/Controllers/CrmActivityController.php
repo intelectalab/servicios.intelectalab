@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Actividades comerciales: llamadas, reuniones, correos, demos y visitas ligadas a un lead o
@@ -89,7 +90,7 @@ class CrmActivityController extends Controller
     public function summary(Request $request)
     {
         $data = $request->validate(['day_start' => ['nullable', 'date'], 'day_end' => ['nullable', 'date']]);
-        $start = isset($data['day_start']) ? Carbon::parse($data['day_start']) : now()->startOfDay();
+        $start = isset($data['day_start']) ? Carbon::parse($data['day_start']) : LocalTime::startOfDay();
         $end = isset($data['day_end']) ? Carbon::parse($data['day_end']) : $start->copy()->addDay();
 
         $row = CrmActivity::query()->selectRaw('

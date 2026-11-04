@@ -211,7 +211,7 @@ class OperationsChecklistTemplatesTest extends TestCase
         $this->postJson('/api/v1/exports', ['resource' => 'checklists', 'format' => 'xlsx', 'rows' => 1])->assertOk();
 
         // Sin el módulo de Órdenes de trabajo, el permiso no vale.
-        DB::table('tenant_modules')->where('tenant_id', $this->tenantId)->where('module_code', 'ORDENES_TRABAJO')->delete();
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->where('tenant_id', $this->tenantId)->where('module_code', 'ORDENES_TRABAJO')->delete());
         $this->getJson('/api/v1/checklists')->assertStatus(403)->assertJsonPath('code', 'MODULE_DISABLED');
 
         // Otra empresa: no existe.

@@ -35,6 +35,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * "Clientes y actores": una sola identidad (persona u organización) con sus
@@ -595,7 +596,7 @@ class PartyController extends Controller
                 : [],
             'finance' => $customerId && $can('receivables.view') ? [
                 'outstanding' => (float) $receivables()->sum('balance_amount'),
-                'overdue' => (float) $receivables()->where('due_date', '<', now()->toDateString())->sum('balance_amount'),
+                'overdue' => (float) $receivables()->where('due_date', '<', LocalTime::today()->toDateString())->sum('balance_amount'),
                 'open_documents' => $receivables()->count(),
                 // Crédito usado y disponible: la deuda de todo el cliente frente a su límite (null sin límite).
                 'credit' => $party->customer ? \App\Modules\Finance\Support\CreditLimit::status($party->customer) : null,

@@ -24,3 +24,8 @@ Illuminate\Support\Facades\Schedule::command('credentials:expire')->dailyAt('00:
 // Cada minuto, los webhooks salientes pendientes y los reintentos que ya toca (Control → Integraciones).
 // Sin solaparse: si un envío lento demora, el minuto siguiente no lo repite.
 Illuminate\Support\Facades\Schedule::command('webhooks:deliver')->everyMinute()->withoutOverlapping(10);
+
+// Tipo de cambio diario (INT-FX): SUNAT publica el del día por la mañana; se intenta a las 09:00
+// y se reintenta a las 13:00 por si aún no estaba (no pisa lo que ya se guardó ese día).
+Illuminate\Support\Facades\Schedule::command('exchange-rates:sunat')->dailyAt('09:00')->timezone('America/Lima');
+Illuminate\Support\Facades\Schedule::command('exchange-rates:sunat')->dailyAt('13:00')->timezone('America/Lima');

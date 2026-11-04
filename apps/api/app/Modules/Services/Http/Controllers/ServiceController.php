@@ -22,6 +22,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 class ServiceController extends Controller
 {
@@ -103,7 +104,7 @@ class ServiceController extends Controller
                     'service_id' => $service->id,
                     'currency' => 'PEN',
                     'amount' => $request->price,
-                    'valid_from' => now()->toDateString(),
+                    'valid_from' => LocalTime::today()->toDateString(),
                     'active' => true,
                 ]);
             }
@@ -183,7 +184,7 @@ class ServiceController extends Controller
 
         $validFrom = isset($data['valid_from'])
             ? Carbon::parse($data['valid_from'])->toDateString()
-            : now()->toDateString();
+            : LocalTime::today()->toDateString();
 
         $price = DB::transaction(function () use ($service, $tenantId, $data, $validFrom) {
             foreach (ServicePrice::where('service_id', $service->id)->where('active', true)->get() as $current) {
@@ -316,7 +317,7 @@ class ServiceController extends Controller
                 if ((float) ($data['price'] ?? 0) > 0) {
                     ServicePrice::create([
                         'tenant_id' => $tenantId, 'service_id' => $service->id, 'currency' => 'PEN',
-                        'amount' => $data['price'], 'valid_from' => now()->toDateString(), 'active' => true,
+                        'amount' => $data['price'], 'valid_from' => LocalTime::today()->toDateString(), 'active' => true,
                     ]);
                 }
 

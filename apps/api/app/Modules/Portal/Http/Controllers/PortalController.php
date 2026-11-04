@@ -9,6 +9,7 @@ use App\Modules\Portal\Support\PortalInvitations;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rules\Password;
+use App\Services\LocalTime;
 
 /**
  * Portal del cliente: quién entra, su inicio y la activación de la invitación.
@@ -53,7 +54,7 @@ class PortalController extends Controller
     {
         $customerId = $request->attributes->get('portal_customer_id');
         $can = fn (string $section) => PortalAccess::can($request, $section);
-        $today = now()->toDateString();
+        $today = LocalTime::today()->toDateString();
 
         $open = $can('invoices')
             ? DB::table('receivables')->where('customer_id', $customerId)->whereIn('status', ['OPEN', 'PARTIAL'])

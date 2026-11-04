@@ -10,7 +10,7 @@ import {
   Scale, Send, Settings, Shield, ShieldCheck, ShoppingCart, Smartphone, SquareKanban, Target, ToggleLeft,
   TrendingUp, Upload, UserCog, UserRound, Wallet, Workflow, Wrench, X, Zap,
 } from "lucide-react";
-import { apiFetch } from "@/lib/api";
+import { ApiError, apiFetch } from "@/lib/api";
 import { PROFILE_NAME_EVENT, clearAuthToken } from "@/lib/auth";
 import { AccessProvider, type Scope } from "@/lib/access-context";
 import { brandVars, loadBranding, subscribeToBranding, type Branding } from "@/lib/branding";
@@ -127,7 +127,12 @@ type AccessSubscription = {
   starts_at: string;
   ends_at: string | null;
   is_trial: boolean;
+  // Vigente, en los 7 días de gracia tras vencer, o en solo lectura.
+  state?: "active" | "grace" | "read_only";
+  grace_until?: string | null;
 };
+
+type PlanLimitWarning = { key: string; label: string; used: number; limit: number; level: "near" | "reached" };
 
 type AccessResponse = {
   modules: string[];
@@ -137,6 +142,7 @@ type AccessResponse = {
   tenant: { name: string; code: string } | null;
   roles: string[];
   subscription?: AccessSubscription | null;
+  plan_limits?: PlanLimitWarning[];
 };
 
 export default function AppShell({ children, plansUrl = "/#plans" }: { children: ReactNode; plansUrl?: string }) {
@@ -158,10 +164,14 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
   const [permissionsLoading, setPermissionsLoading] = useState(true);
   const [accessLoaded, setAccessLoaded] = useState(false);
   const [accessFailed, setAccessFailed] = useState(false);
+  // Sin señal en la App del técnico: se abre con lo guardado en el teléfono (ruta y cola), sin sesión del servidor.
+  const [fieldOffline, setFieldOffline] = useState(false);
   const [accessAttempt, setAccessAttempt] = useState(0);
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [subscription, setSubscription] = useState<AccessSubscription | null>(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [planLimits, setPlanLimits] = useState<PlanLimitWarning[]>([]);
+  const [limitsDismissed, setLimitsDismissed] = useState(false);
 
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
@@ -202,6 +212,7 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
           setScopes(access.scopes ?? {});
           setTenantName(access.tenant?.name);
           setSubscription(access.subscription ?? null);
+          setPlanLimits(access.plan_limits ?? []);
           setRoleName(access.roles[0]);
           setAccessLoaded(true);
           // Al entrar al sistema, quien solo ejecuta órdenes de trabajo va a su app; si después
@@ -211,7 +222,9 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
       } catch (err) {
         console.error("Error al cargar datos de sesión", err);
         // Sin la sesión no se sabe qué puede abrir: se ofrece reintentar en vez de quedarse cargando.
-        if (!cancelled) setAccessFailed(true);
+        // En la App del técnico y sin red, se trabaja con lo guardado en el teléfono.
+        if (!cancelled && !(err instanceof ApiError) && window.location.pathname.startsWith("/campo")) setFieldOffline(true);
+        else if (!cancelled) setAccessFailed(true);
       } finally {
         if (!cancelled) setPermissionsLoading(false);
       }
@@ -324,7 +337,11 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
   const renewalDays = !bannerDismissed && subscription?.ends_at && permissions.includes("tenant.manage")
     ? daysUntil(subscription.ends_at)
     : null;
-  const showRenewal = renewalDays !== null && renewalDays <= RENEWAL_WARNING_DAYS;
+  const subscriptionState = subscription?.state ?? "active";
+  const showRenewal = subscriptionState === "active" && renewalDays !== null && renewalDays <= RENEWAL_WARNING_DAYS;
+  const showGrace = subscriptionState === "grace" && !bannerDismissed && permissions.includes("tenant.manage");
+  const reachedLimits = planLimits.filter((row) => row.level === "reached");
+  const nearLimits = planLimits.filter((row) => row.level === "near");
 
   return (
     <div className="app-page flex h-screen min-h-0 overflow-hidden">
@@ -390,7 +407,70 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
           notifications
         />
 
-        {/* Vigencia: a quien administra la empresa, cuando faltan 7 días o menos (o ya venció). Colores de aviso del sistema. */}
+        {/* Solo lectura: para todos, sin cerrar; quien administra puede ir a renovar. */}
+        {subscriptionState === "read_only" && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--p-danger-line)] bg-[var(--p-danger-soft)] px-4 py-2 text-xs text-[color:var(--p-danger-strong-text)]" data-banner="read-only">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-[var(--app-surface)] px-1.5 py-0.5 text-[10.5px] font-semibold">Solo lectura</span>
+              <span>
+                La suscripción venció el {shortDate(subscription?.ends_at ?? null)}: puedes ver y exportar, pero no crear ni modificar.{" "}
+                {permissions.includes("tenant.manage") ? "Renuévala para volver a trabajar con normalidad." : "Pide al administrador de tu empresa que la renueve."}
+              </span>
+            </div>
+            {permissions.includes("tenant.manage") && (
+              <Link href="/plan" className="rounded-md border border-[color:var(--p-danger-line)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-medium transition hover:bg-[var(--app-surface-muted)]">
+                Renovar
+              </Link>
+            )}
+          </div>
+        )}
+
+        {/* Gracia: venció, pero todo funciona hasta 7 días después. */}
+        {showGrace && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--p-notice-line)] bg-[var(--p-notice-bg)] px-4 py-2 text-xs text-[color:var(--p-notice-text)]" data-banner="grace">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-[var(--p-warning-soft)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[color:var(--p-warning-text)]">Suscripción vencida</span>
+              <span>
+                Venció el {shortDate(subscription?.ends_at ?? null)}. Tienes hasta el <strong className="font-semibold">{shortDate(subscription?.grace_until ?? null)}</strong> para renovarla; después el sistema quedará en solo lectura.
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/plan" className="rounded-md border border-[color:var(--p-notice-line)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-medium text-[color:var(--p-notice-text)] transition hover:bg-[var(--app-surface-muted)]">
+                Renovar
+              </Link>
+              <button type="button" onClick={() => setBannerDismissed(true)} className="cursor-pointer rounded p-1 transition hover:bg-[var(--p-warning-soft)]" aria-label="Cerrar aviso">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Límites del plan: a quien administra, desde el 80 % de uso. */}
+        {planLimits.length > 0 && !limitsDismissed && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--p-notice-line)] bg-[var(--p-notice-bg)] px-4 py-2 text-xs text-[color:var(--p-notice-text)]" data-banner="plan-limits">
+            <div className="flex items-center gap-2">
+              <span className="rounded bg-[var(--p-warning-soft)] px-1.5 py-0.5 text-[10.5px] font-semibold text-[color:var(--p-warning-text)]">Límites del plan</span>
+              <span>
+                {reachedLimits.length > 0 && (
+                  <>Llegaste al límite en {reachedLimits.map((row) => `${row.label.toLowerCase()} (${row.used}/${row.limit})`).join(", ")}: no se pueden crear más. </>
+                )}
+                {nearLimits.length > 0 && (
+                  <>Estás cerca del límite en {nearLimits.map((row) => `${row.label.toLowerCase()} (${row.used}/${row.limit})`).join(", ")}.</>
+                )}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href="/plan" className="rounded-md border border-[color:var(--p-notice-line)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-medium text-[color:var(--p-notice-text)] transition hover:bg-[var(--app-surface-muted)]">
+                Ver Módulos y plan
+              </Link>
+              <button type="button" onClick={() => setLimitsDismissed(true)} className="cursor-pointer rounded p-1 transition hover:bg-[var(--p-warning-soft)]" aria-label="Cerrar aviso">
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Vigencia: a quien administra la empresa, cuando faltan 7 días o menos. Colores de aviso del sistema. */}
         {showRenewal && renewalDays !== null && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[color:var(--p-notice-line)] bg-[var(--p-notice-bg)] px-4 py-2 text-xs text-[color:var(--p-notice-text)]">
             <div className="flex items-center gap-2">
@@ -405,10 +485,10 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
             </div>
             <div className="flex items-center gap-2">
               <Link
-                href="/profile"
+                href="/plan"
                 className="rounded-md border border-[color:var(--p-notice-line)] bg-[var(--app-surface)] px-2.5 py-1 text-xs font-medium text-[color:var(--p-notice-text)] transition hover:bg-[var(--app-surface-muted)]"
               >
-                Extender plan
+                Renovar
               </Link>
               <button
                 type="button"
@@ -424,7 +504,7 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
 
         <main className="min-h-0 flex-1 overflow-y-auto p-6 md:p-10">
           <AccessProvider value={{ permissions, scopes, loading: permissionsLoading }}>
-            {accessFailed ? (
+            {fieldOffline ? children : accessFailed ? (
               <Screen>
                 <Card>
                   <LoadError text="No se pudo cargar tu sesión: el servidor no respondió." onRetry={() => setAccessAttempt((n) => n + 1)} />

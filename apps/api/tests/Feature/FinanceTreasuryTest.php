@@ -510,7 +510,7 @@ class FinanceTreasuryTest extends TestCase
         $this->postJson('/api/v1/exports', ['resource' => 'treasury', 'format' => 'csv', 'rows' => 1])->assertStatus(403);
 
         // Sin el módulo Finanzas, el permiso no vale.
-        DB::table('tenant_modules')->where('tenant_id', $this->tenantId)->where('module_code', 'FINANZAS')->delete();
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->where('tenant_id', $this->tenantId)->where('module_code', 'FINANZAS')->delete());
         $this->getJson('/api/v1/bank-accounts')->assertStatus(403)->assertJsonPath('code', 'MODULE_DISABLED');
     }
 

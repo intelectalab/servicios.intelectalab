@@ -281,7 +281,7 @@ class PortalTest extends TestCase
         $this->assertTrue($this->getJson('/api/v1/portal/services')->json('services.0.renewal_requested'));
 
         // Con CRM: además nace la oportunidad, a nombre de quien vende al cliente.
-        DB::table('tenant_modules')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'module_code' => 'CRM', 'enabled' => true]);
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'module_code' => 'CRM', 'enabled' => true]));
         $crm = $this->postJson('/api/v1/portal/requests', ['service_id' => $service, 'description' => 'Cotícenme el plan anual.'])->assertCreated()->json();
         $stored = DB::table('portal_requests')->where('id', $crm['id'])->first();
         $opportunity = DB::table('crm_opportunities')->where('id', $stored->crm_opportunity_id)->first();

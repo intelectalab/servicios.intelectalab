@@ -42,9 +42,9 @@ class CrmActivitiesCampaignsScoringTest extends TestCase
         ]);
         DB::statement("SET app.tenant_id = '{$this->tenantId}'");
         foreach ($modules as $module) {
-            DB::table('tenant_modules')->insert([
+            $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'module_code' => $module, 'enabled' => true,
-            ]);
+            ]));
         }
 
         return $this->tenantId;

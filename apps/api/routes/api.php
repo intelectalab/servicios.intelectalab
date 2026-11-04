@@ -94,7 +94,7 @@ Route::prefix('v1')->group(function () {
         ->where('path', '.*')->middleware(['signed', 'throttle:60,1,files'])->name('documents.file');
 
     // idempotency: un alta enviada dos veces se registra una vez. record.version: nadie pisa la edición de otro.
-    Route::middleware(['auth:sanctum', 'tenant.context', 'idempotency', 'record.version', 'list.export'])->group(function () {
+    Route::middleware(['auth:sanctum', 'tenant.context', 'subscription.writable', 'idempotency', 'record.version', 'list.export'])->group(function () {
         // Registro de una exportación: exige el permiso de exportar del listado y queda en auditoría.
         Route::post('/exports', [\App\Http\Middleware\ListExport::class, 'record']);
 
@@ -1028,7 +1028,7 @@ Route::prefix('v1')->group(function () {
 
     // Portal del cliente: su propio contexto (portal.user); nunca pasa por tenant.context.
     // portal.section:seccion exige el portal activo en la empresa y la sección en el rol del portal.
-    Route::prefix('portal')->middleware(['auth:sanctum', 'portal.user', 'idempotency', 'record.version'])->group(function () {
+    Route::prefix('portal')->middleware(['auth:sanctum', 'portal.user', 'subscription.writable', 'idempotency', 'record.version'])->group(function () {
         Route::get('/me', [PortalController::class, 'me']);
         // La marca de la empresa, para la barra del portal y sus documentos.
         Route::get('/branding', [\App\Http\Controllers\BrandingController::class, 'show']);

@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Centros de costo y presupuestos: presupuesto anual por centro de costo y cuenta frente a lo
@@ -41,7 +42,7 @@ class BudgetController extends Controller
                 ->get()->keyBy('cost_center_id')
             : collect();
         $actuals = Budgets::actuals($tenantId, $year, $ids);
-        $committed = $year === (int) now()->year ? Budgets::committed($tenantId, $ids) : [];
+        $committed = $year === (int) LocalTime::today()->year ? Budgets::committed($tenantId, $ids) : [];
 
         $rows = $centers->map(function ($center) use ($lines, $actuals, $committed) {
             $annual = round((float) ($lines[$center->id]->annual ?? 0), 2);
@@ -114,7 +115,7 @@ class BudgetController extends Controller
     {
         $tenantId = $request->attributes->get('tenant_id');
         $years = DB::table('budgets')->where('tenant_id', $tenantId)->pluck('fiscal_year')
-            ->merge([(int) now()->year, (int) now()->year + 1])->map(fn ($year) => (int) $year)->unique()->sortDesc()->values();
+            ->merge([(int) LocalTime::today()->year, (int) LocalTime::today()->year + 1])->map(fn ($year) => (int) $year)->unique()->sortDesc()->values();
 
         return response()->json([
             'years' => $years,
@@ -132,7 +133,7 @@ class BudgetController extends Controller
     {
         $tenantId = $request->attributes->get('tenant_id');
         $year = (int) $request->validate(['year' => ['required', 'integer', 'min:2000', 'max:2100']])['year'];
-        if ($year < (int) now()->year - 1 || $year > (int) now()->year + 1) {
+        if ($year < (int) LocalTime::today()->year - 1 || $year > (int) LocalTime::today()->year + 1) {
             throw ValidationException::withMessages(['year' => ['Se prepara el presupuesto del año en curso o del siguiente.']]);
         }
         if (DB::table('budgets')->where('tenant_id', $tenantId)->where('fiscal_year', $year)->exists()) {
@@ -230,7 +231,7 @@ class BudgetController extends Controller
         if ($row->status !== 'APPROVED') {
             throw ValidationException::withMessages(['status' => ['Solo se cierra un presupuesto aprobado.']]);
         }
-        if ((int) $row->fiscal_year >= (int) now()->year) {
+        if ((int) $row->fiscal_year >= (int) LocalTime::today()->year) {
             throw ValidationException::withMessages(['status' => ["El ejercicio {$row->fiscal_year} aún no termina: su presupuesto se cierra a partir del 1 de enero de ".($row->fiscal_year + 1).'.']]);
         }
 
@@ -343,15 +344,15 @@ class BudgetController extends Controller
 
     private function year(Request $request): int
     {
-        $year = $request->integer('year', (int) now()->year);
+        $year = $request->integer('year', (int) LocalTime::today()->year);
 
-        return $year >= 2000 && $year <= 2100 ? $year : (int) now()->year;
+        return $year >= 2000 && $year <= 2100 ? $year : (int) LocalTime::today()->year;
     }
 
     /** Meses del año ya transcurridos (para "a la fecha"): todos en un año pasado, ninguno en uno futuro. */
     private function monthsElapsed(int $year): int
     {
-        return $year < (int) now()->year ? 12 : ($year > (int) now()->year ? 0 : (int) now()->month);
+        return $year < (int) LocalTime::today()->year ? 12 : ($year > (int) LocalTime::today()->year ? 0 : (int) LocalTime::today()->month);
     }
 
     private function audit(Request $request, string $action, string $type, string $id, array $metadata): void

@@ -27,6 +27,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Comprobantes: nacen en borrador desde eventos facturables del mismo cliente y moneda; al
@@ -235,7 +236,7 @@ class InvoiceController extends Controller
                 'series' => $series,
                 'number' => $number,
                 'invoice_number' => Billing::formatNumber($series, $number),
-                'issue_date' => now()->toDateString(),
+                'issue_date' => LocalTime::today()->toDateString(),
                 'issued_at' => now(),
                 'status' => 'ISSUED',
                 'exchange_rate' => $rate,
@@ -313,7 +314,7 @@ class InvoiceController extends Controller
                 'status' => 'DRAFT',
                 'currency' => $invoice->currency,
                 'exchange_rate' => $invoice->exchange_rate,
-                'due_date' => now()->toDateString(),
+                'due_date' => LocalTime::today()->toDateString(),
                 'subtotal' => -1 * (float) $invoice->subtotal,
                 'tax_total' => -1 * (float) $invoice->tax_total,
                 'total' => -1 * (float) $invoice->total,
@@ -343,7 +344,7 @@ class InvoiceController extends Controller
             $note->update([
                 'number' => $number,
                 'invoice_number' => Billing::formatNumber($series, $number),
-                'issue_date' => now()->toDateString(),
+                'issue_date' => LocalTime::today()->toDateString(),
                 'issued_at' => now(),
                 'status' => 'ISSUED',
                 'fiscal_status' => $contingency ? 'CONTINGENCY' : 'NOT_SENT',
@@ -518,7 +519,7 @@ class InvoiceController extends Controller
             $invoice->status !== 'ISSUED' || $invoice->fiscal_status !== 'ACCEPTED' => 'Solo se da de baja un comprobante emitido y aceptado por SUNAT.',
             $invoice->invoice_type === 'CREDIT_NOTE' => 'Una nota de crédito no se da de baja desde aquí.',
             ! FiscalGateway::supportsVoid($invoice->tenant_id) => 'El proveedor de facturación electrónica conectado no ofrece comunicaciones de baja.',
-            $invoice->issue_date && $invoice->issue_date->diffInDays(today()) > self::VOID_DAYS => 'Pasaron más de '.self::VOID_DAYS.' días desde la emisión: corrige con nota de crédito.',
+            $invoice->issue_date && $invoice->issue_date->diffInDays(LocalTime::today()) > self::VOID_DAYS => 'Pasaron más de '.self::VOID_DAYS.' días desde la emisión: corrige con nota de crédito.',
             $receivable && (float) $receivable->balance_amount < (float) $receivable->original_amount => 'El comprobante tiene cobros aplicados: corrige con nota de crédito.',
             DB::table('fiscal_void_requests')->where('invoice_id', $invoice->id)->whereIn('status', ['PENDING', 'ACCEPTED'])->exists() => 'El comprobante ya tiene una comunicación de baja en curso.',
             default => null,
@@ -704,7 +705,7 @@ class InvoiceController extends Controller
                 'balance_amount' => (float) $receivable->balance_amount,
                 'currency' => $receivable->currency,
                 'status' => $receivable->status,
-                'overdue' => in_array($receivable->status, Receivable::OPEN, true) && $receivable->due_date?->isBefore(today()),
+                'overdue' => in_array($receivable->status, Receivable::OPEN, true) && $receivable->due_date?->isBefore(LocalTime::today()),
                 'movements' => $receivable->movements->map(fn (ReceivableMovement $movement) => [
                     'id' => $movement->id, 'movement_type' => $movement->movement_type, 'amount' => (float) $movement->amount,
                     'reference' => $movement->reference, 'at' => $movement->created_at?->toIso8601String(),

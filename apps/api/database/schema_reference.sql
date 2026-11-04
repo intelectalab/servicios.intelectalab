@@ -417,6 +417,45 @@ CREATE FUNCTION public.check_transfer_movement() RETURNS trigger
 ALTER FUNCTION public.check_transfer_movement() OWNER TO erp_user;
 
 --
+-- Name: guard_plan_limit(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.guard_plan_limit() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+    DECLARE
+        v_owner name;
+        v_key text := TG_ARGV[0];
+        v_limit integer;
+        v_used integer;
+    BEGIN
+        SELECT r.rolname INTO v_owner FROM pg_class c JOIN pg_roles r ON r.oid = c.relowner WHERE c.oid = TG_RELID;
+        IF session_user = v_owner THEN
+            RETURN NEW;
+        END IF;
+
+        v_limit := plan_limit_for(NEW.tenant_id, v_key);
+        IF v_limit IS NULL THEN
+            RETURN NEW;
+        END IF;
+
+        PERFORM pg_advisory_xact_lock(hashtext('plan_limit:' || NEW.tenant_id::text || ':' || v_key));
+        EXECUTE format('SELECT count(*) FROM %I.%I WHERE tenant_id = $1', TG_TABLE_SCHEMA, TG_TABLE_NAME)
+            INTO v_used USING NEW.tenant_id;
+
+        IF v_used >= v_limit THEN
+            RAISE EXCEPTION 'PLAN_LIMIT_REACHED'
+                USING ERRCODE = 'P0001', DETAIL = v_key || '|' || v_limit;
+        END IF;
+        RETURN NEW;
+    END
+    $_$;
+
+
+ALTER FUNCTION public.guard_plan_limit() OWNER TO erp_user;
+
+--
 -- Name: guard_platform_tables(); Type: FUNCTION; Schema: public; Owner: erp_user
 --
 
@@ -467,6 +506,70 @@ CREATE FUNCTION public.guard_platform_tables() RETURNS trigger
 
 
 ALTER FUNCTION public.guard_platform_tables() OWNER TO erp_user;
+
+--
+-- Name: guard_tenant_tables(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.guard_tenant_tables() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    DECLARE
+        v_owner name;
+        v_has_plan boolean;
+    BEGIN
+        SELECT r.rolname INTO v_owner FROM pg_class c JOIN pg_roles r ON r.oid = c.relowner WHERE c.oid = TG_RELID;
+        IF session_user = v_owner OR platform_session_user() IS NOT NULL THEN
+            RETURN COALESCE(NEW, OLD);
+        END IF;
+
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Solo la consola de plataforma puede quitar empresas o módulos.' USING ERRCODE = '42501';
+        END IF;
+
+        IF TG_TABLE_NAME = 'tenants' THEN
+            IF TG_OP = 'INSERT' THEN
+                IF NEW.status NOT IN ('ACTIVE', 'PROVISIONING') THEN
+                    RAISE EXCEPTION 'Una empresa nueva nace activa o en alta.' USING ERRCODE = '42501';
+                END IF;
+                RETURN NEW;
+            END IF;
+            IF OLD.id IS DISTINCT FROM app_tenant_id() THEN
+                RAISE EXCEPTION 'Una empresa solo cambia sus propios datos.' USING ERRCODE = '42501';
+            END IF;
+            IF NEW.id <> OLD.id OR NEW.code <> OLD.code OR NEW.status <> OLD.status THEN
+                RAISE EXCEPTION 'El código y el estado de la empresa solo los cambia la consola de plataforma.' USING ERRCODE = '42501';
+            END IF;
+            RETURN NEW;
+        END IF;
+
+        -- tenant_modules
+        IF TG_OP = 'UPDATE' THEN
+            IF NEW.tenant_id <> OLD.tenant_id OR upper(NEW.module_code) <> upper(OLD.module_code) THEN
+                RAISE EXCEPTION 'Un módulo no cambia de empresa ni de código.' USING ERRCODE = '42501';
+            END IF;
+            IF NOT NEW.enabled OR OLD.enabled THEN
+                RETURN NEW;
+            END IF;
+        ELSIF NOT NEW.enabled THEN
+            RETURN NEW;
+        END IF;
+
+        -- Encender o agregar un módulo encendido.
+        IF plan_includes_module(NEW.tenant_id, NEW.module_code) THEN
+            RETURN NEW;
+        END IF;
+        SELECT EXISTS (SELECT 1 FROM tenant_subscriptions s WHERE s.tenant_id = NEW.tenant_id AND s.status = 'ACTIVE') INTO v_has_plan;
+        IF TG_OP = 'UPDATE' AND NOT v_has_plan AND OLD.configuration->>'disabled_by' = 'tenant' THEN
+            RETURN NEW;
+        END IF;
+        RAISE EXCEPTION 'Ese módulo no está en el plan de la empresa: lo enciende la consola de plataforma.' USING ERRCODE = '42501';
+    END
+    $$;
+
+
+ALTER FUNCTION public.guard_tenant_tables() OWNER TO erp_user;
 
 --
 -- Name: isolation_probe_targets(); Type: FUNCTION; Schema: public; Owner: erp_user
@@ -548,6 +651,49 @@ CREATE FUNCTION public.outgoing_messages_immutable() RETURNS trigger
 
 
 ALTER FUNCTION public.outgoing_messages_immutable() OWNER TO erp_user;
+
+--
+-- Name: plan_includes_module(uuid, text); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.plan_includes_module(p_tenant uuid, p_module text) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+        SELECT EXISTS (SELECT 1 FROM module_catalog c WHERE upper(c.code) = upper(p_module) AND c.is_core)
+            OR EXISTS (
+                SELECT 1
+                FROM tenant_subscriptions s
+                JOIN saas_plans p ON p.id = s.plan_id
+                CROSS JOIN LATERAL jsonb_each_text(CASE WHEN jsonb_typeof(p.modules) = 'object' THEN p.modules ELSE '{}'::jsonb END) m
+                WHERE s.tenant_id = p_tenant AND s.status = 'ACTIVE'
+                  AND upper(m.key) = upper(p_module) AND lower(m.value) IN ('true', '1')
+                  AND s.starts_at = (SELECT max(s2.starts_at) FROM tenant_subscriptions s2 WHERE s2.tenant_id = p_tenant AND s2.status = 'ACTIVE')
+            )
+    $$;
+
+
+ALTER FUNCTION public.plan_includes_module(p_tenant uuid, p_module text) OWNER TO erp_user;
+
+--
+-- Name: plan_limit_for(uuid, text); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.plan_limit_for(p_tenant uuid, p_key text) RETURNS integer
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+        SELECT CASE WHEN (p.limits->>p_key) ~ '^[0-9]+$' AND (p.limits->>p_key)::integer > 0
+                    THEN (p.limits->>p_key)::integer END
+        FROM tenant_subscriptions s
+        JOIN saas_plans p ON p.id = s.plan_id
+        WHERE s.tenant_id = p_tenant AND s.status = 'ACTIVE'
+        ORDER BY s.starts_at DESC
+        LIMIT 1
+    $_$;
+
+
+ALTER FUNCTION public.plan_limit_for(p_tenant uuid, p_key text) OWNER TO erp_user;
 
 --
 -- Name: platform_dashboard(integer); Type: FUNCTION; Schema: public; Owner: erp_user
@@ -2245,7 +2391,7 @@ CREATE TABLE public.cost_entries (
     description text,
     amount numeric(18,4) NOT NULL,
     currency character varying(10) DEFAULT 'PEN'::character varying NOT NULL,
-    incurred_at date DEFAULT CURRENT_DATE NOT NULL,
+    incurred_at date DEFAULT ((now() AT TIME ZONE 'America/Lima'::text))::date NOT NULL,
     approved boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     quantity numeric(18,4) DEFAULT 1 NOT NULL,
@@ -3436,7 +3582,7 @@ CREATE TABLE public.orders (
     quotation_id uuid,
     order_number character varying(100) NOT NULL,
     status character varying(30) DEFAULT 'DRAFT'::character varying NOT NULL,
-    order_date date DEFAULT CURRENT_DATE NOT NULL,
+    order_date date DEFAULT ((now() AT TIME ZONE 'America/Lima'::text))::date NOT NULL,
     currency character varying(10) DEFAULT 'PEN'::character varying NOT NULL,
     total numeric(18,4) DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -9348,6 +9494,20 @@ CREATE TRIGGER trg_fiscal_configurations_updated_at BEFORE UPDATE ON public.fisc
 
 
 --
+-- Name: tenant_modules trg_guard_tenant_tables; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_guard_tenant_tables BEFORE INSERT OR DELETE OR UPDATE ON public.tenant_modules FOR EACH ROW EXECUTE FUNCTION public.guard_tenant_tables();
+
+
+--
+-- Name: tenants trg_guard_tenant_tables; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_guard_tenant_tables BEFORE INSERT OR DELETE OR UPDATE ON public.tenants FOR EACH ROW EXECUTE FUNCTION public.guard_tenant_tables();
+
+
+--
 -- Name: integration_connections trg_integration_connections_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
 --
 
@@ -9422,6 +9582,69 @@ CREATE TRIGGER trg_payables_protect BEFORE UPDATE ON public.payables FOR EACH RO
 --
 
 CREATE TRIGGER trg_payables_updated_at BEFORE UPDATE ON public.payables FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: branches trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.branches FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('branches');
+
+
+--
+-- Name: crm_leads trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.crm_leads FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('crm_leads');
+
+
+--
+-- Name: crm_opportunities trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.crm_opportunities FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('crm_opportunities');
+
+
+--
+-- Name: customers trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.customers FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('clients');
+
+
+--
+-- Name: documents trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.documents FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('documents');
+
+
+--
+-- Name: portal_users trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.portal_users FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('portal_users');
+
+
+--
+-- Name: projects trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.projects FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('projects');
+
+
+--
+-- Name: services trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.services FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('services');
+
+
+--
+-- Name: work_orders trg_plan_limit; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_plan_limit BEFORE INSERT ON public.work_orders FOR EACH ROW EXECUTE FUNCTION public.guard_plan_limit('work_orders');
 
 
 --
@@ -14655,6 +14878,12 @@ ALTER TABLE public.resource_assignments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.resources ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: role_permissions; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.role_permissions ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: role_scopes; Type: ROW SECURITY; Schema: public; Owner: erp_user
 --
 
@@ -15576,6 +15805,17 @@ CREATE POLICY tenant_isolation ON public.resources USING ((tenant_id = public.ap
 
 
 --
+-- Name: role_permissions tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.role_permissions USING ((EXISTS ( SELECT 1
+   FROM public.roles r
+  WHERE ((r.id = role_permissions.role_id) AND (r.tenant_id = public.app_tenant_id()))))) WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.roles r
+  WHERE ((r.id = role_permissions.role_id) AND (r.tenant_id = public.app_tenant_id())))));
+
+
+--
 -- Name: role_scopes tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
 --
 
@@ -16006,10 +16246,24 @@ GRANT USAGE ON SCHEMA public TO erp_platform;
 
 
 --
+-- Name: FUNCTION guard_plan_limit(); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.guard_plan_limit() FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION guard_platform_tables(); Type: ACL; Schema: public; Owner: erp_user
 --
 
 REVOKE ALL ON FUNCTION public.guard_platform_tables() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION guard_tenant_tables(); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.guard_tenant_tables() FROM PUBLIC;
 
 
 --
@@ -16026,6 +16280,21 @@ GRANT ALL ON FUNCTION public.isolation_probe_targets() TO erp_app;
 
 REVOKE ALL ON FUNCTION public.message_opened(p_token text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.message_opened(p_token text) TO erp_app;
+
+
+--
+-- Name: FUNCTION plan_includes_module(p_tenant uuid, p_module text); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.plan_includes_module(p_tenant uuid, p_module text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION plan_limit_for(p_tenant uuid, p_key text); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.plan_limit_for(p_tenant uuid, p_key text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.plan_limit_for(p_tenant uuid, p_key text) TO erp_app;
 
 
 --
@@ -17513,6 +17782,9 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 86	2026_11_01_000800_messaging	74
 87	2026_11_01_000900_quotation_authorizations	75
 88	2026_11_01_001000_security_screen	76
+89	2026_11_03_000100_plan_limits_guard	77
+90	2026_11_03_000200_tenant_tables_guard	78
+91	2026_11_03_000300_local_date_defaults	79
 \.
 
 
@@ -17741,7 +18013,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 88, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 91, true);
 
 
 --

@@ -6,6 +6,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 use Throwable;
+use App\Services\LocalTime;
 
 /**
  * Tipo de cambio del dólar que publica SUNAT. Se lee de su archivo público, una línea con
@@ -40,7 +41,7 @@ class SunatExchangeRate
         $date = Carbon::create((int) $m[3], (int) $m[2], (int) $m[1])->startOfDay();
         [$buy, $sell] = [(float) $m[4], (float) $m[5]];
         // Lo publicado debe ser de estos días y tener sentido; si no, no se guarda.
-        if ($buy <= 0 || $sell <= 0 || $buy > $sell * 1.2 || abs($date->diffInDays(today(), false)) > 7) {
+        if ($buy <= 0 || $sell <= 0 || $buy > $sell * 1.2 || abs($date->diffInDays(LocalTime::today(), false)) > 7) {
             throw new RuntimeException('El tipo de cambio que publicó SUNAT no parece válido. Registra el tipo de cambio a mano.');
         }
 

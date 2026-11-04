@@ -11,6 +11,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Cierre del ejercicio: lleva al 31 de diciembre los ingresos y gastos del año a resultados
@@ -125,7 +126,7 @@ class FiscalYearController extends Controller
     /** Por qué no se puede cerrar el año, o null si se puede. */
     private function closeBlocker(string $tenantId, int $year): ?string
     {
-        if ($year >= (int) now()->year) {
+        if ($year >= (int) LocalTime::today()->year) {
             return "El ejercicio {$year} aún no termina: se cierra a partir del 1 de enero de ".($year + 1).'.';
         }
         $row = DB::table('acc_fiscal_years')->where('tenant_id', $tenantId)->where('fiscal_year', $year)->first(['status']);
@@ -207,7 +208,7 @@ class FiscalYearController extends Controller
             ->merge(DB::table('acc_journal_entries')->where('tenant_id', $tenantId)->distinct()->pluck('period'))
             ->map(fn ($period) => (int) substr(trim($period), 0, 4))
             ->merge(DB::table('acc_fiscal_years')->where('tenant_id', $tenantId)->pluck('fiscal_year'))
-            ->push((int) now()->year)
+            ->push((int) LocalTime::today()->year)
             ->unique()->sortDesc()->values()->all();
     }
 

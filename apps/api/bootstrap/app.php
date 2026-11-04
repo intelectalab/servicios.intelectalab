@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'idempotency' => \App\Http\Middleware\Idempotency::class,
             'record.version' => \App\Http\Middleware\CheckRecordVersion::class,
             'list.export' => \App\Http\Middleware\ListExport::class,
+            'subscription.writable' => \App\Http\Middleware\EnsureSubscriptionWritable::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
@@ -30,6 +31,17 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->render(function (\Illuminate\Database\QueryException $e, \Illuminate\Http\Request $request) {
             if ($e->getCode() === '22P02' && $request->is('api/*')) {
                 return response()->json(['message' => 'No encontrado.', 'code' => 'NOT_FOUND'], 404);
+            }
+        });
+
+        // Alta que el plan ya no permite (la base cuenta y bloquea): 422 con el límite y cómo subirlo.
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*') && ($limit = \App\Modules\Subscription\Support\PlanLimits::fromDatabaseError($e->getMessage()))) {
+                return response()->json([
+                    'message' => \App\Modules\Subscription\Support\PlanLimits::message($limit[0], $limit[1]),
+                    'code' => 'PLAN_LIMIT_REACHED',
+                    'limit' => ['key' => $limit[0], 'value' => $limit[1]],
+                ], 422);
             }
         });
 

@@ -162,7 +162,7 @@ class PlatformTenantController extends Controller
         }
 
         $userId = $request->user()->id;
-        $invite = DB::transaction(function () use ($tenant, $data, $reason, $userId) {
+        $invite = PlatformWrites::run(function () use ($tenant, $data, $reason, $userId) {
             $row = DB::table('tenants')->where('id', $tenant)->lockForUpdate()->first(['id', 'status']);
             abort_if(! $row, 404);
             if ($row->status !== $data['from']) {
@@ -305,7 +305,7 @@ class PlatformTenantController extends Controller
         $slug = \App\Services\LoginSlug::validate($data['login_slug'], $tenant);
         $before = \App\Services\LoginSlug::of($tenant);
 
-        DB::table('tenants')->where('id', $tenant)->update(['login_slug' => $slug, 'updated_at' => now()]);
+        PlatformWrites::run(fn () => DB::table('tenants')->where('id', $tenant)->update(['login_slug' => $slug, 'updated_at' => now()]));
         PlatformAuditLogger::log($request->user()->id, 'tenant.login_slug_changed', 'Tenant', $tenant,
             beforeData: ['login_slug' => $before], afterData: ['login_slug' => $slug]);
         \App\Services\LoginSlug::forget($before, $slug);
@@ -415,7 +415,7 @@ class PlatformTenantController extends Controller
         abort_unless(Str::isUuid($tenant), 404);
         $userId = $request->user()->id;
 
-        $result = DB::transaction(function () use ($tenant, $userId) {
+        $result = PlatformWrites::run(function () use ($tenant, $userId) {
             abort_unless(DB::table('tenants')->where('id', $tenant)->lockForUpdate()->exists(), 404);
             $this->enterTenant($tenant);
             $planId = DB::table('tenant_subscriptions')->where('tenant_id', $tenant)->where('status', 'ACTIVE')

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Costos directos de un proyecto (proveedor, licencias, materiales…). Se registran, y otra persona
@@ -96,7 +97,7 @@ class CostEntryController extends Controller
                 'unit_cost' => $data['unit_cost'],
                 'amount' => round((float) $data['quantity'] * (float) $data['unit_cost'], 2),
                 'currency' => 'PEN',
-                'incurred_at' => $data['incurred_at'] ?? now()->toDateString(),
+                'incurred_at' => $data['incurred_at'] ?? LocalTime::today()->toDateString(),
                 'approved' => false,
                 'status' => 'SUBMITTED',
                 'created_by' => $request->user()->id,

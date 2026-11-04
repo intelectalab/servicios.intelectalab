@@ -95,7 +95,8 @@ class TenantPlanTest extends TestCase
         $usage = collect($response->json('usage'))->keyBy('key');
         $limits = json_decode($plan->limits, true);
         $this->assertSame([2, (int) $limits['users'], true], [$usage['users']['used'], $usage['users']['limit'], $usage['users']['enforced']]);
-        $this->assertFalse($usage['clients']['enforced']);
+        // Desde 2026-11-03 todos los límites del plan bloquean el alta siguiente (PlanLimits).
+        $this->assertTrue($usage['clients']['enforced']);
         $this->assertEquals([297, 3], [$response->json('payments.0.amount'), $response->json('payments.0.months')]);
     }
 

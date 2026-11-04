@@ -29,6 +29,7 @@ use App\Services\AuditCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\LocalTime;
 
 /**
  * Panel de control (P-DASH-01): qué ocurre, qué requiere atención y qué resultados hay, por persona.
@@ -98,7 +99,7 @@ class DashboardController extends Controller
             'name' => (string) $request->user()->name,
             'role' => $role,
             'company' => (string) DB::table('tenants')->where('id', $this->tenantId)->value('name'),
-            'date' => today()->toDateString(),
+            'date' => LocalTime::today()->toDateString(),
             'cta' => $cta,
         ];
     }
@@ -158,7 +159,7 @@ class DashboardController extends Controller
         $kpis[] = $this->block('work_orders.view', 'work_orders', 'Órdenes de trabajo', '/work-orders', function () {
             $row = WorkOrder::query()->toBase()
                 ->selectRaw("count(*) FILTER (WHERE status IN ('ASSIGNED', 'IN_PROGRESS', 'BLOCKED')) AS running")
-                ->selectRaw("count(*) FILTER (WHERE status <> 'CANCELLED' AND scheduled_start::date = CURRENT_DATE) AS today")
+                ->selectRaw("count(*) FILTER (WHERE status <> 'CANCELLED' AND (scheduled_start AT TIME ZONE 'America/Lima')::date = (now() AT TIME ZONE 'America/Lima')::date) AS today")
                 ->selectRaw("count(*) FILTER (WHERE status = 'COMPLETED') AS completed")
                 ->first();
 
@@ -206,7 +207,7 @@ class DashboardController extends Controller
     {
         $items = [];
         $item = fn (string $key, string $tone, string $icon, int $count, string $text, ?string $href) => compact('key', 'tone', 'icon', 'count', 'text', 'href');
-        $today = today()->toDateString();
+        $today = LocalTime::today()->toDateString();
 
         if ($this->on('quotations.approve')) {
             $items[] = $item('quotations', 'info', 'file', Quotation::where('status', 'SUBMITTED')->where('created_by', '<>', $this->userId)->count(),
@@ -255,7 +256,7 @@ class DashboardController extends Controller
         }
         if ($this->on('recurring.view')) {
             $items[] = $item('renewals', 'info', 'repeat', RecurringInstance::where('status', 'ACTIVE')->whereNotNull('end_date')
-                ->where('end_date', '<', today()->addDays(RecurringInstance::RENEWAL_ALERT_DAYS)->toDateString())->count(),
+                ->where('end_date', '<', LocalTime::today()->addDays(RecurringInstance::RENEWAL_ALERT_DAYS)->toDateString())->count(),
                 'servicios recurrentes por renovar ('.RecurringInstance::RENEWAL_ALERT_DAYS.' días)', '/recurring');
             $items[] = $item('cycles', 'warning', 'repeat', RecurringInstance::where('status', 'ACTIVE')->where('next_cycle_date', '<=', $today)->count(),
                 'ciclos recurrentes vencidos por procesar', '/recurring');
@@ -433,7 +434,7 @@ class DashboardController extends Controller
     /** @return array<int, array{label: string, value: float}> */
     private function billedByMonth(int $months): array
     {
-        $from = today()->startOfMonth()->subMonths($months - 1);
+        $from = LocalTime::today()->startOfMonth()->subMonths($months - 1);
         $pen = $this->inPen('invoices.total', 'invoices.currency', 'invoices.exchange_rate');
         $sums = Invoice::query()->whereIn('invoices.status', self::BILLED)->where('issue_date', '>=', $from->toDateString())->toBase()
             ->selectRaw("to_char(issue_date, 'YYYY-MM') AS month")

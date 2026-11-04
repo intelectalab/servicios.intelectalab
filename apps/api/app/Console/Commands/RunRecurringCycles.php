@@ -7,6 +7,7 @@ use App\Modules\Finance\Support\Recurrence;
 use App\Modules\Subscription\Support\TenantModules;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use App\Services\LocalTime;
 
 class RunRecurringCycles extends Command
 {
@@ -28,13 +29,13 @@ class RunRecurringCycles extends Command
             }
 
             $ids = RecurringInstance::query()->where('tenant_id', $tenant->id)->where('status', 'ACTIVE')
-                ->whereNotNull('next_cycle_date')->where('next_cycle_date', '<=', today()->toDateString())
+                ->whereNotNull('next_cycle_date')->where('next_cycle_date', '<=', LocalTime::today()->toDateString())
                 ->orderBy('next_cycle_date')->pluck('id')->all();
             if (! $ids) {
                 continue;
             }
 
-            $summary = Recurrence::run($ids, today(), null);
+            $summary = Recurrence::run($ids, LocalTime::today(), null);
             $this->line("{$tenant->code}: {$summary['created']} procesados, {$summary['failed']} fallidos");
         }
 

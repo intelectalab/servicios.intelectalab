@@ -49,7 +49,7 @@ class TenantLoginPageTest extends TestCase
         // Inexistente, mal formado o de una empresa suspendida: igual, 404 (sin decir por qué).
         $this->getJson('/api/v1/public/login-brand/no-existe-'.Str::lower(Str::random(6)))->assertNotFound();
         $this->getJson('/api/v1/public/login-brand/%20--x')->assertNotFound();
-        DB::table('tenants')->where('id', $this->tenantId)->update(['status' => 'SUSPENDED']);
+        $this->asPlatformFixture(fn () => DB::table('tenants')->where('id', $this->tenantId)->update(['status' => 'SUSPENDED']));
         Cache::flush();
         $this->getJson("/api/v1/public/login-brand/{$slug}")->assertNotFound();
     }
@@ -130,7 +130,7 @@ class TenantLoginPageTest extends TestCase
         $this->assertDatabaseHas('platform_audit_logs', ['entity_id' => $tenantId, 'action' => 'tenant.login_link_sent']);
 
         // Empresa suspendida: no se envía (su enlace no funciona).
-        DB::table('tenants')->where('id', $tenantId)->update(['status' => 'SUSPENDED']);
+        $this->asPlatformFixture(fn () => DB::table('tenants')->where('id', $tenantId)->update(['status' => 'SUSPENDED']));
         $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/login-link")->assertStatus(422);
     }
 }

@@ -4,6 +4,7 @@ namespace App\Modules\Accounting\Support;
 
 use App\Modules\Purchasing\Support\Purchasing;
 use Illuminate\Support\Facades\DB;
+use App\Services\LocalTime;
 
 /**
  * Presupuesto por centro de costo y cuenta frente a lo ejecutado (libro diario) y lo comprometido
@@ -76,7 +77,7 @@ class Budgets
      */
     public static function check(string $tenantId, string $centerId, float $amountPen, ?string $exceptOrder = null): ?array
     {
-        $year = (int) now()->year;
+        $year = (int) LocalTime::today()->year;
         $budget = self::approved($tenantId, $year);
         if (! $budget) {
             return null;

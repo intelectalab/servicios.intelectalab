@@ -52,9 +52,9 @@ class ProtectionsTest extends TestCase
             DB::table('role_permissions')->insert(['role_id' => $roleId, 'permission_id' => $permissionId]);
         }
         foreach ($modules as $module) {
-            DB::table('tenant_modules')->insert([
+            $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => $module, 'enabled' => true,
-            ]);
+            ]));
         }
 
         return [$user, $tenantId];
@@ -150,9 +150,9 @@ class ProtectionsTest extends TestCase
         $this->getJson('/api/v1/contracts')->assertStatus(403)->assertJsonPath('code', 'PERMISSION_DENIED');
 
         // Al activarle el módulo, entra.
-        DB::table('tenant_modules')->insert([
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => 'COTIZACIONES', 'enabled' => true,
-        ]);
+        ]));
         $this->getJson('/api/v1/quotations')->assertOk();
     }
 

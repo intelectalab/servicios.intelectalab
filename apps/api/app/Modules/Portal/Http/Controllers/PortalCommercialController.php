@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /** Portal: cotizaciones (y su decisión), mis servicios, solicitudes y renovaciones. */
 class PortalCommercialController extends Controller
@@ -351,7 +352,7 @@ class PortalCommercialController extends Controller
     {
         $validUntil = substr((string) $quotation->getRawOriginal('valid_until'), 0, 10);
 
-        return $validUntil !== '' && $validUntil < now()->toDateString();
+        return $validUntil !== '' && $validUntil < LocalTime::today()->toDateString();
     }
 
     /** Exceso sobre el límite de crédito si aprobara la cotización; null si no lo supera. */

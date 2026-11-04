@@ -33,7 +33,7 @@ class Receivable extends Model
     ];
 
     /** Días de atraso de la fila (negativo o cero si aún no vence). */
-    public const DAYS_OVERDUE = '(CURRENT_DATE - receivables.due_date)';
+    public const DAYS_OVERDUE = "((now() AT TIME ZONE 'America/Lima')::date - receivables.due_date)";
 
     protected $table = 'receivables';
 

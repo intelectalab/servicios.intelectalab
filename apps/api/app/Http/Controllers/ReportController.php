@@ -18,6 +18,7 @@ use App\Services\ListSort;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use App\Services\LocalTime;
 
 /**
  * Reportes (Control → Reportes). Cada reporte lee de su módulo con los mismos modelos que sus
@@ -261,10 +262,10 @@ class ReportController extends Controller
     {
         $amount = 'recurring_service_instances.unit_price * recurring_service_instances.quantity';
         $row = $base->toBase()->select(DB::raw("
-            count(*) FILTER (WHERE recurring_service_instances.end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30) AS n30,
-            coalesce(sum({$amount}) FILTER (WHERE recurring_service_instances.end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 30), 0) AS a30,
-            count(*) FILTER (WHERE recurring_service_instances.end_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 90) AS n90,
-            count(*) FILTER (WHERE recurring_service_instances.end_date < CURRENT_DATE) AS overdue"))->first();
+            count(*) FILTER (WHERE recurring_service_instances.end_date BETWEEN (now() AT TIME ZONE 'America/Lima')::date AND (now() AT TIME ZONE 'America/Lima')::date + 30) AS n30,
+            coalesce(sum({$amount}) FILTER (WHERE recurring_service_instances.end_date BETWEEN (now() AT TIME ZONE 'America/Lima')::date AND (now() AT TIME ZONE 'America/Lima')::date + 30), 0) AS a30,
+            count(*) FILTER (WHERE recurring_service_instances.end_date BETWEEN (now() AT TIME ZONE 'America/Lima')::date AND (now() AT TIME ZONE 'America/Lima')::date + 90) AS n90,
+            count(*) FILTER (WHERE recurring_service_instances.end_date < (now() AT TIME ZONE 'America/Lima')::date) AS overdue"))->first();
 
         return [
             self::kpi('Vencen en 30 días', (int) $row->n30, 'count', null, 'S/ '.number_format((float) $row->a30, 2).' por ciclo'),
@@ -546,7 +547,7 @@ class ReportController extends Controller
                 'service' => $r->service_name,
                 'frequency' => $r->frequency,
                 'end_date' => $r->end_date?->toDateString(),
-                'days_left' => $r->end_date ? (int) today()->diffInDays($r->end_date, false) : null,
+                'days_left' => $r->end_date ? (int) LocalTime::today()->diffInDays($r->end_date, false) : null,
                 'currency' => $r->currency,
                 'amount' => round((float) $r->unit_price * (float) $r->quantity, 2),
             ],

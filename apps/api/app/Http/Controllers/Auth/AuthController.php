@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Mail\MfaCodeMail;
 use App\Models\User;
+use App\Modules\Subscription\Support\PlanLimits;
+use App\Modules\Subscription\Support\SubscriptionState;
 use App\Modules\Subscription\Support\TenantModules;
 use App\Services\AccessScope;
 use App\Services\AuditLogger;
@@ -368,7 +370,7 @@ class AuthController extends Controller
                 'starts_at' => $activeSub->starts_at,
                 'ends_at' => $activeSub->ends_at,
                 'is_trial' => (bool) ($config['is_trial'] ?? false),
-            ];
+            ] + array_intersect_key(SubscriptionState::for((string) $tenantId), ['state' => 1, 'grace_until' => 1]);
         }
 
         return response()->json([
@@ -383,6 +385,8 @@ class AuthController extends Controller
             'tenant' => $tenantId ? DB::table('tenants')->where('id', $tenantId)->first(['name', 'code', 'legal_name']) : null,
             // Suscripción y vigencia de la empresa para alertas preventivas de renovación.
             'subscription' => $subData,
+            // Límites del plan al 80 % o más, para el aviso a quien administra la empresa.
+            'plan_limits' => $tenantId && $request->user()->hasPermission('tenant.manage') ? PlanLimits::warnings((string) $tenantId) : [],
             // Canales de contacto y soporte de la plataforma SaaS (configurables por superadmin).
             'support' => \App\Modules\Subscription\Support\PlatformSettings::support(),
             // Razón social y RUC de la empresa, para los documentos que se descargan (cotización en PDF).

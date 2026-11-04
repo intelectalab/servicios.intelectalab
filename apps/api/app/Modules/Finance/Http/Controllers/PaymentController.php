@@ -22,6 +22,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Cobros: se registran, se aplican a una o varias cuentas por cobrar del cliente (de la misma
@@ -410,7 +411,7 @@ class PaymentController extends Controller
                 'amount' => -1 * $amount, 'reference' => $payment->payment_number, 'payment_id' => $payment->id, 'created_by' => $request->user()->id,
             ]);
             // La diferencia de cambio de esta aplicación va al libro diario.
-            Posting::receivableFx($payment->tenant_id, $movement->id, $difference, now()->toDateString(), $payment->payment_number, $payment->customer_id, $request->user()->id);
+            Posting::receivableFx($payment->tenant_id, $movement->id, $difference, LocalTime::today()->toDateString(), $payment->payment_number, $payment->customer_id, $request->user()->id);
 
             $available = round($available - $amount, 2);
             $applied = round($applied + $amount, 2);

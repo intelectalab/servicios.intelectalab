@@ -10,6 +10,7 @@ use App\Services\AuditLogger;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\LocalTime;
 
 /**
  * Ciclos de los servicios recurrentes: cada periodo vencido de una instancia activa deja su
@@ -36,7 +37,7 @@ class Recurrence
             'unit_price' => round((float) $contracted->price, 4),
             'quantity' => (float) $contracted->quantity > 0 ? (float) $contracted->quantity : 1,
             'currency' => in_array($contract?->currency, ['PEN', 'USD'], true) ? $contract->currency : 'PEN',
-            'start_date' => $start ? Carbon::parse($start)->toDateString() : now()->toDateString(),
+            'start_date' => $start ? Carbon::parse($start)->toDateString() : LocalTime::today()->toDateString(),
             'end_date' => $end ? Carbon::parse($end)->toDateString() : null,
             // Por alcance, la instancia es de quien lleva el servicio o, si nadie, de quien vendió el contrato.
             'owner_user_id' => $contracted->owner_user_id ?? $contract?->created_by,

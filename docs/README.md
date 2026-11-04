@@ -110,6 +110,7 @@ Aquí queda escrito qué se va cambiando en el ERP al llevarlo al diseño del pr
 | 2026-11-01 | Seguridad y aislamiento (Administración): prueba de aislamiento real, controles comprobados, actividad de acceso y política de la empresa (código para todos, duración, inactividad) | [cambios/2026-11-01_seguridad-y-aislamiento.md](cambios/2026-11-01_seguridad-y-aislamiento.md) |
 | 2026-11-01 | Configuración: Identidad y región (nombre comercial; razón social, RUC, zona y moneda de solo lectura), vigencia por defecto de cotizaciones y enlaces a lo que se configura en otras pantallas | [cambios/2026-11-01_configuracion-identidad-y-comercial.md](cambios/2026-11-01_configuracion-identidad-y-comercial.md) |
 | 2026-11-03 | Revisión previa a la revisión con Claude: pruebas, lint, compilación y claves; Next.js 16.4.3 y dependencias de la web sin fallas críticas ni altas; `.env.example` de la web | [cambios/2026-11-03_revision-previa-y-dependencias.md](cambios/2026-11-03_revision-previa-y-dependencias.md) |
+| 2026-11-04 | Brechas de código del reporte: vencimiento con gracia y solo lectura, límites del plan que bloquean y avisan al 80 %, guardas en empresas, módulos y permisos, roles base, hora de Lima, tipo de cambio diario, App del técnico sin señal y pruebas E2E | [cambios/2026-11-04_brechas-de-codigo-del-reporte.md](cambios/2026-11-04_brechas-de-codigo-del-reporte.md) |
 
 ## Cómo se escribe cada entrada
 

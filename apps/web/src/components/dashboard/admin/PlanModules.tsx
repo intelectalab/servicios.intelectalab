@@ -65,15 +65,14 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
   );
 }
 
-/** Aviso bajo la barra: al llegar al límite, o cuando queda poco (85 % o más), con el pedido para ampliarlo. */
+/** Aviso bajo la barra desde el 80 % (como el de la cabecera): al llegar al límite ya no se puede crear más. */
 function LimitNote({ label, used, limit, onRequest }: { label: string; used: number; limit: number; onRequest: (text: string) => void }) {
-  if (used < limit * 0.85) return null;
+  if (used < limit * 0.8) return null;
   const reached = used >= limit;
   const left = limit - used;
   return (
-    // Desde el 85 % la barra ya está en rojo: el aviso va del mismo color.
-    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-[color:var(--p-danger-text)]">
-      <span className="font-medium">{reached ? "Llegaste al límite de tu plan" : `Te ${left === 1 ? "queda 1" : `quedan ${left.toLocaleString("es-PE")}`}`}</span>
+    <p className={`mt-1 flex flex-wrap items-center gap-x-2 text-xs ${reached || used >= limit * 0.85 ? "text-[color:var(--p-danger-text)]" : "text-[color:var(--p-warning-text)]"}`}>
+      <span className="font-medium">{reached ? "Llegaste al límite de tu plan: no se pueden crear más" : `Te ${left === 1 ? "queda 1" : `quedan ${left.toLocaleString("es-PE")}`}`}</span>
       <button type="button" onClick={() => onRequest(`Quisiera ampliar el límite de ${label.toLowerCase()} de mi plan (hoy ${used.toLocaleString("es-PE")} de ${limit.toLocaleString("es-PE")}).`)} className="cursor-pointer font-semibold text-[color:var(--p-brand-text)] underline-offset-2 hover:underline">
         Solicitar más
       </button>

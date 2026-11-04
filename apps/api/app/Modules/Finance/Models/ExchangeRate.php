@@ -4,6 +4,7 @@ namespace App\Modules\Finance\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
+use App\Services\LocalTime;
 
 class ExchangeRate extends Model
 {
@@ -37,7 +38,7 @@ class ExchangeRate extends Model
     public static function current(string $currency = 'USD', ?string $date = null): ?self
     {
         return static::where('currency', $currency)
-            ->where('rate_date', '<=', $date ?? now()->toDateString())
+            ->where('rate_date', '<=', $date ?? LocalTime::today()->toDateString())
             ->orderByDesc('rate_date')
             ->first();
     }

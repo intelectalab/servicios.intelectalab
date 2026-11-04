@@ -6,6 +6,7 @@ use App\Modules\Services\Models\Quotation;
 use App\Services\AuditLogger;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use App\Services\LocalTime;
 
 class ExpireQuotations extends Command
 {
@@ -23,7 +24,7 @@ class ExpireQuotations extends Command
 
             // Válida hasta el día indicado inclusive: vence desde el día siguiente (igual que al aprobar).
             $due = Quotation::ignoringAccessScope()->where('tenant_id', $tenant->id)->where('status', 'SUBMITTED')
-                ->whereNotNull('valid_until')->where('valid_until', '<', today()->toDateString())
+                ->whereNotNull('valid_until')->where('valid_until', '<', LocalTime::today()->toDateString())
                 ->orderBy('valid_until')->get();
             if ($due->isEmpty()) {
                 continue;

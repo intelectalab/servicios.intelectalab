@@ -39,9 +39,9 @@ class AccessScopeTest extends TestCase
         DB::statement("SET app.tenant_id = '{$this->tenantId}'");
 
         foreach (['SERVICIOS', 'COTIZACIONES', 'CONTRATOS'] as $module) {
-            DB::table('tenant_modules')->insert([
+            $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'module_code' => $module, 'enabled' => true,
-            ]);
+            ]));
         }
         DB::table('companies')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'code' => 'PRINCIPAL', 'legal_name' => 'Empresa de Prueba SAC',
@@ -650,9 +650,9 @@ class AccessScopeTest extends TestCase
     public function test_customer_view_asks_for_the_permission_of_each_module(): void
     {
         $this->makeTenant();
-        DB::table('tenant_modules')->insert([
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'module_code' => 'SOPORTE', 'enabled' => true,
-        ]);
+        ]));
         [$customerId, $partyId] = $this->makeCustomer();
         DB::table('support_tickets')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'customer_id' => $customerId,
@@ -680,9 +680,9 @@ class AccessScopeTest extends TestCase
         $this->assertSame([], $view['leads']);
 
         // Con el módulo activado, el mismo permiso ya muestra los leads.
-        DB::table('tenant_modules')->insert([
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'module_code' => 'CRM', 'enabled' => true,
-        ]);
+        ]));
         $this->assertCount(1, $this->getJson("/api/v1/parties/{$partyId}")->assertOk()->json('leads'));
     }
 }

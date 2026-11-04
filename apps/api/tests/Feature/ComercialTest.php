@@ -105,9 +105,9 @@ class ComercialTest extends TestCase
         }
         $this->grantWholeCompany($tenantId, $roleId);
         foreach ($modules as $module) {
-            DB::table('tenant_modules')->insert([
+            $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
                 'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => $module, 'enabled' => true,
-            ]);
+            ]));
         }
 
         return [$user, $tenantId];
@@ -1155,9 +1155,9 @@ class ComercialTest extends TestCase
     public function test_roles_matrix_is_edited_through_the_permission_tables(): void
     {
         [$admin, $tenantId] = $this->makeTenantUser([...self::PERMISSIONS, 'users.view', 'users.manage', 'tenant.manage'], ['SERVICIOS']);
-        DB::table('tenant_modules')->insert([
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
             ['id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => 'COTIZACIONES', 'enabled' => true],
-        ]);
+        ]));
         $seller = $this->makeColleague($tenantId, 'Vendedor', ['quotations.view', 'quotations.manage']);
         $customerId = $this->makeOrganizationCustomer($tenantId, 'Minera Los Andes SAC', '20123456789');
         Sanctum::actingAs($admin);

@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /** Portal: facturas y pagos (con sus PDF y el estado de cuenta) y documentos compartidos. */
 class PortalFinanceController extends Controller
@@ -29,7 +30,7 @@ class PortalFinanceController extends Controller
     public function invoices(Request $request)
     {
         $customerId = $request->attributes->get('portal_customer_id');
-        $today = now()->toDateString();
+        $today = LocalTime::today()->toDateString();
 
         $open = DB::table('receivables')->join('invoices', 'invoices.id', '=', 'receivables.invoice_id')
             ->where('receivables.customer_id', $customerId)->whereIn('receivables.status', ['OPEN', 'PARTIAL'])
@@ -167,10 +168,10 @@ class PortalFinanceController extends Controller
         return response()->json([
             'customer' => PortalCustomer::of($customerId),
             'customer_name' => PortalCustomer::name($customerId),
-            'date' => now()->toDateString(),
+            'date' => LocalTime::today()->toDateString(),
             'rows' => $rows->map(fn ($row) => [
                 ...(array) $row, 'original_amount' => (float) $row->original_amount, 'balance_amount' => (float) $row->balance_amount,
-                'overdue' => in_array($row->status, ['OPEN', 'PARTIAL'], true) && $row->due_date && $row->due_date < now()->toDateString(),
+                'overdue' => in_array($row->status, ['OPEN', 'PARTIAL'], true) && $row->due_date && $row->due_date < LocalTime::today()->toDateString(),
             ]),
             'totals' => $rows->groupBy('currency')->map(fn ($group, $currency) => [
                 'currency' => $currency,

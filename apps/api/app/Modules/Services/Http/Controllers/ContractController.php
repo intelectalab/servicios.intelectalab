@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\DB;
 use App\Services\Notifier;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 class ContractController extends Controller
 {
@@ -323,7 +324,7 @@ class ContractController extends Controller
                 'quotation_id' => $contract->quotation_id,
                 'order_number' => $number,
                 'status' => 'DRAFT',
-                'order_date' => now()->toDateString(),
+                'order_date' => LocalTime::today()->toDateString(),
                 'currency' => $contract->currency,
                 'total' => $contract->total_value,
                 'notes' => "Orden desde {$contract->contract_number}",

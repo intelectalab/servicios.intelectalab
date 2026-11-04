@@ -15,6 +15,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Libro diario: los asientos que generan solos los documentos (ventas, cobros, compras, pagos,
@@ -178,7 +179,7 @@ class JournalController extends Controller
         Chart::ensure($tenantId);
         $accounts = DB::table('acc_accounts')->where('tenant_id', $tenantId)->where('postable', true)->where('active', true)->orderBy('code')->pluck('code')->all();
         $centers = DB::table('cost_centers')->where('tenant_id', $tenantId)->where('active', true)->orderBy('code')->limit(500)->pluck('code')->all();
-        $day = now()->startOfMonth()->addDays(min(4, now()->day - 1))->format('d/m/Y');
+        $day = LocalTime::today()->startOfMonth()->addDays(min(4, LocalTime::today()->day - 1))->format('d/m/Y');
         $center = $centers[0] ?? '';
 
         return [
@@ -268,7 +269,7 @@ class JournalController extends Controller
                 $errors[] = 'falta la fecha o no se entiende (usa día/mes/año)';
             } elseif (Ledger::isClosed($tenantId, substr($group['date'], 0, 7))) {
                 $errors[] = 'el periodo '.substr($group['date'], 0, 7).' está cerrado';
-            } elseif ($group['date'] > now()->toDateString()) {
+            } elseif ($group['date'] > LocalTime::today()->toDateString()) {
                 $errors[] = 'la fecha no puede ser futura';
             }
             if ($group['description'] === '') {

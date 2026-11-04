@@ -28,9 +28,9 @@ class AuditScreenTest extends TestCase
             'created_at' => now(), 'updated_at' => now(),
         ]);
         DB::statement("SET app.tenant_id = '{$tenantId}'");
-        DB::table('tenant_modules')->insert([
+        $this->asPlatformFixture(fn () => DB::table('tenant_modules')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'module_code' => 'COTIZACIONES', 'enabled' => true,
-        ]);
+        ]));
 
         return $this->tenantId = $tenantId;
     }

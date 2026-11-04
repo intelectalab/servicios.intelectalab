@@ -59,8 +59,12 @@ class ImportReport
                     $report->add($number, $row, $preview, $report->mark ?? 'created', $report->note);
                 } catch (ValidationException $e) {
                     $report->add($number, $row, $preview, 'error', (string) collect($e->errors())->flatten()->first());
-                } catch (QueryException) {
-                    $report->add($number, $row, $preview, 'error', 'No se pudo guardar (revisa que los datos no sean demasiado largos).');
+                } catch (QueryException $e) {
+                    // El plan llegó a su límite: las filas siguientes tampoco entran, y se dice por qué.
+                    $limit = \App\Modules\Subscription\Support\PlanLimits::fromDatabaseError($e->getMessage());
+                    $report->add($number, $row, $preview, 'error', $limit
+                        ? \App\Modules\Subscription\Support\PlanLimits::message($limit[0], $limit[1])
+                        : 'No se pudo guardar (revisa que los datos no sean demasiado largos).');
                 }
             }
 

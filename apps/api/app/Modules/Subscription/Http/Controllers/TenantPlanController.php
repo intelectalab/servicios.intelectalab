@@ -5,6 +5,7 @@ namespace App\Modules\Subscription\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Subscription\Models\SaasPlan;
 use App\Modules\Subscription\Support\ModuleCatalog;
+use App\Modules\Subscription\Support\PlanLimits;
 use App\Modules\Subscription\Support\PlatformSettings;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
@@ -38,20 +39,6 @@ class TenantPlanController extends Controller
         'DOCUMENTOS' => [['documents', 'documento', 'documentos']],
     ];
 
-    /** Límites del plan que se pueden medir: clave => [texto, tabla, ¿bloquea al pasarlo?]. */
-    private const LIMITS = [
-        'users' => ['Usuarios activos', 'tenant_users', true],
-        'clients' => ['Clientes', 'customers', false],
-        'services' => ['Servicios del catálogo', 'services', false],
-        'work_orders' => ['Órdenes de trabajo', 'work_orders', false],
-        'projects' => ['Proyectos', 'projects', false],
-        'documents' => ['Documentos', 'documents', false],
-        'portal_users' => ['Usuarios del portal', 'portal_users', false],
-        'crm_leads' => ['Leads', 'crm_leads', false],
-        'crm_opportunities' => ['Oportunidades', 'crm_opportunities', false],
-        'branches' => ['Sedes', 'branches', false],
-    ];
-
     public function show(Request $request)
     {
         $tenantId = (string) $request->attributes->get('tenant_id');
@@ -83,17 +70,7 @@ class TenantPlanController extends Controller
             ];
         })->values();
 
-        $limits = $plan?->limits ?? [];
-        $usage = collect(self::LIMITS)->filter(fn ($definition, string $key) => is_numeric($limits[$key] ?? null) && $limits[$key] > 0)
-            ->map(fn (array $definition, string $key) => [
-                'key' => $key,
-                'label' => $definition[0],
-                'used' => $key === 'users'
-                    ? DB::table('tenant_users')->where('tenant_id', $tenantId)->where('status', 'ACTIVE')->count()
-                    : DB::table($definition[1])->where('tenant_id', $tenantId)->count(),
-                'limit' => (int) $limits[$key],
-                'enforced' => $definition[2],
-            ])->values();
+        $usage = PlanLimits::usage($tenantId);
 
         return response()->json([
             'tenant' => DB::table('tenants')->where('id', $tenantId)->value('name'),

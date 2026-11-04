@@ -21,6 +21,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Services\LocalTime;
 
 /**
  * Cuentas por pagar y pagos a proveedores. Una cuenta nace al aprobar el comprobante del
@@ -215,7 +216,7 @@ class PayableController extends Controller
             'paid_at.before_or_equal' => 'La fecha no puede ser futura.',
         ]);
         $deposit = $request->boolean('deposit_detraction');
-        $paidAt = isset($data['paid_at']) ? Carbon::parse($data['paid_at'])->toDateString() : now()->toDateString();
+        $paidAt = isset($data['paid_at']) ? Carbon::parse($data['paid_at'])->toDateString() : LocalTime::today()->toDateString();
         $userId = $request->user()->id;
 
         $payment = DB::transaction(function () use ($request, $tenantId, $data, $deposit, $paidAt, $userId) {
