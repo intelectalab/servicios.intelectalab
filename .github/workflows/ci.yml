@@ -55,11 +55,13 @@ jobs:
           SQL
 
       # Estructura completa (tablas, RLS, funciones y permisos de cada rol) y catálogos de las migraciones.
+      # Se carga como un respaldo (sin disparadores): las guardas de la base solo dejan escribir los planes
+      # al dueño de las tablas o a la consola, y quien restaura aquí es postgres.
       - name: Restaurar el esquema y los catálogos
         env:
           PGPASSWORD: ci_password
         run: |
-          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f apps/api/database/schema_reference.sql
+          PGOPTIONS='-c session_replication_role=replica' psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f apps/api/database/schema_reference.sql
           psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f .github/ci-fixture.sql
 
       - name: Análisis de dependencias (SAST básico)
@@ -152,7 +154,7 @@ jobs:
           CREATE ROLE erp_platform NOLOGIN;
           CREATE ROLE erp_console WITH LOGIN PASSWORD 'ci_console_password' IN ROLE erp_platform;
           SQL
-          psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f apps/api/database/schema_reference.sql
+          PGOPTIONS='-c session_replication_role=replica' psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f apps/api/database/schema_reference.sql
           psql -h 127.0.0.1 -U postgres -d erp_saas -v ON_ERROR_STOP=1 -q -f .github/ci-fixture.sql
 
       - name: API

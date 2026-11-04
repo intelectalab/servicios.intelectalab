@@ -68,6 +68,12 @@ Cerrar las brechas del reporte de avance (comparación con el kit) que dependen 
 
 - Nuevo trabajo `e2e` en `.github/workflows/ci.yml`: base temporal, API (`artisan serve`) y web compilada (`next start` con el proxy `/api`), y las 4 pruebas con el Chrome de la máquina de GitHub. Las contraseñas solo existen en esa base temporal.
 
+### 2.11. El CI de la API volvía a fallar (arreglado)
+
+- Desde la guarda de planes del 2026-11-01, la prueba de GitHub fallaba al restaurar el esquema: `schema_reference.sql` carga los planes como `postgres`, y la guarda solo deja escribirlos al dueño de las tablas o a la consola. Ahora el CI restaura el esquema como un respaldo, sin disparadores (`PGOPTIONS='-c session_replication_role=replica'`), en el trabajo de la API y en el de E2E.
+- Con la base limpia del CI apareció una prueba que dependía del azar: el historial de accesos del Credential Vault se ordena por hora, y todo lo hecho en una misma operación tenía la misma (`now()`). Desde la migración `2026_11_04_000100` se graba la hora real de cada acceso (`clock_timestamp()`).
+- Comprobado con un PostgreSQL 17 limpio como el de GitHub: esquema, datos y las 359 pruebas en verde.
+
 ## 3. Pruebas
 
 - API: 356 pruebas (7 563 aserciones), con las nuevas `PlanLimitsAndExpiryTest`, `TenantTablesGuardTest` y `LocalTimeTest`. Las pruebas que preparan módulos fuera de un plan o empresas suspendidas usan `asPlatformFixture` (sesión de superadmin de prueba), como lo haría la consola.

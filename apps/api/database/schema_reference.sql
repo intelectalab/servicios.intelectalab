@@ -2425,7 +2425,7 @@ CREATE TABLE public.credential_access_logs (
     action character varying(50) NOT NULL,
     success boolean DEFAULT true NOT NULL,
     correlation_id uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
     reason character varying(500)
 );
 
@@ -17785,6 +17785,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 89	2026_11_03_000100_plan_limits_guard	77
 90	2026_11_03_000200_tenant_tables_guard	78
 91	2026_11_03_000300_local_date_defaults	79
+92	2026_11_04_000100_credential_access_logs_clock_time	80
 \.
 
 
@@ -18013,7 +18014,7 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 91, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 92, true);
 
 
 --
