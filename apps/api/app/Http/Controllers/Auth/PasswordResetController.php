@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class PasswordResetController extends Controller
 {
@@ -37,7 +38,12 @@ class PasswordResetController extends Controller
 
         if ($user) {
             $code = self::issueCode($user, self::CODE_TTL_MINUTES);
-            Mail::to($user->email)->send(new PasswordResetCodeMail($code, self::CODE_TTL_MINUTES));
+            try {
+                Mail::to($user->email)->send(new PasswordResetCodeMail($code, self::CODE_TTL_MINUTES));
+            } catch (TransportExceptionInterface $e) {
+                // Se registra, pero la respuesta es la misma: un error aquí delataría que el correo existe.
+                report($e);
+            }
         }
 
         return response()->json([

@@ -262,6 +262,24 @@ class LoginSecurityTest extends TestCase
         Mail::assertNothingSent();
     }
 
+    public function test_if_the_mail_server_fails_the_login_says_so_instead_of_a_server_error(): void
+    {
+        // Servidor de correo que no responde (como cuando cambia la clave de la cuenta de envío).
+        config(['mail.default' => 'smtp', 'mail.mailers.smtp.host' => '127.0.0.1', 'mail.mailers.smtp.port' => 1, 'mail.mailers.smtp.timeout' => 2]);
+        app('mail.manager')->forgetMailers();
+        $admin = $this->makeUser(['mfa_enabled' => false]);
+        $this->makeTenantFor($admin, 'ACTIVE', 'ADMIN');
+
+        $this->login($admin)->assertStatus(503)
+            ->assertJsonPath('code', 'MAIL_UNAVAILABLE')
+            ->assertJsonPath('message', 'No pudimos enviar el código de verificación a tu correo. Inténtalo de nuevo en unos minutos; si sigue pasando, avisa a soporte de la plataforma.')
+            ->assertJsonMissingPath('mfa_token');
+
+        // Recuperar la contraseña responde igual que siempre (no delata que el correo existe).
+        $this->postJson('/api/v1/forgot-password', ['email' => $admin->email])->assertOk()
+            ->assertJsonPath('message', 'Si el correo existe, enviamos un código de 6 caracteres.');
+    }
+
     public function test_super_admin_always_needs_the_second_step(): void
     {
         Mail::fake();

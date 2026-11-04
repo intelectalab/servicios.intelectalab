@@ -22,6 +22,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AuthController extends Controller
 {
@@ -156,7 +157,19 @@ class AuthController extends Controller
             'expires_at' => $expiresAt,
         ], $expiresAt);
 
-        Mail::to($user->email)->send(new MfaCodeMail($code, self::MFA_TTL_MINUTES));
+        try {
+            Mail::to($user->email)->send(new MfaCodeMail($code, self::MFA_TTL_MINUTES));
+        } catch (TransportExceptionInterface $e) {
+            // El servidor de correo no aceptó el envío (caído o con la clave cambiada): el código no
+            // llegará, así que se descarta y se avisa con claridad en vez de un error del servidor.
+            report($e);
+            Cache::forget('mfa:'.$token);
+
+            return response()->json([
+                'message' => 'No pudimos enviar el código de verificación a tu correo. Inténtalo de nuevo en unos minutos; si sigue pasando, avisa a soporte de la plataforma.',
+                'code' => 'MAIL_UNAVAILABLE',
+            ], 503);
+        }
 
         return response()->json([
             'mfa_required' => true,
