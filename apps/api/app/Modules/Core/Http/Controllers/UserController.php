@@ -41,10 +41,11 @@ class UserController extends Controller
             ->join('persons', 'persons.party_id', '=', 'employees.person_party_id')
             ->where('employees.tenant_id', $tenantId)
             ->orderBy('persons.given_names')
-            ->get(['employees.id', 'employees.user_id', 'employees.employee_code', 'persons.given_names', 'persons.family_name'])
+            ->get(['employees.id', 'employees.user_id', 'employees.employee_code', 'employees.source', 'persons.given_names', 'persons.family_name'])
             ->map(fn ($employee) => [
                 'id' => $employee->id,
                 'user_id' => $employee->user_id,
+                'source' => $employee->source,
                 'name' => trim("{$employee->given_names} {$employee->family_name}"),
                 'code' => $employee->employee_code,
             ]);
@@ -80,6 +81,8 @@ class UserController extends Controller
                     'branch' => $user->default_branch_id ? ['id' => $user->default_branch_id, 'name' => $user->branch_name] : null,
                     'team' => $user->team_id ? ['id' => $user->team_id, 'name' => $user->team_name] : null,
                     'hourly_cost' => (float) $user->hourly_cost,
+                    // Su trabajador lo mantiene el SaaS de RRHH: el costo por hora no se edita aquí.
+                    'hourly_cost_locked' => $employees->contains(fn ($employee) => $employee['user_id'] === $user->id && $employee['source'] === 'HR_SAAS'),
                     // Sedes adicionales: amplían lo que la persona ve con el alcance "Sede".
                     'extra_branches' => ($extraBranches[$user->id] ?? collect())->map(fn ($branch) => ['id' => $branch->id, 'name' => $branch->name])->values(),
                     'employee_id' => $employees->firstWhere('user_id', $user->id)['id'] ?? null,
@@ -138,6 +141,7 @@ class UserController extends Controller
                 'scope' => 'TENANT', 'created_at' => now(),
             ]);
             $this->linkEmployee($tenantId, $user->id, $data['employee_id'] ?? null);
+            $this->syncCost($tenantId, $user->id, $data);
             $this->syncExtraBranches($tenantId, $user->id, $data['extra_branch_ids']);
 
             return $user;
@@ -203,6 +207,7 @@ class UserController extends Controller
                 ]);
             }
             $this->linkEmployee($tenantId, $member->user_id, $data['employee_id'] ?? null);
+            $this->syncCost($tenantId, $member->user_id, $data);
             $this->syncExtraBranches($tenantId, $member->user_id, $data['extra_branch_ids']);
         });
 
@@ -403,8 +408,37 @@ class UserController extends Controller
             if ($taken) {
                 throw ValidationException::withMessages(['employee_id' => ['Ese empleado ya está vinculado a otro usuario.']]);
             }
+            $linked = DB::table('employees')->where('tenant_id', $tenantId)->where('id', $employeeId)->first();
             DB::table('employees')->where('tenant_id', $tenantId)->where('id', $employeeId)->update(['user_id' => $userId]);
+            if ($linked && $linked->user_id !== $userId) {
+                \App\Modules\Personal\Http\Controllers\EmployeeController::userLinked($tenantId, $employeeId, $userId);
+            }
         }
+    }
+
+    /**
+     * El costo por hora vive en un solo lugar (Personal): lo escrito aquí pasa al trabajador
+     * vinculado, y el del trabajador manda sobre el del usuario. Si lo mantiene el SaaS de RRHH,
+     * no se cambia desde aquí.
+     */
+    private function syncCost(string $tenantId, string $userId, array $data): void
+    {
+        $employee = DB::table('employees')->where('tenant_id', $tenantId)->where('user_id', $userId)->first();
+        if (! $employee) {
+            return;
+        }
+        if (array_key_exists('hourly_cost', $data)) {
+            $cost = (float) ($data['hourly_cost'] ?? 0);
+            if ($employee->source === 'HR_SAAS') {
+                if (round($cost, 2) !== round((float) $employee->hourly_cost, 2)) {
+                    \App\Modules\Personal\Support\Personal::mastered('El costo por hora de este trabajador');
+                }
+            } else {
+                \App\Modules\Personal\Support\Personal::copyCostToEmployee($tenantId, $userId, $cost);
+                $employee->hourly_cost = $cost > 0 ? round($cost, 2) : null;
+            }
+        }
+        \App\Modules\Personal\Support\Personal::copyCostToUser($tenantId, $userId, $employee->hourly_cost);
     }
 
     /** ¿Es el único administrador activo de la empresa? */

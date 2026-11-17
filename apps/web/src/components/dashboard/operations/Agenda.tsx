@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import Link from "next/link";
-import { CalendarDays, CalendarRange, Check, Lock, Pencil, Plus, Wrench } from "lucide-react";
+import { CalendarDays, CalendarOff, CalendarRange, Check, Lock, Pencil, Plus, Wrench } from "lucide-react";
 import { ApiError, apiFetch, apiFetchLater } from "@/lib/api";
 import { stateOf } from "@/lib/commercial";
 import { dateTime, fieldErrors, firstError, toLocalInput } from "@/lib/crm";
@@ -15,6 +15,9 @@ import { PickSelect } from "@/components/ui/pick-select";
 import { ScopeNote } from "@/components/dashboard/ScopeNote";
 import { ReasonModal } from "@/components/dashboard/crm/CrmModals";
 import type { AgendaEvent, AgendaOptions, AgendaWeek, AgendaWorkOrder } from "@/types/operations";
+
+/** Ausencia aprobada que bloquea la agenda de una persona (Personal). `label`: el tipo, o "Ausente" si quien mira no puede ver ausencias. */
+type AgendaAbsence = { id: string; user: { id: string; name: string }; date_from: string; date_to: string; label: string };
 
 type Toast = (text: string, tone?: "success" | "danger" | "warning", detail?: string) => void;
 
@@ -34,6 +37,11 @@ const EVENT_TONE: Record<Tone, string> = {
   warning: "bg-[var(--p-warning-soft)] text-[color:var(--p-warning-text)]",
   danger: "bg-[var(--p-danger-soft)] text-[color:var(--p-danger-text)]",
 };
+// Ausencia aprobada (Personal): bloquea el día de esa persona; no se abre ni se agenda encima.
+const ABSENCE = "pointer-events-none min-w-0 items-center gap-1 rounded-md border border-dashed border-current bg-[var(--p-warning-soft)] text-[color:var(--p-warning-text)]";
+/** Día local "AAAA-MM-DD", para compararlo con las fechas de las ausencias. */
+const dayKey = (day: Date) => `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+const absenceText = (absence: AgendaAbsence) => `${absence.user.name} · ${absence.label === "Ausente" ? "Ausente" : `Ausente (${absence.label})`}`;
 const ITEM = "grid w-full gap-px rounded-md border-l-[3px] border-current px-2 py-1.5 text-left text-xs transition-shadow hover:shadow-[0_2px_8px_rgba(16,24,40,.14)]";
 
 type Entry = { key: string; at: string; person: { id: string; name: string } | null; event?: AgendaEvent; order?: AgendaWorkOrder };
@@ -154,6 +162,13 @@ export default function Agenda() {
     ...(week?.work_orders ?? []).map((order) => ({ key: order.id, at: order.starts_at, person: order.assignee, order })),
   ].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), [week, showCancelled]);
 
+  // Ausencias aprobadas del rango (todo el día): se pintan como bloqueo de esa persona.
+  const absences = useMemo(() => (week as (AgendaWeek & { absences?: AgendaAbsence[] }) | null)?.absences ?? [], [week]);
+  const absentOn = (day: Date) => {
+    const key = dayKey(day);
+    return absences.filter((absence) => absence.date_from.slice(0, 10) <= key && absence.date_to.slice(0, 10) >= key);
+  };
+
   // El color por persona solo ayuda cuando hay más de una a la vista.
   const colored = !person && new Set(entries.map((entry) => entry.person?.id).filter(Boolean)).size > 1;
   const colorOf = (id: string) => {
@@ -219,6 +234,12 @@ export default function Agenda() {
           <input type="checkbox" checked={showCancelled} onChange={(event) => setShowCancelled(event.target.checked)} className="h-4 w-4 cursor-pointer accent-[#1B8FC9]" />
           <span>Ver cancelados{cancelledCount ? ` (${cancelledCount})` : ""}</span>
         </label>
+        {absences.length > 0 && (
+          <span className="inline-flex items-center gap-1.5 text-[12.5px]" title="Ausencia aprobada en Personal: no se le puede agendar ese día">
+            <i aria-hidden="true" className="h-3 w-5 rounded-[4px] border border-dashed border-[color:var(--p-warning-text)] bg-[var(--p-warning-soft)]" />
+            <span>Ausente</span>
+          </span>
+        )}
         <ScopeNote resource="agenda" />
       </Filters>
 
@@ -231,6 +252,7 @@ export default function Agenda() {
         >
           {days.map((day) => {
             const list = entries.filter((entry) => sameDay(entry.at, day));
+            const away = absentOn(day);
             const isToday = day.getTime() === today.getTime();
             return (
               <section
@@ -270,6 +292,12 @@ export default function Agenda() {
                     <strong className="app-text text-xl font-semibold tabular-nums">{day.getDate()}</strong>
                   </span>
                 </header>
+                {week && away.map((absence) => (
+                  <span key={absence.id} className={`${ABSENCE} flex px-2 py-1 text-xs`} title="Ausencia aprobada: no se le puede agendar este día">
+                    <CalendarOff size={12} className="shrink-0" aria-hidden="true" />
+                    <span className="min-w-0 [overflow-wrap:anywhere]">{absenceText(absence)}</span>
+                  </span>
+                ))}
                 {!week ? (
                   <div className="pointer-events-none h-10 animate-pulse rounded-md bg-[var(--app-surface-muted)]" />
                 ) : list.length ? (
@@ -293,7 +321,7 @@ export default function Agenda() {
                       </Link>
                     ) : null,
                   )
-                ) : (
+                ) : away.length ? null : (
                   <p className="app-muted pointer-events-none my-1 text-center text-xs sm:my-3">—</p>
                 )}
               </section>
@@ -308,6 +336,7 @@ export default function Agenda() {
           <div className="grid grid-cols-7">
             {days.map((day, index) => {
               const list = entries.filter((entry) => sameDay(entry.at, day));
+              const away = absentOn(day);
               const isToday = day.getTime() === today.getTime();
               const outside = day.getMonth() !== cursor.getMonth();
               return (
@@ -317,7 +346,7 @@ export default function Agenda() {
                   // El día lleva a su semana, donde se ve y se gestiona cada evento.
                   onClick={() => { setCursor(day); setView("week"); }}
                   title="Ver la semana de este día"
-                  aria-label={`${day.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" })}: ${list.length} en agenda`}
+                  aria-label={`${day.toLocaleDateString("es-PE", { weekday: "long", day: "numeric", month: "long" })}: ${list.length} en agenda${away.length ? ` · ausentes: ${away.map((absence) => absence.user.name).join(", ")}` : ""}`}
                   className={`grid min-h-[64px] cursor-pointer content-start gap-1 border-[color:var(--app-border)] p-1.5 text-left transition-colors hover:bg-[var(--app-surface-muted)] sm:min-h-[104px] sm:p-2 ${
                     index % 7 ? "border-l" : ""
                   } ${index >= 7 ? "border-t" : ""} ${outside ? "bg-[var(--app-surface-muted)]" : ""}`}
@@ -330,8 +359,17 @@ export default function Agenda() {
                     >
                       {day.getDate()}
                     </strong>
-                    {list.length > 0 && <span className="rounded-[9px] bg-[var(--p-brand-soft)] px-1.5 text-[11px] font-semibold tabular-nums text-[color:var(--p-brand-text)] sm:hidden">{list.length}</span>}
+                    <span className="inline-flex items-center gap-0.5 sm:hidden">
+                      {away.length > 0 && <CalendarOff size={12} className="text-[color:var(--p-warning-text)]" aria-hidden="true" />}
+                      {list.length > 0 && <span className="rounded-[9px] bg-[var(--p-brand-soft)] px-1.5 text-[11px] font-semibold tabular-nums text-[color:var(--p-brand-text)]">{list.length}</span>}
+                    </span>
                   </span>
+                  {away.slice(0, 2).map((absence) => (
+                    <span key={absence.id} className={`${ABSENCE} hidden px-1.5 py-0.5 text-[11.5px] sm:flex`}>
+                      <span className="truncate">{absenceText(absence)}</span>
+                    </span>
+                  ))}
+                  {away.length > 2 && <span className="hidden text-[11.5px] text-[color:var(--p-warning-text)] sm:block">+{away.length - 2} ausentes</span>}
                   {list.slice(0, 2).map((entry) => {
                     const tone = entry.event ? stateOf(AGENDA_STATES, entry.event.status)[1] : entry.order?.status === "COMPLETED" ? "success" : "neutral";
                     return (

@@ -13,6 +13,11 @@ class AuditCatalog
 {
     /** entity_type => nombre visible. */
     public const ENTITIES = [
+        'HrPosition' => 'Puesto',
+        'LeaveRequest' => 'Ausencia',
+        'LeaveType' => 'Tipo de ausencia',
+        'PayrollExport' => 'Envío a planilla',
+        'HrConnection' => 'Conexión con RRHH',
         'BankStatement' => 'Extracto bancario',
         'BillableEvent' => 'Evento facturable',
         'Branch' => 'Sede',
@@ -86,6 +91,30 @@ class AuditCatalog
 
     /** Acciones cuyo texto no sale del verbo final. */
     public const ACTIONS = [
+        'employee.create' => 'Alta de trabajador',
+        'employee.update' => 'Edición de trabajador',
+        'employee.terminate' => 'Cese de trabajador',
+        'employee.reinstate' => 'Reingreso de trabajador',
+        'hr_position.create' => 'Alta de puesto',
+        'hr_position.update' => 'Edición de puesto',
+        'leave_request.create' => 'Solicitud de ausencia',
+        'leave_request.approve' => 'Aprobación de ausencia',
+        'leave_request.reject' => 'Rechazo de ausencia',
+        'leave_request.cancel' => 'Anulación de ausencia',
+        'leave_type.create' => 'Alta de tipo de ausencia',
+        'leave_type.update' => 'Edición de tipo de ausencia',
+        'payroll_export.create' => 'Generación del envío a planilla',
+        'payroll_export.resend' => 'Reenvío a RRHH',
+        'payroll_export.delivered' => 'Archivo entregado a planilla',
+        'payroll_export.download' => 'Descarga del envío a planilla',
+        'hr_connection.create' => 'Alta de la conexión con RRHH',
+        'hr_connection.update' => 'Cambio de la conexión con RRHH',
+        'hr_connection.rotate' => 'Nueva clave de firma de RRHH',
+        'hr_connection.activate' => 'Activación de la conexión con RRHH',
+        'hr_connection.deactivate' => 'Desactivación de la conexión con RRHH',
+        'hr_connection.resync' => 'Relectura completa desde RRHH',
+        'hr_unmatched.resolve' => 'Caso de la bandeja de RRHH resuelto',
+        'hr_outbound.retry' => 'Reenvío de un mensaje a RRHH',
         'auth.login' => 'Inicio de sesión',
         'auth.logout' => 'Cierre de sesión',
         'auth.account_locked' => 'Cuenta bloqueada por intentos fallidos',

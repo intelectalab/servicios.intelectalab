@@ -727,6 +727,9 @@ class WorkOrderController extends Controller
         }
         $end ??= $start->copy()->addHours(self::DEFAULT_HOURS);
 
+        // De vacaciones o ausente (Personal): no se le asigna trabajo en esas fechas.
+        \App\Modules\Personal\Support\Personal::assertAvailable((string) request()->attributes->get('tenant_id'), $userId, $start, $end, 'assigned_user_id');
+
         $clash = WorkOrder::ignoringAccessScope()
             ->when($order, fn ($q) => $q->whereKeyNot($order->id))
             ->where('assigned_user_id', $userId)

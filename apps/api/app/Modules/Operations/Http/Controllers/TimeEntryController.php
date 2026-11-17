@@ -167,8 +167,10 @@ class TimeEntryController extends Controller
                 'ended_at' => $end,
                 'hours' => round($start->diffInMinutes($end) / 60, 4),
                 'billable' => (bool) ($data['billable'] ?? true),
-                // El costo por hora de la persona en el momento de registrar.
-                'hourly_cost' => (float) DB::table('tenant_users')->where('tenant_id', $tenantId)->where('user_id', $userId)->value('hourly_cost'),
+                // El costo por hora de la persona en el momento de registrar: el de su ficha de
+                // trabajador (Personal) o, si no es trabajador, el de su usuario.
+                'hourly_cost' => \App\Modules\Personal\Support\Personal::hourlyCost($tenantId, $userId),
+                'employee_id' => DB::table('employees')->where('tenant_id', $tenantId)->where('user_id', $userId)->value('id'),
                 'approved' => false,
                 'status' => 'SUBMITTED',
                 'description' => trim((string) ($data['description'] ?? '')) ?: null,

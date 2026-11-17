@@ -2,6 +2,12 @@
 
 return [
 
+    // SaaS de RRHH propio (Personal → Sincronización). "fake" usa el simulador del contrato
+    // (solo fuera de producción) mientras el SaaS de RRHH no exista.
+    'hr_saas' => [
+        'driver' => env('HR_SAAS_DRIVER', 'http'),
+    ],
+
     /*
     |--------------------------------------------------------------------------
     | Third Party Services

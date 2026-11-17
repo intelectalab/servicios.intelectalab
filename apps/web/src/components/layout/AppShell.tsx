@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Bell, BookOpen, BriefcaseBusiness, Calendar, CalendarClock, CalendarDays, ChartColumn, ChartLine, ChartPie,
+  Bell, BookOpen, CalendarOff, FileSpreadsheet, RefreshCw, Users, UsersRound, BriefcaseBusiness, Calendar, CalendarClock, CalendarDays, ChartColumn, ChartLine, ChartPie,
   Clock, Coins, Contact, Crosshair, Eye, FileSignature, FileText, Filter, Folder, Globe, HandCoins, Home, Key,
   KeyRound, Landmark, Layers, LifeBuoy, ListChecks, ListTree, Lock, Package, Plug, Receipt, ReceiptText, Repeat,
   Scale, Send, Settings, Shield, ShieldCheck, ShoppingCart, Smartphone, SquareKanban, Target, ToggleLeft,
@@ -76,6 +76,10 @@ const MENU_ITEMS: MenuItem[] = [
 
   { href: "/tickets", label: "Tickets y SLA", module: "SOPORTE", requiredPermission: "tickets.view", icon: LifeBuoy, superModule: "Soporte" },
   { href: "/warranty-claims", label: "Garantías", module: "SOPORTE", requiredPermission: "warranty.view", icon: Shield, superModule: "Soporte" },
+  { href: "/hr/employees", label: "Trabajadores y puestos", module: "PERSONAL", requiredPermission: "employees.view", icon: UsersRound, superModule: "Personal" },
+  { href: "/hr/leaves", label: "Vacaciones y ausencias", module: "PERSONAL", requiredPermission: "leaves.view", icon: CalendarOff, superModule: "Personal" },
+  { href: "/hr/payroll-exports", label: "Envío de horas a planilla", module: "PERSONAL", requiredPermission: "hr_sync.view", icon: FileSpreadsheet, superModule: "Personal" },
+  { href: "/hr/sync", label: "Sincronización con RRHH", module: "PERSONAL", requiredPermission: "hr_sync.view", icon: RefreshCw, superModule: "Personal" },
 
   { href: "/documents", label: "Documentos", module: "DOCUMENTOS", requiredPermission: "documents.view", icon: Folder, superModule: "Control" },
   { href: "/credentials", label: "Credential Vault", requiredPermission: "credentials.view", icon: KeyRound, superModule: "Control" },
@@ -106,6 +110,7 @@ const GROUP_ICONS = {
   Compras: ShoppingCart,
   Contabilidad: BookOpen,
   Soporte: LifeBuoy,
+  Personal: Users,
   Control: ShieldCheck,
   Administración: Settings,
 };

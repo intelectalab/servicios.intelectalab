@@ -75,6 +75,9 @@ class CheckRecordVersion
         'ticket' => 'support_tickets',
         'claim' => 'warranty_claims',
         'document' => 'documents',
+        'employee' => 'employees',
+        'position' => 'hr_positions',
+        'leave' => 'hr_leave_requests',
     ];
 
     /** Tablas cuyo modelo filtra por el alcance del rol. */

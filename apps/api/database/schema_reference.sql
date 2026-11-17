@@ -1,11 +1,8 @@
--- Esquema completo de la base del ERP (estructura, RLS, funciones y permisos) más los catálogos que
--- llenan las migraciones (migrations, permissions, module_catalog, saas_plans). Lo usa la prueba
--- automática de GitHub (.github/workflows/ci.yml). Sin datos de empresas ni contraseñas.
--- Regenerar tras cada migración nueva: ver docs/cambios/2026-11-01_prueba-automatica-de-github.md
 --
 -- PostgreSQL database dump
 --
 
+\restrict tTYxNcwVfzlBrwr0ocxL2uCUaz4fOUNtRVsOTRrfU0w3frmn0gzKgGfSBD6tDjq
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg13+2)
 -- Dumped by pg_dump version 17.11 (Debian 17.11-1.pgdg13+2)
@@ -30,6 +27,13 @@ CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public;
 
 
 --
+-- Name: EXTENSION btree_gist; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION btree_gist IS 'support for indexing common datatypes in GiST';
+
+
+--
 -- Name: citext; Type: EXTENSION; Schema: -; Owner: -
 --
 
@@ -37,10 +41,24 @@ CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
 
 
 --
+-- Name: EXTENSION citext; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION citext IS 'data type for case-insensitive character strings';
+
+
+--
 -- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
 --
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION pgcrypto; Type: COMMENT; Schema: -; Owner: 
+--
+
+COMMENT ON EXTENSION pgcrypto IS 'cryptographic functions';
 
 
 --
@@ -290,6 +308,74 @@ CREATE FUNCTION public.check_document_update() RETURNS trigger
 
 
 ALTER FUNCTION public.check_document_update() OWNER TO erp_user;
+
+--
+-- Name: check_hr_leave_overlap(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.check_hr_leave_overlap() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        IF NEW.status = 'APPROVED' THEN
+            PERFORM pg_advisory_xact_lock(hashtext('hr_leave:' || NEW.employee_id::text));
+            IF EXISTS (
+                SELECT 1 FROM hr_leave_requests r
+                WHERE r.tenant_id = NEW.tenant_id AND r.employee_id = NEW.employee_id AND r.id <> NEW.id
+                  AND r.status = 'APPROVED' AND r.date_from <= NEW.date_to AND r.date_to >= NEW.date_from
+            ) THEN
+                RAISE EXCEPTION 'HR_LEAVE_OVERLAP' USING ERRCODE = 'check_violation',
+                    DETAIL = 'El trabajador ya tiene una ausencia aprobada en esas fechas.';
+            END IF;
+        END IF;
+        RETURN NEW;
+    END $$;
+
+
+ALTER FUNCTION public.check_hr_leave_overlap() OWNER TO erp_user;
+
+--
+-- Name: check_hr_leave_transition(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.check_hr_leave_transition() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        IF OLD.status IN ('REJECTED', 'CANCELLED') AND (NEW.status IS DISTINCT FROM OLD.status
+            OR NEW.date_from IS DISTINCT FROM OLD.date_from OR NEW.date_to IS DISTINCT FROM OLD.date_to) THEN
+            -- Lo que llega del SaaS de RRHH manda (una ausencia anulada allí puede volver).
+            IF NEW.source <> 'HR_SAAS' THEN
+                RAISE EXCEPTION 'Una solicitud rechazada o anulada no se modifica.' USING ERRCODE = 'check_violation';
+            END IF;
+        END IF;
+        IF OLD.status = 'APPROVED' AND NEW.status NOT IN ('APPROVED', 'CANCELLED') AND NEW.source <> 'HR_SAAS' THEN
+            RAISE EXCEPTION 'Una ausencia aprobada solo se anula.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END $$;
+
+
+ALTER FUNCTION public.check_hr_leave_transition() OWNER TO erp_user;
+
+--
+-- Name: check_hr_payroll_export_update(); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.check_hr_payroll_export_update() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+    BEGIN
+        IF NEW.payload IS DISTINCT FROM OLD.payload OR NEW.payload_sha256 IS DISTINCT FROM OLD.payload_sha256
+            OR NEW.period IS DISTINCT FROM OLD.period OR NEW.version IS DISTINCT FROM OLD.version
+            OR NEW.destination IS DISTINCT FROM OLD.destination OR NEW.employee_count IS DISTINCT FROM OLD.employee_count THEN
+            RAISE EXCEPTION 'Un envío a planilla no se modifica: se genera una versión nueva.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END $$;
+
+
+ALTER FUNCTION public.check_hr_payroll_export_update() OWNER TO erp_user;
 
 --
 -- Name: check_portal_user(); Type: FUNCTION; Schema: public; Owner: erp_user
@@ -570,6 +656,20 @@ CREATE FUNCTION public.guard_tenant_tables() RETURNS trigger
 
 
 ALTER FUNCTION public.guard_tenant_tables() OWNER TO erp_user;
+
+--
+-- Name: hr_connection_tenant(uuid); Type: FUNCTION; Schema: public; Owner: erp_user
+--
+
+CREATE FUNCTION public.hr_connection_tenant(p_connection uuid) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+        SELECT tenant_id FROM hr_connections WHERE id = p_connection AND status = 'ACTIVE';
+    $$;
+
+
+ALTER FUNCTION public.hr_connection_tenant(p_connection uuid) OWNER TO erp_user;
 
 --
 -- Name: isolation_probe_targets(); Type: FUNCTION; Schema: public; Owner: erp_user
@@ -2458,6 +2558,13 @@ CREATE TABLE public.credential_records (
 ALTER TABLE public.credential_records OWNER TO erp_user;
 
 --
+-- Name: TABLE credential_records; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.credential_records IS 'Metadatos de secretos; valores secretos viven cifrados en credential_versions.';
+
+
+--
 -- Name: credential_versions; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -2716,6 +2823,13 @@ CREATE TABLE public.crm_settings (
 ALTER TABLE public.crm_settings OWNER TO erp_user;
 
 --
+-- Name: TABLE crm_settings; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.crm_settings IS 'Configuración específica del CRM por tenant; CRM OFF conserva datos.';
+
+
+--
 -- Name: crm_sources; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -2917,6 +3031,13 @@ CREATE TABLE public.documents (
 ALTER TABLE public.documents OWNER TO erp_user;
 
 --
+-- Name: TABLE documents; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.documents IS 'Document Service único para archivos, evidencias y adjuntos.';
+
+
+--
 -- Name: employees; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -2929,7 +3050,31 @@ CREATE TABLE public.employees (
     "position" character varying(255),
     status character varying(30) DEFAULT 'ACTIVE'::character varying NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    position_id uuid,
+    branch_id uuid,
+    hire_date date,
+    termination_date date,
+    termination_reason character varying(500),
+    contract_type character varying(20),
+    weekly_hours numeric(5,2) DEFAULT 48 NOT NULL,
+    hourly_cost numeric(14,2),
+    currency character(3) DEFAULT 'PEN'::bpchar NOT NULL,
+    payroll_external_id character varying(100),
+    source character varying(10) DEFAULT 'LOCAL'::character varying NOT NULL,
+    external_version integer,
+    synced_at timestamp with time zone,
+    lock_version integer DEFAULT 0 NOT NULL,
+    created_by uuid,
+    CONSTRAINT employees_contract_type_check CHECK (((contract_type IS NULL) OR ((contract_type)::text = ANY ((ARRAY['INDEFINIDO'::character varying, 'PLAZO_FIJO'::character varying, 'TIEMPO_PARCIAL'::character varying, 'PRACTICAS'::character varying])::text[])))),
+    CONSTRAINT employees_currency_check CHECK ((currency = ANY (ARRAY['PEN'::bpchar, 'USD'::bpchar]))),
+    CONSTRAINT employees_hourly_cost_check CHECK (((hourly_cost IS NULL) OR (hourly_cost > (0)::numeric))),
+    CONSTRAINT employees_hr_saas_check CHECK ((((source)::text <> 'HR_SAAS'::text) OR (payroll_external_id IS NOT NULL))),
+    CONSTRAINT employees_source_check CHECK (((source)::text = ANY ((ARRAY['LOCAL'::character varying, 'HR_SAAS'::character varying])::text[]))),
+    CONSTRAINT employees_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying, 'TERMINATED'::character varying])::text[]))),
+    CONSTRAINT employees_terminated_check CHECK ((((status)::text <> 'TERMINATED'::text) OR (termination_date IS NOT NULL))),
+    CONSTRAINT employees_termination_check CHECK (((termination_date IS NULL) OR (hire_date IS NULL) OR (termination_date >= hire_date))),
+    CONSTRAINT employees_weekly_hours_check CHECK (((weekly_hours > (0)::numeric) AND (weekly_hours <= (48)::numeric)))
 );
 
 
@@ -3120,6 +3265,13 @@ CREATE TABLE public.fiscal_documents (
 ALTER TABLE public.fiscal_documents OWNER TO erp_user;
 
 --
+-- Name: TABLE fiscal_documents; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.fiscal_documents IS 'Capa fiscal desacoplada del proveedor para Perú/SUNAT y futura expansión internacional.';
+
+
+--
 -- Name: fiscal_notes; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -3179,6 +3331,262 @@ CREATE TABLE public.fiscal_void_requests (
 
 
 ALTER TABLE public.fiscal_void_requests OWNER TO erp_user;
+
+--
+-- Name: hr_connections; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_connections (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    base_url character varying(300) NOT NULL,
+    status character varying(10) DEFAULT 'INACTIVE'::character varying NOT NULL,
+    token_credential_id uuid,
+    secret_credential_id uuid,
+    initial_match_at timestamp with time zone,
+    activated_at timestamp with time zone,
+    deactivated_at timestamp with time zone,
+    last_event_at timestamp with time zone,
+    lock_version integer DEFAULT 0 NOT NULL,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT hr_connections_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying])::text[]))),
+    CONSTRAINT hr_connections_url_check CHECK (((base_url)::text ~~ 'https://%'::text))
+);
+
+
+ALTER TABLE public.hr_connections OWNER TO erp_user;
+
+--
+-- Name: hr_inbound_events; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_inbound_events (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    connection_id uuid NOT NULL,
+    event_id character varying(100) NOT NULL,
+    event_type character varying(40) NOT NULL,
+    occurred_at timestamp with time zone,
+    payload jsonb NOT NULL,
+    status character varying(10) DEFAULT 'RECEIVED'::character varying NOT NULL,
+    result character varying(500),
+    attempts integer DEFAULT 0 NOT NULL,
+    received_at timestamp with time zone DEFAULT now() NOT NULL,
+    processed_at timestamp with time zone,
+    CONSTRAINT hr_inbound_events_status_check CHECK (((status)::text = ANY ((ARRAY['RECEIVED'::character varying, 'APPLIED'::character varying, 'SKIPPED'::character varying, 'UNMATCHED'::character varying, 'FAILED'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.hr_inbound_events OWNER TO erp_user;
+
+--
+-- Name: hr_leave_requests; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_leave_requests (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    leave_type_id uuid NOT NULL,
+    user_id uuid,
+    branch_id uuid,
+    date_from date NOT NULL,
+    date_to date NOT NULL,
+    days integer NOT NULL,
+    reason text,
+    status character varying(12) DEFAULT 'REQUESTED'::character varying NOT NULL,
+    decided_by uuid,
+    decided_at timestamp with time zone,
+    decision_note text,
+    source character varying(10) DEFAULT 'LOCAL'::character varying NOT NULL,
+    external_id character varying(100),
+    external_version integer,
+    lock_version integer DEFAULT 0 NOT NULL,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT hr_leave_requests_dates_check CHECK ((date_to >= date_from)),
+    CONSTRAINT hr_leave_requests_days_check CHECK (((days > 0) AND (days <= ((date_to - date_from) + 1)))),
+    CONSTRAINT hr_leave_requests_hr_saas_check CHECK ((((source)::text <> 'HR_SAAS'::text) OR (external_id IS NOT NULL))),
+    CONSTRAINT hr_leave_requests_reject_check CHECK ((((status)::text <> 'REJECTED'::text) OR (btrim(COALESCE(decision_note, ''::text)) <> ''::text))),
+    CONSTRAINT hr_leave_requests_self_check CHECK (((decided_by IS NULL) OR (user_id IS NULL) OR (decided_by <> user_id))),
+    CONSTRAINT hr_leave_requests_source_check CHECK (((source)::text = ANY ((ARRAY['LOCAL'::character varying, 'HR_SAAS'::character varying])::text[]))),
+    CONSTRAINT hr_leave_requests_status_check CHECK (((status)::text = ANY ((ARRAY['REQUESTED'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'CANCELLED'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.hr_leave_requests OWNER TO erp_user;
+
+--
+-- Name: hr_leave_types; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_leave_types (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    code character varying(30) NOT NULL,
+    name character varying(120) NOT NULL,
+    paid boolean DEFAULT true NOT NULL,
+    requires_approval boolean DEFAULT true NOT NULL,
+    days_per_year integer,
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT hr_leave_types_days_check CHECK (((days_per_year IS NULL) OR ((days_per_year >= 1) AND (days_per_year <= 366)))),
+    CONSTRAINT hr_leave_types_name_check CHECK (((btrim((name)::text) <> ''::text) AND (btrim((code)::text) <> ''::text)))
+);
+
+
+ALTER TABLE public.hr_leave_types OWNER TO erp_user;
+
+--
+-- Name: hr_outbound_events; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_outbound_events (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    connection_id uuid NOT NULL,
+    event_id character varying(100) NOT NULL,
+    event_type character varying(40) NOT NULL,
+    payload jsonb NOT NULL,
+    export_id uuid,
+    status character varying(10) DEFAULT 'PENDING'::character varying NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    next_attempt_at timestamp with time zone DEFAULT now(),
+    response_code integer,
+    last_error character varying(500),
+    sent_at timestamp with time zone,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT hr_outbound_events_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RETRY'::character varying, 'SENT'::character varying, 'DEAD'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.hr_outbound_events OWNER TO erp_user;
+
+--
+-- Name: hr_payroll_exports; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_payroll_exports (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    period character(7) NOT NULL,
+    version integer DEFAULT 1 NOT NULL,
+    destination character varying(10) NOT NULL,
+    employee_count integer NOT NULL,
+    minutes_total integer DEFAULT 0 NOT NULL,
+    payload jsonb NOT NULL,
+    payload_sha256 character(64) NOT NULL,
+    document_id uuid,
+    connection_id uuid,
+    status character varying(14) DEFAULT 'GENERATED'::character varying NOT NULL,
+    sent_at timestamp with time zone,
+    acknowledged_at timestamp with time zone,
+    provider_response character varying(1000),
+    generated_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT hr_payroll_exports_count_check CHECK (((employee_count >= 0) AND (minutes_total >= 0) AND (version >= 1))),
+    CONSTRAINT hr_payroll_exports_destination_check CHECK (((destination)::text = ANY ((ARRAY['FILE'::character varying, 'HR_SAAS'::character varying])::text[]))),
+    CONSTRAINT hr_payroll_exports_hr_saas_check CHECK ((((destination)::text <> 'HR_SAAS'::text) OR (connection_id IS NOT NULL))),
+    CONSTRAINT hr_payroll_exports_period_check CHECK ((period ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'::text)),
+    CONSTRAINT hr_payroll_exports_status_check CHECK (((status)::text = ANY ((ARRAY['GENERATED'::character varying, 'SENT'::character varying, 'ACKNOWLEDGED'::character varying, 'FAILED'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.hr_payroll_exports OWNER TO erp_user;
+
+--
+-- Name: hr_positions; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_positions (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    code character varying(50) NOT NULL,
+    name character varying(150) NOT NULL,
+    department character varying(150),
+    default_hourly_cost numeric(14,2),
+    currency character(3) DEFAULT 'PEN'::bpchar NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    source character varying(10) DEFAULT 'LOCAL'::character varying NOT NULL,
+    external_id character varying(100),
+    external_version integer,
+    synced_at timestamp with time zone,
+    lock_version integer DEFAULT 0 NOT NULL,
+    created_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT hr_positions_cost_check CHECK (((default_hourly_cost IS NULL) OR (default_hourly_cost > (0)::numeric))),
+    CONSTRAINT hr_positions_currency_check CHECK ((currency = ANY (ARRAY['PEN'::bpchar, 'USD'::bpchar]))),
+    CONSTRAINT hr_positions_hr_saas_check CHECK ((((source)::text <> 'HR_SAAS'::text) OR (external_id IS NOT NULL))),
+    CONSTRAINT hr_positions_name_check CHECK (((btrim((name)::text) <> ''::text) AND (btrim((code)::text) <> ''::text))),
+    CONSTRAINT hr_positions_source_check CHECK (((source)::text = ANY ((ARRAY['LOCAL'::character varying, 'HR_SAAS'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.hr_positions OWNER TO erp_user;
+
+--
+-- Name: hr_sync_runs; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_sync_runs (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    connection_id uuid NOT NULL,
+    kind character varying(14) NOT NULL,
+    status character varying(10) DEFAULT 'RUNNING'::character varying NOT NULL,
+    received integer DEFAULT 0 NOT NULL,
+    applied integer DEFAULT 0 NOT NULL,
+    skipped integer DEFAULT 0 NOT NULL,
+    unmatched integer DEFAULT 0 NOT NULL,
+    error character varying(500),
+    started_by uuid,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    finished_at timestamp with time zone,
+    CONSTRAINT hr_sync_runs_counts_check CHECK ((((applied + skipped) + unmatched) <= received)),
+    CONSTRAINT hr_sync_runs_kind_check CHECK (((kind)::text = ANY ((ARRAY['INITIAL_MATCH'::character varying, 'WEBHOOK'::character varying, 'FULL_RESYNC'::character varying])::text[]))),
+    CONSTRAINT hr_sync_runs_status_check CHECK (((status)::text = ANY ((ARRAY['RUNNING'::character varying, 'COMPLETED'::character varying, 'FAILED'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.hr_sync_runs OWNER TO erp_user;
+
+--
+-- Name: hr_sync_unmatched; Type: TABLE; Schema: public; Owner: erp_user
+--
+
+CREATE TABLE public.hr_sync_unmatched (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tenant_id uuid NOT NULL,
+    run_id uuid NOT NULL,
+    external_id character varying(100) NOT NULL,
+    doc_type character varying(20),
+    doc_number character varying(30),
+    full_name character varying(300) NOT NULL,
+    reason character varying(16) NOT NULL,
+    candidate_ids jsonb DEFAULT '[]'::jsonb NOT NULL,
+    payload jsonb NOT NULL,
+    status character varying(10) DEFAULT 'OPEN'::character varying NOT NULL,
+    employee_id uuid,
+    resolved_by uuid,
+    resolved_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT hr_sync_unmatched_employee_check CHECK ((((status)::text <> ALL ((ARRAY['LINKED'::character varying, 'CREATED'::character varying])::text[])) OR (employee_id IS NOT NULL))),
+    CONSTRAINT hr_sync_unmatched_reason_check CHECK (((reason)::text = ANY ((ARRAY['NO_MATCH'::character varying, 'MULTIPLE_MATCH'::character varying, 'CONFLICT'::character varying])::text[]))),
+    CONSTRAINT hr_sync_unmatched_resolved_check CHECK ((((status)::text = 'OPEN'::text) OR (resolved_at IS NOT NULL))),
+    CONSTRAINT hr_sync_unmatched_status_check CHECK (((status)::text = ANY ((ARRAY['OPEN'::character varying, 'LINKED'::character varying, 'CREATED'::character varying, 'IGNORED'::character varying])::text[])))
+);
+
+
+ALTER TABLE public.hr_sync_unmatched OWNER TO erp_user;
 
 --
 -- Name: idempotency_keys; Type: TABLE; Schema: public; Owner: erp_user
@@ -3509,6 +3917,13 @@ CREATE TABLE public.module_catalog (
 ALTER TABLE public.module_catalog OWNER TO erp_user;
 
 --
+-- Name: TABLE module_catalog; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.module_catalog IS 'Catálogo maestro de módulos disponibles para armar planes SaaS; saas_plans.modules referencia estos codes.';
+
+
+--
 -- Name: notification_preferences; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -3637,6 +4052,13 @@ CREATE TABLE public.outbox_events (
 ALTER TABLE public.outbox_events OWNER TO erp_user;
 
 --
+-- Name: TABLE outbox_events; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.outbox_events IS 'Eventos transaccionales para integración asíncrona.';
+
+
+--
 -- Name: outgoing_messages; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -3686,6 +4108,13 @@ CREATE TABLE public.parties (
 
 
 ALTER TABLE public.parties OWNER TO erp_user;
+
+--
+-- Name: TABLE parties; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.parties IS 'Identidad canónica CORE. No crear crm_customers/crm_contacts/crm_companies.';
+
 
 --
 -- Name: payable_movements; Type: TABLE; Schema: public; Owner: erp_user
@@ -4557,7 +4986,7 @@ CREATE TABLE public.role_scopes (
     resource character varying(50) NOT NULL,
     scope character varying(30) DEFAULT 'OWN'::character varying NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT role_scopes_resource_check CHECK (((resource)::text = ANY ((ARRAY['quotations'::character varying, 'contracts'::character varying, 'orders'::character varying, 'portal'::character varying, 'leads'::character varying, 'opportunities'::character varying, 'activities'::character varying, 'contracted_services'::character varying, 'work_orders'::character varying, 'projects'::character varying, 'time_entries'::character varying, 'cost_entries'::character varying, 'agenda'::character varying, 'billing'::character varying, 'receivables'::character varying, 'payments'::character varying, 'recurring'::character varying, 'purchases'::character varying, 'payables'::character varying, 'budgets'::character varying, 'tickets'::character varying, 'warranty'::character varying, 'documents'::character varying, 'imports'::character varying])::text[]))),
+    CONSTRAINT role_scopes_resource_check CHECK (((resource)::text = ANY ((ARRAY['quotations'::character varying, 'contracts'::character varying, 'orders'::character varying, 'portal'::character varying, 'leads'::character varying, 'opportunities'::character varying, 'activities'::character varying, 'contracted_services'::character varying, 'work_orders'::character varying, 'projects'::character varying, 'time_entries'::character varying, 'cost_entries'::character varying, 'agenda'::character varying, 'billing'::character varying, 'receivables'::character varying, 'payments'::character varying, 'recurring'::character varying, 'purchases'::character varying, 'payables'::character varying, 'budgets'::character varying, 'tickets'::character varying, 'warranty'::character varying, 'documents'::character varying, 'imports'::character varying, 'employees'::character varying, 'leaves'::character varying])::text[]))),
     CONSTRAINT role_scopes_scope_check CHECK (((scope)::text = ANY ((ARRAY['OWN'::character varying, 'TEAM'::character varying, 'BRANCH'::character varying, 'TENANT'::character varying])::text[])))
 );
 
@@ -5179,6 +5608,13 @@ CREATE TABLE public.tenant_modules (
 ALTER TABLE public.tenant_modules OWNER TO erp_user;
 
 --
+-- Name: TABLE tenant_modules; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.tenant_modules IS 'Activación/desactivación no destructiva de módulos por tenant; CRM usa module_code=CRM.';
+
+
+--
 -- Name: tenant_settings; Type: TABLE; Schema: public; Owner: erp_user
 --
 
@@ -5312,6 +5748,13 @@ CREATE TABLE public.tenants (
 
 
 ALTER TABLE public.tenants OWNER TO erp_user;
+
+--
+-- Name: TABLE tenants; Type: COMMENT; Schema: public; Owner: erp_user
+--
+
+COMMENT ON TABLE public.tenants IS 'Tenant SaaS; límite principal de aislamiento lógico.';
+
 
 --
 -- Name: time_entries; Type: TABLE; Schema: public; Owner: erp_user
@@ -6352,6 +6795,22 @@ ALTER TABLE public.documents
 
 
 --
+-- Name: employees employees_payroll_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_payroll_key UNIQUE (tenant_id, payroll_external_id);
+
+
+--
+-- Name: employees employees_person_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_person_key UNIQUE (tenant_id, person_party_id);
+
+
+--
 -- Name: employees employees_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -6365,6 +6824,14 @@ ALTER TABLE ONLY public.employees
 
 ALTER TABLE ONLY public.employees
     ADD CONSTRAINT employees_tenant_id_employee_code_key UNIQUE (tenant_id, employee_code);
+
+
+--
+-- Name: employees employees_tenant_id_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_tenant_id_key UNIQUE (tenant_id, id);
 
 
 --
@@ -6501,6 +6968,182 @@ ALTER TABLE ONLY public.fiscal_series
 
 ALTER TABLE ONLY public.fiscal_void_requests
     ADD CONSTRAINT fiscal_void_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_connections hr_connections_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_connections
+    ADD CONSTRAINT hr_connections_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_connections hr_connections_tenant_id_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_connections
+    ADD CONSTRAINT hr_connections_tenant_id_key UNIQUE (tenant_id, id);
+
+
+--
+-- Name: hr_connections hr_connections_tenant_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_connections
+    ADD CONSTRAINT hr_connections_tenant_key UNIQUE (tenant_id);
+
+
+--
+-- Name: hr_inbound_events hr_inbound_events_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_inbound_events
+    ADD CONSTRAINT hr_inbound_events_key UNIQUE (tenant_id, event_id);
+
+
+--
+-- Name: hr_inbound_events hr_inbound_events_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_inbound_events
+    ADD CONSTRAINT hr_inbound_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_leave_requests hr_leave_requests_external_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT hr_leave_requests_external_key UNIQUE (tenant_id, external_id);
+
+
+--
+-- Name: hr_leave_requests hr_leave_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT hr_leave_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_leave_types hr_leave_types_code_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_types
+    ADD CONSTRAINT hr_leave_types_code_key UNIQUE (tenant_id, code);
+
+
+--
+-- Name: hr_leave_types hr_leave_types_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_types
+    ADD CONSTRAINT hr_leave_types_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_leave_types hr_leave_types_tenant_id_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_types
+    ADD CONSTRAINT hr_leave_types_tenant_id_key UNIQUE (tenant_id, id);
+
+
+--
+-- Name: hr_outbound_events hr_outbound_events_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_outbound_events
+    ADD CONSTRAINT hr_outbound_events_key UNIQUE (tenant_id, event_id);
+
+
+--
+-- Name: hr_outbound_events hr_outbound_events_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_outbound_events
+    ADD CONSTRAINT hr_outbound_events_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_payroll_exports hr_payroll_exports_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_payroll_exports
+    ADD CONSTRAINT hr_payroll_exports_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_payroll_exports hr_payroll_exports_tenant_id_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_payroll_exports
+    ADD CONSTRAINT hr_payroll_exports_tenant_id_key UNIQUE (tenant_id, id);
+
+
+--
+-- Name: hr_payroll_exports hr_payroll_exports_version_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_payroll_exports
+    ADD CONSTRAINT hr_payroll_exports_version_key UNIQUE (tenant_id, period, version);
+
+
+--
+-- Name: hr_positions hr_positions_code_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_positions
+    ADD CONSTRAINT hr_positions_code_key UNIQUE (tenant_id, code);
+
+
+--
+-- Name: hr_positions hr_positions_external_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_positions
+    ADD CONSTRAINT hr_positions_external_key UNIQUE (tenant_id, external_id);
+
+
+--
+-- Name: hr_positions hr_positions_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_positions
+    ADD CONSTRAINT hr_positions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_positions hr_positions_tenant_id_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_positions
+    ADD CONSTRAINT hr_positions_tenant_id_key UNIQUE (tenant_id, id);
+
+
+--
+-- Name: hr_sync_runs hr_sync_runs_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_runs
+    ADD CONSTRAINT hr_sync_runs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: hr_sync_runs hr_sync_runs_tenant_id_key; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_runs
+    ADD CONSTRAINT hr_sync_runs_tenant_id_key UNIQUE (tenant_id, id);
+
+
+--
+-- Name: hr_sync_unmatched hr_sync_unmatched_pkey; Type: CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_unmatched
+    ADD CONSTRAINT hr_sync_unmatched_pkey PRIMARY KEY (id);
 
 
 --
@@ -7839,6 +8482,76 @@ CREATE INDEX credential_access_logs_credential_idx ON public.credential_access_l
 --
 
 CREATE INDEX custom_field_values_tenant_id_entity_type_entity_id_index ON public.custom_field_values USING btree (tenant_id, entity_type, entity_id);
+
+
+--
+-- Name: employees_branch_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX employees_branch_idx ON public.employees USING btree (tenant_id, branch_id);
+
+
+--
+-- Name: employees_user_key; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE UNIQUE INDEX employees_user_key ON public.employees USING btree (tenant_id, user_id) WHERE (user_id IS NOT NULL);
+
+
+--
+-- Name: hr_inbound_events_pending_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX hr_inbound_events_pending_idx ON public.hr_inbound_events USING btree (received_at) WHERE ((status)::text = 'RECEIVED'::text);
+
+
+--
+-- Name: hr_inbound_events_recent_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX hr_inbound_events_recent_idx ON public.hr_inbound_events USING btree (tenant_id, received_at DESC);
+
+
+--
+-- Name: hr_leave_requests_employee_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX hr_leave_requests_employee_idx ON public.hr_leave_requests USING btree (tenant_id, employee_id, date_from);
+
+
+--
+-- Name: hr_leave_requests_status_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX hr_leave_requests_status_idx ON public.hr_leave_requests USING btree (tenant_id, status);
+
+
+--
+-- Name: hr_leave_requests_user_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX hr_leave_requests_user_idx ON public.hr_leave_requests USING btree (tenant_id, user_id, date_from) WHERE ((status)::text = 'APPROVED'::text);
+
+
+--
+-- Name: hr_outbound_events_due_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX hr_outbound_events_due_idx ON public.hr_outbound_events USING btree (next_attempt_at) WHERE ((status)::text = ANY ((ARRAY['PENDING'::character varying, 'RETRY'::character varying])::text[]));
+
+
+--
+-- Name: hr_sync_runs_recent_idx; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE INDEX hr_sync_runs_recent_idx ON public.hr_sync_runs USING btree (tenant_id, started_at DESC);
+
+
+--
+-- Name: hr_sync_unmatched_open_key; Type: INDEX; Schema: public; Owner: erp_user
+--
+
+CREATE UNIQUE INDEX hr_sync_unmatched_open_key ON public.hr_sync_unmatched USING btree (tenant_id, external_id) WHERE ((status)::text = 'OPEN'::text);
 
 
 --
@@ -9505,6 +10218,76 @@ CREATE TRIGGER trg_guard_tenant_tables BEFORE INSERT OR DELETE OR UPDATE ON publ
 --
 
 CREATE TRIGGER trg_guard_tenant_tables BEFORE INSERT OR DELETE OR UPDATE ON public.tenants FOR EACH ROW EXECUTE FUNCTION public.guard_tenant_tables();
+
+
+--
+-- Name: hr_connections trg_hr_connections_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_connections_updated_at BEFORE UPDATE ON public.hr_connections FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: hr_leave_requests trg_hr_leave_overlap; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_leave_overlap BEFORE INSERT OR UPDATE ON public.hr_leave_requests FOR EACH ROW EXECUTE FUNCTION public.check_hr_leave_overlap();
+
+
+--
+-- Name: hr_leave_requests trg_hr_leave_requests_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_leave_requests_updated_at BEFORE UPDATE ON public.hr_leave_requests FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: hr_leave_requests trg_hr_leave_transition; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_leave_transition BEFORE UPDATE ON public.hr_leave_requests FOR EACH ROW EXECUTE FUNCTION public.check_hr_leave_transition();
+
+
+--
+-- Name: hr_leave_types trg_hr_leave_types_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_leave_types_updated_at BEFORE UPDATE ON public.hr_leave_types FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: hr_outbound_events trg_hr_outbound_events_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_outbound_events_updated_at BEFORE UPDATE ON public.hr_outbound_events FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: hr_payroll_exports trg_hr_payroll_export_update; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_payroll_export_update BEFORE UPDATE ON public.hr_payroll_exports FOR EACH ROW EXECUTE FUNCTION public.check_hr_payroll_export_update();
+
+
+--
+-- Name: hr_payroll_exports trg_hr_payroll_exports_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_payroll_exports_updated_at BEFORE UPDATE ON public.hr_payroll_exports FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: hr_positions trg_hr_positions_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_positions_updated_at BEFORE UPDATE ON public.hr_positions FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: hr_sync_unmatched trg_hr_sync_unmatched_updated_at; Type: TRIGGER; Schema: public; Owner: erp_user
+--
+
+CREATE TRIGGER trg_hr_sync_unmatched_updated_at BEFORE UPDATE ON public.hr_sync_unmatched FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 
 --
@@ -11472,6 +12255,22 @@ ALTER TABLE ONLY public.documents
 
 
 --
+-- Name: employees employees_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE SET NULL;
+
+
+--
+-- Name: employees employees_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT employees_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
 -- Name: employees employees_person_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -11712,6 +12511,86 @@ ALTER TABLE ONLY public.employees
 
 
 --
+-- Name: employees fk_employees_position_same_tenant; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.employees
+    ADD CONSTRAINT fk_employees_position_same_tenant FOREIGN KEY (tenant_id, position_id) REFERENCES public.hr_positions(tenant_id, id);
+
+
+--
+-- Name: hr_inbound_events fk_hr_inbound_connection; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_inbound_events
+    ADD CONSTRAINT fk_hr_inbound_connection FOREIGN KEY (tenant_id, connection_id) REFERENCES public.hr_connections(tenant_id, id);
+
+
+--
+-- Name: hr_leave_requests fk_hr_leave_employee; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT fk_hr_leave_employee FOREIGN KEY (tenant_id, employee_id) REFERENCES public.employees(tenant_id, id);
+
+
+--
+-- Name: hr_leave_requests fk_hr_leave_type; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT fk_hr_leave_type FOREIGN KEY (tenant_id, leave_type_id) REFERENCES public.hr_leave_types(tenant_id, id);
+
+
+--
+-- Name: hr_outbound_events fk_hr_outbound_connection; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_outbound_events
+    ADD CONSTRAINT fk_hr_outbound_connection FOREIGN KEY (tenant_id, connection_id) REFERENCES public.hr_connections(tenant_id, id);
+
+
+--
+-- Name: hr_outbound_events fk_hr_outbound_export; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_outbound_events
+    ADD CONSTRAINT fk_hr_outbound_export FOREIGN KEY (tenant_id, export_id) REFERENCES public.hr_payroll_exports(tenant_id, id);
+
+
+--
+-- Name: hr_payroll_exports fk_hr_payroll_connection; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_payroll_exports
+    ADD CONSTRAINT fk_hr_payroll_connection FOREIGN KEY (tenant_id, connection_id) REFERENCES public.hr_connections(tenant_id, id);
+
+
+--
+-- Name: hr_sync_runs fk_hr_sync_connection; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_runs
+    ADD CONSTRAINT fk_hr_sync_connection FOREIGN KEY (tenant_id, connection_id) REFERENCES public.hr_connections(tenant_id, id);
+
+
+--
+-- Name: hr_sync_unmatched fk_hr_unmatched_employee; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_unmatched
+    ADD CONSTRAINT fk_hr_unmatched_employee FOREIGN KEY (tenant_id, employee_id) REFERENCES public.employees(tenant_id, id);
+
+
+--
+-- Name: hr_sync_unmatched fk_hr_unmatched_run; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_unmatched
+    ADD CONSTRAINT fk_hr_unmatched_run FOREIGN KEY (tenant_id, run_id) REFERENCES public.hr_sync_runs(tenant_id, id);
+
+
+--
 -- Name: invoices fk_invoices_customer_same_tenant; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
 --
 
@@ -11805,6 +12684,174 @@ ALTER TABLE ONLY public.warranty_claims
 
 ALTER TABLE ONLY public.work_orders
     ADD CONSTRAINT fk_work_orders_customer_same_tenant FOREIGN KEY (tenant_id, customer_id) REFERENCES public.customers(tenant_id, id) ON DELETE RESTRICT;
+
+
+--
+-- Name: hr_connections hr_connections_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_connections
+    ADD CONSTRAINT hr_connections_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_connections hr_connections_secret_credential_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_connections
+    ADD CONSTRAINT hr_connections_secret_credential_id_fkey FOREIGN KEY (secret_credential_id) REFERENCES public.credential_records(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_connections hr_connections_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_connections
+    ADD CONSTRAINT hr_connections_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_connections hr_connections_token_credential_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_connections
+    ADD CONSTRAINT hr_connections_token_credential_id_fkey FOREIGN KEY (token_credential_id) REFERENCES public.credential_records(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_inbound_events hr_inbound_events_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_inbound_events
+    ADD CONSTRAINT hr_inbound_events_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_leave_requests hr_leave_requests_branch_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT hr_leave_requests_branch_id_fkey FOREIGN KEY (branch_id) REFERENCES public.branches(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_leave_requests hr_leave_requests_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT hr_leave_requests_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_leave_requests hr_leave_requests_decided_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT hr_leave_requests_decided_by_fkey FOREIGN KEY (decided_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_leave_requests hr_leave_requests_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT hr_leave_requests_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_leave_requests hr_leave_requests_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_requests
+    ADD CONSTRAINT hr_leave_requests_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_leave_types hr_leave_types_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_leave_types
+    ADD CONSTRAINT hr_leave_types_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_outbound_events hr_outbound_events_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_outbound_events
+    ADD CONSTRAINT hr_outbound_events_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_outbound_events hr_outbound_events_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_outbound_events
+    ADD CONSTRAINT hr_outbound_events_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_payroll_exports hr_payroll_exports_generated_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_payroll_exports
+    ADD CONSTRAINT hr_payroll_exports_generated_by_fkey FOREIGN KEY (generated_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_payroll_exports hr_payroll_exports_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_payroll_exports
+    ADD CONSTRAINT hr_payroll_exports_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_positions hr_positions_created_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_positions
+    ADD CONSTRAINT hr_positions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_positions hr_positions_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_positions
+    ADD CONSTRAINT hr_positions_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_sync_runs hr_sync_runs_started_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_runs
+    ADD CONSTRAINT hr_sync_runs_started_by_fkey FOREIGN KEY (started_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_sync_runs hr_sync_runs_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_runs
+    ADD CONSTRAINT hr_sync_runs_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
+
+
+--
+-- Name: hr_sync_unmatched hr_sync_unmatched_resolved_by_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_unmatched
+    ADD CONSTRAINT hr_sync_unmatched_resolved_by_fkey FOREIGN KEY (resolved_by) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: hr_sync_unmatched hr_sync_unmatched_tenant_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE ONLY public.hr_sync_unmatched
+    ADD CONSTRAINT hr_sync_unmatched_tenant_id_fkey FOREIGN KEY (tenant_id) REFERENCES public.tenants(id) ON DELETE CASCADE;
 
 
 --
@@ -14608,6 +15655,60 @@ ALTER TABLE public.fiscal_series ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fiscal_void_requests ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: hr_connections; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_connections ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_inbound_events; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_inbound_events ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_leave_requests; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_leave_requests ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_leave_types; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_leave_types ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_outbound_events; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_outbound_events ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_payroll_exports; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_payroll_exports ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_positions; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_positions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_sync_runs; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_sync_runs ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: hr_sync_unmatched; Type: ROW SECURITY; Schema: public; Owner: erp_user
+--
+
+ALTER TABLE public.hr_sync_unmatched ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: idempotency_keys; Type: ROW SECURITY; Schema: public; Owner: erp_user
 --
 
@@ -15482,6 +16583,69 @@ CREATE POLICY tenant_isolation ON public.fiscal_void_requests USING ((tenant_id 
 
 
 --
+-- Name: hr_connections tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_connections USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_inbound_events tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_inbound_events USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_leave_requests tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_leave_requests USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_leave_types tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_leave_types USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_outbound_events tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_outbound_events USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_payroll_exports tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_payroll_exports USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_positions tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_positions USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_sync_runs tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_sync_runs USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
+-- Name: hr_sync_unmatched tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
+--
+
+CREATE POLICY tenant_isolation ON public.hr_sync_unmatched USING ((tenant_id = public.app_tenant_id())) WITH CHECK ((tenant_id = public.app_tenant_id()));
+
+
+--
 -- Name: idempotency_keys tenant_isolation; Type: POLICY; Schema: public; Owner: erp_user
 --
 
@@ -16267,6 +17431,14 @@ REVOKE ALL ON FUNCTION public.guard_tenant_tables() FROM PUBLIC;
 
 
 --
+-- Name: FUNCTION hr_connection_tenant(p_connection uuid); Type: ACL; Schema: public; Owner: erp_user
+--
+
+REVOKE ALL ON FUNCTION public.hr_connection_tenant(p_connection uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.hr_connection_tenant(p_connection uuid) TO erp_app;
+
+
+--
 -- Name: FUNCTION isolation_probe_targets(); Type: ACL; Schema: public; Owner: erp_user
 --
 
@@ -16815,7 +17987,7 @@ GRANT SELECT,INSERT,UPDATE ON TABLE public.documents TO erp_app;
 -- Name: TABLE employees; Type: ACL; Schema: public; Owner: erp_user
 --
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.employees TO erp_app;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.employees TO erp_app;
 
 
 --
@@ -16893,6 +18065,69 @@ GRANT SELECT,INSERT,UPDATE ON TABLE public.fiscal_series TO erp_app;
 --
 
 GRANT SELECT,INSERT,UPDATE ON TABLE public.fiscal_void_requests TO erp_app;
+
+
+--
+-- Name: TABLE hr_connections; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_connections TO erp_app;
+
+
+--
+-- Name: TABLE hr_inbound_events; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_inbound_events TO erp_app;
+
+
+--
+-- Name: TABLE hr_leave_requests; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_leave_requests TO erp_app;
+
+
+--
+-- Name: TABLE hr_leave_types; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_leave_types TO erp_app;
+
+
+--
+-- Name: TABLE hr_outbound_events; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_outbound_events TO erp_app;
+
+
+--
+-- Name: TABLE hr_payroll_exports; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_payroll_exports TO erp_app;
+
+
+--
+-- Name: TABLE hr_positions; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_positions TO erp_app;
+
+
+--
+-- Name: TABLE hr_sync_runs; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_sync_runs TO erp_app;
+
+
+--
+-- Name: TABLE hr_sync_unmatched; Type: ACL; Schema: public; Owner: erp_user
+--
+
+GRANT SELECT,INSERT,UPDATE ON TABLE public.hr_sync_unmatched TO erp_app;
 
 
 --
@@ -17675,11 +18910,13 @@ ALTER DEFAULT PRIVILEGES FOR ROLE erp_user IN SCHEMA public GRANT SELECT,INSERT,
 -- PostgreSQL database dump complete
 --
 
+\unrestrict tTYxNcwVfzlBrwr0ocxL2uCUaz4fOUNtRVsOTRrfU0w3frmn0gzKgGfSBD6tDjq
 
 --
 -- PostgreSQL database dump
 --
 
+\restrict rLK2ZhHKfCFdmBTUc1pHvaYdFlrFEk1hyUEkMfBsVf3AnGDXP2qV4QTxO8rXVXR
 
 -- Dumped from database version 17.11 (Debian 17.11-1.pgdg13+2)
 -- Dumped by pg_dump version 17.11 (Debian 17.11-1.pgdg13+2)
@@ -17786,6 +19023,7 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 90	2026_11_03_000200_tenant_tables_guard	78
 91	2026_11_03_000300_local_date_defaults	79
 92	2026_11_04_000100_credential_access_logs_clock_time	80
+93	2026_11_16_000100_personal_module	81
 \.
 
 
@@ -17820,6 +19058,7 @@ d49b65d8-5553-4bd4-b41b-45ccc995bf5b	PAGOS_COBRANZAS	Pagos y cobranzas	Gestión 
 97c75295-123b-4816-b0c0-6a50b081420b	RENTABILIDAD	Rentabilidad	Costos y margen	FINANZAS_FACTURACION	f	f	99	2026-10-05 15:32:17+00	2026-10-23 00:59:03+00	[]
 291bb136-32f7-4112-be46-a24041ced2ae	TICKETS	Tickets	Gestión de tickets de soporte	SOPORTE_ATENCION_CLIENTE	f	f	99	2026-10-05 15:32:17+00	2026-10-23 00:59:03+00	["tickets"]
 6ae2ed7c-c219-4130-b3c5-4308cd34917b	INTEGRACIONES	Integraciones	Webhooks salientes firmados hacia otros sistemas, con reintentos, y el estado de las conexiones (SUNAT, correo, pagos).	CONTROL	f	t	16	\N	\N	["integrations"]
+f7a54ccd-cf3f-4ed1-b5c1-5168a69c274e	PERSONAL	Personal	Trabajadores, puestos y costo por hora; vacaciones y ausencias que bloquean la agenda; envío mensual de horas a la planilla y conexión con el SaaS de RRHH.	OPERACIONES	f	t	17	\N	\N	["employees", "leaves", "hr_sync"]
 \.
 
 
@@ -17995,6 +19234,20 @@ ab2935c2-e055-463c-ae65-53f14dcb04ef	imports.create	Importar	Importar desde Exce
 15f2140e-84dd-44ae-9c6a-cdc12608ba97	messaging.export	Exportar notificaciones	Exportar la bitácora de envíos.	2026-11-02 02:40:42.126587+00
 e551eef7-1690-460e-bbcc-4978e59f5052	approvals.view	Ver reglas de aprobación	Ver las reglas de autorización interna y las cotizaciones que la esperan.	2026-11-02 03:00:13.737086+00
 18748be6-e2e2-4bbb-b9d7-697ccd6b2838	approvals.manage	Gestionar reglas de aprobación	Cambiar las reglas de autorización interna y quién autoriza cada nivel.	2026-11-02 03:00:13.737086+00
+7834a5f9-80e3-4ed2-b73f-8b257f30b4a6	employees.view	Ver trabajadores	Ver trabajadores y puestos, con su jornada y costo por hora.	2026-11-17 01:19:10.497288+00
+d6e1b142-eea7-444d-99c2-6321179a9144	employees.create	Registrar trabajadores	Dar de alta trabajadores y puestos.	2026-11-17 01:19:10.497288+00
+2863773a-2e86-41e5-aec9-15486c57a009	employees.manage	Gestionar trabajadores	Editar trabajadores y puestos, vincular su usuario y registrar su cese.	2026-11-17 01:19:10.497288+00
+5fd4c2bb-bf37-4d99-a6fd-181208b17fcb	employees.export	Exportar trabajadores	Exportar la lista de trabajadores y puestos.	2026-11-17 01:19:10.497288+00
+7d2797c8-9b8c-481b-89b1-0c840feb4f04	leaves.view	Ver ausencias	Ver vacaciones y ausencias y el calendario del equipo.	2026-11-17 01:19:10.497288+00
+e23eeb7e-469d-42af-a0fd-58e3b0feaa7a	leaves.create	Pedir ausencias	Registrar solicitudes de vacaciones o ausencia.	2026-11-17 01:19:10.497288+00
+70c70e02-3409-4621-b763-15c707836e2b	leaves.approve	Aprobar ausencias	Aprobar o rechazar solicitudes de otras personas.	2026-11-17 01:19:10.497288+00
+9818ec01-b083-488c-b846-640aa37ae96c	leaves.manage	Gestionar ausencias	Anular ausencias y configurar los tipos de ausencia.	2026-11-17 01:19:10.497288+00
+71e0c03a-7f79-4bc8-a5e2-85c899c5e223	leaves.export	Exportar ausencias	Exportar la lista de ausencias.	2026-11-17 01:19:10.497288+00
+599e6a34-6cfd-44a5-b3c2-0ea09a2f8669	hr_sync.view	Ver envíos y sincronización	Ver los envíos de horas a la planilla y el estado de la conexión con el SaaS de RRHH.	2026-11-17 01:19:10.497288+00
+23d58f55-2dae-4fdf-a692-698c316d795a	hr_sync.create	Generar envíos a planilla	Generar el envío mensual de horas (y su versión nueva).	2026-11-17 01:19:10.497288+00
+5ff3ca0b-85bd-4d0c-be3a-f3367eee0199	hr_sync.manage	Gestionar la conexión con RRHH	Configurar la conexión con el SaaS de RRHH, enviar o reenviar y resolver la bandeja.	2026-11-17 01:19:10.497288+00
+95049b13-139b-420f-be62-6db84040ac0d	hr_sync.approve	Sincronizar con RRHH	Activar la conexión, hacer la carga inicial y releer todo desde el SaaS de RRHH.	2026-11-17 01:19:10.497288+00
+a2c51ee6-d714-4784-a581-8c4ba1a22c69	hr_sync.export	Exportar envíos	Exportar la lista de envíos y descargar su archivo.	2026-11-17 01:19:10.497288+00
 \.
 
 
@@ -18004,9 +19257,9 @@ e551eef7-1690-460e-bbcc-4978e59f5052	approvals.view	Ver reglas de aprobación	Ve
 
 COPY public.saas_plans (id, code, name, active, limits, modules, created_at, updated_at, description, display_order, is_public, monthly_price, annual_price, currency, has_trial, trial_days, requires_payment_upfront, auto_renew_default, default_billing_period, features, support_level, support_tickets_month, support_sla_hours, support_channels, consumption) FROM stdin;
 88caead2-f8c5-4782-bb8e-400d54335c13	BASE	Plan Base	t	{"sites": 3, "users": 10, "clients": 100, "branches": 1, "products": 100, "projects": 10, "services": 50, "crm_leads": 500, "documents": 1000, "max_users": 20, "work_orders": 100, "portal_users": 20, "project_users": 20, "timesheet_hours": 1000, "crm_opportunities": 200}	{"AGENDA": true, "PORTAL": true, "CLIENTES": true, "CONTRATOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "COTIZACIONES": true}	2026-09-07 16:33:36.858468+00	2026-10-23 00:59:03+00	Para pequeños emprendedores.	1	t	99.0000	990.0000	PEN	t	30	f	t	MONTHLY	{"api": false, "mfa": false, "audit": true, "automations": false, "integrations": false, "multi_tenant": true, "client_portal": false, "advanced_reports": false, "roles_permissions": true, "electronic_billing": false}	STANDARD	10	24	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{"storage_gb": 20, "files_count": 5000, "exports_month": 100, "backups_included": 7, "api_requests_month": 10000, "documents_generated": 3000}
-bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AGENDA": true, "PORTAL": true, "COMPRAS": true, "CLIENTES": true, "FINANZAS": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "TIMESHEETS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "ORDENES_TRABAJO": true}	2026-09-07 16:33:36.858468+00	2026-10-23 00:59:03+00	Para empresas en constante crecimiento y optimización.	2	t	199.0000	1990.0000	PEN	f	0	f	t	MONTHLY	{}	STANDARD	\N	\N	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{}
+bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AGENDA": true, "PORTAL": true, "COMPRAS": true, "CLIENTES": true, "FINANZAS": true, "PERSONAL": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "TIMESHEETS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "ORDENES_TRABAJO": true}	2026-09-07 16:33:36.858468+00	2026-10-23 00:59:03+00	Para empresas en constante crecimiento y optimización.	2	t	199.0000	1990.0000	PEN	f	0	f	t	MONTHLY	{}	STANDARD	\N	\N	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{}
 01a0f803-8fd8-7127-86f5-c4bdfe64100d	Plan6	Plan 6	t	{"sites": 3, "users": 18, "clients": 100, "branches": 1, "products": 100, "projects": 10, "services": 50, "crm_leads": 500, "documents": 1000, "work_orders": 100, "portal_users": 20, "project_users": 20, "timesheet_hours": 1000, "crm_opportunities": 200}	{"AGENDA": true, "COMPRAS": true, "CLIENTES": true, "FINANZAS": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "ORDENES_TRABAJO": true}	2026-10-01 15:09:38+00	2026-10-23 00:59:03+00	Plan Enterprise	1	f	200.0000	400.0000	PEN	t	30	f	t	MONTHLY	{"api": false, "mfa": true, "audit": true, "automations": false, "integrations": false, "multi_tenant": true, "client_portal": false, "advanced_reports": false, "roles_permissions": true, "electronic_billing": false}	STANDARD	100	24	{"email": true, "portal": true, "whatsapp": false, "priority_attention": false}	{}
-4eb52f95-87a2-40d9-bc7f-f210a23acde1	ENTERPRISE	Plan Enterprise	t	{}	{"CRM": true, "AGENDA": true, "PORTAL": true, "COMPRAS": true, "SOPORTE": true, "CLIENTES": true, "FINANZAS": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "TIMESHEETS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "INTEGRACIONES": true, "ORDENES_TRABAJO": true}	2026-09-07 16:33:36.858468+00	2026-11-01 23:33:07.566227+00	Para empresas ya consolidadas.	3	t	349.0000	3490.0000	PEN	t	15	t	t	MONTHLY	{}	STANDARD	\N	\N	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{}
+4eb52f95-87a2-40d9-bc7f-f210a23acde1	ENTERPRISE	Plan Enterprise	t	{}	{"CRM": true, "AGENDA": true, "PORTAL": true, "COMPRAS": true, "SOPORTE": true, "CLIENTES": true, "FINANZAS": true, "PERSONAL": true, "CONTRATOS": true, "PROYECTOS": true, "SERVICIOS": true, "DOCUMENTOS": true, "TIMESHEETS": true, "CONTABILIDAD": true, "COTIZACIONES": true, "INTEGRACIONES": true, "ORDENES_TRABAJO": true}	2026-09-07 16:33:36.858468+00	2026-11-01 23:33:07.566227+00	Para empresas ya consolidadas.	3	t	349.0000	3490.0000	PEN	t	15	t	t	MONTHLY	{}	STANDARD	\N	\N	{"email": false, "portal": false, "whatsapp": false, "priority_attention": false}	{}
 \.
 
 
@@ -18014,11 +19267,12 @@ bdcd4660-6077-4a9c-9434-0c4c4514364c	PRO	Plan Profesional	t	{}	{"CRM": true, "AG
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: erp_user
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 92, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 93, true);
 
 
 --
 -- PostgreSQL database dump complete
 --
 
+\unrestrict rLK2ZhHKfCFdmBTUc1pHvaYdFlrFEk1hyUEkMfBsVf3AnGDXP2qV4QTxO8rXVXR
 

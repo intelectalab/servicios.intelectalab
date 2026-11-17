@@ -89,6 +89,9 @@ Route::prefix('v1')->group(function () {
 
     Route::middleware('auth:sanctum')->post('/logout', [AuthController::class, 'logout']);
 
+    // Cambios del SaaS de RRHH (contrato docs/14-INTEGRACION-RRHH.md): sin sesión, con firma HMAC de la conexión.
+    Route::post('/webhooks/hr-saas', \App\Modules\Personal\Http\Controllers\HrWebhookController::class)->middleware('throttle:120,1,hr-webhook');
+
     // Descarga de un adjunto guardado en el disco del servidor: sin sesión, solo con el enlace firmado que vence.
     Route::get('/files/{path}', \App\Modules\Documents\Http\Controllers\DocumentFileController::class)
         ->where('path', '.*')->middleware(['signed', 'throttle:60,1,files'])->name('documents.file');
@@ -866,6 +869,75 @@ Route::prefix('v1')->group(function () {
             Route::post('/workflows', [WorkflowController::class, 'store']);
             Route::put('/workflows/{workflow}', [WorkflowController::class, 'update']);
             Route::post('/workflows/{workflow}/toggle', [WorkflowController::class, 'toggle']);
+        });
+
+        // Personal (módulo PERSONAL): trabajadores y puestos, ausencias, envío a planilla y conexión con el SaaS de RRHH.
+        Route::middleware('module:PERSONAL')->prefix('hr')->group(function () {
+            $employees = \App\Modules\Personal\Http\Controllers\EmployeeController::class;
+            $leaves = \App\Modules\Personal\Http\Controllers\LeaveController::class;
+            $exports = \App\Modules\Personal\Http\Controllers\PayrollExportController::class;
+            $sync = \App\Modules\Personal\Http\Controllers\HrSyncController::class;
+
+            Route::middleware('permission:employees.view')->group(function () use ($employees) {
+                Route::get('/employees', [$employees, 'index']);
+                Route::get('/employees/options', [$employees, 'options']);
+                Route::get('/employees/{employee}', [$employees, 'show']);
+                Route::get('/positions', [$employees, 'positions']);
+            });
+            Route::middleware('permission:employees.create')->group(function () use ($employees) {
+                Route::post('/employees', [$employees, 'store']);
+                Route::post('/positions', [$employees, 'storePosition']);
+            });
+            Route::middleware('permission:employees.manage')->group(function () use ($employees) {
+                Route::put('/employees/{employee}', [$employees, 'update']);
+                Route::post('/employees/{employee}/terminate', [$employees, 'terminate']);
+                Route::post('/employees/{employee}/reinstate', [$employees, 'reinstate']);
+                Route::put('/positions/{position}', [$employees, 'updatePosition']);
+            });
+
+            Route::middleware('permission:leaves.view')->group(function () use ($leaves) {
+                Route::get('/leaves', [$leaves, 'index']);
+                Route::get('/leaves/calendar', [$leaves, 'calendar']);
+                Route::get('/leaves/options', [$leaves, 'options']);
+                Route::get('/leave-types', [$leaves, 'types']);
+            });
+            Route::middleware('permission:leaves.create')->group(function () use ($leaves) {
+                Route::post('/leaves', [$leaves, 'store']);
+                // Anular: quien gestiona ausencias, o quien la pidió mientras siga solicitada (se revisa adentro).
+                Route::post('/leaves/{leave}/cancel', [$leaves, 'cancel']);
+            });
+            Route::middleware('permission:leaves.approve')->group(function () use ($leaves) {
+                Route::post('/leaves/{leave}/approve', [$leaves, 'approve']);
+                Route::post('/leaves/{leave}/reject', [$leaves, 'reject']);
+            });
+            Route::middleware('permission:leaves.manage')->group(function () use ($leaves) {
+                Route::post('/leave-types', [$leaves, 'storeType']);
+                Route::put('/leave-types/{type}', [$leaves, 'updateType']);
+            });
+
+            Route::middleware('permission:hr_sync.view')->group(function () use ($exports, $sync) {
+                Route::get('/payroll-exports', [$exports, 'index']);
+                Route::get('/payroll-exports/preview', [$exports, 'preview']);
+                Route::get('/payroll-exports/{export}', [$exports, 'show']);
+                Route::get('/sync/status', [$sync, 'status']);
+                Route::get('/sync/runs', [$sync, 'runs']);
+                Route::get('/sync/unmatched', [$sync, 'unmatched']);
+                Route::get('/sync/events', [$sync, 'events']);
+            });
+            Route::middleware('permission:hr_sync.export')->get('/payroll-exports/{export}/file', [$exports, 'file']);
+            Route::middleware('permission:hr_sync.create')->post('/payroll-exports', [$exports, 'store']);
+            Route::middleware('permission:hr_sync.manage')->group(function () use ($exports, $sync) {
+                Route::post('/payroll-exports/{export}/send', [$exports, 'send']);
+                Route::put('/sync/connection', [$sync, 'saveConnection']);
+                Route::post('/sync/connection/rotate', [$sync, 'rotateSecret']);
+                Route::post('/sync/unmatched/{item}/resolve', [$sync, 'resolve']);
+                Route::post('/sync/events/{event}/retry', [$sync, 'retry']);
+            });
+            Route::middleware(['permission:hr_sync.approve', 'throttle:10,1,hr-sync'])->group(function () use ($sync) {
+                Route::post('/sync/activate', [$sync, 'activate']);
+                Route::post('/sync/deactivate', [$sync, 'deactivate']);
+                Route::post('/sync/full-resync', [$sync, 'resync']);
+            });
         });
 
         // Control: Integraciones (módulo INTEGRACIONES). Los webhooks no se borran: se desactivan.

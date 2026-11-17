@@ -47,6 +47,17 @@ return Application::configure(basePath: dirname(__DIR__))
             }
         });
 
+        // Dos ausencias aprobadas del mismo trabajador que se cruzan (la base lo impide).
+        $exceptions->render(function (\Illuminate\Database\QueryException $e, \Illuminate\Http\Request $request) {
+            if ($request->is('api/*') && str_contains($e->getMessage(), 'HR_LEAVE_OVERLAP')) {
+                return response()->json([
+                    'message' => 'Esta persona ya tiene una ausencia aprobada en esas fechas.',
+                    'code' => 'HR_LEAVE_OVERLAP',
+                    'errors' => ['date_from' => ['Esta persona ya tiene una ausencia aprobada en esas fechas.']],
+                ], 422);
+            }
+        });
+
         // Dos peticiones a la vez sobre lo mismo (p. ej. convertir dos veces una cotización):
         // la base deja pasar solo una; la otra recibe un aviso claro, no un fallo interno.
         $exceptions->render(function (\Illuminate\Database\UniqueConstraintViolationException $e, \Illuminate\Http\Request $request) {

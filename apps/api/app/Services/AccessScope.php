@@ -49,6 +49,8 @@ class AccessScope
         'warranty' => 'Garantías',
         'documents' => 'Documentos',
         'imports' => 'Importaciones',
+        'employees' => 'Trabajadores',
+        'leaves' => 'Ausencias',
     ];
 
     /** De menor a mayor alcance. */
@@ -191,6 +193,9 @@ class AccessScope
             'documents' => $query->whereIn("{$table}.created_by", $owners),
             // Una importación es de quien la hizo.
             'imports' => $query->whereIn("{$table}.created_by", $owners),
+            // El trabajador es "propio" de su usuario; una ausencia, de quien la tiene o la pidió.
+            'employees' => $query->whereIn("{$table}.user_id", $owners),
+            'leaves' => $query->whereIn("{$table}.user_id", $owners)->orWhereIn("{$table}.created_by", $owners),
         };
     }
 

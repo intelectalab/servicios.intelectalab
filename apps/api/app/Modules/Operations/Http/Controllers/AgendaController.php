@@ -68,7 +68,33 @@ class AgendaController extends Controller
                         'customer' => $this->customerName($order->customer),
                     ])
                 : null,
+            'absences' => $this->absences($request, $from, $to, $userId),
         ]);
+    }
+
+    /**
+     * Ausencias aprobadas (Personal) que bloquean la agenda en el rango. El tipo (vacaciones,
+     * descanso médico…) solo lo ve quien puede ver ausencias; los demás ven "Ausente".
+     */
+    private function absences(Request $request, Carbon $from, Carbon $to, ?string $userId): array
+    {
+        $tenantId = (string) $request->attributes->get('tenant_id');
+        if (! \App\Modules\Subscription\Support\TenantModules::isEnabled($tenantId, 'PERSONAL')) {
+            return [];
+        }
+        $detail = CheckPermission::granted($request, 'leaves.view');
+
+        return DB::table('hr_leave_requests as r')->join('hr_leave_types as t', 't.id', '=', 'r.leave_type_id')
+            ->join('users as u', 'u.id', '=', 'r.user_id')
+            ->where('r.tenant_id', $tenantId)->where('r.status', 'APPROVED')->whereNotNull('r.user_id')
+            ->where('r.date_from', '<=', $to->copy()->setTimezone('America/Lima')->toDateString())
+            ->where('r.date_to', '>=', $from->copy()->setTimezone('America/Lima')->toDateString())
+            ->when($userId, fn ($q) => $q->where('r.user_id', $userId))
+            ->orderBy('r.date_from')->limit(500)
+            ->get(['r.id', 'r.user_id', 'u.name', 'r.date_from', 'r.date_to', 't.name as type'])
+            ->map(fn ($a) => ['id' => $a->id, 'user' => ['id' => $a->user_id, 'name' => $a->name], 'date_from' => $a->date_from, 'date_to' => $a->date_to,
+                'label' => $detail ? $a->type : 'Ausente'])
+            ->all();
     }
 
     /** Listas del formulario: a quién se le puede agendar y, con permiso de verlos, los clientes. */
@@ -218,6 +244,9 @@ class AgendaController extends Controller
      */
     private function assertFree(Request $request, array $data, ?AgendaEvent $event): bool
     {
+        // Una ausencia aprobada (Personal) bloquea la agenda: esto no se confirma con "guardar igual".
+        \App\Modules\Personal\Support\Personal::assertAvailable((string) $request->attributes->get('tenant_id'), $data['assigned_user_id'], $data['starts_at'], $data['ends_at'], 'assigned_user_id');
+
         $clash = AgendaClash::find($data['assigned_user_id'], $data['starts_at'], $data['ends_at'], exceptEvent: $event?->id);
         if (! $clash) {
             return false;

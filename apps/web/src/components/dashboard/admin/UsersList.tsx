@@ -22,6 +22,8 @@ type CompanyUser = {
   /** Sedes adicionales: amplían lo que la persona ve con el alcance "Sede". */
   extra_branches: { id: string; name: string }[];
   hourly_cost?: number;
+  /** Su trabajador lo mantiene el SaaS de RRHH: el costo por hora no se edita aquí. */
+  hourly_cost_locked?: boolean;
   team: { id: string; name: string } | null;
   employee_id: string | null;
   /** Entra con verificación en dos pasos (por su rol o porque se le exige). */
@@ -76,6 +78,7 @@ function UserModal({
   const [hourlyCost, setHourlyCost] = useState(user?.hourly_cost ? String(user.hourly_cost) : "");
   const [employeeId, setEmployeeId] = useState(user?.employee_id ?? "");
   const [mfa, setMfa] = useState(user?.mfa_enabled ?? false);
+  const costLocked = Boolean(user?.hourly_cost_locked);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -113,7 +116,8 @@ function UserModal({
           // La principal no se repite como adicional; sin principal no hay adicionales.
           extra_branch_ids: branchId ? extraBranchIds.filter((id) => id !== branchId) : [],
           team_id: teamId || null,
-          hourly_cost: hourlyCost === "" ? 0 : Number(hourlyCost),
+          // Bloqueado: lo manda el SaaS de RRHH y no se envía.
+          ...(costLocked ? {} : { hourly_cost: hourlyCost === "" ? 0 : Number(hourlyCost) }),
           employee_id: employeeId || null,
           mfa,
         }),
@@ -196,8 +200,12 @@ function UserModal({
               />
             </Field>
           )}
-          <Field label="Costo por hora (S/)" error={errors.hourly_cost} hint="Lo toman sus horas al registrarse en Horas y costos.">
-            <input className={INPUT} type="number" min="0" step="0.01" inputMode="decimal" value={hourlyCost} onChange={(e) => setHourlyCost(e.target.value)} placeholder="0.00" />
+          <Field
+            label="Costo por hora (S/)"
+            error={errors.hourly_cost}
+            hint={costLocked ? "Se edita en el SaaS de RRHH" : "Es el mismo de su ficha en Personal; lo toman sus horas en Horas y costos."}
+          >
+            <input className={INPUT} type="number" min="0" step="0.01" inputMode="decimal" value={hourlyCost} onChange={(e) => setHourlyCost(e.target.value)} placeholder="0.00" disabled={costLocked} />
           </Field>
           <Field label="Empleado vinculado" span={2} error={errors.employee_id} hint="La cuenta de acceso y el empleado son registros distintos; aquí se enlazan.">
             <SearchSelect

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, FileText, Lock, Pencil, Plus, Settings, Trash2 } from "lucide-react";
 import { ApiError, apiFetch } from "@/lib/api";
+import { useAccess } from "@/lib/access-context";
 import { QUOTATION_STATES, historyLabel, money, shortDate, stateOf, takeFlash } from "@/lib/commercial";
 import { CONTRACT_STATES } from "@/lib/contracts";
 import { LEAD_STATES, OPPORTUNITY_STATES } from "@/lib/crm";
@@ -155,6 +156,9 @@ export default function ActorDetail() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { toast, toasts } = useToasts();
+  // "Ver en Personal" es navegación: solo se ofrece a quien puede ver el personal.
+  const access = useAccess();
+  const canSeeStaff = !access.loading && access.can("employees.view");
 
   const [actor, setActor] = useState<Actor | null>(null);
   // Columnas personalizadas de la tabla y lo que este registro tiene en cada una.
@@ -336,7 +340,14 @@ export default function ActorDetail() {
                       actor.sla_level
                         ? ["Nivel de SLA", <Chip key="sla" tone={actor.sla_level === "PREMIUM" ? "accent" : "neutral"}>{actor.sla_level === "PREMIUM" ? "Premium" : "Estándar"}</Chip>]
                         : null,
-                      actor.employee_id ? ["Código de empleado", actor.employee_code || "—"] : null,
+                      actor.employee_id
+                        ? ["Código de empleado", (
+                          <span key="employee-code" className="inline-flex flex-wrap items-center gap-x-2.5">
+                            <span>{actor.employee_code || "—"}</span>
+                            {canSeeStaff && <Link href={`/hr/employees/${actor.employee_id}`} className="text-[color:var(--p-brand-text)] hover:underline">Ver en Personal</Link>}
+                          </span>
+                        )]
+                        : null,
                       !isOrg && (actor.employee_id || actor.position) ? ["Cargo", actor.position || "—"] : null,
                       actor.contact_of
                         ? ["Contacto de", <Link key="contact-of" href={`/actors/${actor.contact_of.id}`} className="text-[color:var(--p-brand-text)] hover:underline">{actor.contact_of.name}</Link>]

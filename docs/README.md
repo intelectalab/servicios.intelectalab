@@ -125,3 +125,4 @@ Cada archivo de `cambios/` sigue el mismo orden:
 7. **Pendiente** — lo que quedó sin hacer.
 
 Las entradas se escriben al terminar cada cambio, no por adelantado: lo que figura aquí está hecho.
+| 2026-11-16 | Personal (trabajadores, ausencias, envío de horas a planilla) y conexión con el SaaS de RRHH | [cambios/2026-11-16_personal-y-conexion-con-rrhh.md](cambios/2026-11-16_personal-y-conexion-con-rrhh.md) |

@@ -41,6 +41,7 @@ class BaseRoles
         'users' => ['users', 'roles'], 'purchases' => ['purchases'], 'payables' => ['payables'], 'treasury' => ['treasury'],
         'accounting' => ['accounting'], 'budgets' => ['budgets'], 'fiscal' => ['fiscal'], 'portal_users' => ['portal_users'],
         'messaging' => ['messaging'], 'imports' => ['imports'],
+        'employees' => ['employees'], 'leaves' => ['leaves'], 'hr_sync' => ['hr_sync'],
     ];
 
     /** Matriz del kit: recurso => [Gerencia, Ventas, Operaciones, Técnico, Finanzas, Soporte]. */
@@ -84,6 +85,9 @@ class BaseRoles
         'portal_users' => ['v:TENANT', '', '', '', '', ''],
         'messaging' => ['v:TENANT', '', '', '', 'v:TENANT', ''],
         'imports' => ['v:TENANT', 'vc:OWN', '', '', 'vc:TENANT', ''],
+        'employees' => ['vx:TENANT', '', 'v:BRANCH', '', 'v:TENANT', ''],
+        'leaves' => ['vcax:TENANT', 'vc:OWN', 'vca:BRANCH', 'vc:OWN', 'vc:OWN', 'vc:OWN'],
+        'hr_sync' => ['vax:TENANT', '', '', '', 'vceax:TENANT', ''],
     ];
 
     private const LETTERS = ['v' => 'view', 'c' => 'create', 'e' => 'manage', 'd' => 'delete', 'a' => 'approve', 'x' => 'export', 'u' => 'use', 'r' => 'reveal'];

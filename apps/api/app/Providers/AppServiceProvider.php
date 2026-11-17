@@ -21,6 +21,11 @@ class AppServiceProvider extends ServiceProvider
             'simulated' => new SimulatedScanner,
             default => throw new \RuntimeException('Antivirus de documentos desconocido: '.config('documents.antivirus')),
         });
+
+        // SaaS de RRHH: llamadas reales o el simulador del contrato (nunca en producción).
+        $this->app->singleton(\App\Modules\Personal\HrSaas\HrSaasGateway::class, fn () => config('services.hr_saas.driver') === 'fake' && ! $this->app->environment('production')
+            ? new \App\Modules\Personal\HrSaas\FakeHrSaasGateway
+            : new \App\Modules\Personal\HrSaas\HttpHrSaasGateway);
     }
 
     /**

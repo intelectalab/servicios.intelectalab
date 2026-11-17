@@ -64,6 +64,13 @@ class ListExport
         'api/v1/outgoing-messages' => 'messaging',
         'api/v1/integration-deliveries' => 'integrations',
         'api/v1/users' => 'users',
+        'api/v1/hr/employees' => 'employees',
+        'api/v1/hr/positions' => 'employees',
+        'api/v1/hr/leaves' => 'leaves',
+        'api/v1/hr/payroll-exports' => 'hr_sync',
+        'api/v1/hr/sync/runs' => 'hr_sync',
+        'api/v1/hr/sync/unmatched' => 'hr_sync',
+        'api/v1/hr/sync/events' => 'hr_sync',
         'api/v1/audit' => 'audit',
     ];
 
