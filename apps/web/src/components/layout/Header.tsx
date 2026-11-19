@@ -125,7 +125,7 @@ export default function Header({
       <div className="mr-auto min-w-0">
         <nav aria-label="Ruta" className="app-muted flex items-center gap-[5px] overflow-hidden whitespace-nowrap text-[11.5px]">
           <Home size={13} className="shrink-0" />
-          <span className="truncate">{tenantName ?? "ERP SaaS"}</span>
+          <span className="truncate">{tenantName ?? "IntelectaERP"}</span>
           {currentGroup && (
             <>
               <span aria-hidden="true">·</span>

@@ -4,8 +4,8 @@ import type { MetadataRoute } from "next";
 // completa, directo en la App del técnico. Quien no sea técnico entra igual y usa el menú.
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "ERP SaaS",
-    short_name: "ERP Campo",
+    name: "IntelectaERP",
+    short_name: "IntelectaERP",
     description: "App del técnico: visitas del día, checklist y evidencias.",
     start_url: "/campo",
     scope: "/",

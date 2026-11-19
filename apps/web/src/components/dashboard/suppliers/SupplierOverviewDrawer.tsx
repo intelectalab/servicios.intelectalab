@@ -839,7 +839,7 @@ export function SupplierOverviewDrawer({ supplierId, onClose, onUpdate }: Suppli
 
               {/* Footer */}
               <div className="shrink-0 border-t border-slate-200 bg-slate-50 px-8 py-4 flex items-center justify-between">
-                <span className="text-xs text-slate-400">ERP SaaS - Ficha 360 Proveedor</span>
+                <span className="text-xs text-slate-400">IntelectaERP - Ficha 360 Proveedor</span>
                 <button
                   type="button"
                   onClick={onClose}

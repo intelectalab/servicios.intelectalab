@@ -332,7 +332,7 @@ export default function AppShell({ children, plansUrl = "/#plans" }: { children:
 
   const currentItem = MENU_ITEMS.find((item) => !item.soon && pathname?.startsWith(item.href));
   const currentSection = currentItem?.label ?? (pathname?.startsWith("/profile") ? "Mi perfil" : pathname?.startsWith("/notifications") ? "Notificaciones" : "Inicio");
-  const pageTitle = tenantName ? `${currentSection} · ${tenantName}` : `${currentSection} · ERP SaaS`;
+  const pageTitle = tenantName ? `${currentSection} · ${tenantName}` : `${currentSection} · IntelectaERP`;
 
   useEffect(() => {
     document.title = pageTitle;

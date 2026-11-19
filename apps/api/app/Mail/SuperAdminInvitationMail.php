@@ -28,7 +28,7 @@ class SuperAdminInvitationMail extends Mailable
             text: 'mail.code-text',
             with: [
                 'heading' => 'Crea tu contraseña',
-                'intro' => "{$this->invitedBy} te dio acceso como Super Administrador de la plataforma ERP SaaS. Desde la consola se administran las empresas, sus planes y suscripciones; no incluye los datos de negocio de ninguna empresa. Usa este código para crear tu contraseña.",
+                'intro' => "{$this->invitedBy} te dio acceso como Super Administrador de la plataforma IntelectaERP. Desde la consola se administran las empresas, sus planes y suscripciones; no incluye los datos de negocio de ninguna empresa. Usa este código para crear tu contraseña.",
                 'preview' => "Tu código vence en {$this->days} días.",
                 'expiry' => "Vence en {$this->days} días",
                 'button' => ['label' => 'Crear mi contraseña', 'url' => $this->resetUrl],
