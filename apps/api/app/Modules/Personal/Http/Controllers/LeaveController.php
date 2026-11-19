@@ -112,8 +112,8 @@ class LeaveController extends Controller
             'employees' => $this->requestable($request)->where('employees.status', 'ACTIVE')
                 ->join('persons', 'persons.party_id', '=', 'employees.person_party_id')
                 ->orderByRaw("btrim(persons.given_names || ' ' || persons.family_name)")->limit(500)
-                ->get(['employees.id', 'employees.user_id', 'employees.source', DB::raw("btrim(persons.given_names || ' ' || persons.family_name) as name")])
-                ->map(fn ($e) => ['id' => $e->id, 'name' => $e->name, 'mine' => $e->user_id === $request->user()->id,
+                ->addSelect(DB::raw("btrim(persons.given_names || ' ' || persons.family_name) as full_name"))->get()
+                ->map(fn ($e) => ['id' => $e->id, 'name' => $e->full_name, 'mine' => $e->user_id === $request->user()->id,
                     'mastered' => $connection && $e->source === 'HR_SAAS']),
             'mode' => $connection ? 'HR_SAAS_MASTER' : 'ERP_MASTER',
         ]);

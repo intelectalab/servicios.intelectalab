@@ -134,7 +134,7 @@ class ReportsTest extends TestCase
         $ops = $this->getJson('/api/v1/reports/operaciones')->assertOk();
         $this->assertSame([$order['code'], 'Técnico', 'ASSIGNED'], [$ops->json('data.0.code'), $ops->json('data.0.technician'), $ops->json('data.0.status')]);
         $this->assertSame(1, $ops->json('summary.states.ASSIGNED'));
-        $this->getJson('/api/v1/reports/operaciones?from='.now()->addDays(5)->toDateString())->assertJsonPath('total', 0);
+        $this->getJson('/api/v1/reports/operaciones?from='.now('America/Lima')->addDays(5)->toDateString())->assertJsonPath('total', 0);
         $this->assertSame(['CURRENT', 'D30', 'D60', 'D90', 'OVER'], array_column($this->getJson('/api/v1/reports/cobranza')->json('summary.aging'), 'key'));
     }
 

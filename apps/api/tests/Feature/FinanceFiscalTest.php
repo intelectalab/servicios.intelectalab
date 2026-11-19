@@ -136,10 +136,10 @@ class FinanceFiscalTest extends TestCase
 
         // La constancia de depósito baja la cuenta por cobrar y entra a la cuenta de detracciones.
         $this->postJson("/api/v1/invoices/{$invoice['id']}/withholding-receipt", [])->assertStatus(422)->assertJsonValidationErrors('number');
-        $this->postJson("/api/v1/invoices/{$invoice['id']}/withholding-receipt", ['number' => '123', 'date' => now()->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('date');
+        $this->postJson("/api/v1/invoices/{$invoice['id']}/withholding-receipt", ['number' => '123', 'date' => now('America/Lima')->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('date');
         $this->postJson("/api/v1/invoices/{$plain['id']}/withholding-receipt", ['number' => '123'])->assertStatus(422)->assertJsonValidationErrors('status');
         $done = $this->postJson("/api/v1/invoices/{$invoice['id']}/withholding-receipt", ['number' => '0012345678'])->assertOk()->json();
-        $this->assertSame(['RECEIVED', '0012345678', now()->toDateString()], [$done['withholding']['status'], $done['withholding']['number'], $done['withholding']['date']]);
+        $this->assertSame(['RECEIVED', '0012345678', now('America/Lima')->toDateString()], [$done['withholding']['status'], $done['withholding']['number'], $done['withholding']['date']]);
         $this->assertEquals([1038, 'PARTIAL'], [$done['receivable']['balance_amount'], $done['receivable']['status']]);
         $movement = collect($done['receivable']['movements'])->firstWhere('movement_type', 'WITHHOLDING');
         $this->assertEquals([-142, 'Detracción · constancia 0012345678'], [$movement['amount'], $movement['reference']]);
@@ -161,7 +161,7 @@ class FinanceFiscalTest extends TestCase
         $this->as($this->makeUser('Finanzas', self::FINANCE));
         $customer = $this->makeCustomer();
         $agent = $this->makeCustomer('Agente de Retención SAA');
-        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now()->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now('America/Lima')->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
         $this->putJson('/api/v1/fiscal/settings', self::SETTINGS)->assertOk();
 
         // Otro código, con su porcentaje.
@@ -323,7 +323,7 @@ class FinanceFiscalTest extends TestCase
     {
         $this->makeTenant(self::MODULES);
         $this->as($this->makeUser('Finanzas', self::FINANCE));
-        $today = now()->format('d/m/Y');
+        $today = now('America/Lima')->format('d/m/Y');
         $published = fn (string $body, int $status = 200) => Http::fake(['*tipoCambio*' => Http::response($body, $status)]);
 
         // SUNAT no responde, responde con error o con otra cosa: no se guarda nada.
@@ -340,7 +340,7 @@ class FinanceFiscalTest extends TestCase
         Http::swap(new \Illuminate\Http\Client\Factory());
         $published("{$today}|3.434|3.448|\n");
         $this->postJson('/api/v1/exchange-rates/sync')->assertOk()->assertJsonPath('unchanged', false)
-            ->assertJsonPath('rate.source', 'SUNAT')->assertJsonPath('rate.buy', '3.4340')->assertJsonPath('rate.sell', '3.4480')->assertJsonPath('rate.rate_date', now()->toDateString());
+            ->assertJsonPath('rate.source', 'SUNAT')->assertJsonPath('rate.buy', '3.4340')->assertJsonPath('rate.sell', '3.4480')->assertJsonPath('rate.rate_date', now('America/Lima')->toDateString());
         // Otra vez el mismo día: ya estaba al día, sin duplicar ni volver a auditar.
         $this->postJson('/api/v1/exchange-rates/sync')->assertOk()->assertJsonPath('unchanged', true);
         $this->assertSame(1, DB::table('exchange_rates')->where('tenant_id', $this->tenantId)->count());
@@ -348,7 +348,7 @@ class FinanceFiscalTest extends TestCase
         $this->getJson('/api/v1/exchange-rates/current')->assertOk()->assertJsonPath('sell', '3.4480');
 
         // Uno por día: corrige el que se registró a mano ese día, y queda el antes y el después.
-        $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.5, 'sell' => 3.6])->assertOk()->assertJsonPath('source', 'Manual');
+        $this->postJson('/api/v1/exchange-rates', ['date' => now('America/Lima')->toDateString(), 'buy' => 3.5, 'sell' => 3.6])->assertOk()->assertJsonPath('source', 'Manual');
         $this->postJson('/api/v1/exchange-rates/sync')->assertOk()->assertJsonPath('unchanged', false)->assertJsonPath('rate.sell', '3.4480');
         $this->assertSame(1, DB::table('exchange_rates')->where('tenant_id', $this->tenantId)->count());
         $audit = DB::table('audit_logs')->where('tenant_id', $this->tenantId)->where('action', 'exchange_rate.sync')->orderByDesc('created_at')->get()

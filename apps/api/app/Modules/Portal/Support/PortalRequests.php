@@ -87,7 +87,7 @@ class PortalRequests
             'expected_value' => $price ?? 0,
             'currency' => 'PEN',
             'probability' => $stage->probability,
-            'expected_close_date' => now()->addDays(30)->toDateString(),
+            'expected_close_date' => \App\Services\LocalTime::today()->addDays(30)->toDateString(),
             'owner_user_id' => $seller,
             'branch_id' => $branchId,
         ]);

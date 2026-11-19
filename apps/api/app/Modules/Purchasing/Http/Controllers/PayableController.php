@@ -205,7 +205,7 @@ class PayableController extends Controller
             'payment_method' => ['required', 'in:'.implode(',', array_keys(SupplierPayment::METHODS))],
             // El efectivo no tiene número de operación.
             'reference' => ['nullable', 'required_unless:payment_method,EFECTIVO', 'string', 'max:255'],
-            'paid_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'paid_at' => ['nullable', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
             'deposit_detraction' => ['sometimes', 'boolean'],
             'detraction_number' => ['nullable', 'string', 'max:100'],
             'detraction_account_id' => ['nullable', 'uuid'],

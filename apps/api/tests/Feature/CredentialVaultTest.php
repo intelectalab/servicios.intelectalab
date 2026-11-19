@@ -36,7 +36,7 @@ class CredentialVaultTest extends TestCase
         $this->makeTenant([]);
         $this->as($this->makeUser('Admin', self::ADMIN));
 
-        $this->create(['name' => '', 'credential_type' => 'OTRO', 'secret' => '', 'expires_at' => now()->toDateString()])
+        $this->create(['name' => '', 'credential_type' => 'OTRO', 'secret' => '', 'expires_at' => now('America/Lima')->toDateString()])
             ->assertStatus(422)->assertJsonValidationErrors(['name', 'credential_type', 'secret', 'expires_at']);
 
         $credential = $this->create()->assertCreated()->json();

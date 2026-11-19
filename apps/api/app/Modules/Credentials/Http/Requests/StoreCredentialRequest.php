@@ -21,7 +21,7 @@ class StoreCredentialRequest extends FormRequest
             'owner_label' => ['nullable', 'string', 'max:150'],
             'secret' => ['required', 'string', 'max:10000'],
             // Vence al terminar ese día; hoy ya no sirve.
-            'expires_at' => ['nullable', 'date', 'after:today'],
+            'expires_at' => ['nullable', 'date', 'after:'.\App\Services\LocalTime::today()->toDateString()],
         ];
     }
 

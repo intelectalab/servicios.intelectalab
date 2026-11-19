@@ -144,7 +144,7 @@ class CrmOpportunityController extends Controller
                 'status' => 'OPEN',
                 'currency' => 'PEN',
                 'probability' => $stage->probability,
-                'expected_close_date' => $data['expected_close_date'] ?? now()->addDays(30)->toDateString(),
+                'expected_close_date' => $data['expected_close_date'] ?? \App\Services\LocalTime::today()->addDays(30)->toDateString(),
                 'owner_user_id' => $request->user()->id,
             ]);
 

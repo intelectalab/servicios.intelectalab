@@ -120,7 +120,7 @@ class ChartController extends Controller
     public function periods(Request $request)
     {
         $tenantId = $request->attributes->get('tenant_id');
-        Ledger::openPeriod($tenantId, now()->format('Y-m'));
+        Ledger::openPeriod($tenantId, \App\Services\LocalTime::today()->format('Y-m'));
 
         return response()->json(
             DB::table('acc_periods')->leftJoin('users', 'users.id', '=', 'acc_periods.closed_by')
@@ -141,7 +141,7 @@ class ChartController extends Controller
         if ($row->status === 'CLOSED') {
             throw ValidationException::withMessages(['status' => ['El periodo ya está cerrado.']]);
         }
-        if ($row->period >= now()->format('Y-m')) {
+        if ($row->period >= \App\Services\LocalTime::today()->format('Y-m')) {
             throw ValidationException::withMessages(['status' => ['Solo se cierra un periodo que ya terminó.']]);
         }
         $pending = $this->unreconciled($tenantId, trim($row->period));
@@ -216,7 +216,7 @@ class ChartController extends Controller
             'closed_at' => $period->closed_at ? Carbon::parse($period->closed_at)->toIso8601String() : null,
             'closed_by' => $period->closed_by_name ?? ($period->closed_by ? DB::table('users')->where('id', $period->closed_by)->value('name') : null),
             'reason' => $period->reason,
-            'ended' => $key < now()->format('Y-m'),
+            'ended' => $key < \App\Services\LocalTime::today()->format('Y-m'),
         ];
     }
 

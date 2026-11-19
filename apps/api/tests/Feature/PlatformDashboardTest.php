@@ -47,7 +47,7 @@ class PlatformDashboardTest extends TestCase
         $this->assertSame($data['tenants']['total'], array_sum($data['tenants']['by_status']));
         $this->assertCount($data['tenants']['total'], $data['usage']);
         $this->assertCount(12, $data['signups']);
-        $this->assertSame(now()->format('Y-m'), end($data['signups'])['month']);
+        $this->assertSame(now('America/Lima')->format('Y-m'), end($data['signups'])['month']);
         $this->assertSame($data['subscriptions']['current'], array_sum(array_column($data['plans'], 'tenants')));
         $this->assertSame($data['subscriptions']['paid'] + $data['subscriptions']['trial'], $data['subscriptions']['current']);
         $this->assertArrayHasKey('mail', $data['health']);

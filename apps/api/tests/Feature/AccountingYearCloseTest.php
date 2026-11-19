@@ -163,7 +163,7 @@ class AccountingYearCloseTest extends TestCase
         $this->assertSame(['IMPORT', 'Importado', false], [$detail['source_type'], $detail['source_label'], $detail['automatic']]);
 
         // Un CSV con un asiento bueno y cuatro con errores: entra solo el bueno.
-        $today = now()->format('d/m/Y');
+        $today = now('America/Lima')->format('d/m/Y');
         $csv = "asiento;fecha;glosa;cuenta;debe;haber;centro_costo;detalle\n"
             ."A;{$today};Bueno;6343;100;;CC-ADM;\nA;;;1041;;100;;\n"
             ."B;{$today};No cuadra;6343;100;;;\nB;;;1041;;90;;\n"

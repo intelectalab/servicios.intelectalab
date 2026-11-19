@@ -56,7 +56,7 @@ class TimeEntryController extends Controller
         ColumnFilters::apply($query, $request, [
             'person' => ColumnFilters::text(self::PERSON),
             'context' => ColumnFilters::text(self::CONTEXT),
-            'date' => ColumnFilters::date('time_entries.started_at'),
+            'date' => ColumnFilters::date("(time_entries.started_at AT TIME ZONE 'America/Lima')"),
             'hours' => ColumnFilters::number('time_entries.hours'),
         ]);
 

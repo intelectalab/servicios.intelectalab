@@ -54,7 +54,7 @@ class WarrantyClaimController extends Controller
         ColumnFilters::apply($query, $request, [
             'claim' => ColumnFilters::text("concat_ws(' ', warranty_claims.claim_number, warranty_claims.description)"),
             'customer' => ColumnFilters::text(ListSort::customerName('warranty_claims')),
-            'opened' => ColumnFilters::date('warranty_claims.created_at'),
+            'opened' => ColumnFilters::date("(warranty_claims.created_at AT TIME ZONE 'America/Lima')"),
         ]);
 
         ListSort::apply($query, $request, [
@@ -238,7 +238,7 @@ class WarrantyClaimController extends Controller
             ->whereNotNull('completed_at')->orderByDesc('completed_at')->first(['code', 'completed_at']);
 
         $months = (int) ($service->warranty_months ?? 0);
-        $base = $order ? Carbon::parse($order->completed_at)->startOfDay() : Carbon::parse($contracted->start_date ?? $contracted->created_at)->startOfDay();
+        $base = $order ? Carbon::parse($order->completed_at)->setTimezone('America/Lima')->startOfDay() : Carbon::parse($contracted->start_date ?? $contracted->created_at)->startOfDay();
         $until = $months > 0 ? $base->copy()->addMonthsNoOverflow($months) : null;
         $claimedOn = ($claim->opened_at ?? now())->copy()->startOfDay();
         $covered = $until !== null && $until->greaterThanOrEqualTo($claimedOn);

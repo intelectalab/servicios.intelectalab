@@ -119,7 +119,7 @@ trait OperationsFixtures
         $customerId ??= $this->makeCustomer();
         DB::table('contracts')->insert([
             'id' => $id, 'tenant_id' => $this->tenantId, 'customer_id' => $customerId, 'contract_number' => 'CTR-'.Str::upper(Str::random(6)),
-            'status' => $status, 'start_date' => now()->toDateString(), 'end_date' => now()->addYear()->toDateString(),
+            'status' => $status, 'start_date' => now('America/Lima')->toDateString(), 'end_date' => now('America/Lima')->addYear()->toDateString(),
             'created_by' => $seller?->id, 'branch_id' => $branchId,
         ]);
 
@@ -134,7 +134,7 @@ trait OperationsFixtures
         DB::table('contracted_services')->insert([
             'id' => $id, 'tenant_id' => $this->tenantId, 'customer_id' => $customerId, 'contract_id' => $contractId,
             'service_id' => $data['service_id'] ?? $this->makeService(), 'status' => $data['status'] ?? 'ACTIVE',
-            'start_date' => now()->toDateString(), 'end_date' => now()->addYear()->toDateString(),
+            'start_date' => now('America/Lima')->toDateString(), 'end_date' => now('America/Lima')->addYear()->toDateString(),
             'quantity' => 2, 'price' => 380, 'recurring' => $data['recurring'] ?? false,
             'owner_user_id' => $seller?->id, 'branch_id' => $data['branch_id'] ?? null,
         ]);
@@ -170,7 +170,7 @@ trait OperationsFixtures
 
     private function at(int $days, int $hour): string
     {
-        return now()->addDays($days)->setTime($hour, 0)->toIso8601String();
+        return now('America/Lima')->addDays($days)->setTime($hour, 0)->toIso8601String();
     }
 
     private function assertDatabaseRejects(callable $attempt): void

@@ -59,7 +59,7 @@ class ChecklistController extends Controller
             'name' => ColumnFilters::text("concat_ws(' ', checklists.name, checklists.description)"),
             'service' => ColumnFilters::text(self::SERVICE_NAME),
             'items' => ColumnFilters::number('('.self::ITEMS_COUNT.')'),
-            'updated' => ColumnFilters::date('checklists.updated_at'),
+            'updated' => ColumnFilters::date("(checklists.updated_at AT TIME ZONE 'America/Lima')"),
         ]);
 
         ListSort::apply($query, $request, [

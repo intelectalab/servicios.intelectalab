@@ -185,4 +185,8 @@ Decisiones de la usuaria:
 - **Decisiones del kit:**
   - Marcar sobretiempo en las horas.
   - Un tipo de ausencia «sin aprobación» se aprueba solo al pedirlo.
-- **Pruebas que fallan entre las 19:00 y la medianoche de Lima (17), sin relación con Personal:** comparan la fecha UTC de la prueba con la fecha de Lima del sistema. Están en Cotizaciones, Finanzas, Recurrencia, Portal y Cierre de ejercicio. Hay que fijar la hora en esas pruebas.
+- **Pruebas que fallaban de noche:** corregidas el mismo día (ver `2026-11-16_fechas-de-lima-sin-fallas-de-noche.md`).
+
+## 6. Ajuste tras la revisión (2026-11-19)
+
+- En «Nueva solicitud» de ausencias, el selector de trabajador salía con filas vacías: la API mandaba los nombres en blanco, porque la consulta ignoraba la columna del nombre. Corregido, y la prueba ahora comprueba los nombres.

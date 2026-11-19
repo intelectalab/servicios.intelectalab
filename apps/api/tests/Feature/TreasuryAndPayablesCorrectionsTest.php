@@ -122,7 +122,7 @@ class TreasuryAndPayablesCorrectionsTest extends TestCase
         $supplier = $this->supplier();
         $center = $this->center('CC-OPS');
         $invoice = $this->postJson('/api/v1/supplier-invoices', [
-            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-77', 'issue_date' => now()->toDateString(),
+            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-77', 'issue_date' => now('America/Lima')->toDateString(),
             'subtotal' => 500, 'currency' => 'PEN', 'cost_center_id' => $center, 'expense_account' => '6343',
         ])->assertCreated()->json();
         $payableId = $this->postJson("/api/v1/supplier-invoices/{$invoice['id']}/approve")->assertOk()->json('payable.id');
@@ -163,7 +163,7 @@ class TreasuryAndPayablesCorrectionsTest extends TestCase
 
         // Un pago con depósito de detracción no se revierte (ni la base lo deja).
         $withDetraction = $this->postJson('/api/v1/supplier-invoices', [
-            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-78', 'issue_date' => now()->toDateString(),
+            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-78', 'issue_date' => now('America/Lima')->toDateString(),
             'subtotal' => 1000, 'currency' => 'PEN', 'cost_center_id' => $center, 'expense_account' => '6343', 'detraction_code' => '020',
         ])->assertCreated()->json();
         $payable = $this->postJson("/api/v1/supplier-invoices/{$withDetraction['id']}/approve")->assertOk()->json('payable.id');
@@ -193,7 +193,7 @@ class TreasuryAndPayablesCorrectionsTest extends TestCase
         $this->postJson("/api/v1/purchase-orders/{$order['id']}/receipts", ['pct' => 100])->assertOk();
         // Facturado 1040 sobre 1000 recibidos: 4 % de diferencia.
         $invoice = $this->postJson('/api/v1/supplier-invoices', [
-            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-90', 'issue_date' => now()->toDateString(), 'purchase_order_id' => $order['id'],
+            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-90', 'issue_date' => now('America/Lima')->toDateString(), 'purchase_order_id' => $order['id'],
             'subtotal' => 1040, 'currency' => 'PEN', 'cost_center_id' => $center, 'expense_account' => '6343',
         ])->assertCreated()->json();
         $this->assertSame([false, 'Diferencia 4.0 % con la OC '.$order['order_number'].' (tolerancia 2 %)'], [$invoice['match']['ok'], $invoice['match']['label']]);

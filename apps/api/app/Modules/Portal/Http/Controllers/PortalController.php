@@ -75,7 +75,7 @@ class PortalController extends Controller
             // Servicios recurrentes cuya vigencia termina en los próximos 60 días.
             'renewals' => $can('services')
                 ? DB::table('recurring_service_instances')->where('customer_id', $customerId)->where('status', 'ACTIVE')
-                    ->whereBetween('end_date', [$today, now()->addDays(60)->toDateString()])->count()
+                    ->whereBetween('end_date', [$today, \App\Services\LocalTime::today()->addDays(60)->toDateString()])->count()
                 : null,
             'signatures_pending' => $can('sign')
                 ? DB::table('contract_signature_requests')->where('customer_id', $customerId)->where('status', 'PENDING')->where('expires_at', '>', now())->count()

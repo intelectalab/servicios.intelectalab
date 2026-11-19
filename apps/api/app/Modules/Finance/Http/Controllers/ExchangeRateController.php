@@ -98,7 +98,7 @@ class ExchangeRateController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'date' => ['required', 'date', 'before_or_equal:today'],
+            'date' => ['required', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
             'buy' => ['required', 'numeric', 'gt:0', 'lt:100'],
             'sell' => ['required', 'numeric', 'gt:0', 'lt:100'],
         ], [

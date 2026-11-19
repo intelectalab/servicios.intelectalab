@@ -43,7 +43,7 @@ class BillableEventController extends Controller
         ColumnFilters::apply($query, $request, [
             'event' => ColumnFilters::text('billable_events.description'),
             'customer' => ColumnFilters::text(ListSort::customerName('billable_events')),
-            'date' => ColumnFilters::date('billable_events.created_at'),
+            'date' => ColumnFilters::date("(billable_events.created_at AT TIME ZONE 'America/Lima')"),
             'base' => ColumnFilters::number('billable_events.base'),
             'total' => ColumnFilters::number('billable_events.amount'),
         ]);

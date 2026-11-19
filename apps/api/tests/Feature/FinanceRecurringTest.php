@@ -36,9 +36,9 @@ class FinanceRecurringTest extends TestCase
         $id = (string) Str::uuid();
         DB::table('recurring_service_instances')->insert([
             'id' => $id, 'tenant_id' => $this->tenantId, 'contracted_service_id' => $contracted, 'customer_id' => $contract[1],
-            'status' => 'ACTIVE', 'frequency' => 'MONTHLY', 'interval_value' => 1, 'next_cycle_date' => now()->toDateString(),
+            'status' => 'ACTIVE', 'frequency' => 'MONTHLY', 'interval_value' => 1, 'next_cycle_date' => now('America/Lima')->toDateString(),
             'unit_price' => 380, 'quantity' => 2, 'currency' => 'PEN',
-            'start_date' => now()->subMonth()->toDateString(), 'end_date' => now()->addYear()->toDateString(),
+            'start_date' => now('America/Lima')->subMonth()->toDateString(), 'end_date' => now('America/Lima')->addYear()->toDateString(),
             'owner_user_id' => $seller?->id, 'branch_id' => $branchId, 'created_at' => now(), 'updated_at' => now(),
             ...$data,
         ]);
@@ -67,7 +67,7 @@ class FinanceRecurringTest extends TestCase
         $instance = DB::table('recurring_service_instances')->where('contracted_service_id', $contracted)->first();
         $this->assertSame([$contract[1], 'USD', 'MONTHLY', $branch, $seller->id], [$instance->customer_id, $instance->currency, $instance->frequency, $instance->branch_id, $instance->owner_user_id]);
         $this->assertEquals([380, 2], [$instance->unit_price, $instance->quantity]);
-        $this->assertSame([now()->toDateString(), now()->addYear()->toDateString()], [$instance->start_date, $instance->end_date]);
+        $this->assertSame([now('America/Lima')->toDateString(), now('America/Lima')->addYear()->toDateString()], [$instance->start_date, $instance->end_date]);
         // La ficha del contrato muestra lo pactado por ciclo, con IGV.
         $this->as($this->makeUser('Gerencia', ['contracts.view']));
         $this->getJson("/api/v1/contracts/{$contract[0]}")->assertOk()->assertJsonPath('recurring_instances.0.amount', '896.80');
@@ -79,12 +79,12 @@ class FinanceRecurringTest extends TestCase
         $seller = $this->makeUser('Vendedora', ['contracts.view']);
         $branch = $this->makeBranch('Lima');
         [$id] = $this->recurring([], $seller, $branch);
-        [$future] = $this->recurring(['next_cycle_date' => now()->addDays(10)->toDateString()]);
+        [$future] = $this->recurring(['next_cycle_date' => now('America/Lima')->addDays(10)->toDateString()]);
         [$suspended] = $this->recurring(['status' => 'SUSPENDED']);
         $this->as($this->makeUser('Finanzas', self::FINANCE));
 
         $this->getJson('/api/v1/recurring/summary')->assertOk()->assertJsonPath('due', 1);
-        $period = now()->format('Y-m');
+        $period = now('America/Lima')->format('Y-m');
         $summary = $this->cycles();
         // La que aún no vence ni se mira; la suspendida se omite.
         $this->assertSame([1, 0, 1, 0], [$summary['created'], $summary['skipped_idem'], $summary['skipped_status'], $summary['failed']]);
@@ -98,7 +98,7 @@ class FinanceRecurringTest extends TestCase
         // 2 × 380 sin IGV.
         $this->assertEquals([760, 896.80, 896.80], [$event->base, $event->amount, $cycle->amount]);
         $this->assertSame($summary['event_ids'], [$event->id]);
-        $this->assertSame(now()->addMonthNoOverflow()->toDateString(), DB::table('recurring_service_instances')->where('id', $id)->value('next_cycle_date'));
+        $this->assertSame(now('America/Lima')->addMonthNoOverflow()->toDateString(), DB::table('recurring_service_instances')->where('id', $id)->value('next_cycle_date'));
 
         // Otra pasada no duplica nada.
         $again = $this->cycles();
@@ -109,7 +109,7 @@ class FinanceRecurringTest extends TestCase
         // La base no admite dos ciclos para el mismo periodo, ni un segundo evento para el mismo ciclo, ni borrarlos.
         $this->assertDatabaseRejects(fn () => DB::table('recurring_service_cycles')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'recurring_instance_id' => $id, 'period' => $period,
-            'cycle_start' => now()->addYear()->toDateString(), 'cycle_end' => now()->addYear()->toDateString(), 'idempotency_key' => $cycle->idempotency_key,
+            'cycle_start' => now('America/Lima')->addYear()->toDateString(), 'cycle_end' => now('America/Lima')->addYear()->toDateString(), 'idempotency_key' => $cycle->idempotency_key,
         ]));
         $this->assertDatabaseRejects(fn () => DB::table('billable_events')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'source_type' => 'RECURRING_CYCLE', 'source_id' => $cycle->id,
@@ -132,14 +132,14 @@ class FinanceRecurringTest extends TestCase
         $this->makeTenant(self::MODULES);
         // Tres periodos atrasados y la vigencia termina antes del siguiente.
         [$id] = $this->recurring([
-            'next_cycle_date' => now()->startOfMonth()->subMonthsNoOverflow(2)->toDateString(),
-            'end_date' => now()->endOfMonth()->toDateString(),
+            'next_cycle_date' => now('America/Lima')->startOfMonth()->subMonthsNoOverflow(2)->toDateString(),
+            'end_date' => now('America/Lima')->endOfMonth()->toDateString(),
         ]);
         $this->as($this->makeUser('Finanzas', self::FINANCE));
 
         $this->assertSame(3, $this->cycles()['created']);
         $instance = DB::table('recurring_service_instances')->where('id', $id)->first();
-        $this->assertSame(['EXPIRED', now()->startOfMonth()->addMonthNoOverflow()->toDateString()], [$instance->status, $instance->next_cycle_date]);
+        $this->assertSame(['EXPIRED', now('America/Lima')->startOfMonth()->addMonthNoOverflow()->toDateString()], [$instance->status, $instance->next_cycle_date]);
         $this->assertSame(3, DB::table('recurring_service_cycles')->where('recurring_instance_id', $id)->where('status', 'COMPLETED')->distinct()->count('period'));
         // Vencida, ya no genera ciclos.
         $this->assertSame([0, 1], [$this->cycles($id)['created'], $this->cycles($id)['skipped_status']]);
@@ -160,7 +160,7 @@ class FinanceRecurringTest extends TestCase
         // Dos intentos sobre la misma fila; la instancia no avanza.
         $this->assertCount(1, $failed);
         $this->assertSame(['FAILED', 2, 'Cliente sin datos fiscales', null], [$failed[0]->status, $failed[0]->attempts, $failed[0]->error, $failed[0]->billable_event_id]);
-        $this->assertSame(now()->toDateString(), DB::table('recurring_service_instances')->where('id', $id)->value('next_cycle_date'));
+        $this->assertSame(now('America/Lima')->toDateString(), DB::table('recurring_service_instances')->where('id', $id)->value('next_cycle_date'));
         $this->assertSame(0, DB::table('billable_events')->where('tenant_id', $this->tenantId)->count());
 
         // Corregido el cliente, el mismo ciclo se completa.
@@ -175,14 +175,14 @@ class FinanceRecurringTest extends TestCase
     public function test_one_instance_can_be_processed_ahead_one_period_at_a_time(): void
     {
         $this->makeTenant(self::MODULES);
-        [$soon] = $this->recurring(['next_cycle_date' => now()->addDays(20)->toDateString()]);
-        [$far] = $this->recurring(['next_cycle_date' => now()->addDays(60)->toDateString()]);
+        [$soon] = $this->recurring(['next_cycle_date' => now('America/Lima')->addDays(20)->toDateString()]);
+        [$far] = $this->recurring(['next_cycle_date' => now('America/Lima')->addDays(60)->toDateString()]);
         $this->as($this->makeUser('Finanzas', self::FINANCE));
 
         // El proceso general no adelanta nada.
         $this->assertSame(0, $this->cycles()['created']);
         $this->assertSame(1, $this->cycles($soon)['created']);
-        $this->assertSame(now()->addDays(20)->addMonthNoOverflow()->toDateString(), DB::table('recurring_service_instances')->where('id', $soon)->value('next_cycle_date'));
+        $this->assertSame(now('America/Lima')->addDays(20)->addMonthNoOverflow()->toDateString(), DB::table('recurring_service_instances')->where('id', $soon)->value('next_cycle_date'));
         // Más allá de los 40 días no se adelanta.
         $this->assertSame(0, $this->cycles($far)['created']);
         $this->postJson('/api/v1/recurring/run-cycles', ['instance_id' => (string) Str::uuid()])->assertStatus(404);
@@ -192,7 +192,7 @@ class FinanceRecurringTest extends TestCase
     {
         $this->makeTenant(self::MODULES);
         [$id] = $this->recurring();
-        [$expired, $contracted] = $this->recurring(['status' => 'EXPIRED', 'end_date' => now()->subDays(5)->toDateString(), 'next_cycle_date' => now()->subDays(40)->toDateString()]);
+        [$expired, $contracted] = $this->recurring(['status' => 'EXPIRED', 'end_date' => now('America/Lima')->subDays(5)->toDateString(), 'next_cycle_date' => now('America/Lima')->subDays(40)->toDateString()]);
         [$cancelled] = $this->recurring(['status' => 'CANCELLED']);
         $this->as($this->makeUser('Finanzas', self::FINANCE));
         $this->cycles($id);
@@ -202,13 +202,13 @@ class FinanceRecurringTest extends TestCase
         $this->postJson("/api/v1/recurring/{$id}/renew", ['months' => 12, 'price' => 0])->assertStatus(422)->assertJsonValidationErrors('price');
         $this->postJson("/api/v1/recurring/{$cancelled}/renew", ['months' => 12])->assertStatus(422)->assertJsonValidationErrors('status');
 
-        $end = now()->addYear();
+        $end = now('America/Lima')->addYear();
         $renewed = $this->postJson("/api/v1/recurring/{$id}/renew", ['months' => 12, 'price' => 500])->assertOk()->json();
-        $this->assertSame([now()->subMonth()->toDateString(), $end->copy()->addMonthsNoOverflow(12)->toDateString(), 'ACTIVE'], [$renewed['start_date'], $renewed['end_date'], $renewed['status']]);
+        $this->assertSame([now('America/Lima')->subMonth()->toDateString(), $end->copy()->addMonthsNoOverflow(12)->toDateString(), 'ACTIVE'], [$renewed['start_date'], $renewed['end_date'], $renewed['status']]);
         $this->assertEquals([500, 1180], [$renewed['unit_price'], $renewed['amount']]);
         // La vigencia anterior queda, con su precio.
         $this->assertCount(1, $renewed['terms']);
-        $this->assertEquals([380, now()->subMonth()->toDateString(), $end->toDateString()], [$renewed['terms'][0]['unit_price'], $renewed['terms'][0]['start'], $renewed['terms'][0]['end']]);
+        $this->assertEquals([380, now('America/Lima')->subMonth()->toDateString(), $end->toDateString()], [$renewed['terms'][0]['unit_price'], $renewed['terms'][0]['start'], $renewed['terms'][0]['end']]);
         // El ciclo ya procesado conserva su importe.
         $this->assertEquals(896.80, $renewed['cycles'][0]['amount']);
         $this->assertContains('recurring.renew', array_column($renewed['history'], 'action'));
@@ -225,7 +225,7 @@ class FinanceRecurringTest extends TestCase
         $this->postJson("/api/v1/recurring/{$expired}/renew", ['months' => 6])->assertStatus(422)->assertJsonValidationErrors('status');
         DB::table('contracted_services')->where('id', $contracted)->update(['status' => 'ACTIVE']);
         $back = $this->postJson("/api/v1/recurring/{$expired}/renew", ['months' => 6])->assertOk()->json();
-        $this->assertSame(['ACTIVE', now()->toDateString(), now()->subMonth()->toDateString(), now()->addMonthsNoOverflow(6)->toDateString()], [$back['status'], $back['next_cycle_date'], $back['start_date'], $back['end_date']]);
+        $this->assertSame(['ACTIVE', now('America/Lima')->toDateString(), now('America/Lima')->subMonth()->toDateString(), now('America/Lima')->addMonthsNoOverflow(6)->toDateString()], [$back['status'], $back['next_cycle_date'], $back['start_date'], $back['end_date']]);
     }
 
     public function test_suspending_and_cancelling_need_a_reason_and_reactivating_needs_the_service_active(): void
@@ -254,9 +254,9 @@ class FinanceRecurringTest extends TestCase
     public function test_the_list_filters_sorts_and_warns_about_renewals(): void
     {
         $this->makeTenant(self::MODULES);
-        [$soon] = $this->recurring(['end_date' => now()->addDays(30)->toDateString(), 'unit_price' => 100, 'quantity' => 1], customerId: $this->makeCustomer('Alfa SAC'));
-        $this->recurring(['frequency' => 'YEARLY', 'next_cycle_date' => now()->addDays(90)->toDateString()], customerId: $this->makeCustomer('Beta SAC'));
-        $this->recurring(['status' => 'CANCELLED', 'end_date' => now()->addDays(10)->toDateString()], customerId: $this->makeCustomer('Gama SAC'));
+        [$soon] = $this->recurring(['end_date' => now('America/Lima')->addDays(30)->toDateString(), 'unit_price' => 100, 'quantity' => 1], customerId: $this->makeCustomer('Alfa SAC'));
+        $this->recurring(['frequency' => 'YEARLY', 'next_cycle_date' => now('America/Lima')->addDays(90)->toDateString()], customerId: $this->makeCustomer('Beta SAC'));
+        $this->recurring(['status' => 'CANCELLED', 'end_date' => now('America/Lima')->addDays(10)->toDateString()], customerId: $this->makeCustomer('Gama SAC'));
         $this->as($this->makeUser('Finanzas', self::FINANCE));
 
         $this->getJson('/api/v1/recurring')->assertOk()->assertJsonPath('total', 3);

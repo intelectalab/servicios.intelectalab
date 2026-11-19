@@ -530,7 +530,7 @@ class OperationsTest extends TestCase
         $filter = fn (array $f) => '/api/v1/work-orders?filters='.urlencode(json_encode([$f]));
         $this->getJson($filter(['id' => 'order', 'type' => 'text', 'operator' => 'contains', 'value' => 'bomba']))->assertJsonPath('total', 1);
         $this->getJson($filter(['id' => 'customer', 'type' => 'text', 'operator' => 'contains', 'value' => 'sur']))->assertJsonPath('total', 2);
-        $this->getJson($filter(['id' => 'scheduled', 'type' => 'date', 'operator' => 'range', 'value' => now()->addDay()->toDateString().'|'.now()->addDays(2)->toDateString()]))->assertJsonPath('total', 2);
+        $this->getJson($filter(['id' => 'scheduled', 'type' => 'date', 'operator' => 'range', 'value' => now('America/Lima')->addDay()->toDateString().'|'.now('America/Lima')->addDays(2)->toDateString()]))->assertJsonPath('total', 2);
 
         $this->getJson('/api/v1/work-orders?per_page=5000')->assertJsonPath('per_page', 200);
         $this->getJson('/api/v1/work-orders?export=1')->assertOk()->assertJsonPath('total', 3);

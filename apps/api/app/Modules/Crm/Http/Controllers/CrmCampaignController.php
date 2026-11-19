@@ -45,7 +45,7 @@ class CrmCampaignController extends Controller
 
         ColumnFilters::apply($query, $request, [
             'campaign' => ColumnFilters::text("concat_ws(' ', crm_campaigns.name, crm_campaigns.code, crm_campaigns.channel)"),
-            'start' => ColumnFilters::date('crm_campaigns.starts_at'),
+            'start' => ColumnFilters::date("(crm_campaigns.starts_at AT TIME ZONE 'America/Lima')"),
             'budget' => ColumnFilters::number('crm_campaigns.budget'),
         ]);
 

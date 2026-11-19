@@ -192,7 +192,7 @@ class LedgerController extends Controller
         $tenantId = $request->attributes->get('tenant_id');
         $valid = fn ($value) => is_string($value) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $value);
         $first = DB::table('acc_journal_entries')->where('tenant_id', $tenantId)->min('period');
-        $to = $valid($request->query('to')) ? $request->query('to') : now()->format('Y-m');
+        $to = $valid($request->query('to')) ? $request->query('to') : \App\Services\LocalTime::today()->format('Y-m');
         $from = $valid($request->query('from')) ? $request->query('from') : ($defaultFrom ?? ($first ? trim($first) : $to));
         if ($from > $to) {
             [$from, $to] = [$to, $from];

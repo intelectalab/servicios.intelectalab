@@ -56,7 +56,7 @@ class JournalController extends Controller
     {
         $tenantId = $request->attributes->get('tenant_id');
         $periods = $this->periods($tenantId);
-        $period = in_array($request->query('period'), $periods, true) ? $request->query('period') : ($periods[0] ?? now()->format('Y-m'));
+        $period = in_array($request->query('period'), $periods, true) ? $request->query('period') : ($periods[0] ?? \App\Services\LocalTime::today()->format('Y-m'));
         $totals = DB::table('acc_journal_entries')->where('tenant_id', $tenantId)
             ->selectRaw('count(*) AS total')
             ->selectRaw('count(*) FILTER (WHERE period = ?) AS in_period', [$period])
@@ -444,6 +444,6 @@ class JournalController extends Controller
     {
         return collect(DB::table('acc_periods')->where('tenant_id', $tenantId)->pluck('period'))
             ->merge(DB::table('acc_journal_entries')->where('tenant_id', $tenantId)->distinct()->pluck('period'))
-            ->push(now()->format('Y-m'))->map(fn ($period) => trim($period))->unique()->sortDesc()->values()->all();
+            ->push(\App\Services\LocalTime::today()->format('Y-m'))->map(fn ($period) => trim($period))->unique()->sortDesc()->values()->all();
     }
 }

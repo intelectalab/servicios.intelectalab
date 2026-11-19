@@ -441,9 +441,9 @@ class ComercialTest extends TestCase
             return $id;
         };
 
-        $late = $make(now()->subDay()->toDateString());
-        $today = $make(now()->toDateString());
-        $draft = $make(now()->subDays(5)->toDateString(), submit: false);
+        $late = $make(now('America/Lima')->subDay()->toDateString());
+        $today = $make(now('America/Lima')->toDateString());
+        $draft = $make(now('America/Lima')->subDays(5)->toDateString(), submit: false);
 
         $this->artisan('quotations:expire')->assertSuccessful();
         DB::statement("SET app.tenant_id = '{$tenantId}'");
@@ -503,14 +503,14 @@ class ComercialTest extends TestCase
         $this->assertSame('quotation.create', $actions->last());
 
         // Vencida: no se aprueba; se puede marcar vencida.
-        $expired = $this->postJson('/api/v1/quotations', [...$payload, 'valid_until' => now()->subDay()->toDateString()])->json('id');
+        $expired = $this->postJson('/api/v1/quotations', [...$payload, 'valid_until' => now('America/Lima')->subDay()->toDateString()])->json('id');
         $this->postJson("/api/v1/quotations/{$expired}/submit")->assertOk();
         $this->postJson("/api/v1/quotations/{$expired}/approve")->assertStatus(422)->assertJsonValidationErrors('status');
         $this->postJson("/api/v1/quotations/{$expired}/expire")->assertOk()->assertJsonPath('status', 'EXPIRED');
         $this->postJson("/api/v1/quotations/{$expired}/cancel")->assertStatus(422);
 
         // Segregación de funciones: quien la creó no la aprueba; otra persona con el permiso, sí.
-        $approved = $this->postJson('/api/v1/quotations', [...$payload, 'valid_until' => now()->toDateString()])->json('id');
+        $approved = $this->postJson('/api/v1/quotations', [...$payload, 'valid_until' => now('America/Lima')->toDateString()])->json('id');
         $this->postJson("/api/v1/quotations/{$approved}/submit")->assertOk();
         $this->getJson("/api/v1/quotations/{$approved}")->assertOk()->assertJsonPath('own_approval_blocked', true);
         $this->postJson("/api/v1/quotations/{$approved}/approve", ['comment' => 'Conforme'])
@@ -595,11 +595,11 @@ class ComercialTest extends TestCase
         $this->postJson('/api/v1/quotations', $payload)->assertStatus(422)->assertJsonValidationErrors('currency');
         $this->postJson('/api/v1/quotations', [...$payload, 'currency' => 'EUR'])->assertStatus(422);
 
-        $this->postJson('/api/v1/exchange-rates', ['date' => now()->addDay()->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(422);
-        $this->postJson('/api/v1/exchange-rates', ['date' => now()->subDay()->toDateString(), 'buy' => 3.69, 'sell' => 3.70])->assertCreated();
-        $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.74, 'sell' => 3.80])->assertCreated();
+        $this->postJson('/api/v1/exchange-rates', ['date' => now('America/Lima')->addDay()->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(422);
+        $this->postJson('/api/v1/exchange-rates', ['date' => now('America/Lima')->subDay()->toDateString(), 'buy' => 3.69, 'sell' => 3.70])->assertCreated();
+        $this->postJson('/api/v1/exchange-rates', ['date' => now('America/Lima')->toDateString(), 'buy' => 3.74, 'sell' => 3.80])->assertCreated();
         // Registrar otra vez el mismo día corrige el valor, no lo duplica.
-        $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.74, 'sell' => 3.75])
+        $this->postJson('/api/v1/exchange-rates', ['date' => now('America/Lima')->toDateString(), 'buy' => 3.74, 'sell' => 3.75])
             ->assertOk()->assertJsonPath('source', 'Manual');
 
         $this->getJson('/api/v1/exchange-rates')->assertOk()->assertJsonPath('total', 2);
@@ -637,7 +637,7 @@ class ComercialTest extends TestCase
 
         $this->getJson('/api/v1/exchange-rates/current')->assertOk();
         $this->getJson('/api/v1/exchange-rates')->assertStatus(403);
-        $this->postJson('/api/v1/exchange-rates', ['date' => now()->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(403);
+        $this->postJson('/api/v1/exchange-rates', ['date' => now('America/Lima')->toDateString(), 'buy' => 3.7, 'sell' => 3.75])->assertStatus(403);
     }
 
     public function test_contract_lifecycle_from_an_approved_quotation(): void
@@ -675,7 +675,7 @@ class ComercialTest extends TestCase
             ->assertJsonPath('customer.party.organization.legal_name', 'Minera Los Andes SAC')
             ->assertJsonCount(2, 'items')
             ->assertJsonPath('history.0.action', 'contract.generate');
-        $this->assertSame(now()->addDay()->toDateString(), substr($this->getJson("/api/v1/contracts/{$id}")->json('start_date'), 0, 10));
+        $this->assertSame(now('America/Lima')->addDay()->toDateString(), substr($this->getJson("/api/v1/contracts/{$id}")->json('start_date'), 0, 10));
 
         // Listado: por número, por cliente y por estado.
         $this->getJson('/api/v1/contracts?search=los andes')->assertOk()->assertJsonPath('total', 1)

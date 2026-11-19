@@ -40,7 +40,7 @@ class PortalUserController extends Controller
         ColumnFilters::apply($query, $request, [
             'user' => ColumnFilters::text("concat_ws(' ', users.name, users.email)"),
             'customer' => ColumnFilters::text(self::CUSTOMER),
-            'last_login' => ColumnFilters::date('portal_users.last_login_at'),
+            'last_login' => ColumnFilters::date("(portal_users.last_login_at AT TIME ZONE 'America/Lima')"),
         ]);
         ListSort::apply($query, $request, [
             'user' => 'lower(users.name)',

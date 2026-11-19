@@ -67,7 +67,7 @@ class DocumentController extends Controller
             'document' => ColumnFilters::text("concat_ws(' ', documents.title, ".sprintf(self::LATEST, 'original_name').')'),
             'category' => ColumnFilters::text('documents.document_type'),
             'version' => ColumnFilters::number('(SELECT max(v.version) FROM document_versions v WHERE v.document_id = documents.id)'),
-            'updated' => ColumnFilters::date('documents.updated_at'),
+            'updated' => ColumnFilters::date("(documents.updated_at AT TIME ZONE 'America/Lima')"),
         ]);
 
         ListSort::apply($query, $request, [

@@ -147,7 +147,7 @@ class AccountingTest extends TestCase
         $this->assertEquals([1000, 0, 1000], [$statements['kpis']['income'], $statements['kpis']['expenses'], $statements['kpis']['result']]);
         // El gráfico sigue al rango (como mucho 24 meses) y trae el resultado de cada mes.
         $this->assertCount(24, $statements['months']);
-        $this->assertEquals(['period' => now()->format('Y-m'), 'income' => 1000, 'expenses' => 0, 'result' => 1000], end($statements['months']));
+        $this->assertEquals(['period' => now('America/Lima')->format('Y-m'), 'income' => 1000, 'expenses' => 0, 'result' => 1000], end($statements['months']));
         $this->assertCount((int) now()->month, $this->getJson('/api/v1/financial-statements')->json('months'));
         $this->assertTrue($statements['balanced']);
         $this->assertAllEntriesPassTheDatabaseCheck();
@@ -171,7 +171,7 @@ class AccountingTest extends TestCase
         $bank = $this->bank(10000);
 
         $register = fn (array $data) => $this->postJson('/api/v1/supplier-invoices', [
-            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-'.random_int(1, 99999999), 'issue_date' => now()->toDateString(),
+            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-'.random_int(1, 99999999), 'issue_date' => now('America/Lima')->toDateString(),
             'subtotal' => 1000, 'currency' => 'PEN', 'cost_center_id' => $center['id'], 'expense_account' => '6343', ...$data,
         ]);
         // La cuenta de gasto sale del plan: una cuenta que no es de gasto no se acepta.
@@ -223,7 +223,7 @@ class AccountingTest extends TestCase
         $this->makeTenant(self::MODULES);
         $accountant = $this->makeUser('Contador', self::ACCOUNTANT);
         $this->as($accountant);
-        $today = now()->toDateString();
+        $today = now('America/Lima')->toDateString();
         $entry = fn (array $lines, array $data = []) => $this->postJson('/api/v1/journal-entries', ['date' => $today, 'description' => 'Aporte de capital', 'lines' => $lines, ...$data]);
 
         $entry([['account' => '1041', 'debit' => 100]])->assertStatus(422)->assertJsonValidationErrors('lines');
@@ -235,12 +235,12 @@ class AccountingTest extends TestCase
 
         $created = $entry([['account' => '1041', 'debit' => 1500], ['account' => '5011', 'credit' => 1500], ['account' => '', 'debit' => 0]])->assertCreated()->json();
         $this->assertSame(['MANUAL', 'Manual', 'POSTED', 2, 'Contador'], [$created['source_type'], $created['source_label'], $created['status'], count($created['lines']), $created['created_by']]);
-        $this->assertSame('AS-'.now()->format('Y-m').'-0001', $created['entry_number']);
+        $this->assertSame('AS-'.now('America/Lima')->format('Y-m').'-0001', $created['entry_number']);
         $this->assertSame('Acciones', $created['lines'][1]['account_name']);
 
         $this->postJson("/api/v1/journal-entries/{$created['id']}/reverse", [])->assertStatus(422)->assertJsonValidationErrors('reason');
         $reversed = $this->postJson("/api/v1/journal-entries/{$created['id']}/reverse", ['reason' => 'Aporte duplicado'])->assertOk()->json();
-        $this->assertSame(['REVERSED', 'Aporte duplicado', 'AS-'.now()->format('Y-m').'-0002'], [$reversed['status'], $reversed['reason'], $reversed['reversed_by']['number']]);
+        $this->assertSame(['REVERSED', 'Aporte duplicado', 'AS-'.now('America/Lima')->format('Y-m').'-0002'], [$reversed['status'], $reversed['reason'], $reversed['reversed_by']['number']]);
         $reversal = $this->getJson("/api/v1/journal-entries/{$reversed['reversed_by']['id']}")->assertOk()->json();
         $this->assertSame(['REVERSAL', $created['entry_number']], [$reversal['source_type'], $reversal['reversal_of']['number']]);
         $this->assertEquals([0, 1500], [$reversal['lines'][0]['debit'], $reversal['lines'][0]['credit']]);
@@ -261,7 +261,7 @@ class AccountingTest extends TestCase
         $write = function (float $credit, int $lines = 2) {
             $id = (string) Str::uuid();
             DB::table('acc_journal_entries')->insert([
-                'id' => $id, 'tenant_id' => $this->tenantId, 'entry_number' => 'AS-X-'.Str::random(4), 'entry_date' => now()->toDateString(), 'period' => now()->format('Y-m'),
+                'id' => $id, 'tenant_id' => $this->tenantId, 'entry_number' => 'AS-X-'.Str::random(4), 'entry_date' => now('America/Lima')->toDateString(), 'period' => now('America/Lima')->format('Y-m'),
                 'description' => 'Prueba', 'source_type' => 'MANUAL',
             ]);
             DB::table('acc_journal_lines')->insert(['tenant_id' => $this->tenantId, 'entry_id' => $id, 'position' => 1, 'account_code' => '1041', 'debit' => 10, 'credit' => 0]);
@@ -308,11 +308,11 @@ class AccountingTest extends TestCase
         $this->assertEquals(['6391' => [12, 0], '1041' => [0, 12]], $this->lines('BANK_FEE', $movement));
 
         $periods = collect($this->getJson('/api/v1/accounting-periods')->assertOk()->json());
-        $this->assertSame([now()->format('Y-m'), $lastPeriod], $periods->pluck('period')->all());
+        $this->assertSame([now('America/Lima')->format('Y-m'), $lastPeriod], $periods->pluck('period')->all());
         $this->assertSame([1, 1], [$periods->firstWhere('period', $lastPeriod)['entries'], $periods->firstWhere('period', $lastPeriod)['unreconciled']]);
 
         // El periodo en curso no se cierra; uno con movimientos sin conciliar, tampoco.
-        $this->postJson('/api/v1/accounting-periods/'.now()->format('Y-m').'/close')->assertStatus(422);
+        $this->postJson('/api/v1/accounting-periods/'.now('America/Lima')->format('Y-m').'/close')->assertStatus(422);
         $this->postJson("/api/v1/accounting-periods/{$lastPeriod}/close")->assertStatus(422)->assertJsonValidationErrors('status');
         DB::table('bank_movements')->where('id', $movement)->update(['reconciled' => true, 'reconciled_at' => now()]);
         $closed = $this->postJson("/api/v1/accounting-periods/{$lastPeriod}/close")->assertOk()->json();
@@ -324,7 +324,7 @@ class AccountingTest extends TestCase
         ]])->assertStatus(422)->assertJsonValidationErrors('date');
         $late = \App\Modules\Finance\Support\Treasury::move($account, -3, 'BANK_FEE', 'Comisión tardía', ['date' => $last->toDateString()]);
         Posting::bankMovement($this->tenantId, $late, null);
-        $this->assertSame(now()->format('Y-m'), DB::table('acc_journal_entries')->where('source_id', $late)->value('period'));
+        $this->assertSame(now('America/Lima')->format('Y-m'), DB::table('acc_journal_entries')->where('source_id', $late)->value('period'));
         $this->assertDatabaseRejects(fn () => DB::table('acc_journal_entries')->insert([
             'tenant_id' => $this->tenantId, 'entry_number' => 'AS-Z', 'entry_date' => $last->toDateString(), 'period' => $lastPeriod,
             'description' => 'En periodo cerrado', 'source_type' => 'MANUAL',
@@ -346,7 +346,7 @@ class AccountingTest extends TestCase
         $revenue = $this->postJson('/api/v1/cost-centers', ['code' => 'CC-VTA', 'name' => 'Ventas', 'kind' => 'REVENUE'])->assertCreated()->json();
         $year = (int) now()->year;
         // Con tipo de cambio registrado: lo comprometido en dólares se lleva a soles.
-        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'currency' => 'USD', 'rate_date' => now()->toDateString(), 'buy' => 3.44, 'sell' => 3.448]);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'currency' => 'USD', 'rate_date' => now('America/Lima')->toDateString(), 'buy' => 3.44, 'sell' => 3.448]);
 
         $this->assertNull($this->getJson('/api/v1/budgets/execution')->assertOk()->json('budget'));
         $budget = $this->postJson('/api/v1/budgets', ['year' => $year])->assertCreated()->json();
@@ -389,7 +389,7 @@ class AccountingTest extends TestCase
         // Facturado y aprobado: pasa de comprometido a ejecutado.
         $this->postJson("/api/v1/purchase-orders/{$order['id']}/receipts", ['pct' => 100])->assertOk();
         $invoice = $this->postJson('/api/v1/supplier-invoices', [
-            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-77', 'issue_date' => now()->toDateString(), 'subtotal' => 1200,
+            'supplier_id' => $supplier, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-77', 'issue_date' => now('America/Lima')->toDateString(), 'subtotal' => 1200,
             'currency' => 'PEN', 'cost_center_id' => $center['id'], 'expense_account' => '6343', 'purchase_order_id' => $order['id'],
         ])->assertCreated()->json();
         $this->postJson("/api/v1/supplier-invoices/{$invoice['id']}/approve")->assertOk();
@@ -450,7 +450,7 @@ class AccountingTest extends TestCase
         $this->getJson('/api/v1/journal-entries')->assertOk();
         $this->getJson('/api/v1/journal-entries?export=1')->assertForbidden();
         $this->postJson('/api/v1/exports', ['resource' => 'accounting', 'format' => 'xlsx', 'rows' => 3])->assertForbidden();
-        $this->postJson('/api/v1/journal-entries', ['date' => now()->toDateString(), 'description' => 'X', 'lines' => []])->assertForbidden();
+        $this->postJson('/api/v1/journal-entries', ['date' => now('America/Lima')->toDateString(), 'description' => 'X', 'lines' => []])->assertForbidden();
         $this->as($admin);
         $this->getJson('/api/v1/journal-entries?export=1')->assertOk();
         $this->postJson('/api/v1/exports', ['resource' => 'accounting', 'format' => 'csv', 'rows' => 2])->assertSuccessful();
@@ -486,11 +486,11 @@ class AccountingTest extends TestCase
         $account = (string) Str::uuid();
         DB::table('financial_accounts')->insert(['id' => $account, 'tenant_id' => $this->tenantId, 'code' => 'CTA-1', 'name' => 'BCP', 'account_type' => 'BANK', 'currency' => 'PEN', 'status' => 'ACTIVE']);
         $opening = (string) Str::uuid();
-        DB::table('bank_movements')->insert(['id' => $opening, 'tenant_id' => $this->tenantId, 'account_id' => $account, 'movement_date' => now()->toDateString(), 'description' => 'Apertura', 'amount' => 1000, 'ref_type' => 'OPENING', 'reconciled' => true]);
+        DB::table('bank_movements')->insert(['id' => $opening, 'tenant_id' => $this->tenantId, 'account_id' => $account, 'movement_date' => now('America/Lima')->toDateString(), 'description' => 'Apertura', 'amount' => 1000, 'ref_type' => 'OPENING', 'reconciled' => true]);
         $invoice = (string) Str::uuid();
         DB::table('supplier_invoices')->insert([
             'id' => $invoice, 'tenant_id' => $this->tenantId, 'supplier_id' => $supplier, 'supplier_name' => 'Servicios Andinos SAC', 'doc_type' => 'FACTURA',
-            'doc_number' => 'F001-1', 'issue_date' => now()->toDateString(), 'due_date' => now()->toDateString(), 'cost_center_id' => $center,
+            'doc_number' => 'F001-1', 'issue_date' => now('America/Lima')->toDateString(), 'due_date' => now('America/Lima')->toDateString(), 'cost_center_id' => $center,
             'expense_account' => '6364', 'currency' => 'PEN', 'subtotal' => 100, 'tax' => 18, 'total' => 118, 'status' => 'APPROVED', 'approved_at' => now(),
         ]);
         $this->assertSame(0, DB::table('acc_journal_entries')->where('tenant_id', $this->tenantId)->count());

@@ -230,10 +230,10 @@ class PlatformTenantsTest extends TestCase
 
         // Una fecha pasada o anterior a la vigencia actual no extiende nada.
         $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/extend-subscription", [
-            'ends_at' => now()->subDay()->format('Y-m-d'), 'amount' => 10, 'payment_method' => 'Yape / Plin',
+            'ends_at' => now('America/Lima')->subDay()->format('Y-m-d'), 'amount' => 10, 'payment_method' => 'Yape / Plin',
         ])->assertStatus(422)->assertJsonValidationErrors('ends_at');
 
-        $newEndsAt = now()->addYears(30)->format('Y-m-d');
+        $newEndsAt = now('America/Lima')->addYears(30)->format('Y-m-d');
 
         $response = $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/extend-subscription", [
             'ends_at' => $newEndsAt,
@@ -251,7 +251,7 @@ class PlatformTenantsTest extends TestCase
 
         // Acortar después de extender tampoco.
         $this->postJson("/api/v1/superadmin/tenants/{$tenantId}/extend-subscription", [
-            'ends_at' => now()->addYears(29)->format('Y-m-d'), 'amount' => 10, 'payment_method' => 'Yape / Plin',
+            'ends_at' => now('America/Lima')->addYears(29)->format('Y-m-d'), 'amount' => 10, 'payment_method' => 'Yape / Plin',
         ])->assertStatus(422)->assertJsonValidationErrors('ends_at');
 
         // La ficha lee los pagos fuera de cualquier contexto de empresa (como en el servidor).

@@ -112,7 +112,7 @@ class PortalCommercialController extends Controller
     public function services(Request $request)
     {
         $customerId = $request->attributes->get('portal_customer_id');
-        $soon = now()->addDays(60)->toDateString();
+        $soon = \App\Services\LocalTime::today()->addDays(60)->toDateString();
 
         $contracts = DB::table('contracts')->where('customer_id', $customerId)->where('status', '!=', 'DRAFT')
             ->orderByDesc('start_date')

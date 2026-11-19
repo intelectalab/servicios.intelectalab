@@ -89,7 +89,7 @@ class PurchasingTest extends TestCase
     private function invoicePayload(string $supplierId, string $costCenterId, array $data = []): array
     {
         return [
-            'supplier_id' => $supplierId, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-'.random_int(1, 99999999), 'issue_date' => now()->toDateString(),
+            'supplier_id' => $supplierId, 'doc_type' => 'FACTURA', 'doc_number' => 'F001-'.random_int(1, 99999999), 'issue_date' => now('America/Lima')->toDateString(),
             'subtotal' => 1000, 'currency' => 'PEN', 'cost_center_id' => $costCenterId, 'expense_account' => '6343', 'description' => 'Mantenimiento',
             ...$data,
         ];
@@ -233,13 +233,13 @@ class PurchasingTest extends TestCase
 
         $this->postJson('/api/v1/supplier-invoices', [])->assertStatus(422)->assertJsonValidationErrors(['supplier_id', 'doc_number', 'issue_date', 'subtotal', 'cost_center_id', 'expense_account']);
         $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center, ['doc_number' => '123']))->assertStatus(422)->assertJsonValidationErrors('doc_number');
-        $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center, ['issue_date' => now()->addDay()->toDateString()]))->assertStatus(422)->assertJsonValidationErrors('issue_date');
+        $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center, ['issue_date' => now('America/Lima')->addDay()->toDateString()]))->assertStatus(422)->assertJsonValidationErrors('issue_date');
         // La orden debe ser del mismo proveedor y moneda.
         $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($other, $center, ['purchase_order_id' => $order['id']]))->assertStatus(422)->assertJsonValidationErrors('purchase_order_id');
 
         $invoice = $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center, ['doc_number' => 'f001-88', 'purchase_order_id' => $order['id']]))->assertCreated()->json();
         $this->assertSame(['REGISTERED', 'F001-88', 'NOT_CHECKED', $order['order_number']], [$invoice['status'], $invoice['doc_number'], $invoice['sunat_validation'], $invoice['purchase_order']['order_number']]);
-        $this->assertEquals([1000, 180, 1180, now()->addDays(30)->toDateString()], [$invoice['subtotal'], $invoice['tax'], $invoice['total'], $invoice['due_date']]);
+        $this->assertEquals([1000, 180, 1180, now('America/Lima')->addDays(30)->toDateString()], [$invoice['subtotal'], $invoice['tax'], $invoice['total'], $invoice['due_date']]);
         $this->assertNull($invoice['detraction']);
         $this->assertNull($invoice['payable']);
 
@@ -247,7 +247,7 @@ class PurchasingTest extends TestCase
         $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center, ['doc_number' => 'F001-88']))->assertStatus(422)->assertJsonValidationErrors('doc_number');
         $this->assertDatabaseRejects(fn () => DB::table('supplier_invoices')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'supplier_id' => $supplier, 'supplier_name' => 'X', 'doc_type' => 'FACTURA', 'doc_number' => 'F001-88',
-            'issue_date' => now()->toDateString(), 'due_date' => now()->toDateString(), 'cost_center_id' => $center, 'expense_account' => '6343', 'subtotal' => 1, 'total' => 1,
+            'issue_date' => now('America/Lima')->toDateString(), 'due_date' => now('America/Lima')->toDateString(), 'cost_center_id' => $center, 'expense_account' => '6343', 'subtotal' => 1, 'total' => 1,
         ]));
         // El mismo número de otro proveedor sí.
         $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($other, $center, ['doc_number' => 'F001-88']))->assertCreated();
@@ -282,7 +282,7 @@ class PurchasingTest extends TestCase
         // Una sola cuenta por comprobante.
         $this->assertDatabaseRejects(fn () => DB::table('payables')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'supplier_invoice_id' => $invoice['id'], 'supplier_id' => $supplier,
-            'due_date' => now()->toDateString(), 'original_amount' => 10,
+            'due_date' => now('America/Lima')->toDateString(), 'original_amount' => 10,
         ]));
 
         // Otro comprobante de la misma orden ya no cuadra: lo aprobado cubre lo recibido.
@@ -339,7 +339,7 @@ class PurchasingTest extends TestCase
 
         // En dólares hace falta el tipo de cambio; con él, la detracción se calcula en soles.
         $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center, ['currency' => 'USD']))->assertStatus(422)->assertJsonValidationErrors('currency');
-        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now()->subDay()->toDateString(), 'currency' => 'USD', 'buy' => 3.7, 'sell' => 3.75]);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now('America/Lima')->subDay()->toDateString(), 'currency' => 'USD', 'buy' => 3.7, 'sell' => 3.75]);
         $usd = $this->postJson('/api/v1/supplier-invoices', $this->invoicePayload($supplier, $center, ['currency' => 'USD', 'detraction_code' => '037']))->assertCreated()->json();
         // 1180 USD × 3.75 = 4425 → 12 % = 531.
         $this->assertEquals([3.75, 531], [$usd['exchange_rate'], $usd['detraction']['amount']]);

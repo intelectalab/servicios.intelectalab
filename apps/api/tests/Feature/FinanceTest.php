@@ -160,7 +160,7 @@ class FinanceTest extends TestCase
         $customer = $this->makeCustomer();
         $other = $this->makeCustomer('Otra Empresa SAC');
         $this->as($finance);
-        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now()->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now('America/Lima')->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
 
         $first = $this->event($customer, 1000);
         $second = $this->event($customer, 250.50, ['description' => 'Horas adicionales']);
@@ -183,7 +183,7 @@ class FinanceTest extends TestCase
         $this->assertSame($first['id'], $draft['items'][0]['billable_event_id']);
         $this->assertNull($draft['receivable']);
         // Vence a los 30 días si el cliente no tiene sus propios días de crédito.
-        $this->assertSame(now()->addDays(30)->toDateString(), $draft['due_date']);
+        $this->assertSame(now('America/Lima')->addDays(30)->toDateString(), $draft['due_date']);
 
         // Ya están facturados: no entran en otro comprobante.
         $this->getJson('/api/v1/billable-events?status=INVOICED')->assertOk()->assertJsonPath('total', 2)->assertJsonPath('data.0.invoice.id', $draft['id']);
@@ -197,7 +197,7 @@ class FinanceTest extends TestCase
 
         // Los días de crédito del cliente mandan en el vencimiento.
         DB::table('customers')->where('id', $customer)->update(['payment_terms_days' => 15]);
-        $this->assertSame(now()->addDays(15)->toDateString(), $this->draft([$first['id']])['due_date']);
+        $this->assertSame(now('America/Lima')->addDays(15)->toDateString(), $this->draft([$first['id']])['due_date']);
     }
 
     public function test_invoice_needs_the_customer_ruc_and_a_receipt_does_not(): void
@@ -231,7 +231,7 @@ class FinanceTest extends TestCase
         $draft = $this->draft([$this->event($customer, 1000)['id']]);
         $issued = $this->postJson("/api/v1/invoices/{$draft['id']}/issue")->assertOk()->json();
 
-        $this->assertSame(['ISSUED', 'F001-00000001', now()->toDateString(), 'NOT_SENT', 'Minera Los Andes SAC', $ruc], [
+        $this->assertSame(['ISSUED', 'F001-00000001', now('America/Lima')->toDateString(), 'NOT_SENT', 'Minera Los Andes SAC', $ruc], [
             $issued['status'], $issued['invoice_number'], $issued['issue_date'], $issued['fiscal_status'], $issued['customer_name'], $issued['customer_tax_id'],
         ]);
         // Sin proveedor conectado no se dice que fue a SUNAT.
@@ -286,7 +286,7 @@ class FinanceTest extends TestCase
         $this->postJson('/api/v1/payments', ['customer_id' => $customer, 'amount' => 10, 'currency' => 'USD', 'payment_method' => 'TRANSFERENCIA', 'reference' => 'X'])
             ->assertStatus(422)->assertJsonValidationErrors('currency');
 
-        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now()->subDay()->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now('America/Lima')->subDay()->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
         $issued = $this->postJson("/api/v1/invoices/{$draft['id']}/issue")->assertOk()->json();
         $this->assertEquals(['USD', 3.75, 118], [$issued['currency'], $issued['exchange_rate'], $issued['receivable']['balance_amount']]);
 
@@ -296,7 +296,7 @@ class FinanceTest extends TestCase
         $this->postJson("/api/v1/payments/{$soles['id']}/allocate")->assertStatus(422)->assertJsonValidationErrors('receivable_ids');
 
         // En dólares sí, y guarda la diferencia de cambio contra el de la emisión.
-        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now()->toDateString(), 'currency' => 'USD', 'buy' => 3.80, 'sell' => 3.85]);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now('America/Lima')->toDateString(), 'currency' => 'USD', 'buy' => 3.80, 'sell' => 3.85]);
         $dollars = $this->pay($customer, 118, ['currency' => 'USD', 'auto_allocate' => true]);
         $this->assertSame('ALLOCATED', $dollars['status']);
         $this->assertEquals(3.85, $dollars['exchange_rate']);
@@ -325,7 +325,7 @@ class FinanceTest extends TestCase
         $this->as($this->makeUser('Finanzas', self::FINANCE));
         $customer = $this->makeCustomer('Minera Los Andes SAC');
         DB::table('companies')->where('tenant_id', $this->tenantId)->update(['tax_identifier' => '20123456789']);
-        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now()->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
+        DB::table('exchange_rates')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'rate_date' => now('America/Lima')->toDateString(), 'currency' => 'USD', 'buy' => 3.70, 'sell' => 3.75]);
         $this->connectProvider();
 
         // Un borrador no sale; emitido, sí, y con los datos que SUNAT pide.
@@ -423,12 +423,12 @@ class FinanceTest extends TestCase
         $recent = $this->issued($customer, 500);     // 590
         $foreign = $this->issued($other, 100);       // 118
         // El más antiguo vence antes.
-        DB::table('receivables')->where('id', $old['receivable']['id'])->update(['due_date' => now()->subDays(40)->toDateString()]);
+        DB::table('receivables')->where('id', $old['receivable']['id'])->update(['due_date' => now('America/Lima')->subDays(40)->toDateString()]);
 
         $this->postJson('/api/v1/payments', [])->assertStatus(422)->assertJsonValidationErrors(['customer_id', 'amount', 'currency', 'payment_method']);
         $this->postJson('/api/v1/payments', ['customer_id' => $customer, 'amount' => 10, 'currency' => 'PEN', 'payment_method' => 'TRANSFERENCIA'])
             ->assertStatus(422)->assertJsonValidationErrors('reference');
-        $this->postJson('/api/v1/payments', ['customer_id' => $customer, 'amount' => 10, 'currency' => 'PEN', 'payment_method' => 'CHEQUE', 'reference' => '1', 'paid_at' => now()->addDays(2)->toDateString()])
+        $this->postJson('/api/v1/payments', ['customer_id' => $customer, 'amount' => 10, 'currency' => 'PEN', 'payment_method' => 'CHEQUE', 'reference' => '1', 'paid_at' => now('America/Lima')->addDays(2)->toDateString()])
             ->assertStatus(422)->assertJsonValidationErrors('paid_at');
         $this->postJson('/api/v1/payments', ['customer_id' => (string) Str::uuid(), 'amount' => 10, 'currency' => 'PEN', 'payment_method' => 'EFECTIVO'])
             ->assertStatus(422)->assertJsonValidationErrors('customer_id');
@@ -484,8 +484,8 @@ class FinanceTest extends TestCase
         $current = $this->issued($customer, 100);   // 118, por vencer
         $late = $this->issued($customer, 200);      // 236, 45 días
         $older = $this->issued($other, 300);        // 354, 120 días
-        DB::table('receivables')->where('id', $late['receivable']['id'])->update(['due_date' => now()->subDays(45)->toDateString()]);
-        DB::table('receivables')->where('id', $older['receivable']['id'])->update(['due_date' => now()->subDays(120)->toDateString()]);
+        DB::table('receivables')->where('id', $late['receivable']['id'])->update(['due_date' => now('America/Lima')->subDays(45)->toDateString()]);
+        DB::table('receivables')->where('id', $older['receivable']['id'])->update(['due_date' => now('America/Lima')->subDays(120)->toDateString()]);
 
         $summary = $this->getJson('/api/v1/receivables/summary')->assertOk()->json();
         $this->assertEquals([708, 590, 3, 2], [$summary['outstanding'], $summary['overdue'], $summary['open_count'], $summary['overdue_customers']]);
@@ -513,7 +513,7 @@ class FinanceTest extends TestCase
 
         $first = $this->issued($customer, 1000);    // 1180
         $second = $this->issued($customer, 500);    // 590
-        DB::table('receivables')->where('id', $first['receivable']['id'])->update(['due_date' => now()->subDays(5)->toDateString()]);
+        DB::table('receivables')->where('id', $first['receivable']['id'])->update(['due_date' => now('America/Lima')->subDays(5)->toDateString()]);
         $payment = $this->pay($customer, 2000, ['auto_allocate' => true]);   // 1180 + 590, libres 230
         $id = $payment['id'];
         $this->assertEquals(['PARTIALLY_ALLOCATED', 230], [$payment['status'], $payment['free']]);

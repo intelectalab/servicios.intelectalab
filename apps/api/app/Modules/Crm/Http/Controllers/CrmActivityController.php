@@ -64,7 +64,7 @@ class CrmActivityController extends Controller
         ColumnFilters::apply($query, $request, [
             'activity' => ColumnFilters::text("concat_ws(' ', crm_activities.subject, crm_activities.description)"),
             'related' => ColumnFilters::text(self::RELATED),
-            'due' => ColumnFilters::date('crm_activities.due_at'),
+            'due' => ColumnFilters::date("(crm_activities.due_at AT TIME ZONE 'America/Lima')"),
             'owner' => ColumnFilters::text('(SELECT u.name FROM users u WHERE u.id = crm_activities.owner_user_id)'),
         ]);
 

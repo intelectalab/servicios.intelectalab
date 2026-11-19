@@ -76,7 +76,7 @@ class CrmLeadController extends Controller
             'contact' => ColumnFilters::text("concat_ws(' ', crm_leads.email, crm_leads.phone)"),
             'interest' => ColumnFilters::text('crm_leads.interest'),
             'score' => ColumnFilters::number('crm_leads.score'),
-            'created' => ColumnFilters::date('crm_leads.created_at'),
+            'created' => ColumnFilters::date("(crm_leads.created_at AT TIME ZONE 'America/Lima')"),
         ]);
 
         ListSort::apply($query, $request, [
@@ -304,7 +304,7 @@ class CrmLeadController extends Controller
                     'expected_value' => $data['amount'],
                     'currency' => 'PEN',
                     'probability' => $stage->probability,
-                    'expected_close_date' => $data['expected_close_date'] ?? now()->addDays(30)->toDateString(),
+                    'expected_close_date' => $data['expected_close_date'] ?? \App\Services\LocalTime::today()->addDays(30)->toDateString(),
                     // La oportunidad sigue siendo de quien llevaba el lead, la cree quien la cree.
                     'owner_user_id' => $lead->owner_user_id ?? $request->user()->id,
                     'branch_id' => $lead->branch_id,

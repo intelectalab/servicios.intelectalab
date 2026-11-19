@@ -279,7 +279,7 @@ class SupportTest extends TestCase
         $service = $this->makeService('Instalación de equipo');
         DB::table('services')->where('id', $service)->update(['warranty_months' => 6, 'warranty_conditions' => 'Cubre defectos de ejecución.']);
         $contracted = $this->makeContracted(['service_id' => $service]);
-        DB::table('contracted_services')->where('id', $contracted)->update(['start_date' => now()->subYear()->toDateString()]);
+        DB::table('contracted_services')->where('id', $contracted)->update(['start_date' => now('America/Lima')->subYear()->toDateString()]);
         $customerId = DB::table('contracted_services')->where('id', $contracted)->value('customer_id');
 
         // Última OT completada hace dos meses: dentro de los 6 meses.
@@ -300,7 +300,7 @@ class SupportTest extends TestCase
         $this->assertSame(['UNDER_REVIEW', true, '6 meses · Cubre defectos de ejecución.', 'Última OT completada (OT-PRUEBA-1)'], [
             $claim['status'], $claim['coverage']['valid'], $claim['coverage']['policy'], $claim['coverage']['base'],
         ]);
-        $this->assertSame(now()->subMonths(2)->addMonthsNoOverflow(6)->toDateString(), $claim['coverage']['until']);
+        $this->assertSame(now('America/Lima')->subMonths(2)->addMonthsNoOverflow(6)->toDateString(), $claim['coverage']['until']);
         // Un reclamo por ticket, y la ficha del ticket lo muestra.
         $this->postJson('/api/v1/warranty-claims', ['contracted_service_id' => $contracted, 'ticket_id' => $ticket['id'], 'description' => 'Otra'])
             ->assertStatus(422)->assertJsonValidationErrors('ticket_id');

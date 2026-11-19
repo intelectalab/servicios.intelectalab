@@ -36,7 +36,7 @@ class PortalNoticeController extends Controller
             'customer_id' => ['nullable', 'uuid'],
             'body' => ['required', 'string', 'max:500'],
             'link' => ['nullable', 'string', 'max:500', 'regex:#^(https?://|/)#'],
-            'expires_at' => ['nullable', 'date', 'after:today'],
+            'expires_at' => ['nullable', 'date', 'after:'.\App\Services\LocalTime::today()->toDateString()],
         ], [
             'body.required' => 'Escribe el aviso.',
             'link.regex' => 'El enlace debe empezar con https:// o con /.',

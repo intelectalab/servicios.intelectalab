@@ -63,7 +63,7 @@ class WorkOrderController extends Controller
         ColumnFilters::apply($query, $request, [
             'order' => ColumnFilters::text("concat_ws(' ', work_orders.code, work_orders.title)"),
             'customer' => ColumnFilters::text(ListSort::customerName('work_orders')),
-            'scheduled' => ColumnFilters::date('work_orders.scheduled_start'),
+            'scheduled' => ColumnFilters::date("(work_orders.scheduled_start AT TIME ZONE 'America/Lima')"),
         ]);
 
         ListSort::apply($query, $request, [

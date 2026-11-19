@@ -141,7 +141,7 @@ class CredentialController extends Controller
         $data = $request->validate([
             'secret' => ['required', 'string', 'max:10000'],
             'reason' => ['required', 'string', 'max:500'],
-            'expires_at' => ['nullable', 'date', 'after:today'],
+            'expires_at' => ['nullable', 'date', 'after:'.\App\Services\LocalTime::today()->toDateString()],
         ], [], ['secret' => 'valor nuevo', 'reason' => 'motivo', 'expires_at' => 'fecha de vencimiento']);
 
         $tenantId = $request->attributes->get('tenant_id');

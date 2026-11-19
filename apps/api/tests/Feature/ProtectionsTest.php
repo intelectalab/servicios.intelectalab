@@ -219,7 +219,7 @@ class ProtectionsTest extends TestCase
         ];
         $order = fn (string $number, ?string $contractId = null) => [
             'id' => (string) Str::uuid(), 'tenant_id' => $tenantId, 'customer_id' => $customerId, 'quotation_id' => $quotationId,
-            'contract_id' => $contractId, 'order_number' => $number, 'status' => 'DRAFT', 'order_date' => now()->toDateString(),
+            'contract_id' => $contractId, 'order_number' => $number, 'status' => 'DRAFT', 'order_date' => now('America/Lima')->toDateString(),
             'created_at' => now(), 'updated_at' => now(),
         ];
 

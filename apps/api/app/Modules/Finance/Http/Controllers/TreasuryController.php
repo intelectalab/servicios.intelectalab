@@ -182,7 +182,7 @@ class TreasuryController extends Controller
             'to_account_id' => ['required', 'uuid', 'different:from_account_id'],
             'amount' => ['required', 'numeric', 'gt:0', 'max:9999999999'],
             'reference' => ['nullable', 'string', 'max:255'],
-            'date' => ['nullable', 'date', 'before_or_equal:today'],
+            'date' => ['nullable', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
         ], [
             'from_account_id.required' => 'Selecciona la cuenta de origen.',
             'to_account_id.required' => 'Selecciona la cuenta de destino.',
@@ -289,7 +289,7 @@ class TreasuryController extends Controller
     /** Título, columnas, ejemplos, instrucciones y anchos de la plantilla del extracto. */
     public static function statementTemplateParts(): array
     {
-        $day = fn (int $ago) => now()->subDays($ago)->format('d/m/Y');
+        $day = fn (int $ago) => \App\Services\LocalTime::today()->subDays($ago)->format('d/m/Y');
 
         return [
             'Plantilla de extracto bancario',
@@ -614,7 +614,7 @@ class TreasuryController extends Controller
             'account_id' => ['required', 'uuid'],
             'description' => ['required', 'string', 'max:500'],
             'amount' => ['required', 'numeric', 'gt:0'],
-            'expense_date' => ['nullable', 'date', 'before_or_equal:today'],
+            'expense_date' => ['nullable', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
             'receipt' => ['nullable', 'string', 'max:150'],
             'cost_center_id' => ['required', 'uuid'],
             'expense_account' => ['required', 'string', 'max:20', Purchasing::expenseAccountRule($request->attributes->get('tenant_id'))],
@@ -844,7 +844,7 @@ class TreasuryController extends Controller
             'expense_limit' => ['nullable', 'numeric', 'gt:0', 'max:9999999999'],
             'custodian_user_id' => ['nullable', 'uuid'],
             'opening_balance' => [$account ? 'prohibited' : 'nullable', 'numeric', 'min:0', 'max:9999999999'],
-            'opening_date' => [$account ? 'prohibited' : 'nullable', 'date', 'before_or_equal:today'],
+            'opening_date' => [$account ? 'prohibited' : 'nullable', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
             'status' => [$account ? 'sometimes' : 'prohibited', 'in:ACTIVE,INACTIVE'],
         ], [
             'name.required' => 'Indica el nombre de la cuenta.',

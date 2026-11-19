@@ -87,7 +87,8 @@ class ColumnFilters
     /** `$day` es una expresión que da la fecha como texto "YYYY-MM-DD". */
     private static function applyDate($query, string $day, string $operator, string $value): void
     {
-        $today = now();
+        // "Hoy", "ayer", "esta semana"… del calendario de Lima (la app guarda en UTC).
+        $today = LocalTime::today();
         // La semana empieza el domingo, como en el calendario de la pantalla.
         $weekStart = $today->copy()->subDays($today->dayOfWeek);
 

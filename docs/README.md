@@ -126,3 +126,4 @@ Cada archivo de `cambios/` sigue el mismo orden:
 
 Las entradas se escriben al terminar cada cambio, no por adelantado: lo que figura aquí está hecho.
 | 2026-11-16 | Personal (trabajadores, ausencias, envío de horas a planilla) y conexión con el SaaS de RRHH | [cambios/2026-11-16_personal-y-conexion-con-rrhh.md](cambios/2026-11-16_personal-y-conexion-con-rrhh.md) |
+| 2026-11-16 | Fechas de Lima en validaciones, valores por defecto y filtros; pruebas sin fallas de noche | [cambios/2026-11-16_fechas-de-lima-sin-fallas-de-noche.md](cambios/2026-11-16_fechas-de-lima-sin-fallas-de-noche.md) |

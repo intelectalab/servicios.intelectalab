@@ -52,7 +52,7 @@ class PortalTest extends TestCase
         $id = (string) Str::uuid();
         DB::table('quotations')->insert([
             'id' => $id, 'tenant_id' => $this->tenantId, 'customer_id' => $customerId, 'quotation_number' => 'COT-'.Str::upper(Str::random(6)),
-            'status' => $status, 'version' => 1, 'currency' => 'PEN', 'valid_until' => $validUntil ?? now()->addDays(10)->toDateString(),
+            'status' => $status, 'version' => 1, 'currency' => 'PEN', 'valid_until' => $validUntil ?? now('America/Lima')->addDays(10)->toDateString(),
             'subtotal' => 100, 'tax_total' => 18, 'discount_total' => 0, 'total' => 118, 'notes' => 'Pago a 30 días.', 'created_by' => $by?->id,
         ]);
         DB::table('quotation_items')->insert([
@@ -205,7 +205,7 @@ class PortalTest extends TestCase
         $client = $this->portalUser($customerId);
         $approved = $this->quotation($customerId, by: $seller);
         $rejected = $this->quotation($customerId);
-        $expired = $this->quotation($customerId, validUntil: now()->subDay()->toDateString());
+        $expired = $this->quotation($customerId, validUntil: now('America/Lima')->subDay()->toDateString());
 
         $this->as($client);
         $detail = $this->getJson("/api/v1/portal/quotations/{$approved}")->assertOk()->json();
@@ -262,8 +262,8 @@ class PortalTest extends TestCase
         $line = $this->makeContracted(['service_id' => $service, 'recurring' => true], $contract);
         DB::table('recurring_service_instances')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'contracted_service_id' => $line, 'customer_id' => $customerId,
-            'status' => 'ACTIVE', 'frequency' => 'MONTHLY', 'start_date' => now()->subYear()->toDateString(), 'end_date' => now()->addDays(20)->toDateString(),
-            'next_cycle_date' => now()->addDays(5)->toDateString(), 'unit_price' => 100, 'quantity' => 1, 'currency' => 'PEN',
+            'status' => 'ACTIVE', 'frequency' => 'MONTHLY', 'start_date' => now('America/Lima')->subYear()->toDateString(), 'end_date' => now('America/Lima')->addDays(20)->toDateString(),
+            'next_cycle_date' => now('America/Lima')->addDays(5)->toDateString(), 'unit_price' => 100, 'quantity' => 1, 'currency' => 'PEN',
         ]);
 
         // Sin CRM: a la bandeja.
@@ -470,7 +470,7 @@ class PortalTest extends TestCase
         // Comprobantes: uno emitido con saldo, un borrador (no se ve) y uno de otro cliente.
         $invoice = fn (string $customer, string $status, string $number) => tap((string) Str::uuid(), fn ($id) => DB::table('invoices')->insert([
             'id' => $id, 'tenant_id' => $this->tenantId, 'customer_id' => $customer, 'invoice_number' => $number, 'invoice_type' => 'INVOICE',
-            'status' => $status, 'currency' => 'PEN', 'issue_date' => now()->subDays(40)->toDateString(), 'due_date' => now()->subDays(10)->toDateString(),
+            'status' => $status, 'currency' => 'PEN', 'issue_date' => now('America/Lima')->subDays(40)->toDateString(), 'due_date' => now('America/Lima')->subDays(10)->toDateString(),
             'subtotal' => 100, 'tax_total' => 18, 'total' => 118, 'balance_due' => 118,
         ]));
         $issued = $invoice($customerId, 'ISSUED', 'F001-00000077');
@@ -478,7 +478,7 @@ class PortalTest extends TestCase
         $foreign = $invoice($otherId, 'ISSUED', 'F001-00000078');
         DB::table('receivables')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'customer_id' => $customerId, 'invoice_id' => $issued,
-            'original_amount' => 118, 'balance_amount' => 118, 'currency' => 'PEN', 'due_date' => now()->subDays(10)->toDateString(), 'status' => 'OPEN',
+            'original_amount' => 118, 'balance_amount' => 118, 'currency' => 'PEN', 'due_date' => now('America/Lima')->subDays(10)->toDateString(), 'status' => 'OPEN',
         ]);
 
         $this->as($client);

@@ -50,7 +50,7 @@ class CreditLimitTest extends TestCase
     {
         $this->as($seller);
         $id = $this->postJson('/api/v1/quotations', [
-            'customer_id' => $customerId, 'valid_until' => now()->addDays(10)->toDateString(),
+            'customer_id' => $customerId, 'valid_until' => now('America/Lima')->addDays(10)->toDateString(),
             'items' => [['description' => 'Mantenimiento', 'quantity' => 1, 'unit_price' => $price]],
         ])->assertCreated()->json('id');
         $this->postJson("/api/v1/quotations/{$id}/submit")->assertOk();
@@ -145,7 +145,7 @@ class CreditLimitTest extends TestCase
         $this->postJson("/api/v1/quotations/{$quotation}/approve")->assertOk();
         $this->as($seller);
         $contract = $this->postJson("/api/v1/quotations/{$quotation}/contract")->assertSuccessful()->json('id');
-        DB::table('contracts')->where('id', $contract)->update(['start_date' => now()->toDateString(), 'end_date' => now()->addYear()->toDateString()]);
+        DB::table('contracts')->where('id', $contract)->update(['start_date' => now('America/Lima')->toDateString(), 'end_date' => now('America/Lima')->addYear()->toDateString()]);
         $this->debt($finance, $customerId, 1000);
 
         $this->as($approver);
@@ -202,7 +202,7 @@ class CreditLimitTest extends TestCase
         $usual = $this->makeCustomer('Sin plazo SAC');
         DB::table('customers')->where('id', $usual)->update(['payment_terms_days' => null]);
 
-        $this->assertSame(now()->toDateString(), substr((string) $this->debt($finance, $cash, 100)['due_date'], 0, 10));
-        $this->assertSame(now()->addDays(30)->toDateString(), substr((string) $this->debt($finance, $usual, 100)['due_date'], 0, 10));
+        $this->assertSame(now('America/Lima')->toDateString(), substr((string) $this->debt($finance, $cash, 100)['due_date'], 0, 10));
+        $this->assertSame(now('America/Lima')->addDays(30)->toDateString(), substr((string) $this->debt($finance, $usual, 100)['due_date'], 0, 10));
     }
 }

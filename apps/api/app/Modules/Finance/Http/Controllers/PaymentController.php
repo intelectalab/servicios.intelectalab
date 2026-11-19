@@ -60,7 +60,7 @@ class PaymentController extends Controller
         ColumnFilters::apply($query, $request, [
             'payment' => ColumnFilters::text("concat_ws(' ', payments.payment_number, payments.payment_method, payments.reference)"),
             'customer' => ColumnFilters::text(ListSort::customerName('payments')),
-            'date' => ColumnFilters::date('payments.paid_at'),
+            'date' => ColumnFilters::date("(payments.paid_at AT TIME ZONE 'America/Lima')"),
             'amount' => ColumnFilters::number('payments.amount'),
             'allocated' => ColumnFilters::number(self::ALLOCATED),
             'account' => ColumnFilters::text(self::ACCOUNT_NAME),
@@ -134,7 +134,7 @@ class PaymentController extends Controller
             'payment_method' => ['required', 'in:'.implode(',', Payment::METHODS)],
             // El efectivo no tiene número de operación.
             'reference' => ['nullable', 'required_unless:payment_method,EFECTIVO', 'string', 'max:255'],
-            'paid_at' => ['nullable', 'date', 'before_or_equal:today'],
+            'paid_at' => ['nullable', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
             'financial_account_id' => ['nullable', 'uuid'],
             'auto_allocate' => ['sometimes', 'boolean'],
         ], [

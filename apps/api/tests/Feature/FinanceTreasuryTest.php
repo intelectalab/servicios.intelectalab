@@ -189,11 +189,11 @@ class FinanceTreasuryTest extends TestCase
         $this->assertEquals([-180, 11000], [$refund->amount, $this->balanceOf($bank['id'])]);
         // Una caja no reembolsa más de lo que tiene.
         $big = $this->pay($customer, 100, ['payment_method' => 'EFECTIVO', 'reference' => null]);
-        DB::table('bank_movements')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'movement_date' => now()->toDateString(), 'description' => 'Salida', 'amount' => -650, 'ref_type' => 'MANUAL', 'reconciled' => true]);
+        DB::table('bank_movements')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'movement_date' => now('America/Lima')->toDateString(), 'description' => 'Salida', 'amount' => -650, 'ref_type' => 'MANUAL', 'reconciled' => true]);
         $this->postJson("/api/v1/payments/{$big['id']}/refund", ['amount' => 100, 'reason' => 'Devolución'])->assertStatus(422)->assertJsonValidationErrors('amount');
 
         // La base: un cobro deja un solo movimiento, y un movimiento no se edita, no se desconcilia ni se borra.
-        $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now()->toDateString(), 'description' => 'Doble', 'amount' => 1, 'ref_type' => 'PAYMENT', 'ref_id' => $payment['id']]));
+        $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->insert(['id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now('America/Lima')->toDateString(), 'description' => 'Doble', 'amount' => 1, 'ref_type' => 'PAYMENT', 'ref_id' => $payment['id']]));
         $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->where('id', $movement->id)->update(['amount' => 1]));
         $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->where('id', $movement->id)->update(['account_id' => $second['id']]));
         $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->where('id', $movement->id)->update(['reconciled' => false]));
@@ -217,7 +217,7 @@ class FinanceTreasuryTest extends TestCase
         $send(['to_account_id' => $detraction['id']])->assertStatus(422)->assertJsonValidationErrors('to_account_id');
         $send(['from_account_id' => $detraction['id']])->assertStatus(422)->assertJsonValidationErrors('from_account_id');
         $send(['amount' => 10000.01])->assertStatus(422)->assertJsonValidationErrors('amount');
-        $send(['date' => now()->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('date');
+        $send(['date' => now('America/Lima')->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('date');
 
         $send(['reference' => 'TRF-1'])->assertCreated()->assertJsonPath('reference', 'TRF-1');
         $this->assertEquals([9000, 1000], [$this->balanceOf($bank['id']), $this->balanceOf($other['id'])]);
@@ -239,10 +239,10 @@ class FinanceTreasuryTest extends TestCase
         $this->as($this->makeUser('Tesorería', self::TREASURY));
         $bank = $this->account();
         $cash = $this->cash();
-        $today = now()->format('d/m/Y');
+        $today = now('America/Lima')->format('d/m/Y');
         $byNumber = $this->pay($customer, 1180, ['reference' => 'OP-100']);
-        $byDate = $this->pay($customer, 590, ['reference' => 'OP-200', 'paid_at' => now()->subDays(2)->toDateString()]);
-        $tooOld = $this->pay($customer, 300, ['reference' => 'OP-300', 'paid_at' => now()->subDays(10)->toDateString()]);
+        $byDate = $this->pay($customer, 590, ['reference' => 'OP-200', 'paid_at' => now('America/Lima')->subDays(2)->toDateString()]);
+        $tooOld = $this->pay($customer, 300, ['reference' => 'OP-300', 'paid_at' => now('America/Lima')->subDays(10)->toDateString()]);
 
         $this->postJson("/api/v1/bank-accounts/{$bank['id']}/statements/import", [])->assertStatus(422)->assertJsonValidationErrors('file');
         $this->upload($cash['id'], "fecha;monto\n{$today};1")->assertStatus(422)->assertJsonValidationErrors('file');
@@ -292,12 +292,12 @@ class FinanceTreasuryTest extends TestCase
         $this->assertSame([3, 0], [$fromTemplate['lines'], count($fromTemplate['warnings'])]);
         $templateLines = DB::table('bank_statement_lines')->where('statement_id', $fromTemplate['statement_id'])->orderBy('position')->get();
         $this->assertEquals([1180, -25, -0.05], $templateLines->pluck('amount')->map(fn ($amount) => (float) $amount)->all());
-        $this->assertSame([now()->subDays(3)->toDateString(), '000123', 'ITF'], [$templateLines[0]->line_date, $templateLines[0]->op_number, $templateLines[2]->description]);
+        $this->assertSame([now('America/Lima')->subDays(3)->toDateString(), '000123', 'ITF'], [$templateLines[0]->line_date, $templateLines[0]->op_number, $templateLines[2]->description]);
         // Un Excel con la fecha como celda de fecha y el monto como número también se lee.
-        $this->upload($bank['id'], $this->workbook([['fecha', 'descripcion', 'monto', 'operacion'], [\PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel(now()->subDays(4)->startOfDay()), 'ABONO EXCEL', 999.5, 7788]]), 'banco.xlsx')
+        $this->upload($bank['id'], $this->workbook([['fecha', 'descripcion', 'monto', 'operacion'], [\PhpOffice\PhpSpreadsheet\Shared\Date::PHPToExcel(now('America/Lima')->subDays(4)->startOfDay()), 'ABONO EXCEL', 999.5, 7788]]), 'banco.xlsx')
             ->assertCreated()->assertJsonPath('lines', 1);
         $excel = DB::table('bank_statement_lines')->where('description', 'ABONO EXCEL')->first();
-        $this->assertEquals([now()->subDays(4)->toDateString(), 999.5, '7788'], [$excel->line_date, (float) $excel->amount, $excel->op_number]);
+        $this->assertEquals([now('America/Lima')->subDays(4)->toDateString(), 999.5, '7788'], [$excel->line_date, (float) $excel->amount, $excel->op_number]);
 
         // A mano: emparejar con un movimiento del mismo importe; registrar comisión o abono; ignorar.
         $view = $this->getJson("/api/v1/bank-statements?account_id={$bank['id']}")->assertOk()->json();
@@ -353,7 +353,7 @@ class FinanceTreasuryTest extends TestCase
         $spend(['account_id' => $bank['id']])->assertStatus(422)->assertJsonValidationErrors('account_id');
         // Tope por comprobante: 350 si la caja no define el suyo.
         $spend(['amount' => 350.01])->assertStatus(422)->assertJsonValidationErrors('amount');
-        $spend(['expense_date' => now()->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('expense_date');
+        $spend(['expense_date' => now('America/Lima')->addDay()->toDateString()])->assertStatus(422)->assertJsonValidationErrors('expense_date');
 
         $first = $spend(['receipt' => 'Boleta B001-123'])->assertCreated()->json();
         $this->assertMatchesRegularExpression('/^CCH-\d{4}-0001$/', $first['expense_number']);
@@ -369,10 +369,10 @@ class FinanceTreasuryTest extends TestCase
         $this->assertSame(['6311', $center], [$line->account_code, $line->cost_center_id]);
         // La base exige centro y cuenta del plan en todo gasto nuevo.
         $this->assertDatabaseRejects(fn () => DB::table('cash_expenses')->insert([
-            'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'expense_number' => 'X-1', 'expense_date' => now()->toDateString(), 'description' => 'Sin centro', 'amount' => 1, 'expense_account' => '6311',
+            'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'expense_number' => 'X-1', 'expense_date' => now('America/Lima')->toDateString(), 'description' => 'Sin centro', 'amount' => 1, 'expense_account' => '6311',
         ]));
         $this->assertDatabaseRejects(fn () => DB::table('cash_expenses')->insert([
-            'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'expense_number' => 'X-2', 'expense_date' => now()->toDateString(), 'description' => 'Cuenta inventada', 'amount' => 1, 'cost_center_id' => $center, 'expense_account' => 'Movilidad',
+            'tenant_id' => $this->tenantId, 'account_id' => $cash['id'], 'expense_number' => 'X-2', 'expense_date' => now('America/Lima')->toDateString(), 'description' => 'Cuenta inventada', 'amount' => 1, 'cost_center_id' => $center, 'expense_account' => 'Movilidad',
         ]));
         $this->getJson("/api/v1/cash-expenses?account_id={$cash['id']}&search=utiles")->assertOk()->assertJsonPath('total', 0);
         $this->getJson("/api/v1/cash-expenses?account_id={$cash['id']}&search=Útiles")->assertOk()->assertJsonPath('total', 1);
@@ -401,7 +401,7 @@ class FinanceTreasuryTest extends TestCase
         $bank = $this->account();
         $dollars = $this->account(['name' => 'BCP Dólares', 'currency' => 'USD', 'opening_balance' => 100]);
         $other = $this->account(['name' => 'BBVA Soles', 'opening_balance' => 0]);
-        $day = now()->format('d/m/Y');
+        $day = now('America/Lima')->format('d/m/Y');
 
         $first = $this->import($bank['id'], [[$day, 'ITF', '-1.00', '']], 'octubre.csv')->assertCreated()->json('statement_id');
         $this->travel(1)->minutes();
@@ -432,16 +432,16 @@ class FinanceTreasuryTest extends TestCase
         $this->assertSame(2, DB::table('bank_movements')->where('ref_type', 'TRANSFER')->where('ref_id', $transfer->id)->count());
         $insert = fn (array $data) => DB::table('bank_transfers')->insert([
             'id' => (string) Str::uuid(), 'tenant_id' => $this->tenantId, 'from_account_id' => $bank['id'], 'to_account_id' => $other['id'],
-            'amount' => 10, 'currency' => 'PEN', 'transfer_date' => now()->toDateString(), ...$data,
+            'amount' => 10, 'currency' => 'PEN', 'transfer_date' => now('America/Lima')->toDateString(), ...$data,
         ]);
         $this->assertDatabaseRejects(fn () => $insert(['to_account_id' => $dollars['id']]));
         $this->assertDatabaseRejects(fn () => $insert(['amount' => 999999]));
         $this->assertDatabaseRejects(fn () => $insert(['to_account_id' => $bank['id']]));
         $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->insert([
-            'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now()->toDateString(), 'description' => 'Sin transferencia', 'amount' => -5, 'ref_type' => 'TRANSFER', 'ref_id' => (string) Str::uuid(),
+            'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now('America/Lima')->toDateString(), 'description' => 'Sin transferencia', 'amount' => -5, 'ref_type' => 'TRANSFER', 'ref_id' => (string) Str::uuid(),
         ]));
         $this->assertDatabaseRejects(fn () => DB::table('bank_movements')->insert([
-            'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now()->toDateString(), 'description' => 'Otra vez', 'amount' => -300, 'ref_type' => 'TRANSFER', 'ref_id' => $transfer->id,
+            'tenant_id' => $this->tenantId, 'account_id' => $bank['id'], 'movement_date' => now('America/Lima')->toDateString(), 'description' => 'Otra vez', 'amount' => -300, 'ref_type' => 'TRANSFER', 'ref_id' => $transfer->id,
         ]));
         $this->assertDatabaseRejects(fn () => DB::table('bank_transfers')->where('id', $transfer->id)->update(['amount' => 1]));
         $this->assertDatabaseRejects(fn () => DB::table('bank_transfers')->where('id', $transfer->id)->delete());
@@ -452,9 +452,9 @@ class FinanceTreasuryTest extends TestCase
         $this->makeTenant(self::MODULES);
         $customer = $this->makeCustomer();
         $this->as($this->makeUser('Tesorería', self::TREASURY));
-        $bank = $this->account(['opening_date' => now()->subDays(5)->toDateString()]);
+        $bank = $this->account(['opening_date' => now('America/Lima')->subDays(5)->toDateString()]);
         $other = $this->account(['name' => 'BBVA Soles', 'opening_balance' => 0]);
-        $this->pay($customer, 500, ['reference' => 'OP-1', 'financial_account_id' => $bank['id'], 'paid_at' => now()->subDays(2)->toDateString()]);
+        $this->pay($customer, 500, ['reference' => 'OP-1', 'financial_account_id' => $bank['id'], 'paid_at' => now('America/Lima')->subDays(2)->toDateString()]);
         $this->postJson('/api/v1/bank-transfers', ['from_account_id' => $bank['id'], 'to_account_id' => $other['id'], 'amount' => 2000, 'reference' => 'TRF-9'])->assertCreated();
 
         $this->getJson('/api/v1/bank-movements')->assertStatus(404);
@@ -480,7 +480,7 @@ class FinanceTreasuryTest extends TestCase
         $this->as($this->makeUser('Tesorería', self::TREASURY));
         $bank = $this->account();
         $cash = $this->cash();
-        $lineId = DB::table('bank_statement_lines')->where('statement_id', $this->import($bank['id'], [[now()->format('d/m/Y'), 'ITF', '-1.00', '']])->json('statement_id'))->value('id');
+        $lineId = DB::table('bank_statement_lines')->where('statement_id', $this->import($bank['id'], [[now('America/Lima')->format('d/m/Y'), 'ITF', '-1.00', '']])->json('statement_id'))->value('id');
         $viewer = $this->makeUser('Gerencia', ['treasury.view', 'treasury.export']);
         $operator = $this->makeUser('Cajera', ['treasury.view', 'treasury.create']);
 
@@ -520,7 +520,7 @@ class FinanceTreasuryTest extends TestCase
         $this->as($this->makeUser('Tesorería', self::TREASURY));
         $bank = $this->account();
         $cash = $this->cash();
-        $lineId = DB::table('bank_statement_lines')->where('statement_id', $this->import($bank['id'], [[now()->format('d/m/Y'), 'ITF', '-1.00', '']])->json('statement_id'))->value('id');
+        $lineId = DB::table('bank_statement_lines')->where('statement_id', $this->import($bank['id'], [[now('America/Lima')->format('d/m/Y'), 'ITF', '-1.00', '']])->json('statement_id'))->value('id');
 
         $this->makeTenant(self::MODULES);
         $customer = $this->makeCustomer();

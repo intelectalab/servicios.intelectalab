@@ -50,7 +50,7 @@ class AuditController extends Controller
         $actionLabel = AuditCatalog::actionLabelSql();
 
         ColumnFilters::apply($query, $request, [
-            'at' => ColumnFilters::date('audit_logs.created_at'),
+            'at' => ColumnFilters::date("(audit_logs.created_at AT TIME ZONE 'America/Lima')"),
             'action' => ColumnFilters::text("concat_ws(' ', {$actionLabel}, audit_logs.action)"),
             'ip' => ColumnFilters::text('host(audit_logs.ip_address)'),
             'correlation' => ColumnFilters::text('audit_logs.correlation_id'),

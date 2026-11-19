@@ -130,7 +130,7 @@ class SupplierInvoiceController extends Controller
             'supplier_id' => ['required', 'uuid'],
             'doc_type' => ['required', 'in:'.implode(',', array_keys(SupplierInvoice::TYPES))],
             'doc_number' => ['required', 'regex:/^[A-Z0-9]{4}-\d{1,8}$/'],
-            'issue_date' => ['required', 'date', 'before_or_equal:today'],
+            'issue_date' => ['required', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
             'due_date' => ['nullable', 'date', 'after_or_equal:issue_date'],
             'subtotal' => ['required', 'numeric', 'gt:0', 'max:9999999999'],
             'currency' => ['required', 'in:PEN,USD'],

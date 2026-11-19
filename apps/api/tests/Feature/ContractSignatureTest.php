@@ -144,7 +144,7 @@ class ContractSignatureTest extends TestCase
 
         // La empresa cambia las condiciones después de enviarlo: la firma ya no procede.
         $this->putJson("/api/v1/contracts/{$contractId}", [
-            'start_date' => now()->toDateString(), 'end_date' => now()->addYear()->toDateString(), 'sla_level' => 'ESTANDAR', 'terms' => 'Pago a 15 días.',
+            'start_date' => now('America/Lima')->toDateString(), 'end_date' => now('America/Lima')->addYear()->toDateString(), 'sla_level' => 'ESTANDAR', 'terms' => 'Pago a 15 días.',
         ])->assertOk()->assertJsonPath('signature.changed', true);
         $this->as($client);
         $this->postJson("/api/v1/portal/signatures/{$requestId}/code")->assertOk();

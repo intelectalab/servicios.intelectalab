@@ -296,7 +296,7 @@ class QuotationController extends Controller
         $quotation = Quotation::findOrFail($quotation);
         $this->assertStatus($quotation, ['SUBMITTED'], 'aprobar');
 
-        if ($quotation->valid_until && $quotation->valid_until->copy()->endOfDay()->isPast()) {
+        if ($quotation->valid_until && $quotation->valid_until->toDateString() < \App\Services\LocalTime::today()->toDateString()) {
             throw ValidationException::withMessages([
                 'status' => ['No se puede aprobar una cotización vencida.'],
             ]);
@@ -417,7 +417,7 @@ class QuotationController extends Controller
                 'previous_id' => $quotation->id,
                 'currency' => $quotation->currency,
                 'exchange_rate' => $exchangeRate,
-                'valid_until' => now()->addDays(self::VALIDITY_DAYS)->toDateString(),
+                'valid_until' => \App\Services\LocalTime::today()->addDays(self::VALIDITY_DAYS)->toDateString(),
                 ...$totals,
                 'notes' => $quotation->notes,
                 'created_by' => $request->user()->id,

@@ -135,6 +135,7 @@ class PersonalTest extends TestCase
         $this->as($technician);
         $options = $this->getJson('/api/v1/hr/leaves/options')->assertOk()->json('employees');
         $this->assertSame([$worker['id']], array_column($options, 'id'));
+        $this->assertSame(['Rocío Quispe Mamani'], array_column($options, 'name'));
         $this->postJson('/api/v1/hr/leaves', ['employee_id' => $other['id'], 'leave_type_id' => $types['VAC']['id'], 'date_from' => $this->day(10), 'date_to' => $this->day(14)])
             ->assertStatus(422)->assertJsonValidationErrors('employee_id');
         $leave = $this->postJson('/api/v1/hr/leaves', ['employee_id' => $worker['id'], 'leave_type_id' => $types['VAC']['id'],
@@ -203,7 +204,7 @@ class PersonalTest extends TestCase
 
         // Lo generado no se reescribe; el mes que no empieza no se genera.
         $this->assertDatabaseRejects(fn () => DB::table('hr_payroll_exports')->where('id', $first['id'])->update(['payload' => '{}']));
-        $this->postJson('/api/v1/hr/payroll-exports', ['period' => now()->addMonths(2)->format('Y-m')])->assertStatus(422);
+        $this->postJson('/api/v1/hr/payroll-exports', ['period' => now('America/Lima')->addMonths(2)->format('Y-m')])->assertStatus(422);
     }
 
     public function test_hr_saas_connection_initial_match_webhook_and_hours(): void

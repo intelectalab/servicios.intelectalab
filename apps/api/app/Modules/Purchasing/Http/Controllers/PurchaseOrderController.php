@@ -391,7 +391,7 @@ class PurchaseOrderController extends Controller
                 'supplier_id' => $supplier->id,
                 'cost_center_id' => $data['cost_center_id'],
                 'currency' => $data['currency'],
-                'needed_by' => $data['needed_by'] ?? now()->addDays(10)->toDateString(),
+                'needed_by' => $data['needed_by'] ?? \App\Services\LocalTime::today()->addDays(10)->toDateString(),
                 'notes' => isset($data['notes']) && trim($data['notes']) !== '' ? trim($data['notes']) : null,
                 'subtotal' => $subtotal,
                 'tax' => round($total - $subtotal, 2),

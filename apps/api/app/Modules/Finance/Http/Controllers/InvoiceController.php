@@ -164,7 +164,7 @@ class InvoiceController extends Controller
                 'status' => 'DRAFT',
                 'currency' => $first->currency,
                 // 0 días = al contado: vence hoy (solo sin días registrados se usan los de siempre).
-                'due_date' => now()->addDays((int) ($customer->payment_terms_days ?? Billing::DEFAULT_TERMS_DAYS))->toDateString(),
+                'due_date' => LocalTime::today()->addDays((int) ($customer->payment_terms_days ?? Billing::DEFAULT_TERMS_DAYS))->toDateString(),
                 'subtotal' => $subtotal,
                 'tax_total' => round($total - $subtotal, 2),
                 'total' => $total,
@@ -436,13 +436,13 @@ class InvoiceController extends Controller
         }
         $data = $request->validate([
             'number' => ['required', 'string', 'max:100'],
-            'date' => ['nullable', 'date', 'before_or_equal:today'],
+            'date' => ['nullable', 'date', 'before_or_equal:'.\App\Services\LocalTime::today()->toDateString()],
         ], [
             'number.required' => 'Indica el número de constancia o certificado.',
             'date.before_or_equal' => 'La fecha no puede ser futura.',
         ]);
         $number = trim($data['number']);
-        $date = \Illuminate\Support\Carbon::parse($data['date'] ?? now())->toDateString();
+        $date = \Illuminate\Support\Carbon::parse($data['date'] ?? LocalTime::today()->toDateString())->toDateString();
         $detraction = $invoice->withholding_type === 'DETRACTION';
 
         DB::transaction(function () use ($request, $invoice, $number, $date, $detraction) {

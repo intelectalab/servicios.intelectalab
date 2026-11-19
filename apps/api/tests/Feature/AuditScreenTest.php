@@ -207,7 +207,7 @@ class AuditScreenTest extends TestCase
         $this->assertSame([$export], $this->ids($filter(['id' => 'at', 'type' => 'date', 'operator' => 'today', 'value' => ''])));
         $this->assertSame([$scopes, $login], $this->ids($filter([
             'id' => 'at', 'type' => 'date', 'operator' => 'range',
-            'value' => now()->subDays(2)->format('Y-m-d').'|'.now()->subDay()->format('Y-m-d'),
+            'value' => now('America/Lima')->subDays(2)->format('Y-m-d').'|'.now('America/Lima')->subDay()->format('Y-m-d'),
         ])));
         $this->assertSame([$scopes], $this->ids($filter(['id' => 'action', 'type' => 'text', 'operator' => 'contains', 'value' => 'alcance'])));
         $this->assertSame([$export], $this->ids($filter(['id' => 'action', 'type' => 'text', 'operator' => 'contains', 'value' => 'quotations.export'])));
