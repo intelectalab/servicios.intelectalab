@@ -21,6 +21,10 @@ test("la app del técnico abre sin señal después de abrirla una vez", async ({
   // Una recarga con red para que la pantalla quede guardada, y luego sin red.
   await page.reload();
   await expect(page.getByText("Cómo funciona el modo sin conexión")).toBeVisible();
+  // El service worker guarda la pantalla y la app guarda la ruta un instante después de recibirlas:
+  // se espera a que las dos estén guardadas en el teléfono antes de cortar la señal.
+  await expect.poll(() => page.evaluate(async () => Boolean(await caches.match("/campo"))), { timeout: 15000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("erp.field.route") !== null), { timeout: 15000 }).toBe(true);
   await context.setOffline(true);
   await page.reload();
   await expect(page.getByText("Cómo funciona el modo sin conexión")).toBeVisible();

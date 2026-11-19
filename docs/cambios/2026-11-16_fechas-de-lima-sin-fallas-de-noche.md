@@ -44,3 +44,15 @@ No eran solo las pruebas. Varios lugares del sistema todavía tomaban «hoy» en
 ## 4. Pruebas
 
 - 364 pruebas en verde, corridas a las 22:00 de Lima, el horario en que antes fallaban.
+
+## 5. CI de la repo de la empresa (2026-11-19)
+
+Tras publicar `eecebe1`, el CI salió en rojo por dos motivos ajenos a Personal:
+
+- **Análisis de dependencias (`composer audit`):** hay avisos de seguridad nuevos (4 y 13 de noviembre) para Laravel y varias librerías de Symfony.
+  - Se actualizaron solo las afectadas: Laravel 12.69.1 → 12.72.0; Symfony http-foundation, http-kernel y routing → 7.4.23; filesystem y yaml → 8.1.11.
+  - No se tomaron versiones de los últimos días (Laravel 12.73 y Guzzle 7.16.3 tienen 2 días).
+  - `composer audit` queda sin avisos y pasan las 364 pruebas.
+- **E2E «App del técnico sin señal»:** la prueba cortaba la red antes de que el teléfono terminara de guardar la pantalla y la ruta (pasa un instante después de cargarlas). Ahora espera a que ambas estén guardadas.
+  - La app sí funciona sin señal: se comprobó a mano contra la compilación de producción.
+  - Las 4 E2E pasan tres veces seguidas contra la compilación de producción con Next.js 16.4.6.
